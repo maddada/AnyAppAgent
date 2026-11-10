@@ -27,3 +27,17 @@ describe("search row titles", () => {
     expect(plainToolTitle({ kind: "search", title: "Find the alarm code" })).toBe("Find the alarm code");
   });
 });
+
+import { summarizeTools } from "../src/renderer/src/chatText.ts";
+
+describe("folded tool rows", () => {
+  it("counts each file once (a real turn: day.ts once, HomeScreen.tsx seven times, the memory file)", () => {
+    const tools = [
+      { kind: "edit", title: "Changed day.ts", detail: "src/lib/day.ts" },
+      ...Array.from({ length: 7 }, () => ({ kind: "edit", title: "Changed HomeScreen.tsx", detail: "src/screens/HomeScreen.tsx" })),
+      { kind: "edit", title: "Changed APP_MEMORY.md" },
+      { kind: "execute", title: "Run typecheck, lint and bundle checks", detail: "npm run check" },
+    ];
+    expect(summarizeTools(tools)).toBe("Edited 3 files, ran a command");
+  });
+});

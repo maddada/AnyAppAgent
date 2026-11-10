@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import type { App, ChatItem } from "../../shared/types.ts";
 import { AppIcon, Icon, Spinner, StateLine, appState } from "./ui.tsx";
-import { plainToolTitle } from "./chatText.ts";
+import { plainToolTitle, summarizeTools } from "./chatText.ts";
 
 const api = window.anyapp;
 
@@ -194,18 +194,7 @@ function groupTools(items: ChatItem[]): (ChatItem | ChatItem[])[] {
 }
 
 function summary(items: ChatItem[]): string {
-  const n = (kind: string) => items.filter((i) => i.tool?.kind === kind).length;
-  const plural = (k: number, one: string, many: string) => (k === 1 ? one : many.replace("#", String(k)));
-  const parts: string[] = [];
-  const edits = n("edit") + n("delete") + n("move");
-  if (edits) parts.push(plural(edits, "changed a file", "changed # files"));
-  if (n("read")) parts.push(plural(n("read"), "read a file", "read # files"));
-  if (n("execute")) parts.push(plural(n("execute"), "ran a command", "ran # commands"));
-  if (n("search")) parts.push(plural(n("search"), "searched once", "searched # times"));
-  const rest = items.length - edits - n("read") - n("execute") - n("search");
-  if (rest > 0) parts.push(plural(rest, "one more step", "# more steps"));
-  const text = parts.join(", ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return summarizeTools(items.flatMap((i) => (i.tool ? [i.tool] : [])));
 }
 
 function ToolGroup({ items, app }: { items: ChatItem[]; app: App }) {

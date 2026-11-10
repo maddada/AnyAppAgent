@@ -225,6 +225,7 @@ function PhonesPanel({ s }: { s: Snapshot }) {
             <div>
               <strong className="body">{d.name}</strong>
               <span className="label">{d.connected ? "Connected, seen just now" : d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : "Paired"}</span>
+              <span className="label">{viaWords(d.via)}</span>
             </div>
           </div>
         ))
@@ -252,6 +253,11 @@ function AddPhonePanel({ s, onMore }: { s: Snapshot; onMore: () => void }) {
 
 // ------------------------------------------------------------------ Phones
 
+/** How a phone reaches this PC, in the words the phone app uses too. */
+function viaWords(via: string | undefined): string {
+  return via === "easy-connect" ? "From anywhere" : "Same Wi-Fi only";
+}
+
 function PhonesPage({ s }: { s: Snapshot }) {
   const devices = s.admin?.devices ?? [];
   const [forget, setForget] = useState<{ id: string; name: string } | null>(null);
@@ -274,6 +280,7 @@ function PhonesPage({ s }: { s: Snapshot }) {
               <div className="lrow-main">
                 <div className="heading">{d.name}</div>
                 <StateLine state={d.connected ? "ready" : "idle"} text={d.connected ? "Connected" : d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : "Paired"} />
+                <span className="label secondary">{viaWords(d.via)}</span>
               </div>
               <button className="btn btn-quiet btn-sm" onClick={() => setForget({ id: d.id, name: d.name })}>
                 Forget

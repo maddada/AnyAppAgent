@@ -19,3 +19,25 @@ export function plainToolTitle(tool: { title: string; kind: string; detail?: str
   }
   return first === tool.detail?.split("\n")[0].trim() || RAW_COMMAND.test(first) ? "Ran a command" : first;
 }
+
+/**
+ * One line for a folded run of finished tool rows ("Edited 3 files, ran a command"). Files are
+ * counted once each, however often they were edited or read.
+ */
+export function summarizeTools(tools: { kind: string; title: string; detail?: string }[]): string {
+  const files = (kinds: string[]) => new Set(tools.filter((t) => kinds.includes(t.kind)).map((t) => t.detail || t.title)).size;
+  const count = (kind: string) => tools.filter((t) => t.kind === kind).length;
+  const plural = (k: number, one: string, many: string) => (k === 1 ? one : many.replace("#", String(k)));
+  const parts: string[] = [];
+  const edited = files(["edit", "delete", "move"]);
+  const read = files(["read"]);
+  if (edited) parts.push(plural(edited, "edited a file", "edited # files"));
+  if (read) parts.push(plural(read, "read a file", "read # files"));
+  if (count("execute")) parts.push(plural(count("execute"), "ran a command", "ran # commands"));
+  if (count("search")) parts.push(plural(count("search"), "searched once", "searched # times"));
+  const known = ["edit", "delete", "move", "read", "execute", "search"];
+  const rest = tools.filter((t) => !known.includes(t.kind)).length;
+  if (rest > 0) parts.push(plural(rest, "one more step", "# more steps"));
+  const text = parts.join(", ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

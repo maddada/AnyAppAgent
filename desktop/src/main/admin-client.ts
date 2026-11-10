@@ -35,6 +35,7 @@ interface TokenRecord {
   deviceName?: string;
   createdAt?: string;
   lastSeenAt?: string;
+  via?: string; // "lan" (older companions), "same-network" or "easy-connect"
 }
 
 /** AdminState built without the admin routes (fallback). */
@@ -52,6 +53,7 @@ export function fallbackAdminState(stateDir: string, port: number): AdminState |
       pairedAt: r.createdAt ?? "",
       lastSeenAt: r.lastSeenAt,
       connected: false,
+      via: r.via === "easy-connect" ? "easy-connect" : "same-network",
     }));
   } catch {
     // no phones yet
