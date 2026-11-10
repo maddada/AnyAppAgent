@@ -60,14 +60,42 @@ function toolContentText(event: JsonObject): string | undefined {
   return parts.length > 0 ? parts.join("\n") : undefined;
 }
 
+const COMMAND_TITLES: [RegExp, string][] = [
+  [/npm run check\b/, "Checked the app"],
+  [/npm run (typecheck|lint)\b|\btsc\b|\beslint\b/, "Checked the app"],
+  [/npm run bundle\b|expo export/, "Checked that the app packs up"],
+  [/npm run icon\b|make-icon/, "Made the app icon"],
+  [/npx expo install\b|\bnpm (install|i)\b/, "Added a part to the app"],
+  [/\bgit\b/, "Looked at the app's history"],
+  [/\b(curl|wget|Invoke-WebRequest)\b/, "Downloaded something"],
+  [/\b(ls|dir|cat|head|tail|grep|rg|find|Get-ChildItem|Get-Content|Select-String)\b/, "Looked at the app's files"],
+  [/\bnode\b/, "Ran a small script"],
+];
+
+/**
+ * A short plain title for a command row (the person on the phone is not technical); the raw
+ * command line stays in the row's detail. Uses the description Claude Code gives its own
+ * command when there is one.
+ */
+export function plainCommandTitle(command: string | undefined, description: string | undefined): string {
+  const said = description?.trim();
+  if (said) return shorten(said.charAt(0).toUpperCase() + said.slice(1).replace(/\.$/, ""), 80);
+  if (!command) return "Running a command";
+  for (const [pattern, title] of COMMAND_TITLES) if (pattern.test(command)) return title;
+  return "Ran a command";
+}
+
 export function toolInfo(event: JsonObject, cwd: string): ToolCallInfo {
   const rawKind = readString(event, "kind") ?? "other";
   const kind = TOOL_KINDS.has(rawKind) ? rawKind : "other";
   const rawStatus = readString(event, "status");
   const status: ToolCallInfo["status"] =
     rawStatus === "in_progress" || rawStatus === "completed" || rawStatus === "failed" ? rawStatus : "pending";
-  const title = (readString(event, "title") ?? readString(event, "name") ?? "Tool").trim() || "Tool";
   const input = isJsonObject(event["rawInput"]) ? event["rawInput"] : {};
+  const title =
+    kind === "execute"
+      ? plainCommandTitle(readString(input, "command"), readString(input, "description"))
+      : (readString(event, "title") ?? readString(event, "name") ?? "Tool").trim() || "Tool";
   const locations = Array.isArray(event["locations"]) ? event["locations"] : [];
   const firstPath = locations.map((l) => (isJsonObject(l) ? readString(l, "path") : undefined)).find(Boolean);
   let detail: string | undefined;

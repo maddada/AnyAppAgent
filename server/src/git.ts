@@ -56,11 +56,21 @@ const BASE_IGNORES = [
   ".env.*",
 ];
 
+/**
+ * Build output the real build writes OUTSIDE the template's ignored folders: the Gradle output of
+ * local native modules (modules/<name>/android/build, with paths too long for Git on Windows).
+ * Without these lines `git add -A` fails and every turn looked like "no files changed".
+ */
+export const BUILD_OUTPUT_IGNORES = ["modules/*/android/build/", "modules/*/android/.cxx/", "modules/*/android/.gradle/", ".gradle/"];
+
 export function ensureGitignore(dir: string): void {
   const path = join(dir, ".gitignore");
   const current = existsSync(path) ? readFileSync(path, "utf8") : "";
-  const have = new Set(current.split(/\r?\n/).map((line) => line.trim()));
-  const missing = BASE_IGNORES.filter((line) => !have.has(line));
+  const have = new Set(current.split(/\r?\n/).map((line) => line.trim().replace(/^\//, "")));
+  // A project with its own .gitignore (the template has one) only gets what must never be
+  // committed when it is missing; an empty project gets the whole list.
+  const wanted = current === "" ? [...BASE_IGNORES, ...BUILD_OUTPUT_IGNORES] : ["node_modules/", ...BUILD_OUTPUT_IGNORES, "*.jks", "*.keystore", ".env"];
+  const missing = wanted.filter((line) => !have.has(line) && !(line === ".env" && [...have].some((l) => l.startsWith(".env"))));
   if (missing.length === 0) return;
   const sep = current === "" || current.endsWith("\n") ? "" : "\n";
   writeFileSync(path, `${current}${sep}${current === "" ? "" : "\n# Added by AnyAppAgent\n"}${missing.join("\n")}\n`);
@@ -82,15 +92,39 @@ export async function initRepo(dir: string, message: string): Promise<void> {
   await commitAll(dir, message);
 }
 
+/** Before any add: the ignore list is current (apps made earlier get it too) and long paths work. */
+async function prepare(dir: string): Promise<void> {
+  ensureGitignore(dir);
+  await git(dir, ["config", "core.longpaths", "true"]);
+}
+
+async function addAll(dir: string): Promise<void> {
+  const added = await git(dir, ["add", "-A"]);
+  if (added.code !== 0) throw new Error(`git add failed: ${lastLine(added)}`);
+}
+
 /** A hash of the whole working tree (tracked + untracked, minus ignored files). */
-export async function treeSnapshot(dir: string): Promise<string> {
-  await git(dir, ["add", "-A"]);
-  const tree = await git(dir, ["write-tree"]);
-  return tree.code === 0 ? tree.stdout.trim() : `unknown-${Date.now()}`;
+/**
+ * A hash of the whole working tree (tracked + untracked, minus ignored files). When Git cannot
+ * read the tree the answer is a unique value, so the caller builds rather than wrongly deciding
+ * that nothing changed.
+ */
+export async function treeSnapshot(dir: string, log: (message: string) => void = () => {}): Promise<string> {
+  try {
+    await prepare(dir);
+    await addAll(dir);
+    const tree = await git(dir, ["write-tree"]);
+    if (tree.code !== 0) throw new Error(`git write-tree failed: ${lastLine(tree)}`);
+    return tree.stdout.trim();
+  } catch (error) {
+    log(`could not take a snapshot of ${dir} (${(error as Error).message}); treating it as changed`);
+    return `unknown-${Date.now()}-${Math.random()}`;
+  }
 }
 
 export async function commitAll(dir: string, message: string): Promise<boolean> {
-  await git(dir, ["add", "-A"]);
+  await prepare(dir);
+  await addAll(dir);
   const status = await git(dir, ["status", "--porcelain"]);
   if (status.stdout.trim() === "") return false;
   const commit = await git(dir, [...(await identityArgs(dir)), "commit", "-q", "-m", message]);

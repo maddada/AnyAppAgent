@@ -11,6 +11,8 @@ import { log } from "./fs-util.ts";
 import { serverName, startHttpServer } from "./http.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
 import { Store } from "./store.ts";
+import { loadToolchain, TOOLCHAIN_MISSING } from "./toolchain.ts";
+import { warmBuilder } from "./warm.ts";
 
 export { pairingUri };
 
@@ -21,11 +23,19 @@ export async function main(): Promise<void> {
   const adminToken = process.env.ANYAPP_ADMIN_TOKEN;
   const store = new Store(config.stateDir);
   const auth = new Auth(config.stateDir, adminToken);
+  const toolchain = loadToolchain(config.stateDir);
   const builder = await loadBuilder(config.builder);
   const easyConnect = new EasyConnect({ stateDir: config.stateDir, port: config.port, auth, log });
 
   let broadcast: (event: ServerEvent) => void = () => {};
-  const apps = new AppManager({ store, builder, config, broadcast: (event) => broadcast(event), log });
+  const apps = new AppManager({
+    store,
+    builder,
+    config,
+    broadcast: (event) => broadcast(event),
+    log,
+    checkToolchain: () => (builder.kind === "real" && !toolchain ? TOOLCHAIN_MISSING : null),
+  });
   apps.recover();
 
   const http = startHttpServer({
@@ -48,6 +58,7 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
   easyConnect.init();
+  if (builder.kind === "real") warmBuilder(config.appsDir, log);
 
   const addresses = lanAddresses();
   const lines = [
@@ -60,6 +71,11 @@ export async function main(): Promise<void> {
     ...addresses.map((a) => `    http://${a}:${config.port}`),
     `    http://10.0.2.2:${config.port}   (Android emulator on this PC)`,
     "",
+    builder.kind === "real"
+      ? toolchain
+        ? `  Android tools: ${toolchain.javaHome}, ${toolchain.androidHome} (from ${toolchain.source})`
+        : `  ${TOOLCHAIN_MISSING}`
+      : "  Android tools: not needed (fake builder)",
     `  Builder: ${builder.kind}   GitHub: ${config.github ? "on" : "off"}   Desktop app: ${auth.hasAdmin ? "connected" : "not used"}   Apps: ${config.appsDir}`,
     `  State: ${config.stateDir}`,
     "",

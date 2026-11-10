@@ -9,6 +9,7 @@ import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { AcpAgentRequestResponder } from "./acp/agent-connection.ts";
 import type { Builder, BuildResult } from "./builder.ts";
 import { runBuildCycle, type BuildAttempt } from "./build-cycle.ts";
+import { BuildProgress, isEnvironmentFailure, plainBuildError } from "./build-progress.ts";
 import type { Config } from "./config.ts";
 import { nowIso } from "./fs-util.ts";
 import * as git from "./git.ts";
@@ -86,6 +87,8 @@ export class AppManager {
   private readonly broadcast: (event: ServerEvent) => void;
   private readonly log: (...parts: unknown[]) => void;
   private readonly runtimes = new Map<string, Runtime>();
+  /** A plain sentence when the builder cannot run on this PC (no Android toolchain), else null. */
+  private readonly checkToolchain: () => string | null;
 
   constructor(deps: {
     store: Store;
@@ -93,12 +96,14 @@ export class AppManager {
     config: Config;
     broadcast: (event: ServerEvent) => void;
     log: (...parts: unknown[]) => void;
+    checkToolchain?: () => string | null;
   }) {
     this.store = deps.store;
     this.builder = deps.builder;
     this.config = deps.config;
     this.broadcast = deps.broadcast;
     this.log = deps.log;
+    this.checkToolchain = deps.checkToolchain ?? (() => null);
   }
 
   // ---------- startup / shutdown
@@ -374,13 +379,13 @@ export class AppManager {
   }
 
   private async userTurn(record: AppRecord, text: string): Promise<void> {
-    const before = await git.treeSnapshot(record.dir);
+    const before = await git.treeSnapshot(record.dir, (m) => this.log(`[${record.app.slug}] ${m}`));
     const stopReason = await this.agentTurn(record, text);
     if (stopReason === "cancelled" || this.runtime(record.app.id).cancelRequested) {
       this.setStatus(record, "idle");
       return;
     }
-    const after = await git.treeSnapshot(record.dir);
+    const after = await git.treeSnapshot(record.dir, (m) => this.log(`[${record.app.slug}] ${m}`));
     if (before === after) {
       this.log(`[${record.app.slug}] the turn changed no files; no build`);
       this.setStatus(record, "idle");
@@ -471,17 +476,41 @@ export class AppManager {
 
   // ---------- builds
 
+  /**
+   * Builds after a turn. The person sees ONE build row for the whole cycle: it keeps saying what is
+   * happening in plain words, says "Found a small problem, fixing it" while the agent repairs a
+   * failed build, and only turns into "The app didn't build" when every try failed.
+   */
   private async buildCycle(record: AppRecord): Promise<void> {
     const rt = this.runtime(record.app.id);
     const max = this.config.maxBuildFixes;
+    const rowId = randomUUID();
+    const toolchainProblem = this.checkToolchain();
+    if (toolchainProblem) {
+      const build: BuildInfo = { number: (record.app.latestBuild?.number ?? 0) + 1, status: "failed", startedAt: nowIso(), finishedAt: nowIso(), error: toolchainProblem };
+      this.emitItem(record, { id: rowId, kind: "build", build, text: "" });
+      this.setStatus(record, "error", toolchainProblem);
+      return;
+    }
+    let environmentProblem: string | undefined;
     const outcome = await runBuildCycle<{ build: BuildInfo }>({
       maxFixes: max,
-      build: () => this.buildOnce(record),
-      cancelled: () => rt.cancelRequested,
+      build: () => this.buildOnce(record, rowId),
+      cancelled: () => rt.cancelRequested || environmentProblem !== undefined,
       fix: async (error, attempt) => {
-        const number = record.app.latestBuild?.number ?? 0;
-        this.errorItem(record, `Build ${number} failed. Asking the agent to fix it (try ${attempt} of ${max}).`);
-        const stop = await this.agentTurn(record, buildFixPrompt({ buildNumber: number, attempt, maxAttempts: max, error }));
+        if (isEnvironmentFailure(error)) {
+          environmentProblem = error;
+          return false;
+        }
+        const failed = record.app.latestBuild!;
+        this.emitItem(record, {
+          id: rowId,
+          kind: "build",
+          build: { number: failed.number, status: "running", startedAt: failed.startedAt },
+          text: `Found a small problem. Fixing it, then building again (${attempt} of ${max})`,
+        });
+        this.log(`[${record.app.slug}] build ${failed.number} failed; fix attempt ${attempt} of ${max}`);
+        const stop = await this.agentTurn(record, buildFixPrompt({ buildNumber: failed.number, attempt, maxAttempts: max, error }));
         return stop !== "cancelled";
       },
     });
@@ -494,7 +523,10 @@ export class AppManager {
         this.log(`[${record.app.slug}] commit failed:`, (error as Error).message);
       }
       const pushError = await git.push(record.dir);
-      if (pushError) this.errorItem(record, `Could not push to GitHub (${shorten(pushError, 160)}); the change is saved on the PC.`);
+      if (pushError) {
+        this.log(`[${record.app.slug}] push failed: ${pushError}`);
+        this.errorItem(record, "Could not save this version to GitHub right now; it is kept on the PC.");
+      }
       record.app.latestApk = build;
       this.checkIcon(record);
       this.setStatus(record, "idle");
@@ -502,31 +534,42 @@ export class AppManager {
       this.log(`[${record.app.slug}] APK ${build.number} ready (${build.sizeBytes} bytes)`);
       return;
     }
-    if (outcome.outcome === "cancelled") {
-      this.setStatus(record, "error", "The last build failed and fixing it was stopped.");
-      return;
+    const failed = record.app.latestBuild!;
+    let plain: string;
+    if (environmentProblem !== undefined) {
+      this.log(`[${record.app.slug}] build environment problem: ${firstLine(environmentProblem.replace(/^Build #\d+ failed\.\s*/, ""))}`);
+      plain = "The PC could not build the app just now. Tap Try again in a moment.";
+    } else if (outcome.outcome === "cancelled") {
+      plain = "You stopped the fix. Tap Try again to build again.";
+    } else {
+      plain = `${plainBuildError(outcome.error)} ${max} tries to fix it did not work. Tap Try again, or tell me more about what you want.`;
     }
-    const lines = outcome.error.trim().split(/\r?\n/).slice(-12).join("\n");
-    this.errorItem(record, `The build still fails after ${outcome.fixes} fixes:\n${lines}`);
-    this.setStatus(record, "error", "The build failed.");
+    record.app.latestBuild = { ...failed, status: "failed", error: plain };
+    this.emitItem(record, { id: rowId, kind: "build", build: record.app.latestBuild, text: "" });
+    this.setStatus(record, "error", plain);
   }
 
-  private async buildOnce(record: AppRecord): Promise<BuildAttempt<{ build: BuildInfo }>> {
+  private async buildOnce(record: AppRecord, rowId: string): Promise<BuildAttempt<{ build: BuildInfo }>> {
     const app = record.app;
     const number = (app.latestBuild?.number ?? 0) + 1;
-    const itemId = randomUUID();
     let build: BuildInfo = { number, status: "running", startedAt: nowIso() };
     app.latestBuild = build;
     this.setStatus(record, "building");
-    this.emitItem(record, { id: itemId, kind: "build", build, text: "Starting the build" });
-    let lastLogAt = 0;
+    const progress = new BuildProgress(!existsSync(join(record.dir, "android", "app", "build")));
+    let shown = "";
+    const show = () => {
+      const text = progress.text;
+      if (text === shown) return;
+      shown = text;
+      this.emitItem(record, { id: rowId, kind: "build", build, text });
+    };
+    show();
+    const heartbeat = setInterval(show, 15_000);
     const onLog = (line: string) => {
-      const text = line.trim();
-      if (text === "" || Date.now() - lastLogAt < 1000) return;
-      lastLogAt = Date.now();
-      this.emitItem(record, { id: itemId, kind: "build", text: shorten(text, 200) });
+      if (progress.line(line)) show();
     };
     this.log(`[${app.slug}] build ${number} started`);
+    const started = Date.now();
     try {
       const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog });
       const apkDir = this.store.apkDir(app.id);
@@ -542,16 +585,19 @@ export class AppManager {
         sha256: result.sha256,
       };
       app.latestBuild = build;
-      this.emitItem(record, { id: itemId, kind: "build", build, text: "The new version is ready" });
+      this.log(`[${app.slug}] build ${number} took ${Math.round((Date.now() - started) / 1000)} s`);
+      this.emitItem(record, { id: rowId, kind: "build", build, text: "The new version is ready" });
       return { ok: true, result: { build } };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      build = { ...build, status: "failed", finishedAt: nowIso(), error: firstLine(message) };
+      build = { ...build, status: "failed", finishedAt: nowIso(), error: plainBuildError(message) };
       app.latestBuild = build;
-      this.emitItem(record, { id: itemId, kind: "build", build, text: "The build failed" });
-      this.log(`[${app.slug}] build ${number} failed: ${firstLine(message)}`);
+      const detail = message.replace(/^Build #\d+ failed\.\s*/, "");
+      this.log(`[${app.slug}] build ${number} failed after ${Math.round((Date.now() - started) / 1000)} s: ${firstLine(detail)}`);
       this.touch(record);
       return { ok: false, error: message };
+    } finally {
+      clearInterval(heartbeat);
     }
   }
 

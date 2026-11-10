@@ -56,21 +56,38 @@ describe("ChatTranslator", () => {
       rawInput: { command: "npm install" },
     });
     expect(opened).toEqual([
-      { id: "id1", kind: "tool", tool: { title: "Install packages", kind: "execute", status: "pending", detail: "npm install" } },
+      { id: "id1", kind: "tool", tool: { title: "Added a part to the app", kind: "execute", status: "pending", detail: "npm install" } },
     ]);
     expect(t.translate({ sessionUpdate: "tool_call_update", toolCallId: "t1", status: "in_progress" })).toEqual([
-      { id: "id1", kind: "tool", tool: { title: "Install packages", kind: "execute", status: "in_progress", detail: "npm install" } },
+      { id: "id1", kind: "tool", tool: { title: "Added a part to the app", kind: "execute", status: "in_progress", detail: "npm install" } },
     ]);
     expect(t.translate({ sessionUpdate: "tool_call_update", toolCallId: "t1", status: "completed" })).toEqual([
-      { id: "id1", kind: "tool", tool: { title: "Install packages", kind: "execute", status: "completed", detail: "npm install" } },
+      { id: "id1", kind: "tool", tool: { title: "Added a part to the app", kind: "execute", status: "completed", detail: "npm install" } },
     ]);
     expect(t.finishTurn("end_turn")).toEqual([]);
   });
 
   it("drops the detail when the title already says it", () => {
     const t = translator();
-    const out = t.translate({ sessionUpdate: "tool_call", toolCallId: "c", title: "`npm test`", kind: "execute", rawInput: { command: "npm test" } });
-    expect(out[0].tool).toEqual({ title: "`npm test`", kind: "execute", status: "pending" });
+    const out = t.translate({ sessionUpdate: "tool_call", toolCallId: "c", title: "Read App.tsx", kind: "read", rawInput: { file_path: "App.tsx" } });
+    expect(out[0].tool).toEqual({ title: "Read App.tsx", kind: "read", status: "pending" });
+  });
+
+  it("gives command rows a plain title and keeps the command line in the detail", () => {
+    const t = translator();
+    const run = (rawInput: Record<string, string>) =>
+      t.translate({ sessionUpdate: "tool_call", toolCallId: Math.random().toString(), title: `\`${rawInput.command}\``, kind: "execute", rawInput })[0].tool!;
+    expect(run({ command: 'cd "C:/aa/apps/tapcounter" && npm run check 2>&1 | tail -20' })).toEqual({
+      title: "Checked the app",
+      kind: "execute",
+      status: "pending",
+      detail: 'cd "C:/aa/apps/tapcounter" && npm run check 2>&1 | tail -20',
+    });
+    expect(run({ command: "npm run icon -- --bg \"#0E7C66\" --glyph mosque" }).title).toBe("Made the app icon");
+    expect(run({ command: "npx expo install expo-battery" }).title).toBe("Added a part to the app");
+    expect(run({ command: "T=\"C:/Users/x/tapcounter-typ\"; whoami" }).title).toBe("Ran a command");
+    expect(run({ command: "python3 x.py", description: "Measure the adhan recording." }).title).toBe("Measure the adhan recording");
+    expect(t.translate({ sessionUpdate: "tool_call", toolCallId: "z", title: "Terminal", kind: "execute" })[0].tool?.title).toBe("Running a command");
   });
 
   it("shows edited file paths relative to the project", () => {
@@ -117,7 +134,7 @@ describe("ChatTranslator", () => {
     t.translate({ sessionUpdate: "agent_message_chunk", content: text("Working") });
     t.translate({ sessionUpdate: "tool_call", toolCallId: "t9", title: "Run tests", kind: "execute", status: "in_progress" });
     const closed = t.finishTurn("cancelled");
-    expect(closed).toEqual([{ id: "id2", kind: "tool", tool: { title: "Run tests", kind: "execute", status: "failed" } }]);
+    expect(closed).toEqual([{ id: "id2", kind: "tool", tool: { title: "Running a command", kind: "execute", status: "failed" } }]);
   });
 
   it("ignores updates it does not show and malformed ones", () => {
