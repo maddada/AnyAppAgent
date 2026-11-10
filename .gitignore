@@ -1,0 +1,15 @@
+.reference/
+node_modules/
+dist/
+build/
+.expo/
+.gradle/
+*.apk
+*.aab
+*.jks
+*.keystore
+*.log
+.env
+.env.*
+local.properties
+tmp/

@@ -1,0 +1,107 @@
+# AnyAppAgent: what we are building
+
+AnyAppAgent is an Android app, side-loaded only (never published to a store), for making other
+Android apps from the phone. The user has app ideas but does not want to sit at the PC: they type a
+prompt on the phone, an agent on their PC builds the app, and the finished APK arrives on the phone
+and installs over the previous version. It must be dead simple for a regular, non-technical user.
+
+## The user's flow
+
+1. **Connect your PC** (first run). The PC runs the companion; the phone connects to it with an
+   address and a short pairing code. Nothing else to set up: the companion does Git and GitHub.
+2. **Home**: a two-column grid of the user's apps, each with its icon and name, plus a "new app"
+   tile. A new app asks only for a name and what it should do.
+3. **Tap an app**: either **Open** it (launch it on the phone) or **Change it** (a chat with that
+   app's agent).
+4. **Prompt, wait, install**: when the agent finishes a turn, the PC builds the APK by itself and
+   the phone downloads it and starts the install, replacing the app already there.
+
+## The parts and who owns which folder
+
+| Folder      | What                                                                            |
+| ----------- | ------------------------------------------------------------------------------- |
+| `shared/`   | `protocol.ts`: the wire contract between phone and PC. Types only.               |
+| `server/`   | The PC companion: pairing, one Claude Code session per app, Git/GitHub, builds.  |
+| `template/` | The React Native (Expo) starter every new app is copied from.                    |
+| `builder/`  | Creates an app from the template and builds its signed APK.                      |
+| `app/`      | The AnyAppAgent Android app itself (React Native, Expo).                         |
+| `docs/`     | This file and `ENVIRONMENT.md` (Android toolchain and emulator on this PC).       |
+| `.reference/` | Reference checkouts (bb). Read only, git-ignored, never imported from.         |
+
+Each folder has its own `package.json`; there is no root workspace. A thread edits only its own
+folder(s).
+
+## Decisions already made
+
+- **Agent**: Claude Code over ACP (Agent Client Protocol), and nothing else. Do it the way bb does:
+  `.reference/bb` is a checkout of https://github.com/get-bb/bb (MIT). Mirror how bb launches the
+  Claude Code ACP agent, initializes, creates and resumes sessions, sets the permission mode,
+  translates session updates, and answers permission requests. Do not invent another way. Start in
+  `plugins/provider-acp`, `packages/provider-bridge-acp` (`client/`, `bridge/agent-connection.ts`,
+  `session/`, `session-params.ts`, `delta-translation.ts`) and `packages/agent-runtime`. Copying bb
+  code is fine; keep its MIT notice in `THIRD_PARTY_NOTICES.md`.
+- **One session per app**: each app has exactly one long-lived Claude Code session on the PC,
+  working in that app's project folder. It is the only thing the user talks to for that app. Model
+  it on the Ghostex coordinator idea (`C:\Users\madda\.claude\skills\ghostex-orchestrator\SKILL.md`,
+  project at `C:\dev\Ghostex`): the session gets a short playbook that says it owns this one app
+  for a non-technical user on a phone, answers in short plain language, never asks the user to run
+  commands or open files, may hand large work to its own subagents, keeps the app building, and
+  keeps a small goal-and-memory file for the app.
+- **Unattended**: the user is on a phone, so sessions run without permission prompts wherever bb's
+  "full access" mode allows it. A permission request that still arrives is shown in the chat.
+- **Chat look**: copy bb's thread view (message layout, tool-call rows, composer, spacing, colours,
+  typography). bb's own mobile app is a WebView around its web app, so the look to copy lives in
+  `.reference/bb/packages/thread-view`, `packages/core-ui`, `packages/shared-ui` and `apps/app`.
+- **Generated apps**: React Native with Expo, so over-the-air updates can be added later. Package
+  ids are `com.anyapp.<slug>`. Every build of an app is signed with the same key and has a higher
+  `versionCode` than the last, so it installs over the one on the phone.
+- **Build after every turn**: when the agent's turn ends, the server builds the APK. If the build
+  fails, the server sends the error back to the agent as a new prompt (at most 3 times), then shows
+  the failure in the chat. After a successful build it commits and pushes, then announces the APK.
+- **Git and GitHub**: each app is its own Git repository, with a private GitHub repository named
+  `anyapp-<slug>` created through the `gh` CLI (already signed in on this PC). If GitHub fails, the
+  app still works locally and the chat says so in one line.
+- **Permissions**: AnyAppAgent may ask for any Android permission that makes the flow smoother
+  (installing packages, querying and launching packages, notifications, foreground service,
+  cleartext HTTP to the PC). It is never going to a store.
+- **Where apps live on the PC**: `C:\aa\apps\<slug>` by default (short on purpose: React Native
+  builds on Windows break on long paths). Server state lives in `%USERPROFILE%\.anyappagent`
+  (config, tokens, the signing keystore, chat history). Neither is inside this repository.
+- **Ports**: the companion listens on `0.0.0.0:8787` (HTTP and WebSocket). The emulator reaches the
+  PC at `10.0.2.2:8787`.
+
+## The contract between `builder/` and `server/`
+
+`builder/index.mjs` (plain ESM, no build step) exports:
+
+```
+createApp({ dir, name, slug, packageName, onLog? }) -> Promise<void>
+    Copies the template into dir, fills in name and package id, and leaves it ready to build.
+buildApk({ dir, buildNumber, onLog? }) -> Promise<{ apkPath, sizeBytes, sha256 }>
+    Builds a signed, installable APK with versionCode = buildNumber. Rejects with an Error whose
+    message is the useful part of the build output (the part an agent needs to fix it).
+getIconPath({ dir }) -> string | null
+    Absolute path of the app's launcher icon PNG, or null.
+```
+
+and a CLI for humans and tests: `node builder/cli.mjs create <dir> --name "<name>"` and
+`node builder/cli.mjs build <dir> --build-number <n>`.
+
+## The contract between `server/` and `app/`
+
+`shared/protocol.ts`. Both sides implement exactly that. Additive changes only, listed in the
+thread's report.
+
+## Proof that it works
+
+The finished system is proven on the Android emulator: AnyAppAgent is installed there, paired with
+the companion on this PC, and used (through its own UI) to create a Muslim prayer alarm app for
+Ajman, UAE: correct prayer times, each time adjustable by the user, and two announcements before
+each prayer at offsets the user sets. The APK arrives and installs through AnyAppAgent, and a
+second prompt produces an update that installs over it.
+
+## Sharing this PC
+
+Several threads work at once. Edit only your own folder. Use only your own Android package on the
+emulator; never wipe the emulator, uninstall another thread's app, or kill the adb server. The
+existing AVD named `ghostex` belongs to another project: do not use or change it.
