@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnyAppAgent Directions</title>
+<style>
+/*@FONTS@*/
+/*@SCREENS_CSS@*/
+/*@DIRECTIONS_CSS@*/
+:root { --board: #E7E5E0; --board-ink: #1D1D1B; --board-ink-2: #5D5B56; --board-rule: #CFCCC5; }
+html, body { margin: 0; background: var(--board); color: var(--board-ink); font-family: "Segoe UI", system-ui, sans-serif; }
+.page { max-width: 1440px; margin: 0 auto; padding: 56px 48px 96px; box-sizing: border-box; }
+.page h1 { font-size: 40px; line-height: 44px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+.intro { max-width: 820px; color: var(--board-ink-2); font-size: 17px; line-height: 27px; margin: 14px 0 0; }
+.over { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; }
+.over-col { border-top: 2px solid var(--board-ink); padding-top: 16px; }
+.dname { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--board-ink-2); font-weight: 600; }
+.dtitle { font-size: 30px; line-height: 34px; font-weight: 600; letter-spacing: -0.015em; margin: 4px 0 10px; }
+.didea { color: var(--board-ink-2); font-size: 15px; line-height: 23px; margin: 0 0 20px; min-height: 92px; }
+.pair { display: flex; gap: 16px; }
+.fit { zoom: var(--z); flex: none; }
+.over .fit { --z: 0.53; }
+.section { margin-top: 96px; }
+.section-head { display: flex; align-items: baseline; gap: 20px; border-top: 2px solid var(--board-ink); padding-top: 16px; }
+.section-head .dtitle { margin: 0; }
+.section-head p { margin: 0; color: var(--board-ink-2); font-size: 16px; line-height: 24px; max-width: 760px; }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 28px; }
+.mode-label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--board-ink-2); font-weight: 600; margin-bottom: 12px; }
+.mode-col { display: flex; flex-direction: column; gap: 20px; }
+.mode-col .pair .fit { --z: 0.82; }
+.mode-col > .fit { --z: 0.5893; }
+.rec { margin-top: 96px; border-top: 2px solid var(--board-ink); padding-top: 16px; display: grid; grid-template-columns: 1fr 2fr; gap: 48px; }
+.rec h2 { font-size: 30px; line-height: 34px; font-weight: 600; letter-spacing: -0.015em; margin: 4px 0 0; }
+.rec p { margin: 0 0 14px; font-size: 16px; line-height: 26px; color: var(--board-ink-2); }
+.rec strong { color: var(--board-ink); }
+@media (max-width: 700px) {
+  .page { padding: 32px 16px 64px; }
+  .page h1 { font-size: 30px; line-height: 34px; }
+  .intro { font-size: 15px; line-height: 23px; }
+  .over { grid-template-columns: 1fr; gap: 40px; margin-top: 32px; }
+  .didea { min-height: 0; }
+  .over .fit, .mode-col .pair .fit { --z: 0.4385; }
+  .modes { grid-template-columns: 1fr; gap: 32px; }
+  .mode-col > .fit { --z: 0.3196; }
+  .section { margin-top: 64px; }
+  .section-head { flex-direction: column; gap: 8px; }
+  .rec { grid-template-columns: 1fr; gap: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>AnyAppAgent, three directions</h1>
+  <p class="intro">One theme for the Android app and the desktop app. Each direction shows the same four screens (phone home, phone chat, the desktop onboarding step about a safe copy, and the desktop main window) in light and in dark. Same content, same layout, different point of view.</p>
+  <div class="over" id="over"></div>
+  <div id="sections"></div>
+  <div class="rec">
+    <div><div class="dname">Recommendation</div><h2>Workbench</h2></div>
+    <div>
+      <!--@RECOMMENDATION@-->
+    </div>
+  </div>
+</div>
+<script>
+const ICONS = /*@ICONS@*/;
+/*@SCREENS_JS@*/
+const DIRS = [
+  { k: "wb", name: "Workbench", idea: "A maker's bench: warm paper, graphite ink and one bottle green that only ever means \"do this next\" or \"ready\". Bricolage Grotesque gives headings a hand-cut confidence, and IBM Plex Mono labels things the way a workshop labels its drawers." },
+  { k: "al", name: "Almanac", idea: "A well-set book: white pages, a serif voice for the agent and fountain-pen blue for the one thing to do next. Calm and literate, with rules and margins instead of boxes; Newsreader for words, Instrument Sans for controls." },
+  { k: "sg", name: "Signal", idea: "Workshop signage: concrete grey, black type and one signal yellow, condensed uppercase headings and square corners. Loud, direct and readable at arm's length; Archivo for everything, JetBrains Mono for labels." },
+];
+const S = window.AAScreens;
+const fit = (html) => `<div class="fit">${html}</div>`;
+document.getElementById("over").innerHTML = DIRS.map((d, i) => `
+  <div class="over-col">
+    <div class="dname">Direction ${i + 1}</div>
+    <div class="dtitle">${d.name}</div>
+    <p class="didea">${d.idea}</p>
+    <div class="pair"><div class="d d-${d.k} light">${fit(S.phoneHome())}</div><div class="d d-${d.k} dark">${fit(S.phoneHome())}</div></div>
+  </div>`).join("");
+document.getElementById("sections").innerHTML = DIRS.map((d, i) => `
+  <section class="section" id="dir-${d.k}">
+    <div class="section-head"><div><div class="dname">Direction ${i + 1}</div><div class="dtitle">${d.name}</div></div><p>${d.idea}</p></div>
+    <div class="modes">
+      ${["light", "dark"].map((m) => `
+        <div class="mode-col d d-${d.k} ${m}">
+          <div class="mode-label" style="color:var(--board-ink-2)">${m === "light" ? "Light" : "Dark"}</div>
+          <div class="pair">${fit(S.phoneHome())}${fit(S.phoneChat())}</div>
+          ${fit(S.deskOnboarding())}
+          ${fit(S.deskMain())}
+        </div>`).join("")}
+    </div>
+  </section>`).join("");
+</script>
+</body>
+</html>

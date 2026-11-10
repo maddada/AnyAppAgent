@@ -1,0 +1,12 @@
+{
+  "name": "@anyappagent/theme",
+  "private": true,
+  "type": "module",
+  "description": "AnyAppAgent theme (Workbench): tokens, theme.css, fonts and the mark for the Android and desktop apps.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "gen": "node tools/gen-theme-css.mjs",
+    "test": "node --test tools/theme.test.mjs",
+    "pages": "node tools/build-pages.mjs"
+  }
+}

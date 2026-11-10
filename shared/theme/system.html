@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AnyAppAgent Theme</title>
+<link rel="stylesheet" href="theme.css">
+<style>
+/* Mockup styles shared by directions.html and system.html. Only --aa-* custom properties carry
+   the look; nothing here names a colour, a family or a radius directly. */
+
+.mk {
+  font-family: var(--aa-font-text);
+  font-size: var(--aa-type-body-size);
+  line-height: var(--aa-type-body-line);
+  color: var(--aa-text);
+  background: var(--aa-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.mk, .mk * { box-sizing: border-box; }
+.mk :where(button) { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: default; }
+.mk :where(p, h1, h2, ol, ul, li) { margin: 0; padding: 0; }
+.mk :where(ol, ul) { list-style: none; }
+.ic { flex: none; stroke-width: var(--aa-icon-stroke); display: block; }
+.ic * { vector-effect: non-scaling-stroke; }
+
+/* Type roles */
+.t-display {
+  font-family: var(--aa-type-display-family);
+  font-size: var(--aa-type-display-size);
+  line-height: var(--aa-type-display-line);
+  font-weight: var(--aa-type-display-weight);
+  letter-spacing: var(--aa-type-display-tracking);
+  text-transform: var(--aa-type-display-transform);
+}
+.t-title {
+  font-family: var(--aa-type-title-family);
+  font-size: var(--aa-type-title-size);
+  line-height: var(--aa-type-title-line);
+  font-weight: var(--aa-type-title-weight);
+  letter-spacing: var(--aa-type-title-tracking);
+  text-transform: var(--aa-type-title-transform);
+}
+.eyebrow, .panel-label, .step-tag {
+  font-family: var(--aa-type-eyebrow-family);
+  font-size: var(--aa-type-eyebrow-size);
+  line-height: var(--aa-type-eyebrow-line);
+  font-weight: var(--aa-type-eyebrow-weight);
+  letter-spacing: var(--aa-type-eyebrow-tracking);
+  text-transform: var(--aa-type-eyebrow-transform);
+  color: var(--aa-text-secondary);
+}
+
+/* Frames */
+.phone {
+  width: 390px; height: 844px; border-radius: 44px; overflow: hidden; position: relative;
+  display: flex; flex-direction: column;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.10), 0 24px 48px -28px rgb(0 0 0 / 0.45);
+}
+.sbar { height: 40px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 28px 0; font-size: 14px; font-weight: 600; color: var(--aa-text); font-family: var(--aa-font-text); }
+.sbar-r { display: flex; align-items: center; gap: 6px; }
+.gesture { height: 24px; flex: none; display: flex; align-items: center; justify-content: center; }
+.gesture span { width: 108px; height: 4px; border-radius: 2px; background: var(--aa-text); opacity: 0.5; }
+
+.win {
+  width: 1120px; height: 720px; border-radius: var(--aa-radius-window); overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.14), 0 30px 60px -30px rgb(0 0 0 / 0.5);
+}
+.win-bar { height: 36px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 0 0 16px; font-size: 12px; color: var(--aa-text-secondary); background: var(--aa-surface-sunken); border-bottom: var(--aa-border-width) solid var(--aa-border); }
+.win-ctl { display: flex; height: 100%; }
+.win-ctl svg { width: 46px; padding: 0 18px; height: 100%; }
+.win-body { flex: 1; display: flex; min-height: 0; }
+
+/* Shared atoms */
+.icon-btn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--aa-radius-button); color: var(--aa-text-secondary); }
+.mk .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--aa-space-sm); white-space: nowrap;
+  height: var(--aa-size-button-height); padding: 0 var(--aa-space-xl);
+  border-radius: var(--aa-radius-button);
+  font-family: var(--aa-font-text); font-size: var(--aa-type-button-size); font-weight: var(--aa-type-button-weight);
+  letter-spacing: var(--aa-type-button-tracking); text-transform: var(--aa-type-button-transform);
+}
+.mk .btn-primary { background: var(--aa-accent); color: var(--aa-on-accent); }
+.mk .btn-quiet { color: var(--aa-text); background: transparent; box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border-strong); }
+.mk .btn-sm { height: var(--aa-size-button-height-small); padding: 0 var(--aa-space-lg); font-size: var(--aa-type-button-small-size); font-weight: var(--aa-type-button-small-weight); }
+.mk .btn-block { width: 100%; }
+
+.appicon { width: var(--aa-size-app-icon); height: var(--aa-size-app-icon); border-radius: var(--aa-radius-app-icon); overflow: hidden; flex: none; position: relative; }
+.appicon::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--aa-icon-edge); }
+.appicon svg { width: 100%; height: 100%; display: block; }
+.appicon-sm { width: var(--aa-size-app-icon-small); height: var(--aa-size-app-icon-small); border-radius: calc(var(--aa-size-app-icon-small) / 4); }
+.appicon-md { width: var(--aa-size-app-icon-medium); height: var(--aa-size-app-icon-medium); border-radius: calc(var(--aa-size-app-icon-medium) / 4); }
+
+.state { display: flex; align-items: center; gap: var(--aa-space-sm); font-size: var(--aa-type-label-size); line-height: var(--aa-type-label-line); font-weight: var(--aa-type-label-weight); color: var(--aa-text-tertiary); }
+.state-ready { color: var(--aa-ready); }
+.state-working { color: var(--aa-working); }
+.state-problem { color: var(--aa-problem); }
+.state-dot { width: var(--aa-size-dot); height: var(--aa-size-dot); border-radius: 50%; background: currentColor; flex: none; }
+.spin { width: var(--aa-size-spinner); height: var(--aa-size-spinner); flex: none; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; opacity: 0.9; }
+.conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--aa-ready); flex: none; display: inline-block; }
+
+/* Wordmark */
+.mark { display: block; flex: none; }
+.mark-xs { width: 22px; height: 22px; }
+.mark-sm { width: 28px; height: 28px; }
+.wordmark, .wordmark-sm { display: inline-flex; align-items: center; gap: 10px; font-family: var(--aa-font-display); font-weight: var(--aa-wordmark-weight); letter-spacing: var(--aa-wordmark-tracking); color: var(--aa-text); }
+.wordmark { font-size: 19px; }
+.wordmark-sm { font-size: 15px; gap: 8px; }
+
+/* Phone home */
+.home-head { padding: 4px 20px 0 24px; }
+.home-top { display: flex; align-items: center; justify-content: space-between; height: 48px; margin-right: -10px; }
+.home-title { margin-top: 18px; }
+.home-sub { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--aa-text-secondary); font-size: var(--aa-type-callout-size); line-height: var(--aa-type-callout-line); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--aa-size-grid-gap); padding: 24px 20px 0; flex: 1; align-content: start; }
+.tile {
+  background: var(--aa-tile-bg); border-radius: var(--aa-radius-tile);
+  box-shadow: inset 0 0 0 var(--aa-tile-border-width) var(--aa-tile-border);
+  padding: var(--aa-tile-padding); display: flex; flex-direction: column; align-items: var(--aa-tile-align); text-align: var(--aa-tile-text-align);
+  min-height: var(--aa-size-tile-min-height);
+}
+.tile:not(.tile-new) { box-shadow: inset 0 0 0 var(--aa-tile-border-width) var(--aa-tile-border), var(--aa-tile-shadow); }
+.tile .appicon { margin-bottom: var(--aa-space-md); }
+.tile-name { font-family: var(--aa-type-name-family); font-size: var(--aa-type-name-size); line-height: var(--aa-type-name-line); font-weight: var(--aa-type-name-weight); letter-spacing: var(--aa-type-name-tracking); color: var(--aa-text); margin-bottom: var(--aa-space-xs); }
+.tile .state { margin-top: auto; }
+.tile-new { background: var(--aa-tile-new-bg); box-shadow: none; outline: var(--aa-tile-border-width) var(--aa-tile-new-style) var(--aa-tile-new-border); outline-offset: calc(var(--aa-tile-border-width) * -1); }
+.new-plus { width: var(--aa-size-app-icon); height: var(--aa-size-app-icon); border-radius: var(--aa-radius-app-icon); display: grid; place-items: center; background: var(--aa-accent); color: var(--aa-on-accent); margin-bottom: var(--aa-space-md); }
+.tile-hint { color: var(--aa-text-secondary); font-size: var(--aa-type-label-size); line-height: var(--aa-type-label-line); margin-top: auto; }
+
+/* Phone chat */
+.chat-head { display: flex; align-items: center; gap: var(--aa-space-sm); height: var(--aa-size-chat-header-height); flex: none; padding: 0 16px 0 6px; border-bottom: var(--aa-border-width) solid var(--aa-border); }
+.chat-id { flex: 1; min-width: 0; }
+.chat-title { font-family: var(--aa-type-name-family); font-weight: var(--aa-type-heading-weight); font-size: var(--aa-type-heading-size); line-height: 20px; letter-spacing: var(--aa-type-name-tracking); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-sub { font-size: var(--aa-type-caption-size); line-height: 16px; color: var(--aa-ready); font-weight: var(--aa-type-label-weight); }
+.timeline { flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
+.tl-inner { padding: var(--aa-space-lg) var(--aa-space-lg) var(--aa-space-md); display: flex; flex-direction: column; gap: var(--aa-space-md); }
+.msg-user { display: flex; justify-content: flex-end; }
+.msg-user .bubble { max-width: calc(var(--aa-size-bubble-max-width-percent) * 1%); }
+.bubble { background: var(--aa-bubble-bg); color: var(--aa-text); border-radius: var(--aa-radius-bubble); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-bubble-border); padding: var(--aa-space-md) var(--aa-space-lg); font-size: var(--aa-type-callout-size); line-height: var(--aa-type-callout-line); }
+.think { display: flex; align-items: center; gap: var(--aa-space-sm); color: var(--aa-text-tertiary); font-size: var(--aa-type-row-size); line-height: var(--aa-type-row-line); padding: 0 var(--aa-space-xs); font-style: var(--aa-think-style); }
+.prose { font-family: var(--aa-type-prose-family); font-size: var(--aa-type-prose-size); line-height: var(--aa-type-prose-line); padding: 0 var(--aa-space-xs); }
+.prose strong { font-weight: var(--aa-type-strong-weight); }
+.prose em { font-style: normal; font-weight: var(--aa-type-strong-weight); }
+.plan { margin: 0 var(--aa-space-xs); padding: var(--aa-space-md); border-radius: var(--aa-radius-card); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border); display: flex; flex-direction: column; gap: var(--aa-space-xs); }
+.plan-head { display: flex; align-items: center; gap: var(--aa-space-sm); color: var(--aa-text-secondary); font-size: var(--aa-type-label-size); line-height: var(--aa-type-row-line); font-weight: var(--aa-type-label-weight); }
+.plan-count { margin-left: auto; color: var(--aa-text-tertiary); font-weight: 400; }
+.plan-item { display: flex; align-items: center; gap: var(--aa-space-sm); font-size: var(--aa-type-row-size); line-height: var(--aa-type-row-line); color: var(--aa-text); }
+.plan-item.is-done { color: var(--aa-text-secondary); }
+.plan-item.is-done .ic { color: var(--aa-text-tertiary); }
+.plan-item.is-active { font-weight: var(--aa-type-label-weight); }
+.plan-item.is-pending { color: var(--aa-text-tertiary); }
+.tools { display: flex; flex-direction: column; }
+.trow { display: flex; align-items: center; gap: var(--aa-space-sm); height: var(--aa-size-tool-row-height); padding: 0 var(--aa-space-xs); color: var(--aa-text-secondary); font-size: var(--aa-type-row-size); line-height: var(--aa-type-row-line); }
+.tr-icon { color: var(--aa-text-tertiary); display: flex; }
+.tr-title { white-space: nowrap; }
+.tr-detail { font-family: var(--aa-font-mono); font-size: var(--aa-type-mono-size); color: var(--aa-text-tertiary); white-space: nowrap; }
+.tr-status { margin-left: auto; color: var(--aa-text-tertiary); display: flex; }
+.trow.is-failed .tr-detail, .tr-failed { color: var(--aa-problem); }
+.trow.is-pending { color: var(--aa-text-tertiary); }
+.trow.is-running { color: var(--aa-text); }
+.build { margin: var(--aa-space-xs) 0 0; padding: var(--aa-space-lg); border-radius: var(--aa-radius-card); background: var(--aa-surface); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border), var(--aa-shadow-1); display: flex; flex-direction: column; gap: var(--aa-space-lg); }
+.build-top { display: flex; gap: var(--aa-space-md); align-items: center; }
+.build-badge { width: var(--aa-size-badge); height: var(--aa-size-badge); border-radius: var(--aa-radius-badge); display: grid; place-items: center; flex: none; background: var(--aa-surface-sunken); color: var(--aa-text-secondary); }
+.build.is-ready .build-badge { background: var(--aa-ready-soft); color: var(--aa-ready); }
+.build.is-failed .build-badge { background: var(--aa-problem-soft); color: var(--aa-problem); }
+.build-title { font-family: var(--aa-type-name-family); font-weight: var(--aa-type-heading-weight); font-size: var(--aa-type-heading-size); line-height: 22px; letter-spacing: var(--aa-type-name-tracking); }
+.build-sub { color: var(--aa-text-secondary); font-size: var(--aa-type-row-size); line-height: var(--aa-type-row-line); }
+.progress { height: var(--aa-size-progress-height); border-radius: var(--aa-radius-progress); background: var(--aa-surface-sunken); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--aa-working); border-radius: inherit; }
+.composer { flex: none; padding: var(--aa-space-sm) var(--aa-space-md) var(--aa-space-xs); }
+.composer-box { display: flex; align-items: center; gap: var(--aa-space-sm); min-height: var(--aa-size-composer-min-height); padding: var(--aa-space-xs) 6px var(--aa-space-xs) var(--aa-space-lg); border-radius: var(--aa-radius-composer); background: var(--aa-field-bg); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-field-border), var(--aa-shadow-1); }
+.composer-ph { flex: 1; color: var(--aa-text-tertiary); font-size: var(--aa-type-body-size); }
+.send { width: var(--aa-size-send-button); height: var(--aa-size-send-button); border-radius: var(--aa-radius-send); display: grid; place-items: center; background: var(--aa-surface-sunken) !important; color: var(--aa-text-tertiary) !important; }
+
+/* Desktop onboarding */
+.onb-rail { width: var(--aa-size-rail-width); flex: none; padding: var(--aa-space-3xl) var(--aa-space-3xl) var(--aa-space-2xl); background: var(--aa-rail-bg); border-right: var(--aa-border-width) solid var(--aa-border); display: flex; flex-direction: column; }
+.steps { margin-top: var(--aa-space-4xl); display: flex; flex-direction: column; gap: 4px; }
+.step { display: flex; align-items: center; gap: var(--aa-space-md); min-height: var(--aa-size-touch); padding: 0 var(--aa-space-md); border-radius: var(--aa-radius-button); color: var(--aa-text-secondary); font-size: var(--aa-type-callout-size); line-height: 20px; }
+.step-n { width: var(--aa-size-step-badge); height: var(--aa-size-step-badge); flex: none; border-radius: var(--aa-radius-step); display: grid; place-items: center; font-family: var(--aa-font-mono); font-size: 12px; font-weight: 600; box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border-strong); color: var(--aa-text-tertiary); }
+.step.is-done .step-n { background: var(--aa-surface-sunken); box-shadow: none; color: var(--aa-text-secondary); }
+.step.is-current { background: var(--aa-selected-bg); color: var(--aa-text); font-weight: var(--aa-type-label-weight); }
+.step.is-current .step-n { background: var(--aa-text); color: var(--aa-bg); box-shadow: none; }
+.step-l { display: flex; flex-direction: column; gap: 2px; }
+.step-tag { color: var(--aa-text-tertiary); font-size: 10px; line-height: 12px; }
+.rail-foot { margin-top: auto; font-size: var(--aa-type-caption-size); line-height: 18px; color: var(--aa-text-tertiary); max-width: 200px; }
+.onb-main { flex: 1; display: flex; flex-direction: column; background: var(--aa-bg); }
+.onb-content { flex: 1; padding: 80px 80px 0 80px; max-width: 760px; }
+.onb-title { margin-top: var(--aa-space-lg); font-family: var(--aa-type-hero-family); font-size: var(--aa-type-hero-size); line-height: var(--aa-type-hero-line); font-weight: var(--aa-type-hero-weight); letter-spacing: var(--aa-type-hero-tracking); }
+.lede { margin-top: var(--aa-space-lg); font-size: var(--aa-type-lede-size); line-height: var(--aa-type-lede-line); color: var(--aa-text-secondary); max-width: 560px; font-family: var(--aa-type-lede-family); }
+.how { margin-top: var(--aa-space-3xl); display: flex; flex-direction: column; gap: var(--aa-space-xl); }
+.how li { display: flex; gap: 16px; align-items: flex-start; }
+.how-n { width: 28px; flex: none; font-family: var(--aa-font-mono); font-size: 13px; line-height: 22px; color: var(--aa-text-tertiary); padding-top: 1px; }
+.how div { display: flex; flex-direction: column; gap: 2px; }
+.how strong { font-weight: var(--aa-type-heading-weight); font-size: var(--aa-type-body-size); line-height: 22px; }
+.how span { color: var(--aa-text-secondary); font-size: var(--aa-type-callout-size); line-height: 20px; }
+.check-card { margin-top: var(--aa-space-3xl); display: flex; align-items: center; gap: var(--aa-space-md); padding: var(--aa-space-lg); border-radius: var(--aa-radius-card); background: var(--aa-surface); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border), var(--aa-shadow-1); max-width: 560px; }
+.check-icon { width: var(--aa-size-badge); height: var(--aa-size-badge); flex: none; display: grid; place-items: center; border-radius: var(--aa-radius-badge); background: var(--aa-surface-sunken); color: var(--aa-text-secondary); }
+.check-text { flex: 1; display: flex; flex-direction: column; }
+.check-text strong { font-weight: var(--aa-type-heading-weight); font-size: var(--aa-type-body-size); line-height: 22px; }
+.check-text span { color: var(--aa-text-secondary); font-size: var(--aa-type-label-size); line-height: 18px; }
+.onb-foot { display: flex; justify-content: space-between; padding: var(--aa-space-xl) var(--aa-space-3xl) var(--aa-space-2xl) var(--aa-space-7xl); border-top: var(--aa-border-width) solid var(--aa-border); }
+
+/* Desktop main */
+.dm-side { width: var(--aa-size-sidebar-width); flex: none; padding: 24px 16px 20px; background: var(--aa-rail-bg); border-right: var(--aa-border-width) solid var(--aa-border); display: flex; flex-direction: column; }
+.dm-side .wordmark { padding: 0 8px; }
+.nav { margin-top: 32px; display: flex; flex-direction: column; gap: 2px; }
+.nav-i { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: var(--aa-radius-button); color: var(--aa-text-secondary); font-size: var(--aa-type-callout-size); }
+.nav-i .ic { color: var(--aa-text-tertiary); }
+.nav-i.is-active { background: var(--aa-selected-bg); color: var(--aa-text); font-weight: var(--aa-type-label-weight); }
+.nav-i.is-active .ic { color: var(--aa-text); }
+.side-status { margin-top: auto; display: flex; gap: 10px; align-items: flex-start; padding: 12px; font-size: var(--aa-type-caption-size); line-height: 17px; color: var(--aa-text-secondary); }
+.side-status .conn-dot { margin-top: 5px; }
+.side-status div { display: flex; flex-direction: column; gap: 2px; }
+.side-status strong { color: var(--aa-text); font-weight: var(--aa-type-label-weight); font-size: var(--aa-type-label-size); }
+.dm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 36px 40px 0; background: var(--aa-bg); }
+.dm-head { display: flex; align-items: flex-end; justify-content: space-between; padding-bottom: 24px; }
+.dm-sub { color: var(--aa-text-secondary); margin-top: 4px; font-size: var(--aa-type-callout-size); }
+.dm-cols { display: flex; gap: 32px; align-items: flex-start; }
+.dm-left { flex: 1; min-width: 0; }
+.list { border-radius: var(--aa-radius-card); background: var(--aa-list-bg); box-shadow: inset 0 0 0 var(--aa-list-border-width) var(--aa-border); overflow: hidden; }
+.lrow { display: flex; align-items: center; gap: var(--aa-space-md); height: var(--aa-size-app-row-height); padding: 0 var(--aa-space-lg); border-top: var(--aa-border-width) solid var(--aa-border); }
+.lrow:first-child { border-top: 0; }
+.lrow-main { flex: 1; min-width: 0; }
+.lrow-title { font-family: var(--aa-type-name-family); font-weight: var(--aa-type-heading-weight); font-size: var(--aa-type-heading-size); line-height: 22px; letter-spacing: var(--aa-type-name-tracking); }
+.lrow-main .state { margin-top: 2px; }
+.lrow-meta { color: var(--aa-text-tertiary); font-size: var(--aa-type-label-size); text-align: right; white-space: nowrap; }
+.recent { margin-top: 28px; }
+.recent-row { display: flex; gap: 16px; align-items: baseline; padding: 9px 0; border-top: var(--aa-border-width) solid var(--aa-border); font-size: var(--aa-type-label-size); line-height: 20px; color: var(--aa-text-secondary); }
+.recent-row:first-of-type { margin-top: 10px; }
+.recent-row time { width: 64px; flex: none; font-family: var(--aa-font-mono); font-size: var(--aa-type-mono-size); color: var(--aa-text-tertiary); }
+.lrow-chev { color: var(--aa-text-tertiary); }
+.dm-aside { width: 280px; flex: none; display: flex; flex-direction: column; gap: 16px; }
+.panel { border-radius: var(--aa-radius-card); background: var(--aa-surface); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border); padding: 16px 18px 18px; }
+.phone-card { display: flex; gap: 12px; align-items: center; margin-top: 12px; color: var(--aa-text-secondary); }
+.phone-card div { display: flex; flex-direction: column; }
+.phone-card strong { color: var(--aa-text); font-weight: var(--aa-type-heading-weight); font-size: var(--aa-type-body-size); line-height: 22px; }
+.phone-card span { font-size: var(--aa-type-label-size); line-height: 18px; }
+.qr-card p { color: var(--aa-text-secondary); font-size: var(--aa-type-label-size); line-height: 19px; margin: 12px 0 14px; }
+.qr-wrap { margin-top: var(--aa-space-md); padding: var(--aa-space-md); background: var(--aa-qr-bg); border-radius: var(--aa-radius-card); display: inline-flex; box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border); }
+.qr-card .btn { width: 100%; }
+
+/* system.html: component styles not already in screens.css, plus the page around them.
+   Like screens.css, component rules use only --aa-* variables from theme.css. */
+
+/* ---------- components ---------- */
+.mk .btn-problem { background: var(--aa-problem); color: var(--aa-on-problem); }
+.mk .btn[disabled], .mk .btn.is-disabled { background: var(--aa-surface-sunken); color: var(--aa-text-tertiary); box-shadow: none; }
+.mk .btn-primary.is-pressed { background: var(--aa-accent-pressed); }
+.mk .btn.is-focus { outline: var(--aa-focus-width) solid var(--aa-focus); outline-offset: 2px; }
+.mk .btn-text { height: auto; padding: 0; color: var(--aa-text); text-decoration: underline; text-decoration-color: var(--aa-border-strong); text-underline-offset: 3px; }
+
+.field { display: flex; flex-direction: column; gap: var(--aa-space-sm); width: 100%; }
+.field-label { font-size: var(--aa-type-label-size); line-height: var(--aa-type-label-line); font-weight: var(--aa-type-label-weight); color: var(--aa-text); }
+.field-box { display: flex; align-items: center; gap: 10px; height: var(--aa-size-field-height); padding: 0 var(--aa-space-lg); border-radius: var(--aa-radius-field); background: var(--aa-field-bg); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-field-border); font-size: var(--aa-type-body-size); color: var(--aa-text); }
+.field-box .ph { color: var(--aa-text-tertiary); }
+.field-box .caret { width: 1.5px; height: 22px; background: var(--aa-accent); margin-left: -8px; }
+.field.is-focus .field-box { box-shadow: inset 0 0 0 var(--aa-focus-width) var(--aa-accent); }
+.field-help { font-size: var(--aa-type-caption-size); line-height: 17px; color: var(--aa-text-secondary); }
+.field.is-problem .field-box { box-shadow: inset 0 0 0 var(--aa-focus-width) var(--aa-problem); }
+.field.is-problem .field-help { color: var(--aa-problem); }
+
+.sheet-stage { position: relative; width: 390px; height: 520px; overflow: hidden; border-radius: 28px; background: var(--aa-bg); }
+.sheet-stage::before { content: ""; position: absolute; inset: 0; background: var(--aa-scrim); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--aa-surface-overlay); border-radius: var(--aa-radius-sheet) var(--aa-radius-sheet) 0 0; box-shadow: var(--aa-shadow-3); padding: var(--aa-space-md) var(--aa-space-xl) var(--aa-space-2xl); }
+.grabber { width: 36px; height: 4px; border-radius: var(--aa-radius-full); background: var(--aa-border-strong); margin: 0 auto var(--aa-space-lg); }
+.sheet-head { display: flex; align-items: center; gap: var(--aa-space-md); margin-bottom: var(--aa-space-xl); }
+.sheet-head .appicon { width: 56px; height: 56px; border-radius: 14px; }
+.sheet-title { font-family: var(--aa-type-title-small-family); font-size: var(--aa-type-title-small-size); line-height: var(--aa-type-title-small-line); font-weight: var(--aa-type-title-small-weight); letter-spacing: var(--aa-type-title-small-tracking); }
+.sheet-actions { display: flex; flex-direction: column; gap: var(--aa-space-sm); }
+.sheet-note { margin-top: 14px; color: var(--aa-text-secondary); font-size: var(--aa-type-caption-size); line-height: 17px; text-align: center; }
+
+.dialog-stage { position: relative; width: 560px; height: 300px; display: grid; place-items: center; border-radius: 10px; overflow: hidden; background: var(--aa-bg); }
+.dialog-stage::before { content: ""; position: absolute; inset: 0; background: var(--aa-scrim); }
+.dialog { position: relative; width: var(--aa-size-dialog-width); background: var(--aa-surface-overlay); border-radius: var(--aa-radius-sheet); box-shadow: var(--aa-shadow-3); padding: var(--aa-space-2xl); }
+.dialog h2 { font-family: var(--aa-type-title-small-family); font-size: var(--aa-type-title-small-size); line-height: var(--aa-type-title-small-line); font-weight: var(--aa-type-title-small-weight); letter-spacing: var(--aa-type-title-small-tracking); margin: 0; }
+.dialog p { margin: var(--aa-space-sm) 0 var(--aa-space-2xl); color: var(--aa-text-secondary); font-size: var(--aa-type-callout-size); line-height: var(--aa-type-callout-line); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: var(--aa-space-sm); }
+
+.toast { display: inline-flex; align-items: center; gap: var(--aa-space-md); min-height: 48px; padding: var(--aa-space-md) var(--aa-space-lg); border-radius: var(--aa-radius-toast); background: var(--aa-text); color: var(--aa-bg); box-shadow: var(--aa-shadow-2); font-size: var(--aa-type-callout-size); line-height: var(--aa-type-callout-line); max-width: var(--aa-size-toast-max-width); }
+.toast .ic { color: var(--aa-bg); }
+.toast b { margin-left: 8px; font-weight: var(--aa-type-strong-weight); text-decoration: underline; text-underline-offset: 3px; }
+
+.srow { display: flex; align-items: center; gap: var(--aa-space-md); min-height: var(--aa-size-row-height); padding: 0 var(--aa-space-lg); border-top: var(--aa-border-width) solid var(--aa-border); background: var(--aa-surface); }
+.srow:first-child { border-top: 0; }
+.srow .srow-ic { color: var(--aa-text-secondary); }
+.srow-l { flex: 1; }
+.srow-v { color: var(--aa-text-tertiary); font-size: var(--aa-type-label-size); }
+.srow.is-pressed { background: var(--aa-selected-bg); }
+.slist { border-radius: var(--aa-radius-card); overflow: hidden; box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border); width: 358px; }
+.slist .srow { background: transparent; }
+
+.progress.is-indeterminate span { width: 32%; margin-left: 30%; }
+.spin { animation: aa-spin var(--aa-duration-spinner) linear infinite; }
+@keyframes aa-spin { to { transform: rotate(360deg); } }
+
+.think-body { margin: calc(var(--aa-space-xs) * -1) var(--aa-space-xs) 0 11px; padding: 2px 0 2px var(--aa-space-md); border-left: 2px solid var(--aa-border); color: var(--aa-text-secondary); font-size: var(--aa-type-callout-size); line-height: var(--aa-type-callout-line); }
+.trow-body { margin: 0 var(--aa-space-xs) var(--aa-space-xs) 28px; padding: var(--aa-space-md); border-radius: var(--aa-radius-badge); background: var(--aa-code-bg); font-family: var(--aa-font-mono); font-size: var(--aa-type-mono-size); line-height: 18px; color: var(--aa-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.prose p + p, .prose p + ul, .prose ul + p { margin-top: var(--aa-space-md); }
+.prose ul { padding-left: var(--aa-space-xl); list-style: disc; }
+.prose li { margin: 2px 0; }
+.prose li::marker { color: var(--aa-text-tertiary); }
+.prose code { font-family: var(--aa-font-mono); font-size: 0.86em; background: var(--aa-code-bg); border-radius: var(--aa-radius-code); padding: 1px 5px; }
+.prose a { color: var(--aa-text); text-decoration: underline; text-decoration-color: var(--aa-border-strong); text-underline-offset: 3px; }
+.perm { display: flex; flex-direction: column; gap: var(--aa-space-md); padding: var(--aa-space-lg); border-radius: var(--aa-radius-card); background: var(--aa-surface); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border-strong); }
+.perm-top { display: flex; gap: 12px; align-items: flex-start; }
+.perm-top .build-badge { width: 36px; height: 36px; }
+.perm-t { font-weight: var(--aa-type-heading-weight); font-size: var(--aa-type-heading-size); line-height: var(--aa-type-heading-line); }
+.perm-s { font-family: var(--aa-font-mono); font-size: var(--aa-type-mono-size); color: var(--aa-text-secondary); line-height: 18px; margin-top: 2px; }
+.perm-actions { display: flex; gap: var(--aa-space-sm); }
+.perm-actions .btn { flex: 1; }
+.err { display: flex; gap: var(--aa-space-sm); align-items: flex-start; padding: 0 var(--aa-space-xs); color: var(--aa-text-secondary); font-size: var(--aa-type-row-size); line-height: var(--aa-type-row-line); }
+.err .ic { color: var(--aa-problem); margin-top: 2px; }
+.mk .send.is-active { background: var(--aa-accent) !important; color: var(--aa-on-accent) !important; }
+.composer-text { flex: 1; font-size: var(--aa-type-body-size); color: var(--aa-text); }
+
+.qr-standalone { width: 300px; }
+
+/* ---------- page ---------- */
+:root { --page-bg: #E7E5E0; --page-ink: #1D1D1B; --page-ink-2: #5D5B56; --page-rule: #CFCCC5; }
+html, body { margin: 0; background: var(--page-bg); color: var(--page-ink); font-family: "Segoe UI", system-ui, sans-serif; }
+.page { max-width: 1440px; margin: 0 auto; padding: 56px 48px 96px; box-sizing: border-box; }
+.page > h1 { font-size: 40px; line-height: 44px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+.intro { max-width: 860px; color: var(--page-ink-2); font-size: 17px; line-height: 27px; margin: 14px 0 0; }
+.intro code, .sec-note code { font-size: 0.9em; }
+.sec { margin-top: 80px; border-top: 2px solid var(--page-ink); padding-top: 16px; }
+.sec > h2 { font-size: 28px; line-height: 32px; font-weight: 600; letter-spacing: -0.015em; margin: 0; }
+.sec-note { color: var(--page-ink-2); font-size: 15px; line-height: 23px; margin: 6px 0 0; max-width: 860px; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 24px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px var(--page-rule); }
+.pane { padding: 28px; background: var(--aa-bg); color: var(--aa-text); font-family: var(--aa-font-text); min-width: 0; }
+.pane-label { font-family: var(--aa-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--aa-text-tertiary); margin-bottom: 18px; }
+.comp { margin-top: 40px; }
+.comp-h { display: flex; gap: 16px; align-items: baseline; }
+.comp-h h3 { font-size: 19px; line-height: 24px; margin: 0; font-weight: 600; }
+.comp-h p { margin: 0; color: var(--page-ink-2); font-size: 14px; line-height: 21px; }
+.comp .duo { margin-top: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+.note { font-family: var(--aa-font-mono); font-size: 11px; color: var(--aa-text-tertiary); }
+.chatcol { width: 358px; display: flex; flex-direction: column; gap: 12px; }
+.tiles2 { display: grid; grid-template-columns: 171px 171px; gap: 12px; }
+
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.sw { border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--aa-border); background: var(--aa-surface); }
+.sw-chip { height: 54px; box-shadow: inset 0 0 0 1px var(--aa-border); border-radius: 10px 10px 0 0; }
+.sw-t { padding: 8px 10px 10px; font-size: 12px; line-height: 16px; }
+.sw-t b { display: block; font-weight: 600; color: var(--aa-text); }
+.sw-t span { font-family: var(--aa-font-mono); color: var(--aa-text-secondary); font-size: 11px; }
+.sw-group { font-family: var(--aa-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--aa-text-tertiary); margin: 22px 0 10px; }
+.sw-group:first-of-type { margin-top: 0; }
+
+.typerow { display: grid; grid-template-columns: 170px 1fr; gap: 20px; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--aa-border); }
+.typerow:first-child { border-top: 0; }
+.typemeta { font-family: var(--aa-font-mono); font-size: 11px; line-height: 16px; color: var(--aa-text-tertiary); }
+.typemeta b { display: block; color: var(--aa-text); font-size: 12px; font-weight: 500; }
+.typesample { color: var(--aa-text); min-width: 0; }
+
+.marks { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; }
+.marks img { display: block; }
+.adapt { position: relative; width: 132px; height: 132px; overflow: hidden; }
+.adapt img { position: absolute; inset: 0; width: 100%; height: 100%; }
+[data-aa-theme="dark"] .adapt-mono img { filter: invert(1); }
+
+.screens { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; }
+.screens .mode-col { display: flex; flex-direction: column; gap: 20px; }
+.screens .pair { display: flex; gap: 20px; }
+.fit { zoom: var(--z); flex: none; }
+.screens .pair .fit { --z: 0.82; }
+.screens .mode-col > .fit { --z: 0.5893; }
+.mode-label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--page-ink-2); font-weight: 600; }
+
+@media (max-width: 700px) {
+  .page { padding: 32px 16px 64px; }
+  .page > h1 { font-size: 30px; line-height: 34px; }
+  .intro { font-size: 15px; line-height: 23px; }
+  .duo { grid-template-columns: 1fr; }
+  .pane { padding: 20px 16px; }
+  .comp-h { flex-direction: column; gap: 4px; }
+  .swatches { grid-template-columns: repeat(2, 1fr); }
+  .typerow { grid-template-columns: 1fr; gap: 6px; }
+  .typesample { overflow: hidden; }
+  .chatcol, .slist { width: 100%; }
+  .tiles2 { grid-template-columns: 1fr 1fr; }
+  .sheet-stage { zoom: 0.8718; }
+  .dialog-stage { zoom: 0.5893; }
+  .screens { grid-template-columns: 1fr; gap: 32px; }
+  .screens .pair .fit { --z: 0.4385; }
+  .screens .mode-col > .fit { --z: 0.3196; }
+  .marks { gap: 16px; }
+}
+
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>AnyAppAgent theme: Workbench</h1>
+  <p class="intro">The final system, rendered from the real <code>theme.css</code> (generated from <code>tokens.ts</code>). One theme for the Android app and the desktop app, light and dark. Component numbers match <code>COMPONENTS.md</code>.</p>
+  <div id="sections"></div>
+</div>
+<script>
+const ICONS = {"plus":"<path d=\"M5 12h14\"/><path d=\"M12 5v14\"/>","settings":"<path d=\"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>","chevron-left":"<path d=\"m15 18-6-6 6-6\"/>","chevron-right":"<path d=\"m9 18 6-6-6-6\"/>","chevron-down":"<path d=\"m6 9 6 6 6-6\"/>","check":"<path d=\"M20 6 9 17l-5-5\"/>","x":"<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>","loader-circle":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\"/>","arrow-up":"<path d=\"m5 12 7-7 7 7\"/><path d=\"M12 19V5\"/>","package":"<path d=\"M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z\"/><path d=\"M12 22V12\"/><polyline points=\"3.29 7 12 12 20.71 7\"/><path d=\"m7.5 4.27 9 5.15\"/>","file-text":"<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\"/><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/>","file-pen":"<path d=\"M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34\"/><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"/><path d=\"M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z\"/>","terminal":"<path d=\"M12 19h8\"/><path d=\"m4 17 6-6-6-6\"/>","search":"<path d=\"m21 21-4.34-4.34\"/><circle cx=\"11\" cy=\"11\" r=\"8\"/>","list-todo":"<path d=\"M13 5h8\"/><path d=\"M13 12h8\"/><path d=\"M13 19h8\"/><path d=\"m3 17 2 2 4-4\"/><rect x=\"3\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\"/>","circle":"<circle cx=\"12\" cy=\"12\" r=\"10\"/>","circle-check":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16 9-5.5 5.5L8 12\"/>","circle-dashed":"<path d=\"M10.1 2.182a10 10 0 0 1 3.8 0\"/><path d=\"M13.9 21.818a10 10 0 0 1-3.8 0\"/><path d=\"M17.609 3.721a10 10 0 0 1 2.69 2.7\"/><path d=\"M2.182 13.9a10 10 0 0 1 0-3.8\"/><path d=\"M20.279 17.609a10 10 0 0 1-2.7 2.69\"/><path d=\"M21.818 10.1a10 10 0 0 1 0 3.8\"/><path d=\"M3.721 6.391a10 10 0 0 1 2.7-2.69\"/><path d=\"M6.391 20.279a10 10 0 0 1-2.69-2.7\"/>","smartphone":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"/><path d=\"M12 18h.01\"/>","monitor":"<rect width=\"20\" height=\"14\" x=\"2\" y=\"3\" rx=\"2\"/><line x1=\"8\" x2=\"16\" y1=\"21\" y2=\"21\"/><line x1=\"12\" x2=\"12\" y1=\"17\" y2=\"21\"/>","cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\"/>","shield-check":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\"/><path d=\"m9 12 2 2 4-4\"/>","lock":"<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/>","folder-open":"<path d=\"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2\"/>","qr-code":"<rect width=\"5\" height=\"5\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"5\" height=\"5\" x=\"16\" y=\"3\" rx=\"1\"/><rect width=\"5\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"/><path d=\"M21 16h-3a2 2 0 0 0-2 2v3\"/><path d=\"M21 21v.01\"/><path d=\"M12 7v3a2 2 0 0 1-2 2H7\"/><path d=\"M3 12h.01\"/><path d=\"M12 3h.01\"/><path d=\"M12 16v.01\"/><path d=\"M16 12h1\"/><path d=\"M21 12v.01\"/><path d=\"M12 21v-1\"/>","wifi":"<path d=\"M12 20h.01\"/><path d=\"M2 8.82a15 15 0 0 1 20 0\"/><path d=\"M5 12.859a10 10 0 0 1 14 0\"/><path d=\"M8.5 16.429a5 5 0 0 1 7 0\"/>","refresh-cw":"<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\"/><path d=\"M21 3v5h-5\"/><path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\"/><path d=\"M8 16H3v5\"/>","external-link":"<path d=\"M15 3h6v6\"/><path d=\"M10 14 21 3\"/><path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\"/>","circle-exclamation-point":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"12\" x2=\"12\" y1=\"8\" y2=\"12\"/><line x1=\"12\" x2=\"12.01\" y1=\"16\" y2=\"16\"/>","triangle-exclamation-point":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/>","laptop":"<path d=\"M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z\"/><path d=\"M20.054 15.987H3.946\"/>","layout-grid":"<rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\"/>","download":"<path d=\"M12 15V3\"/><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><path d=\"m7 10 5 5 5-5\"/>","play":"<path d=\"M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z\"/>","ellipsis":"<circle cx=\"12\" cy=\"12\" r=\"1\"/><circle cx=\"19\" cy=\"12\" r=\"1\"/><circle cx=\"5\" cy=\"12\" r=\"1\"/>","brain":"<path d=\"M12 18V5\"/><path d=\"M15 13a4.17 4.17 0 01-3-4 4.17 4.17 0 01-3 4\"/><path d=\"M17.707 6.294A3 3 0 1012 5a3 3 0 10-5.707 1.294\"/><path d=\"M17.996 5.125a4 4 0 012.526 5.77\"/><path d=\"M18 18a4 4 0 002-7.465\"/><path d=\"M19.967 17.482a4 4 0 11-7.967.517 4 4 0 11-7.967-.517\"/><path d=\"M6 18a4 4 0 01-2-7.465\"/><path d=\"M6.004 5.125a4 4 0 00-2.526 5.77\"/>","sparkles":"<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\"/><path d=\"M20 2v4\"/><path d=\"M22 4h-4\"/><circle cx=\"4\" cy=\"20\" r=\"2\"/>","house":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/>","power":"<path d=\"M12 2v10\"/><path d=\"M18.4 6.6a9 9 0 1 1-12.77.04\"/>","copy":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\"/><path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\"/>","hard-drive":"<path d=\"M10 16h.01\"/><path d=\"M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\"/><path d=\"M21.946 12.013H2.054\"/><path d=\"M6 16h.01\"/>","cloud-upload":"<path d=\"M12 13v8\"/><path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\"/><path d=\"m8 17 4-4 4 4\"/>","key-round":"<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\"/><circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"/>","arrow-right":"<path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/>","circle-dot":"<circle cx=\"12\" cy=\"12\" r=\"1\"/><circle cx=\"12\" cy=\"12\" r=\"10\"/>","pencil":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\"/><path d=\"m15 5 4 4\"/>","link":"<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\"/><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\"/>","globe":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20\"/><path d=\"M2 12h20\"/>","bell":"<path d=\"M10.268 21a2 2 0 0 0 3.464 0\"/><path d=\"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326\"/>","sun":"<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2\"/><path d=\"M12 20v2\"/><path d=\"m4.93 4.93 1.41 1.41\"/><path d=\"m17.66 17.66 1.41 1.41\"/><path d=\"M2 12h2\"/><path d=\"M20 12h2\"/><path d=\"m6.34 17.66-1.41 1.41\"/><path d=\"m19.07 4.93-1.41 1.41\"/>","moon":"<path d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\"/>","info":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 16v-4\"/><path d=\"M12 8h.01\"/>","trash":"<path d=\"M10 11v6\"/><path d=\"M14 11v6\"/><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\"/><path d=\"M3 6h18\"/><path d=\"M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"/>","square":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\"/>","mic":"<path d=\"M12 19v3\"/><path d=\"M19 10v2a7 7 0 0 1-14 0v-2\"/><rect x=\"9\" y=\"2\" width=\"6\" height=\"13\" rx=\"3\"/>","paperclip":"<path d=\"m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551\"/>","folder":"<path d=\"M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z\"/>","git-branch":"<path d=\"M15 6a9 9 0 0 0-9 9V3\"/><circle cx=\"18\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/>","user-round":"<circle cx=\"12\" cy=\"8\" r=\"5\"/><path d=\"M20 21a8 8 0 0 0-16 0\"/>","log-out":"<path d=\"m16 17 5-5-5-5\"/><path d=\"M21 12H9\"/><path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"/>","menu":"<path d=\"M4 5h16\"/><path d=\"M4 12h16\"/><path d=\"M4 19h16\"/>","scan-line":"<path d=\"M3 7V5a2 2 0 0 1 2-2h2\"/><path d=\"M17 3h2a2 2 0 0 1 2 2v2\"/><path d=\"M21 17v2a2 2 0 0 1-2 2h-2\"/><path d=\"M7 21H5a2 2 0 0 1-2-2v-2\"/><path d=\"M7 12h10\"/>"};
+const TOKEN_NAMES = {"colors":["bg","surface","surfaceSunken","surfaceOverlay","scrim","text","textSecondary","textTertiary","border","borderStrong","accent","accentPressed","onAccent","working","workingSoft","ready","readySoft","problem","problemSoft","onProblem","focus","tileBg","tileBorder","tileNewBg","tileNewBorder","bubbleBg","bubbleBorder","bubbleText","fieldBg","fieldBorder","railBg","selectedBg","listBg","qrBg","qrFg","markBg","markFg","codeBg","iconEdge"],"types":["hero","display","title","titleSmall","heading","name","body","prose","lede","callout","label","row","caption","button","buttonSmall","mono","eyebrow"]};
+/* Mockup builder shared by directions.html and system.html.
+   Every screen is plain markup styled only through the --aa-* custom properties, so the same
+   screens render in any direction or in the final theme. Needs a global ICONS map
+   (Lucide icon name -> inner SVG markup). */
+(function () {
+  const ic = (name, size = 20, cls = "") =>
+    `<svg class="ic ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="var(--aa-icon-stroke)" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
+
+  const APP_ART = {
+    prayer: `<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#1D3646"/><circle cx="30" cy="33" r="15" fill="#EFE0BC"/><circle cx="37" cy="27.5" r="12.5" fill="#1D3646"/><circle cx="45" cy="19" r="2" fill="#EFE0BC"/><rect x="12" y="50" width="40" height="2" rx="1" fill="#EFE0BC" opacity=".35"/></svg>`,
+    habits: `<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#E4B04A"/>${[0, 1, 2]
+      .map((r) =>
+        [0, 1, 2]
+          .map((c) => {
+            const on = [1, 1, 0, 1, 1, 1, 0, 1, 0][r * 3 + c];
+            return `<rect x="${14 + c * 13}" y="${14 + r * 13}" width="10" height="10" rx="3" fill="#2A2116" opacity="${on ? 1 : 0.22}"/>`;
+          })
+          .join(""),
+      )
+      .join("")}</svg>`,
+    groceries: `<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#F2EADC"/><path d="M24 26c0-6 3.6-10 8-10s8 4 8 10" fill="none" stroke="#B9482B" stroke-width="3" stroke-linecap="round"/><path d="M17 26h30l-3 22a3 3 0 0 1-3 2.6H23a3 3 0 0 1-3-2.6z" fill="#B9482B"/><rect x="26" y="34" width="12" height="2.6" rx="1.3" fill="#F2EADC"/></svg>`,
+    tasbih: `<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#57412F"/>${Array.from({ length: 14 })
+      .map((_, i) => {
+        const a = (i / 14) * Math.PI * 2 - Math.PI / 2;
+        return `<circle cx="${(32 + Math.cos(a) * 15).toFixed(1)}" cy="${(30 + Math.sin(a) * 15).toFixed(1)}" r="3" fill="#F0E2C8"/>`;
+      })
+      .join("")}<rect x="30.5" y="45" width="3" height="10" rx="1.5" fill="#F0E2C8"/></svg>`,
+    water: `<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#D5E4E8"/><path d="M32 13c7 9 12 15.5 12 22a12 12 0 0 1-24 0c0-6.5 5-13 12-22z" fill="#2B6075"/><path d="M27 38a6 6 0 0 0 5 5" stroke="#D5E4E8" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>`,
+  };
+  const appIcon = (k, cls = "") => `<div class="appicon ${cls}">${APP_ART[k]}</div>`;
+
+  const mark = (cls = "") =>
+    `<svg class="mark ${cls}" viewBox="0 0 108 108" aria-hidden="true"><rect width="108" height="108" rx="26" fill="var(--aa-mark-bg)"/><g fill="var(--aa-mark-fg)"><rect x="27" y="27" width="24" height="24" rx="6"/><rect x="57" y="27" width="24" height="24" rx="6"/><rect x="27" y="57" width="24" height="24" rx="6"/><rect x="57" y="57" width="24" height="24" rx="6" transform="rotate(-14 69 69)" fill="none" stroke="var(--aa-mark-fg)" stroke-width="5"/></g></svg>`;
+
+  const statusBar = () =>
+    `<div class="sbar"><span>9:41</span><span class="sbar-r">${ic("wifi", 15)}<svg width="22" height="12" viewBox="0 0 22 12"><rect x=".5" y=".5" width="18" height="11" rx="3" fill="none" stroke="currentColor" opacity=".5"/><rect x="2.5" y="2.5" width="12" height="7" rx="1.5" fill="currentColor"/><rect x="19.8" y="4" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div>`;
+  const gesture = () => `<div class="gesture"><span></span></div>`;
+
+  const stateLine = (state, text) => {
+    const m =
+      state === "ready"
+        ? `<span class="state-dot"></span>`
+        : state === "working"
+          ? `<span class="spin"></span>`
+          : state === "problem"
+            ? ic("circle-exclamation-point", 15)
+            : "";
+    return `<div class="state state-${state}">${m}<span>${text}</span></div>`;
+  };
+
+  function tile(k, name, state, text) {
+    return `<div class="tile" data-state="${state}">${appIcon(k)}<div class="tile-name">${name}</div>${stateLine(state, text)}</div>`;
+  }
+
+  function phoneHome() {
+    return `<div class="phone mk">
+${statusBar()}
+<div class="home-head">
+  <div class="home-top"><span class="wordmark-sm">${mark("mark-xs")}<span>AnyAppAgent</span></span><button class="icon-btn" aria-label="Settings">${ic("settings", 22)}</button></div>
+  <h1 class="t-display home-title">Your apps</h1>
+  <p class="home-sub"><span class="conn-dot"></span>Connected to your PC</p>
+</div>
+<div class="grid">
+  ${tile("prayer", "Ajman Prayer Times", "ready", "Update ready")}
+  ${tile("habits", "Daily Habits", "working", "Making changes")}
+  ${tile("groceries", "Groceries", "problem", "Couldn't build")}
+  ${tile("tasbih", "Tasbih Counter", "idle", "Updated yesterday")}
+  ${tile("water", "Drink Water", "idle", "Updated 3 days ago")}
+  <div class="tile tile-new"><div class="new-plus">${ic("plus", 28)}</div><div class="tile-name">New app</div><div class="tile-hint">Describe your idea</div></div>
+</div>
+${gesture()}
+</div>`;
+  }
+
+  const toolRow = (icon, title, detail, status) => {
+    const s =
+      status === "done"
+        ? `<span class="tr-status">${ic("check", 16)}</span>`
+        : status === "running"
+          ? `<span class="tr-status"><span class="spin"></span></span>`
+          : status === "pending"
+          ? `<span class="tr-status"></span>`
+          : `<span class="tr-status tr-failed">${ic("x", 16)}</span>`;
+    return `<div class="trow is-${status}"><span class="tr-icon">${ic(icon, 16)}</span><span class="tr-title">${title}</span>${detail ? `<span class="tr-detail">${detail}</span>` : ""}${s}</div>`;
+  };
+
+  function buildRow(state) {
+    if (state === "building")
+      return `<div class="build is-building"><div class="build-top"><span class="build-badge">${ic("package", 20)}</span><div class="build-text"><div class="build-title">Building version 8</div><div class="build-sub">Usually about two minutes</div></div></div><div class="progress"><span style="width:58%"></span></div></div>`;
+    if (state === "failed")
+      return `<div class="build is-failed"><div class="build-top"><span class="build-badge">${ic("circle-exclamation-point", 20)}</span><div class="build-text"><div class="build-title">Version 8 didn't build</div><div class="build-sub">Tried 3 times. Ask for a fix, or keep using version 7.</div></div></div></div>`;
+    return `<div class="build is-ready"><div class="build-top"><span class="build-badge">${ic("package", 20)}</span><div class="build-text"><div class="build-title">Your app is ready</div><div class="build-sub">Version 8, 31 MB</div></div></div><button class="btn btn-primary btn-block">${ic("download", 18)}Install</button></div>`;
+  }
+
+  function phoneChat() {
+    return `<div class="phone mk">
+${statusBar()}
+<div class="chat-head">
+  <button class="icon-btn" aria-label="Back">${ic("chevron-left", 24)}</button>
+  ${appIcon("prayer", "appicon-sm")}
+  <div class="chat-id"><div class="chat-title">Ajman Prayer Times</div><div class="chat-sub">Version 8 ready</div></div>
+  <button class="btn btn-quiet btn-sm">Open</button>
+</div>
+<div class="timeline"><div class="tl-inner">
+  <div class="msg-user"><div class="bubble">Add a second reminder before each prayer, and let me choose the minutes for both.</div></div>
+  <div class="think">${ic("chevron-right", 16)}<span>Thought for 6s</span></div>
+  <div class="prose"><p>Good idea. Every prayer will get two reminders, and a screen where you set both times.</p></div>
+  <div class="tools">
+    ${toolRow("file-pen", "Edit Reminders.tsx", "+48 −6", "done")}
+    ${toolRow("terminal", "Run the tests", "1 failed", "failed")}
+    ${toolRow("file-pen", "Edit Reminders.tsx", "+2 −2", "done")}
+    ${toolRow("terminal", "Run the tests", "14 passed", "done")}
+  </div>
+  <div class="prose"><p>Done. Reminders now come <strong>15 and 5 minutes</strong> before each prayer. You can change both in Settings.</p></div>
+  ${buildRow("ready")}
+</div></div>
+<div class="composer"><div class="composer-box"><span class="composer-ph">Ask for a change</span><button class="send" aria-label="Send" disabled>${ic("arrow-up", 20)}</button></div></div>
+${gesture()}
+</div>`;
+  }
+
+  const winBar = (title) =>
+    `<div class="win-bar"><span class="win-title">${title}</span><span class="win-ctl"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor"/></svg><svg width="10" height="10" viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" fill="none" stroke="currentColor"/></svg><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></span></div>`;
+
+  function stepItem(n, label, status, tag) {
+    const marker = status === "done" ? ic("check", 14) : `${n}`;
+    return `<li class="step is-${status}"><span class="step-n">${marker}</span><span class="step-l">${label}${tag ? `<span class="step-tag">${tag}</span>` : ""}</span></li>`;
+  }
+
+  function deskOnboarding() {
+    return `<div class="win mk">
+${winBar("AnyAppAgent setup")}
+<div class="win-body onb">
+  <aside class="onb-rail">
+    <div class="wordmark">${mark("mark-sm")}<span>AnyAppAgent</span></div>
+    <ol class="steps">
+      ${stepItem(1, "Welcome", "done")}
+      ${stepItem(2, "Tools for building apps", "done")}
+      ${stepItem(3, "A safe copy of your apps", "current", "Optional")}
+      ${stepItem(4, "Connect your phone", "todo")}
+    </ol>
+    <p class="rail-foot">You can change any of this later in Settings.</p>
+  </aside>
+  <main class="onb-main">
+    <div class="onb-content">
+      <div class="eyebrow">Step 3 of 4, optional</div>
+      <h1 class="t-display onb-title">A safe copy of your apps</h1>
+      <p class="lede">AnyAppAgent can keep a private copy of every app you make on GitHub, a free service for storing apps. If this PC ever breaks, nothing is lost.</p>
+      <ol class="how">
+        <li><span class="how-n">1</span><div><strong>Sign in to GitHub</strong><span>Or make a free account. It takes about a minute.</span></div></li>
+        <li><span class="how-n">2</span><div><strong>We make one private copy per app</strong><span>Only you can see them. Nothing is shared.</span></div></li>
+        <li><span class="how-n">3</span><div><strong>It stays up to date by itself</strong><span>Every change you ask for is saved there too.</span></div></li>
+      </ol>
+      <div class="check-card">
+        <span class="check-icon">${ic("cloud", 20)}</span>
+        <div class="check-text"><strong>GitHub</strong><span>Not signed in yet</span></div>
+        <button class="btn btn-primary">Sign in to GitHub ${ic("external-link", 16)}</button>
+      </div>
+    </div>
+    <footer class="onb-foot"><button class="btn btn-quiet">${ic("chevron-left", 18)}Back</button><button class="btn btn-quiet">Skip this step</button></footer>
+  </main>
+</div>
+</div>`;
+  }
+
+  function qr(size = 132) {
+    const n = 25;
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+    const cell = size / n;
+    let rects = "";
+    const inFinder = (x, y) => (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) if (!inFinder(x, y) && rnd() > 0.52) rects += `<rect x="${x * cell}" y="${y * cell}" width="${cell + 0.2}" height="${cell + 0.2}"/>`;
+    const finder = (fx, fy) =>
+      `<rect x="${fx * cell}" y="${fy * cell}" width="${7 * cell}" height="${7 * cell}" rx="${cell * 1.4}"/><rect x="${(fx + 1) * cell}" y="${(fy + 1) * cell}" width="${5 * cell}" height="${5 * cell}" rx="${cell * 0.9}" fill="var(--aa-qr-bg)"/><rect x="${(fx + 2) * cell}" y="${(fy + 2) * cell}" width="${3 * cell}" height="${3 * cell}" rx="${cell * 0.6}"/>`;
+    return `<svg class="qr" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><g fill="var(--aa-qr-fg)">${rects}${finder(0, 0)}${finder(n - 7, 0)}${finder(0, n - 7)}</g></svg>`;
+  }
+
+  function appRow(k, name, pkg, state, stateText, meta) {
+    return `<div class="lrow">${appIcon(k, "appicon-md")}<div class="lrow-main"><div class="lrow-title">${name}</div>${stateLine(state, stateText)}</div><div class="lrow-meta">${meta}</div><span class="lrow-chev">${ic("chevron-right", 18)}</span></div>`;
+  }
+
+  function deskMain() {
+    return `<div class="win mk">
+${winBar("AnyAppAgent")}
+<div class="win-body dm">
+  <aside class="dm-side">
+    <div class="wordmark">${mark("mark-sm")}<span>AnyAppAgent</span></div>
+    <nav class="nav">
+      <a class="nav-i is-active">${ic("layout-grid", 18)}Apps</a>
+      <a class="nav-i">${ic("smartphone", 18)}Phones</a>
+      <a class="nav-i">${ic("settings", 18)}Settings</a>
+    </nav>
+    <div class="side-status"><span class="conn-dot"></span><div><strong>Running</strong><span>Your phone can reach this PC from anywhere</span></div></div>
+  </aside>
+  <main class="dm-main">
+    <header class="dm-head"><div><h1 class="t-title">Your apps</h1><p class="dm-sub">5 apps, all made on this PC</p></div><button class="btn btn-quiet">${ic("folder-open", 18)}Open apps folder</button></header>
+    <div class="dm-cols">
+      <div class="dm-left"><section class="list">
+        ${appRow("prayer", "Ajman Prayer Times", "com.anyapp.ajmanprayertimes", "ready", "Update ready", "v8, 2 min ago")}
+        ${appRow("habits", "Daily Habits", "com.anyapp.dailyhabits", "working", "Making changes", "v3, yesterday")}
+        ${appRow("groceries", "Groceries", "com.anyapp.groceries", "problem", "Couldn't build", "v5, today")}
+        ${appRow("tasbih", "Tasbih Counter", "com.anyapp.tasbihcounter", "idle", "Up to date", "v2, yesterday")}
+        ${appRow("water", "Drink Water", "com.anyapp.drinkwater", "idle", "Up to date", "v6, Sunday")}
+      </section>
+      <section class="recent"><div class="panel-label">Today</div>
+        <div class="recent-row"><time>10:42</time><span>Ajman Prayer Times: version 8 built and sent to your phone</span></div>
+        <div class="recent-row"><time>10:37</time><span>Daily Habits: started on "add a weekly summary"</span></div>
+        <div class="recent-row"><time>09:15</time><span>Groceries: version 6 didn't build after 3 tries</span></div>
+      </section></div>
+      <aside class="dm-aside">
+        <div class="panel"><div class="panel-label">Your phone</div><div class="phone-card">${ic("smartphone", 22)}<div><strong>Pixel 8</strong><span>Connected, seen just now</span></div></div></div>
+        <div class="panel qr-card"><div class="panel-label">Add another phone</div><div class="qr-wrap">${qr(136)}</div><p>Open AnyAppAgent on the phone and scan this code.</p><button class="btn btn-quiet btn-sm">Use a code instead</button></div>
+      </aside>
+    </div>
+  </main>
+</div>
+</div>`;
+  }
+
+  window.AAScreens = { ic, appIcon, mark, qr, stateLine, tile, toolRow, buildRow, phoneHome, phoneChat, deskOnboarding, deskMain, APP_ART };
+})();
+
+/* Builds system.html. Every value shown is read back from theme.css at runtime
+   (getComputedStyle on a light and a dark pane); TOKEN_NAMES only lists which names to show. */
+(function () {
+  const S = window.AAScreens;
+  const { ic } = S;
+  const kebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  const duo = (html, cls = "") =>
+    `<div class="duo">${["light", "dark"].map((m) => `<div class="pane mk ${cls}" data-aa-theme="${m}"><div class="pane-label">${m === "light" ? "Light" : "Dark"}</div>${html}</div>`).join("")}</div>`;
+  const comp = (n, title, note, html, cls) =>
+    `<div class="comp" id="c-${n}"><div class="comp-h"><h3>${n}. ${title}</h3><p>${note}</p></div>${duo(html, cls)}</div>`;
+
+  // ---------- colour ----------
+  const groups = [
+    ["Surfaces", ["bg", "surface", "surfaceSunken", "surfaceOverlay", "scrim"]],
+    ["Text", ["text", "textSecondary", "textTertiary"]],
+    ["Lines", ["border", "borderStrong", "focus"]],
+    ["Accent", ["accent", "accentPressed", "onAccent"]],
+    ["States", ["working", "workingSoft", "ready", "readySoft", "problem", "problemSoft", "onProblem"]],
+  ];
+  const listed = new Set(groups.flatMap((g) => g[1]));
+  groups.push(["Component aliases", TOKEN_NAMES.colors.filter((c) => !listed.has(c))]);
+  const swatches = groups
+    .map(
+      ([g, names]) =>
+        `<div class="sw-group">${g}</div><div class="swatches">${names
+          .map((n) => `<div class="sw"><div class="sw-chip" style="background:var(--aa-${kebab(n)})"></div><div class="sw-t"><b>${n}</b><span data-var="--aa-${kebab(n)}"></span></div></div>`)
+          .join("")}</div>`,
+    )
+    .join("");
+
+  // ---------- type ----------
+  const samples = {
+    hero: "A safe copy of your apps",
+    display: "Your apps",
+    title: "Your apps",
+    titleSmall: "Ajman Prayer Times",
+    heading: "Your app is ready",
+    name: "Daily Habits",
+    body: "Every prayer will get two reminders, and a screen where you set both times.",
+    prose: "Done. Reminders now come 15 and 5 minutes before each prayer.",
+    lede: "AnyAppAgent can keep a private copy of every app you make.",
+    callout: "Connected to your PC",
+    label: "Update ready",
+    row: "Run the tests, 14 passed",
+    caption: "You can change any of this later in Settings.",
+    button: "Install",
+    buttonSmall: "Open",
+    mono: "Edit Reminders.tsx  +48 \u22126",
+    eyebrow: "Step 3 of 4, optional",
+  };
+  const typeRows = TOKEN_NAMES.types
+    .map((r) => {
+      const k = kebab(r);
+      return `<div class="typerow"><div class="typemeta"><b>${r}</b><span data-type="${k}"></span></div><div class="typesample aa-type-${k}">${samples[r] || r}</div></div>`;
+    })
+    .join("");
+
+  // ---------- components ----------
+  const buttons = `<div class="col">
+    <div class="row"><button class="btn btn-primary">${ic("download", 18)}Install</button><button class="btn btn-primary is-pressed">Pressed</button><button class="btn btn-quiet">Skip this step</button><button class="btn btn-quiet btn-sm">Open</button></div>
+    <div class="row"><button class="btn btn-problem">Forget phone</button><button class="btn" disabled>Install</button><button class="btn btn-quiet is-focus">Focused</button><button class="btn btn-text">Use a code instead</button></div>
+  </div>`;
+  const fields = `<div class="col" style="width:100%;max-width:358px">
+    <div class="field"><div class="field-label">Name</div><div class="field-box"><span class="ph">For example, Prayer Times</span></div></div>
+    <div class="field is-focus"><div class="field-label">What should it do?</div><div class="field-box"><span>Alarms for the five prayers in Ajman</span><span class="caret"></span></div><div class="field-help">Plain words are best. You can change it any time.</div></div>
+    <div class="field is-problem"><div class="field-label">Name</div><div class="field-box"><span class="ph">For example, Prayer Times</span></div><div class="field-help">Give your app a name first.</div></div>
+  </div>`;
+  const tiles = `<div class="tiles2">
+    ${S.tile("prayer", "Ajman Prayer Times", "ready", "Update ready")}
+    ${S.tile("habits", "Daily Habits", "working", "Making changes")}
+    ${S.tile("groceries", "Groceries", "problem", "Couldn't build")}
+    ${S.tile("tasbih", "Tasbih Counter", "idle", "Updated yesterday")}
+    <div class="tile tile-new"><div class="new-plus">${ic("plus", 28)}</div><div class="tile-name">New app</div><div class="tile-hint">Describe your idea</div></div>
+  </div>`;
+  const sheet = `<div class="col"><div class="sheet-stage"><div class="sheet"><div class="grabber"></div>
+    <div class="sheet-head">${S.appIcon("prayer")}<div><div class="sheet-title">Ajman Prayer Times</div>${S.stateLine("ready", "Update ready")}</div></div>
+    <div class="sheet-actions"><button class="btn btn-primary btn-block">${ic("download", 18)}Install version 8</button><button class="btn btn-quiet btn-block">${ic("play", 18)}Open</button><button class="btn btn-quiet btn-block">${ic("pencil", 18)}Change it</button></div>
+    <p class="sheet-note">Version 7 is on this phone.</p></div></div>
+    <div class="dialog-stage"><div class="dialog"><h2>Forget this phone?</h2><p>Pixel 8 will not reach this PC again until you scan the code once more. Its apps stay installed.</p><div class="dialog-actions"><button class="btn btn-quiet">Cancel</button><button class="btn btn-problem">Forget phone</button></div></div></div></div>`;
+  const lists = `<div class="col" style="width:100%">
+    <div class="slist">
+      <div class="srow"><span class="srow-ic">${ic("smartphone", 20)}</span><span class="srow-l">Phone</span><span class="srow-v">Pixel 8</span>${ic("chevron-right", 18, "srow-ic")}</div>
+      <div class="srow is-pressed"><span class="srow-ic">${ic("globe", 20)}</span><span class="srow-l">Reach from anywhere</span><span class="srow-v">On</span>${ic("chevron-right", 18, "srow-ic")}</div>
+      <div class="srow"><span class="srow-ic">${ic("folder", 20)}</span><span class="srow-l">Apps folder</span><span class="srow-v">C:\\aa\\apps</span>${ic("chevron-right", 18, "srow-ic")}</div>
+    </div>
+    <div class="list" style="width:100%;max-width:520px">${["prayer|Ajman Prayer Times|ready|Update ready|v8, 2 min ago", "groceries|Groceries|problem|Couldn't build|v5, today"]
+      .map((r) => {
+        const [k, n, st, tx, meta] = r.split("|");
+        return `<div class="lrow">${S.appIcon(k, "appicon-md")}<div class="lrow-main"><div class="lrow-title">${n}</div>${S.stateLine(st, tx)}</div><div class="lrow-meta">${meta}</div><span class="lrow-chev">${ic("chevron-right", 18)}</span></div>`;
+      })
+      .join("")}</div>
+  </div>`;
+  const steps = `<div class="onb-rail" style="width:300px;border:0;border-radius:12px;padding:20px">
+    <ol class="steps" style="margin-top:0">
+      <li class="step is-done"><span class="step-n">${ic("check", 14)}</span><span class="step-l">Welcome</span></li>
+      <li class="step is-current"><span class="step-n">3</span><span class="step-l">A safe copy of your apps<span class="step-tag">Optional</span></span></li>
+      <li class="step is-todo"><span class="step-n">4</span><span class="step-l">Connect your phone</span></li>
+    </ol></div>`;
+  const qr = `<div class="panel qr-card qr-standalone"><div class="panel-label">Add another phone</div><div class="qr-wrap">${S.qr(136)}</div><p>Open AnyAppAgent on the phone and scan this code.</p><button class="btn btn-quiet btn-sm">Use a code instead</button></div>`;
+  const progress = `<div class="col" style="width:100%;max-width:358px">
+    <div class="note">Determinate</div><div class="progress" style="width:100%"><span style="width:58%"></span></div>
+    <div class="note">Indeterminate (sweeps)</div><div class="progress is-indeterminate" style="width:100%"><span></span></div>
+    <div class="note">States</div>
+    <div class="row">${S.stateLine("working", "Making changes")}${S.stateLine("ready", "Update ready")}${S.stateLine("problem", "Couldn't build")}${S.stateLine("idle", "Updated yesterday")}</div>
+  </div>`;
+  const toasts = `<div class="col"><div class="toast">${ic("circle-check", 20)}<span>Version 8 is installed</span></div><div class="toast">${ic("wifi", 20)}<span>Lost the PC. Trying again</span><b>Details</b></div></div>`;
+
+  const chatA = `<div class="chatcol">
+    <div class="note">User message</div>
+    <div class="msg-user" style="padding-left:40px"><div class="bubble">Add a second reminder before each prayer, and let me choose the minutes for both.</div></div>
+    <div class="note">Assistant message (markdown)</div>
+    <div class="prose"><p>Here is what changed:</p><ul><li>Two reminders for every prayer</li><li>A <strong>Reminders</strong> screen in Settings</li></ul><p>Times come from <code>PrayerTimes.ts</code>, using the <a>Umm al-Qura</a> method.</p></div>
+    <div class="note">Thinking row, collapsed and open</div>
+    <div class="think">${ic("chevron-right", 16)}<span>Thought for 6s</span></div>
+    <div class="think">${ic("chevron-down", 16)}<span>Thought for 6s</span></div>
+    <div class="think-body">Asr in the UAE follows the Shafi'i time, so the later shadow rule does not apply here.</div>
+    <div class="note">Plan</div>
+    <div class="plan"><div class="plan-head">${ic("list-todo", 16)}<span>Plan</span><span class="plan-count">1 of 3 done</span></div>
+      <div class="plan-item is-done">${ic("circle-check", 16)}<span>Two reminders for each prayer</span></div>
+      <div class="plan-item is-active"><span class="spin" style="margin:0 1.5px"></span><span>A screen to set both times</span></div>
+      <div class="plan-item is-pending">${ic("circle-dashed", 16)}<span>Build version 8</span></div></div>
+  </div>`;
+  const chatB = `<div class="chatcol">
+    <div class="note">Tool-call rows: pending, running, done, failed, open</div>
+    <div class="tools">
+      ${S.toolRow("search", "Search for prayer settings", "", "pending")}
+      ${S.toolRow("terminal", "Install expo-notifications", "", "running")}
+      ${S.toolRow("file-pen", "Edit Reminders.tsx", "+48 \u22126", "done")}
+      ${S.toolRow("terminal", "Run the tests", "1 failed", "failed")}
+    </div>
+    <div class="trow-body">FAIL  Reminders.test.ts
+  second reminder fires 5 min before Maghrib
+  expected 18:21, received 18:26</div>
+    <div class="note">Build row: building, ready, failed</div>
+    ${S.buildRow("building")}${S.buildRow("ready")}${S.buildRow("failed")}
+  </div>`;
+  const chatC = `<div class="chatcol">
+    <div class="note">Permission request</div>
+    <div class="perm"><div class="perm-top"><span class="build-badge">${ic("lock", 18)}</span><div><div class="perm-t">Allow this step?</div><div class="perm-s">npm install expo-notifications</div></div></div><div class="perm-actions"><button class="btn btn-quiet btn-sm">Don't allow</button><button class="btn btn-primary btn-sm">Allow</button></div></div>
+    <div class="note">Error row</div>
+    <div class="err">${ic("circle-exclamation-point", 16)}<span>Couldn't reach GitHub, so this version is only saved on your PC.</span></div>
+    <div class="note">Composer: empty, typing</div>
+    <div class="composer" style="padding:0"><div class="composer-box"><span class="composer-ph">Ask for a change</span><button class="send" disabled>${ic("arrow-up", 20)}</button></div></div>
+    <div class="composer" style="padding:0"><div class="composer-box"><span class="composer-text">Make the Fajr alarm louder</span><button class="send is-active">${ic("arrow-up", 20)}</button></div></div>
+  </div>`;
+
+  // ---------- marks ----------
+  const markPane = (m) => `<div class="marks">
+    <img src="mark/mark.svg" width="108" height="108" alt="">
+    <img src="mark/mark.svg" width="48" height="48" alt="">
+    <img src="mark/mark-small.svg" width="24" height="24" alt="">
+    <img src="mark/mark-small.svg" width="16" height="16" alt="">
+    <div class="adapt" style="border-radius:50%"><img src="mark/android/adaptive-background.svg" alt=""><img src="mark/android/adaptive-foreground.svg" alt=""></div>
+    <div class="adapt" style="border-radius:32%"><img src="mark/android/adaptive-background.svg" alt=""><img src="mark/android/adaptive-foreground.svg" alt=""></div>
+    <div class="adapt adapt-mono" style="border-radius:50%;background:var(--aa-ready-soft)"><img src="mark/android/adaptive-monochrome.svg" alt="" style="opacity:.72"></div>
+    <img src="mark/${m === "light" ? "lockup.svg" : "lockup-dark.svg"}" height="40" alt="AnyAppAgent">
+  </div>`;
+
+  const sections = `
+  <section class="sec" id="colour"><h2>Colour</h2><p class="sec-note">Paper, graphite and one bottle green. Green means the next thing to do, or ready. Brick red means a problem. Working is ink in motion, never a colour. Every swatch below is read from <code>theme.css</code>.</p>
+    <div class="duo">${["light", "dark"].map((m) => `<div class="pane mk" data-aa-theme="${m}"><div class="pane-label">${m === "light" ? "Light" : "Dark"}</div>${swatches}</div>`).join("")}</div></section>
+  <section class="sec" id="type"><h2>Type</h2><p class="sec-note">Bricolage Grotesque, cut at two optical sizes (Display for big headings, Text for everything else), and IBM Plex Mono for labels, file names and times. Both OFL.</p>
+    ${duo(typeRows)}</section>
+  <section class="sec" id="mark"><h2>Mark</h2><p class="sec-note">Three finished tiles and one still being set into place: your apps, and the next one on the bench. The Android adaptive layers keep inside the 66dp safe zone; the 16 and 24px versions are drawn on the pixel grid for the Windows tray.</p>
+    <div class="duo">${["light", "dark"].map((m) => `<div class="pane mk" data-aa-theme="${m}"><div class="pane-label">${m === "light" ? "Light" : "Dark"}</div>${markPane(m)}</div>`).join("")}</div></section>
+  <section class="sec" id="components"><h2>Components</h2><p class="sec-note">Numbered as in <code>COMPONENTS.md</code>. Each one in light and dark, built only from theme.css variables.</p>
+    ${comp(1, "Buttons", "Primary (one per screen), quiet, small, problem, disabled, focus, text.", buttons)}
+    ${comp(2, "Text field", "Rest, focused with text, problem.", fields)}
+    ${comp(3, "App tile", "Ready, working, problem, idle, and the new app slot.", tiles)}
+    ${comp(4, "Sheet and dialog", "Phone bottom sheet after tapping an app; desktop confirm dialog.", sheet)}
+    ${comp(5, "List rows", "Settings row (one pressed) and the desktop app row.", lists)}
+    ${comp(6, "Onboarding step rail", "Done, current, to do. The full step layout is in Screens below.", steps)}
+    ${comp(7, "QR card", "Always dark modules on light paper, also in dark mode.", qr)}
+    ${comp(8, "Progress and states", "Bar, sweep, and the three states with their marks.", progress)}
+    ${comp(9, "Toast", "Inverted ink, at the bottom, one line.", toasts)}
+    ${comp(10, "Chat: messages, thinking, plan", "The structure of bb's thread view, in this theme.", chatA)}
+    ${comp(11, "Chat: tool calls and build", "Quiet rows; only a failure and a ready build get colour.", chatB)}
+    ${comp(12, "Chat: permission, error, composer", "", chatC)}
+  </section>
+  <section class="sec" id="screens"><h2>Screens</h2><p class="sec-note">The four screens from the directions page, rebuilt from the final theme.css.</p>
+    <div class="screens">${["light", "dark"]
+      .map(
+        (m) => `<div class="mode-col" data-aa-theme="${m}"><div class="mode-label">${m === "light" ? "Light" : "Dark"}</div>
+        <div class="pair"><div class="fit">${S.phoneHome()}</div><div class="fit">${S.phoneChat()}</div></div>
+        <div class="fit">${S.deskOnboarding()}</div><div class="fit">${S.deskMain()}</div></div>`,
+      )
+      .join("")}</div></section>`;
+  document.getElementById("sections").innerHTML = sections;
+
+  // Read values back from theme.css.
+  for (const el of document.querySelectorAll("[data-var]")) {
+    el.textContent = getComputedStyle(el).getPropertyValue(el.dataset.var).trim();
+  }
+  for (const el of document.querySelectorAll("[data-type]")) {
+    const cs = getComputedStyle(el);
+    const v = (p) => cs.getPropertyValue(`--aa-type-${el.dataset.type}-${p}`).trim();
+    const f = v("family").toLowerCase();
+    const fam = f.includes("display") ? "Display" : f.includes("mono") ? "Mono" : "Text";
+    el.textContent = `${fam} ${v("weight")}, ${v("size")}/${v("line")}${v("tracking") !== "0" ? `, ${v("tracking")}` : ""}`;
+  }
+})();
+
+</script>
+</body>
+</html>

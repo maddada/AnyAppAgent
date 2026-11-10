@@ -1,0 +1,230 @@
+/* The three directions as value sets. Same variable names as the final theme.css. */
+
+/* ---------- shared defaults ---------- */
+.d {
+  --aa-space-xs: 4px; --aa-space-sm: 8px; --aa-space-md: 12px; --aa-space-lg: 16px; --aa-space-xl: 20px;
+  --aa-size-button-height-small: 36px; --aa-size-app-icon: 64px; --aa-size-app-icon-small: 36px; --aa-size-app-icon-medium: 44px;
+  --aa-size-dot: 8px; --aa-size-spinner: 13px; --aa-size-tile-min-height: 172px; --aa-size-chat-header-height: 60px;
+  --aa-size-tool-row-height: 32px; --aa-size-badge: 40px; --aa-size-progress-height: 6px; --aa-radius-progress: 3px;
+  --aa-size-composer-min-height: 52px; --aa-size-send-button: 40px; --aa-size-bubble-max-width-percent: 85;
+  --aa-type-row-size: 14px; --aa-type-row-line: 20px; --aa-type-button-small-size: 14px; --aa-type-button-small-weight: var(--aa-type-button-weight);
+  --aa-icon-edge: rgb(0 0 0 / 0.06);
+  --aa-space-2xl: 24px; --aa-space-3xl: 32px; --aa-space-4xl: 40px; --aa-space-7xl: 80px;
+  --aa-size-rail-width: 300px; --aa-size-touch: 44px; --aa-size-step-badge: 26px; --aa-size-app-row-height: 72px; --aa-size-sidebar-width: 240px;
+  --aa-border-width: 1px; --aa-tile-border-width: 1px; --aa-list-border-width: 1px;
+  --aa-icon-stroke: 1.75;
+  --aa-type-display-transform: none; --aa-type-button-transform: none; --aa-think-style: normal;
+  --aa-tile-align: flex-start; --aa-tile-text-align: left; --aa-tile-padding: 16px; --aa-size-grid-gap: 12px;
+  --aa-size-button-height: 48px;
+  --aa-type-display-size: 34px; --aa-type-display-line: 40px; --aa-type-display-weight: 700; --aa-type-display-tracking: -0.02em;
+  --aa-type-title-size: 28px; --aa-type-title-line: 34px; --aa-type-title-weight: 700; --aa-type-title-tracking: -0.015em;
+  --aa-type-heading-size: 17px; --aa-type-heading-weight: 600;
+  --aa-type-name-size: 16px; --aa-type-name-line: 21px; --aa-type-name-weight: 600; --aa-type-name-tracking: -0.005em;
+  --aa-type-body-size: 16px; --aa-type-body-line: 24px;
+  --aa-type-prose-size: 16px; --aa-type-prose-line: 24px;
+  --aa-type-callout-size: 15px; --aa-type-callout-line: 21px;
+  --aa-type-lede-size: 18px; --aa-type-lede-line: 28px;
+  --aa-type-label-size: 14px; --aa-type-label-line: 19px; --aa-type-label-weight: 500;
+  --aa-type-caption-size: 13px;
+  --aa-type-mono-size: 12.5px;
+  --aa-type-eyebrow-size: 11px; --aa-type-eyebrow-line: 14px; --aa-type-eyebrow-weight: 500; --aa-type-eyebrow-tracking: 0.08em;
+  --aa-type-button-size: 16px; --aa-type-button-weight: 600; --aa-type-button-tracking: 0;
+  --aa-type-strong-weight: 600;
+  --aa-wordmark-weight: 700; --aa-wordmark-tracking: -0.02em;
+  --aa-type-hero-size: 46px; --aa-type-hero-line: 50px;
+  --aa-type-display-family: var(--aa-font-display); --aa-type-title-family: var(--aa-font-display); --aa-type-hero-family: var(--aa-font-display);
+  --aa-type-hero-weight: var(--aa-type-display-weight); --aa-type-hero-tracking: var(--aa-type-display-tracking);
+  --aa-type-title-transform: var(--aa-type-display-transform); --aa-type-eyebrow-transform: uppercase;
+  --aa-tile-new-style: solid; --aa-tile-shadow: 0 0 0 transparent;
+}
+
+/* ---------- 1. Workbench ---------- */
+.d-wb {
+  --aa-font-display: "WB Display", "WB Text", sans-serif;
+  --aa-font-text: "WB Text", sans-serif;
+  --aa-type-name-family: "WB Text", sans-serif;
+  --aa-type-prose-family: "WB Text", sans-serif;
+  --aa-type-lede-family: "WB Text", sans-serif;
+  --aa-font-mono: "WB Mono", monospace;
+  --aa-type-eyebrow-family: "WB Mono", monospace;
+  --aa-radius-window: 10px; --aa-radius-button: 12px; --aa-radius-app-icon: 16px; --aa-radius-tile: 20px;
+  --aa-radius-bubble: 18px 18px 6px 18px; --aa-radius-card: 16px; --aa-radius-badge: 12px; --aa-radius-composer: 26px;
+  --aa-radius-send: 20px; --aa-radius-step: 8px;
+  --aa-type-display-size: 38px; --aa-type-display-line: 42px; --aa-type-display-weight: 800; --aa-type-display-tracking: -0.03em;
+  --aa-type-title-weight: 800; --aa-type-title-tracking: -0.025em;
+  --aa-type-hero-size: 50px; --aa-type-hero-line: 52px;
+  --aa-tile-new-style: dashed; --aa-tile-border-width: 1.5px;
+  --aa-wordmark-weight: 800; --aa-wordmark-tracking: -0.025em;
+}
+.d-wb.light {
+  --aa-bg: #F3EFE7; --aa-surface: #FBF9F4; --aa-surface-sunken: #E9E3D7; --aa-rail-bg: #ECE7DD;
+  --aa-text: #1F1B16; --aa-text-secondary: #575046; --aa-text-tertiary: #6F675C;
+  --aa-border: #DED6C8; --aa-border-strong: #C2B7A5;
+  --aa-accent: #1D6A4A; --aa-on-accent: #F7F4EC;
+  --aa-ready: #1D6A4A; --aa-ready-soft: #DCE8DE; --aa-working: #575046; --aa-problem: #A63A21; --aa-problem-soft: #F3DDD3;
+  --aa-tile-bg: var(--aa-surface); --aa-tile-border: transparent; --aa-tile-new-bg: transparent; --aa-tile-new-border: #B3A893;
+  --aa-tile-shadow: 0 1px 1px rgb(70 50 20 / 0.06), 0 2px 6px -2px rgb(70 50 20 / 0.10);
+  --aa-bubble-bg: #E9E3D7; --aa-bubble-border: transparent; --aa-field-bg: var(--aa-surface); --aa-field-border: var(--aa-border);
+  --aa-selected-bg: #E2DBCE; --aa-list-bg: var(--aa-surface);
+  --aa-qr-bg: #FBF9F4; --aa-qr-fg: #1F1B16; --aa-mark-bg: #1D6A4A; --aa-mark-fg: #F7F4EC;
+  --aa-shadow-1: 0 1px 2px rgb(60 45 25 / 0.06);
+}
+.d-wb.dark {
+  --aa-bg: #181613; --aa-surface: #211E1A; --aa-surface-sunken: #2C2824; --aa-rail-bg: #1D1A17;
+  --aa-text: #EEE8DD; --aa-text-secondary: #BDB3A5; --aa-text-tertiary: #978D80;
+  --aa-border: #332F29; --aa-border-strong: #4B443B;
+  --aa-accent: #6DBB8F; --aa-on-accent: #0E2117;
+  --aa-ready: #86CDA5; --aa-ready-soft: #1E3328; --aa-working: #BDB3A5; --aa-problem: #EE8466; --aa-problem-soft: #3A2219;
+  --aa-tile-bg: var(--aa-surface); --aa-tile-border: #2B2722; --aa-tile-new-bg: transparent; --aa-tile-new-border: #564E44;
+  --aa-tile-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
+  --aa-bubble-bg: #2E2A25; --aa-bubble-border: transparent; --aa-field-bg: var(--aa-surface); --aa-field-border: var(--aa-border-strong);
+  --aa-selected-bg: #2C2824; --aa-list-bg: var(--aa-surface);
+  --aa-qr-bg: #EEE8DD; --aa-qr-fg: #181613; --aa-mark-bg: #6DBB8F; --aa-mark-fg: #0E2117;
+  --aa-shadow-1: 0 1px 0 rgb(0 0 0 / 0.2);
+}
+
+/* ---------- 2. Almanac ---------- */
+.d-al {
+  --aa-font-display: "AL Display", "AL Serif", serif;
+  --aa-font-text: "AL Sans", sans-serif;
+  --aa-type-name-family: "AL Serif", serif;
+  --aa-type-prose-family: "AL Serif", serif;
+  --aa-type-lede-family: "AL Serif", serif;
+  --aa-font-mono: "AL Sans", sans-serif;
+  --aa-type-eyebrow-family: "AL Sans", sans-serif;
+  --aa-radius-window: 8px; --aa-radius-button: 999px; --aa-radius-app-icon: 15px; --aa-radius-tile: 0px;
+  --aa-radius-bubble: 20px; --aa-radius-card: 10px; --aa-radius-badge: 999px; --aa-radius-composer: 999px;
+  --aa-radius-send: 999px; --aa-radius-step: 999px;
+  --aa-type-display-size: 40px; --aa-type-display-line: 44px; --aa-type-display-weight: 400; --aa-type-display-tracking: -0.015em;
+  --aa-type-title-size: 34px; --aa-type-title-line: 38px; --aa-type-title-weight: 400; --aa-type-title-tracking: -0.01em;
+  --aa-type-name-size: 18px; --aa-type-name-line: 22px; --aa-type-name-weight: 500; --aa-type-name-tracking: 0;
+  --aa-type-heading-size: 18px; --aa-type-heading-weight: 500;
+  --aa-type-prose-size: 17px; --aa-type-prose-line: 26px;
+  --aa-type-lede-size: 20px; --aa-type-lede-line: 30px;
+  --aa-type-hero-size: 52px; --aa-type-hero-line: 56px;
+  --aa-type-label-weight: 500;
+  --aa-type-eyebrow-size: 11px; --aa-type-eyebrow-weight: 600; --aa-type-eyebrow-tracking: 0.12em;
+  --aa-type-mono-size: 13px;
+  --aa-type-strong-weight: 600;
+  --aa-tile-align: center; --aa-tile-text-align: center; --aa-tile-padding: 18px 8px 16px; --aa-size-grid-gap: 0px;
+  --aa-icon-stroke: 1.5;
+  --aa-think-style: italic;
+  --aa-wordmark-weight: 500; --aa-wordmark-tracking: -0.01em;
+}
+.d-al.light {
+  --aa-bg: #FBFAF7; --aa-surface: #FFFFFF; --aa-surface-sunken: #F0EEE8; --aa-rail-bg: #F4F2ED;
+  --aa-text: #171A21; --aa-text-secondary: #4C525D; --aa-text-tertiary: #686E79;
+  --aa-border: #E3E0D9; --aa-border-strong: #BEBAB0;
+  --aa-accent: #1E50A6; --aa-on-accent: #FFFFFF;
+  --aa-ready: #1E50A6; --aa-ready-soft: #E1EAF6; --aa-working: #4C525D; --aa-problem: #A2302A; --aa-problem-soft: #F5E0DD;
+  --aa-tile-bg: transparent; --aa-tile-border: transparent; --aa-tile-new-bg: transparent; --aa-tile-new-border: transparent;
+  --aa-bubble-bg: #F0EEE8; --aa-bubble-border: transparent; --aa-field-bg: #FFFFFF; --aa-field-border: var(--aa-border-strong);
+  --aa-selected-bg: transparent; --aa-list-bg: transparent;
+  --aa-qr-bg: #FFFFFF; --aa-qr-fg: #171A21; --aa-mark-bg: #1E50A6; --aa-mark-fg: #FBFAF7;
+  --aa-shadow-1: none;
+  --aa-list-border-width: 0px;
+}
+.d-al.dark {
+  --aa-bg: #12151B; --aa-surface: #181C24; --aa-surface-sunken: #222733; --aa-rail-bg: #0F1217;
+  --aa-text: #ECE6DA; --aa-text-secondary: #B2AEA5; --aa-text-tertiary: #8E8B85;
+  --aa-border: #282D38; --aa-border-strong: #424958;
+  --aa-accent: #7FB0EE; --aa-on-accent: #0B1A2E;
+  --aa-ready: #8DBAF2; --aa-ready-soft: #1A2A40; --aa-working: #B2AEA5; --aa-problem: #F08E80; --aa-problem-soft: #3A1F1E;
+  --aa-tile-bg: transparent; --aa-tile-border: transparent; --aa-tile-new-bg: transparent; --aa-tile-new-border: transparent;
+  --aa-bubble-bg: #222733; --aa-bubble-border: transparent; --aa-field-bg: #181C24; --aa-field-border: var(--aa-border-strong);
+  --aa-selected-bg: transparent; --aa-list-bg: transparent;
+  --aa-qr-bg: #ECE6DA; --aa-qr-fg: #12151B; --aa-mark-bg: #7FB0EE; --aa-mark-fg: #12151B;
+  --aa-shadow-1: none;
+  --aa-list-border-width: 0px;
+}
+/* Almanac draws rules instead of boxes */
+.d-al .grid { padding-top: 20px; }
+.d-al .tile { border-top: 1px solid var(--aa-border); min-height: 168px; }
+.d-al .tile:nth-child(odd) { border-right: 1px solid var(--aa-border); }
+.d-al .tile-name { font-style: normal; }
+.d-al .new-plus { background: transparent; color: var(--aa-accent); box-shadow: inset 0 0 0 1.5px var(--aa-accent); }
+.d-al .tile .state, .d-al .tile-hint { margin-top: 2px; }
+.d-al .tile .appicon { margin-bottom: 12px; }
+.d-al .lrow:first-child { border-top: 1px solid var(--aa-border); }
+.d-al .lrow:last-child { border-bottom: 1px solid var(--aa-border); }
+.d-al .lrow { padding: 0 4px; }
+.d-al .panel { background: transparent; box-shadow: none; border-top: 1px solid var(--aa-border); border-radius: 0; padding: 14px 0 6px; }
+.d-al .step.is-current .step-n { background: var(--aa-accent); color: var(--aa-on-accent); }
+.d-al .step.is-current { color: var(--aa-text); }
+.d-al .nav-i.is-active { box-shadow: inset 2px 0 0 var(--aa-accent); border-radius: 0; }
+.d-al .plan { box-shadow: none; border-left: 2px solid var(--aa-border); border-radius: 0; padding: 2px 0 2px 14px; }
+.d-al .build { box-shadow: inset 0 0 0 1px var(--aa-border); background: var(--aa-surface); }
+.d-al .think { font-family: "AL Serif", serif; font-size: 15px; }
+.d-al .eyebrow { color: var(--aa-accent); }
+
+/* ---------- 3. Signal ---------- */
+.d-sg {
+  --aa-font-display: "SG Display", "SG Sans", sans-serif;
+  --aa-font-text: "SG Sans", sans-serif;
+  --aa-type-name-family: "SG Sans", sans-serif;
+  --aa-type-prose-family: "SG Sans", sans-serif;
+  --aa-type-lede-family: "SG Sans", sans-serif;
+  --aa-font-mono: "SG Mono", monospace;
+  --aa-type-eyebrow-family: "SG Mono", monospace;
+  --aa-radius-window: 4px; --aa-radius-button: 3px; --aa-radius-app-icon: 10px; --aa-radius-tile: 4px;
+  --aa-radius-bubble: 4px; --aa-radius-card: 4px; --aa-radius-badge: 3px; --aa-radius-composer: 4px;
+  --aa-radius-send: 3px; --aa-radius-step: 2px;
+  --aa-border-width: 1.5px; --aa-tile-border-width: 2px; --aa-list-border-width: 2px;
+  --aa-icon-stroke: 2.1;
+  --aa-type-display-transform: uppercase; --aa-type-button-transform: uppercase;
+  --aa-type-display-size: 46px; --aa-type-display-line: 44px; --aa-type-display-weight: 800; --aa-type-display-tracking: -0.01em;
+  --aa-type-title-size: 38px; --aa-type-title-line: 38px; --aa-type-title-weight: 800; --aa-type-title-tracking: -0.005em;
+  --aa-type-hero-size: 60px; --aa-type-hero-line: 56px;
+  --aa-type-name-size: 16px; --aa-type-name-line: 20px; --aa-type-name-weight: 700; --aa-type-name-tracking: -0.01em;
+  --aa-type-heading-weight: 700;
+  --aa-type-button-size: 14px; --aa-type-button-weight: 700; --aa-type-button-tracking: 0.06em;
+  --aa-type-eyebrow-size: 11.5px; --aa-type-eyebrow-weight: 700; --aa-type-eyebrow-tracking: 0.04em;
+  --aa-type-label-weight: 600;
+  --aa-type-strong-weight: 700;
+  --aa-wordmark-weight: 800; --aa-wordmark-tracking: 0;
+  --aa-size-grid-gap: 10px;
+}
+.d-sg.light {
+  --aa-bg: #E8E8E4; --aa-surface: #F7F7F4; --aa-surface-sunken: #DADAD5; --aa-rail-bg: #DEDED9;
+  --aa-text: #121212; --aa-text-secondary: #3F3F3C; --aa-text-tertiary: #5F5F5B;
+  --aa-border: #C4C4BE; --aa-border-strong: #121212;
+  --aa-accent: #FFC81E; --aa-on-accent: #121212;
+  --aa-ready: #121212; --aa-ready-soft: #FFC81E; --aa-working: #3F3F3C; --aa-problem: #C42819; --aa-problem-soft: #F6D8D3;
+  --aa-tile-bg: var(--aa-surface); --aa-tile-border: #121212; --aa-tile-new-bg: #FFC81E; --aa-tile-new-border: #121212;
+  --aa-bubble-bg: #121212; --aa-bubble-border: transparent; --aa-field-bg: #F7F7F4; --aa-field-border: #121212;
+  --aa-selected-bg: #121212; --aa-list-bg: var(--aa-surface);
+  --aa-qr-bg: #F7F7F4; --aa-qr-fg: #121212; --aa-mark-bg: #FFC81E; --aa-mark-fg: #121212;
+  --aa-shadow-1: none;
+}
+.d-sg.dark {
+  --aa-bg: #161615; --aa-surface: #1F1F1D; --aa-surface-sunken: #2B2B28; --aa-rail-bg: #111110;
+  --aa-text: #F1F1EC; --aa-text-secondary: #BDBDB6; --aa-text-tertiary: #95958E;
+  --aa-border: #353532; --aa-border-strong: #F1F1EC;
+  --aa-accent: #F4C21D; --aa-on-accent: #121212;
+  --aa-ready: #F4C21D; --aa-ready-soft: #3A3112; --aa-working: #BDBDB6; --aa-problem: #FF7563; --aa-problem-soft: #3E1D18;
+  --aa-tile-bg: var(--aa-surface); --aa-tile-border: #4A4A46; --aa-tile-new-bg: #F4C21D; --aa-tile-new-border: #F4C21D;
+  --aa-bubble-bg: #F1F1EC; --aa-bubble-border: transparent; --aa-field-bg: #1F1F1D; --aa-field-border: #F1F1EC;
+  --aa-selected-bg: #F1F1EC; --aa-list-bg: var(--aa-surface);
+  --aa-qr-bg: #F1F1EC; --aa-qr-fg: #161615; --aa-mark-bg: #F4C21D; --aa-mark-fg: #121212;
+  --aa-shadow-1: none;
+}
+/* Signal: inverted user bubble, yellow new tile, black current step, hard labels */
+.d-sg .bubble { color: var(--aa-bg); }
+.d-sg.light .bubble { color: #F7F7F4; }
+.d-sg .tile-new .new-plus { background: #121212; color: #FFC81E; }
+.d-sg .tile-new .tile-name, .d-sg .tile-new .tile-hint { color: #121212; }
+.d-sg .step.is-current { color: var(--aa-bg); }
+.d-sg .step.is-current .step-n { background: var(--aa-accent); color: #121212; }
+.d-sg .nav-i.is-active { background: var(--aa-text); color: var(--aa-bg); }
+.d-sg .nav-i.is-active .ic { color: var(--aa-accent); }
+.d-sg.light .state-ready span:last-child { background: #FFC81E; padding: 0 5px; }
+.d-sg.light .state-ready .state-dot { display: none; }
+.d-sg .state, .d-sg .lrow-meta, .d-sg .tile-hint { font-family: var(--aa-font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; }
+.d-sg .build.is-ready { box-shadow: inset 0 0 0 2px var(--aa-border-strong); }
+.d-sg .build.is-ready .build-badge { color: #121212; background: var(--aa-accent); }
+.d-sg .chat-sub { text-transform: uppercase; font-family: var(--aa-font-mono); font-size: 11.5px; }
+.d-sg.light .chat-sub { color: var(--aa-text); }
+.d-sg .home-title { margin-top: 22px; }
+.d-sg .composer-box { box-shadow: inset 0 0 0 2px var(--aa-field-border); }
+.d-sg .wordmark, .d-sg .wordmark-sm { text-transform: uppercase; font-family: var(--aa-font-display); }
+.d-sg .onb-title { max-width: 560px; }
