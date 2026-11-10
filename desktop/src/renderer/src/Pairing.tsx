@@ -2,7 +2,7 @@
 // the same-network QR with the address and 6-digit code for typing. While Easy Connect starts (a
 // few minutes the first time), the same-network QR works and its progress shows underneath.
 import { useEffect, useRef, useState } from "react";
-import { Globe, RefreshCw, Wifi } from "lucide-react";
+import { Check, Copy, Globe, RefreshCw, Wifi } from "lucide-react";
 import type { Snapshot } from "../../shared/types.ts";
 import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
 import { Icon, QrPlate, Spinner } from "./ui.tsx";
@@ -60,6 +60,23 @@ export function useFreshCode(s: Snapshot): void {
   }, [needs]);
 }
 
+function CopyLink({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="btn btn-quiet btn-sm"
+      style={{ alignSelf: "flex-start" }}
+      onClick={async () => {
+        await api.copyText(link);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      }}
+    >
+      <Icon of={copied ? Check : Copy} size="sm" /> {copied ? "Copied" : "Copy the link for your phone"}
+    </button>
+  );
+}
+
 /** The full pairing block: big QR on the left, words on the right. */
 export function PairingPanel({ s }: { s: Snapshot }) {
   const p = s.pairing;
@@ -87,7 +104,13 @@ export function PairingPanel({ s }: { s: Snapshot }) {
               </p>
               {typeInstead ? (
                 <>
-                  <p className="label secondary">On the same Wi-Fi as this PC, you can type this instead:</p>
+                  {p.easyConnectLink && (
+                    <>
+                      <p className="label secondary">Phone can't scan? Send it this link (by email or a chat app, for example) and tap the link on the phone. It works from anywhere and only once.</p>
+                      <CopyLink link={p.easyConnectLink} />
+                    </>
+                  )}
+                  <p className="label secondary">Or, on the same Wi-Fi as this PC, type this in the app:</p>
                   <TypedCode s={s} />
                 </>
               ) : (

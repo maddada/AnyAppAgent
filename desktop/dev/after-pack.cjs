@@ -9,7 +9,10 @@ const SKIP = ["vitest", "@vitest", "typescript", "@typescript", "@types"].map((n
 exports.default = async function afterPack(context) {
   const repo = resolve(__dirname, "..", "..");
   const companion = join(context.appOutDir, "resources", "companion");
-  for (const part of ["server", "template"]) {
+  // Only the companion needs its node_modules. The builder never uses template/node_modules: it
+  // copies apps from its own dependency cache (.anyappagent/cache in the user folder), which the
+  // setup fills in its "Tools for building apps" step.
+  for (const part of ["server"]) {
     const from = join(repo, part, "node_modules");
     const to = join(companion, part, "node_modules");
     if (!existsSync(from)) throw new Error(`${from} is missing: run npm install in ${part}/ first`);

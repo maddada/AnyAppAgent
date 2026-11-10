@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { App, ChatItem } from "../../shared/types.ts";
 import { AppIcon, Icon, Spinner, StateLine, appState } from "./ui.tsx";
+import { plainToolTitle } from "./chatText.ts";
 
 const api = window.anyapp;
 
@@ -82,7 +83,7 @@ export function ChatView({ app, icon, onBack }: { app: App; icon?: string; onBac
       >
         <div className="timeline">
           {items.length === 0 && <p className="callout tertiary">Nothing said yet.</p>}
-          {groupTools(items).map((g) => (Array.isArray(g) ? <ToolGroup key={g[0].id} items={g} /> : <Row key={g.id} item={g} />))}
+          {groupTools(items).map((g) => (Array.isArray(g) ? <ToolGroup key={g[0].id} items={g} app={app} /> : <Row key={g.id} item={g} app={app} />))}
         </div>
       </div>
       <form
@@ -207,7 +208,7 @@ function summary(items: ChatItem[]): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function ToolGroup({ items }: { items: ChatItem[] }) {
+function ToolGroup({ items, app }: { items: ChatItem[]; app: App }) {
   const [open, setOpen] = useState(false);
   const failed = items.some((i) => i.tool?.status === "failed");
   return (
@@ -219,12 +220,12 @@ function ToolGroup({ items }: { items: ChatItem[] }) {
         <span className="tr-title">{summary(items)}</span>
         <span className="tr-status">{failed ? <Icon of={X} size="sm" /> : <Icon of={Check} size="sm" />}</span>
       </button>
-      {open && items.map((i) => <Row key={i.id} item={i} />)}
+      {open && items.map((i) => <Row key={i.id} item={i} app={app} />)}
     </>
   );
 }
 
-function Row({ item }: { item: ChatItem }) {
+function Row({ item, app }: { item: ChatItem; app: App }) {
   const [open, setOpen] = useState(false);
   switch (item.kind) {
     case "user":
@@ -248,19 +249,20 @@ function Row({ item }: { item: ChatItem }) {
     case "tool": {
       const t = item.tool;
       if (!t) return null;
-      const title = t.title.split("\n")[0];
+      const title = plainToolTitle(t);
+      // The raw command line (or the path) shows only once the row is opened.
+      const more = [t.detail, t.title.split("\n")[0].trim() !== title ? t.title : undefined].filter((x, i, a): x is string => !!x && a.indexOf(x) === i).join("\n");
       const cls = t.status === "pending" ? "is-pending" : t.status === "in_progress" ? "is-running" : t.status === "failed" ? "is-failed" : "";
       return (
         <>
-          <button className={`trow row-type ${cls}`} onClick={() => setOpen(!open)} title={t.title}>
+          <button className={`trow row-type ${cls}`} onClick={() => more && setOpen(!open)}>
             <span className="tr-icon">
               <Icon of={TOOL_GLYPHS[t.kind] ?? CircleDot} size="sm" />
             </span>
             <span className="tr-title">{title}</span>
-            {t.detail && <span className="tr-detail">{t.detail.split("\n")[0]}</span>}
             <span className="tr-status">{t.status === "in_progress" ? <Spinner /> : t.status === "completed" ? <Icon of={Check} size="sm" /> : t.status === "failed" ? <Icon of={X} size="sm" /> : null}</span>
           </button>
-          {open && (t.detail || t.title.includes("\n")) && <div className="tr-open">{t.detail ?? t.title}</div>}
+          {open && more && <div className="tr-open">{more}</div>}
         </>
       );
     }
@@ -289,6 +291,9 @@ function Row({ item }: { item: ChatItem }) {
       const ready = b?.status === "succeeded";
       const failed = b?.status === "failed";
       const mb = b?.sizeBytes && b.sizeBytes >= 1024 * 1024 ? `, ${Math.round(b.sizeBytes / 1024 / 1024)} MB` : "";
+      // The build finishes before the companion saves it and announces it (apk.ready): only then
+      // has it really gone to the phone.
+      const sent = ready && (app.latestApk?.number ?? 0) >= (b?.number ?? Infinity);
       return (
         <div className="card build">
           <div className="build-top">
@@ -298,7 +303,7 @@ function Row({ item }: { item: ChatItem }) {
             <div>
               <div className="heading">{ready ? "Your app is ready" : failed ? `Version ${b?.number} didn't build` : `Building version ${b?.number ?? ""}`}</div>
               <div className="build-sub row-type">
-                {ready ? `Version ${b?.number}${mb}. Sent to your phone.` : failed ? (b?.error ?? "Ask for a fix, or keep using the last version.") : (item.text ?? "Usually about two minutes")}
+                {ready ? `Version ${b?.number}${mb}. ${sent ? "Sent to your phone." : "Saving it and sending it to your phone…"}` : failed ? (b?.error ?? "Ask for a fix, or keep using the last version.") : (item.text ?? "Usually about two minutes")}
               </div>
             </div>
           </div>

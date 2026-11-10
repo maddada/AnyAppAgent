@@ -46,6 +46,9 @@ export function planInstall(pieces: ToolPiece[], sdkMissing: string[] = []): Ins
   }
   if (need("node")) steps.push({ id: "node", label: "Getting Node.js", weight: 35 });
   if (need("git")) steps.push({ id: "git", label: "Getting Git", weight: 60 });
+  // The builder's dependency cache (only when detection reported it; it needs Node and Git first).
+  const deps = pieces.find((p) => p.id === "deps");
+  if (deps && !deps.ok) steps.push({ id: "deps", label: "Getting the parts every app starts from", weight: 450 });
   return steps;
 }
 
@@ -98,6 +101,8 @@ export interface ToolsInstallerOptions {
   sdkPackages?: string[];
   /** For tests: run only these step ids (e.g. ["sdk:cmake;3.30.5", "ninja"]). */
   only?: string[];
+  /** How to fill the builder's dependency cache: `node builder/cli.mjs warm` run by this executable. */
+  warm?: { cli: string; probeDir: string; env: NodeJS.ProcessEnv };
 }
 
 export class ToolsInstaller {
@@ -146,6 +151,7 @@ export class ToolsInstaller {
       else if (step.id === "ninja") await this.installNinja(report);
       else if (step.id === "node") await this.installNode(report);
       else if (step.id === "git") await this.installGit(report);
+      else if (step.id === "deps") await this.installDeps(report);
       report(1);
       this.done += step.weight;
     }
@@ -293,6 +299,43 @@ export class ToolsInstaller {
     }
   }
 
+  /**
+   * Fills the builder's dependency cache and makes a spare app folder (`builder/cli.mjs warm`):
+   * one `npm ci` of the template, about 3 minutes and 450 MB the first time. It prints little,
+   * so progress creeps towards 90% by expected time, with the phase from its log lines.
+   */
+  private async installDeps(report: (f: number, d?: string) => void): Promise<void> {
+    const warm = this.opts.warm;
+    if (!warm) return;
+    const started = Date.now();
+    let phase = "Downloading…";
+    const tick = setInterval(() => report(0.9 * (1 - Math.exp(-((Date.now() - started) / 1000) / 110)), phase), 500);
+    let tail = "";
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawnHidden(process.execPath, [warm.cli, "warm", warm.probeDir], { env: { ...warm.env, ELECTRON_RUN_AS_NODE: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+        this.child = child;
+        const onData = (chunk: Buffer) => {
+          const text = chunk.toString();
+          tail = (tail + text).slice(-3000);
+          this.log(`warm: ${lastLine(text)}`);
+          if (/Deps cache:|spare/i.test(text)) phase = "Getting a first app folder ready…";
+        };
+        child.stdout?.on("data", onData);
+        child.stderr?.on("data", onData);
+        child.on("error", reject);
+        child.on("close", (code) => {
+          this.child = undefined;
+          if (this.abort.signal.aborted) reject(new Error("Stopped."));
+          else if (code === 0) resolve();
+          else reject(new Error(`The parts every app starts from could not be downloaded. Check the internet connection and try again. (${lastLine(tail)})`));
+        });
+      });
+    } finally {
+      clearInterval(tick);
+    }
+  }
+
   private async installNode(report: (f: number, d?: string) => void): Promise<void> {
     const index = await fetchJson<{ version: string; lts: string | false; files: string[] }[]>("https://nodejs.org/dist/index.json", this.abort.signal);
     const pick = index.find((v) => v.version.startsWith("v24.") && v.files.includes("win-x64-zip")) ?? index.find((v) => v.lts && v.files.includes("win-x64-zip"));
@@ -330,11 +373,16 @@ export class ToolsInstaller {
 /** The licence file content the Android tools write when the Android SDK licence is accepted. */
 export const ANDROID_SDK_LICENSE_HASH = "24333f8a63b6825ea9c5514f83c2829b004d1fee";
 
+function lastLine(text: string): string {
+  return text.trim().split(String.fromCharCode(10)).map((l) => l.trim()).filter(Boolean).pop() ?? "";
+}
+
 function order(id: string): number {
   if (id === "jdk") return 0;
   if (id === "cmdline-tools") return 1;
   if (id === "licenses") return 2;
   if (id.startsWith("sdk:")) return 3;
   if (id === "ninja") return 4;
+  if (id === "deps") return 6; // needs Node (npm) and Git, which come before it
   return 5;
 }

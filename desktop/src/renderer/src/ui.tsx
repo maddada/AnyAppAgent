@@ -74,11 +74,17 @@ export function appState(app: App): { state: UiState; text: string } {
     case "working":
       return { state: "working", text: "Making changes" };
     case "building":
-      return { state: "working", text: `Building version ${app.latestBuild?.number ?? ""}`.trim() };
+      // After the build itself the companion still commits and pushes before it announces the APK.
+      return app.latestBuild?.status === "succeeded"
+        ? { state: "working", text: `Saving version ${app.latestBuild.number}` }
+        : { state: "working", text: `Building version ${app.latestBuild?.number ?? ""}`.trim() };
     case "error":
       return { state: "problem", text: app.latestBuild?.status === "failed" ? "Couldn't build" : "Something went wrong" };
     default: {
       const apk = app.latestApk;
+      const built = app.latestBuild;
+      // A finished build that is not announced yet is still on its way, never "ready" or "waiting".
+      if (built?.status === "succeeded" && built.number > (apk?.number ?? 0)) return { state: "working", text: `Saving version ${built.number}` };
       if (!apk) return { state: "idle", text: "Waiting for the first version" };
       const fresh = apk.finishedAt && Date.now() - Date.parse(apk.finishedAt) < 60 * 60_000;
       return fresh ? { state: "ready", text: `Version ${apk.number} ready` } : { state: "idle", text: "Up to date" };

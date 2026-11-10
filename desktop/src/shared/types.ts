@@ -34,7 +34,7 @@ export interface GitHubCheck {
 }
 
 export interface ToolPiece {
-  id: "jdk" | "sdk" | "node" | "git";
+  id: "jdk" | "sdk" | "node" | "git" | "deps";
   label: string; // plain words: "Java kit", "Android kit", "Node.js", "Git"
   ok: boolean;
   /** Where it was found (shown only in the advanced corner). */
@@ -116,6 +116,8 @@ export interface PairingView {
   easyConnectDetail?: string;
   /** Easy Connect is on but its one-time code was used or expired. */
   needsNewCode?: boolean;
+  /** anyappagent://pair?ec=<code>: the Easy Connect code as a link, for a phone that cannot scan. */
+  easyConnectLink?: string;
 }
 
 export interface Snapshot {
@@ -166,6 +168,8 @@ export interface AnyAppBridge {
 
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>;
   restartCompanion(): Promise<void>;
+  /** Quits the app and stops the companion (same as Quit in the tray menu). */
+  quit(): Promise<void>;
   copyText(text: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   openFolder(which: "tools" | "state" | "apps"): Promise<void>;

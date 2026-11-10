@@ -461,6 +461,17 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
           </button>
         </div>
       </section>
+      <section className="list">
+        <div className="srow">
+          <div className="srow-main">
+            <span className="body">Quit AnyAppAgent</span>
+            <span className="sub">Stops making apps until you open AnyAppAgent again. Closing the window does not stop it.</span>
+          </div>
+          <button className="btn btn-quiet btn-sm" onClick={() => api.quit()}>
+            Quit
+          </button>
+        </div>
+      </section>
       <details className="adv">
         <summary>Advanced</summary>
         <div className="kv">

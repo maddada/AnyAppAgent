@@ -38,6 +38,7 @@ const bridge: AnyAppBridge = {
   sendMessage: (appId, text) => ipcRenderer.invoke("apps:send", appId, text),
   setSetting: (key, value) => ipcRenderer.invoke("settings:set", key, value),
   restartCompanion: () => ipcRenderer.invoke("companion:restart"),
+  quit: () => ipcRenderer.invoke("app:quit"),
   copyText: (text) => ipcRenderer.invoke("copy", text),
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   openFolder: (which) => ipcRenderer.invoke("open-folder", which),

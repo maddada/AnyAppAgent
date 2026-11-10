@@ -305,3 +305,29 @@ describe("ninja check", () => {
     expect(ids).toContain("sdk:cmake;3.22.1");
   });
 });
+
+// ------------------------------------------------------------- the builder's dependency cache
+
+import { depsReady } from "../src/main/detect/deps.ts";
+
+describe("builder dependency cache", () => {
+  it("is ready only when the builder wrote its .ready marker", () => {
+    const seen: string[] = [];
+    const yes = depsReady("C:/home/.anyappagent/cache", "02cbcbc968a0a868", (p) => (seen.push(p), true));
+    expect(yes.ok).toBe(true);
+    expect(seen[0].split(String.fromCharCode(92)).join("/")).toBe("C:/home/.anyappagent/cache/deps-02cbcbc968a0a868/.ready");
+    expect(depsReady("C:/c", "abc", () => false).ok).toBe(false);
+  });
+
+  it("is installed last, after Node and Git, and only when detection said it is missing", () => {
+    const ids = planInstall([
+      { id: "jdk", label: "", ok: true },
+      { id: "sdk", label: "", ok: true },
+      { id: "node", label: "", ok: false },
+      { id: "git", label: "", ok: true },
+      { id: "deps", label: "", ok: false },
+    ]).map((s) => s.id);
+    expect(ids).toEqual(["node", "deps"]);
+    expect(planInstall([{ id: "deps", label: "", ok: true }, { id: "jdk", label: "", ok: true }, { id: "sdk", label: "", ok: true }, { id: "node", label: "", ok: true }, { id: "git", label: "", ok: true }])).toEqual([]);
+  });
+});

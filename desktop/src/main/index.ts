@@ -14,6 +14,7 @@ import { Companion } from "./companion.ts";
 import { claudeCliCandidates, detectClaude } from "./detect/claude.ts";
 import { detectGitHub, ghCandidates, type GhLocation } from "./detect/github.ts";
 import { detectTools } from "./detect/tools.ts";
+import { detectDeps } from "./detect/deps.ts";
 import { run } from "./exec.ts";
 import { ToolsInstaller } from "./install/tools-installer.ts";
 import { firstExisting, resolvePaths } from "./paths.ts";
@@ -204,6 +205,14 @@ async function checkGitHub(): Promise<void> {
 async function checkTools(): Promise<void> {
   if (installer) return;
   const result = await detectTools({ toolsDir: paths.toolsDir, env, runner: run });
+  // The builder's dependency cache is the fifth piece: without it the first app waits minutes.
+  const deps = await detectDeps(paths.repoRoot);
+  result.pieces.push({ id: "deps", label: "App starter kit", ok: deps.ok, path: deps.dir, source: deps.ok ? "tools" : "none" });
+  if (deps.error) log(`[tools] could not check the builder's cache: ${deps.error}`);
+  if (!deps.ok && result.state === "done") {
+    result.state = "needed";
+    result.summary = "Almost ready: one more download (about 450 MB).";
+  }
   const forced = simulate.get("tools");
   if (forced === "needed" || forced === "installing") {
     checks.tools = { ...result, state: "needed", summary: "Needs a one-time download (about 2.5 GB).", pieces: result.pieces.map((p) => ({ ...p, ok: p.id === "git", source: p.id === "git" ? "system" : "none" })) };
@@ -266,6 +275,11 @@ async function installTools(): Promise<void> {
     toolsDir: paths.toolsDir,
     pieces,
     log,
+    warm: {
+      cli: join(paths.repoRoot, "builder", "cli.mjs"),
+      probeDir: join(paths.appsDir, "warm-probe"),
+      env: { ...process.env, PATH: [...(checks.tools.env?.path ?? []), process.env.PATH ?? ""].join(";") },
+    },
     onProgress: (p) => {
       checks.tools = { ...checks.tools, state: "working", install: { running: true, progress: p.progress, label: p.label, detail: p.detail } };
       broadcast();
@@ -318,7 +332,14 @@ async function pairingView(): Promise<PairingView> {
     // Ready without a code: the last one was used or expired; the panel asks for a new one.
     needsNewCode: s.easyConnect.state === "ready" && !s.easyConnect.code,
   };
-  if (s.easyConnect.state === "ready" && s.easyConnect.code) return { ...base, kind: "easy-connect", qrSvg: await qrSvg(s.easyConnect.code) };
+  if (s.easyConnect.state === "ready" && s.easyConnect.code)
+    return {
+      ...base,
+      kind: "easy-connect",
+      qrSvg: await qrSvg(s.easyConnect.code),
+      // For a phone that cannot scan: the same code as a link the AnyAppAgent app opens.
+      easyConnectLink: `anyappagent://pair?ec=${s.easyConnect.code}`,
+    };
   return { ...base, kind: "same-network", qrSvg: await qrSvg(s.pairing.qrPayload) };
 }
 
@@ -498,6 +519,7 @@ function ipc(): void {
     if (key in settings && typeof value === typeof settings[key]) setSetting(key, value as never);
   });
   ipcMain.handle("companion:restart", () => companion.restart());
+  ipcMain.handle("app:quit", () => app.quit());
   ipcMain.handle("copy", (_e, text: string) => clipboard.writeText(String(text)));
   ipcMain.handle("open-external", (_e, url: string) => {
     if (/^https:\/\//.test(String(url))) return shell.openExternal(String(url));

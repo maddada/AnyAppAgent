@@ -49,6 +49,14 @@ Easy Connect is off in a fresh companion. The phone step of the setup turns it o
 start builds a helper, about two and a half minutes), and the pairing panel shows its `detail`
 while it starts. Until it is ready, the same-network QR with address and code works.
 
+## The tools step
+
+Five pieces: the Java kit, the Android kit, Node.js, Git, and the app starter kit (the builder's
+dependency cache, `npm ci` of the template into `%USERPROFILE%\.anyappagent\cache\deps-<hash>`).
+Detection reads the hash from the builder itself (`builder/lib/template.mjs`), and "Get the tools"
+fills a missing cache with `builder/cli.mjs warm` (about 3 minutes, needs the internet), so the
+user's first app does not start with a silent wait.
+
 ## Layout
 
 - `src/main/`: Electron main process. `index.ts` (window, tray, IPC, lifecycle), `companion.ts`
@@ -60,5 +68,7 @@ while it starts. Until it is ready, the same-network QR with address and code wo
 - The look comes from the shared theme (`../shared/theme`): the renderer imports its `theme.css`
   (every value is a `--aa-*` variable, fonts bundled by Vite), code reads `tokens.ts`, and the window,
   installer and tray icons are `../shared/theme/mark/windows`. Nothing Workbench-specific lives here.
-- `dev/`: the fake companion, the screenshot and proof scripts, the electron-builder afterPack hook.
+- `dev/`: the fake companion, the screenshot and proof scripts, `drive.mjs` (drives a running app
+  started with `--remote-debugging-port`: click by text, screenshots, eval), and the electron-builder
+  afterPack hook (copies only `server/node_modules`; the builder never uses `template/node_modules`).
 - `docs/screens/`: screenshots of every screen, light and dark.
