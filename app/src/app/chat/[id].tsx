@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Keyboard, Pressable, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowUp, ChevronLeft, Square } from "lucide-react-native";
+import { ArrowDown, ArrowUp, ChevronLeft, Square } from "lucide-react-native";
 import { ChatRow } from "@/chat/ChatRows";
-import { buildRows } from "@/chat/timeline";
+import { buildRows, type Row } from "@/chat/timeline";
 import { describeApp } from "@/lib/describe";
 import { installApp, launchApp } from "@/lib/installer";
 import type { App, ChatItem } from "@/lib/protocol";
@@ -21,6 +21,8 @@ import { border, elevation, icon, radius, size, space, typeStyle, useTheme } fro
 const EMPTY: ChatItem[] = [];
 /** The composer grows to six lines of type.body, then scrolls (COMPONENTS.md, Composer). */
 const COMPOSER_MAX_LINES = 6;
+/** Within this distance of the newest item the chat counts as "at the bottom" and follows new items. */
+const PINNED_WITHIN = size.touch * 2;
 
 export default function Chat() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,12 +41,42 @@ export default function Chat() {
 
   const rows = useMemo(() => buildRows(items, app).reverse(), [items, app]);
 
+  // Stay on the newest item while the agent works, unless the user scrolled up to read; then a
+  // "Jump to latest" control brings them back (as in bb's thread view). The list is inverted, so
+  // offset 0 is the bottom.
+  const list = useRef<FlatList<Row>>(null);
+  const pinnedRef = useRef(true);
+  const [pinned, setPinned] = useState(true);
+  const follow = () => {
+    if (pinnedRef.current) list.current?.scrollToOffset({ offset: 0, animated: true });
+  };
+  const jumpToLatest = () => {
+    pinnedRef.current = true;
+    setPinned(true);
+    list.current?.scrollToOffset({ offset: 0, animated: true });
+  };
+
   return (
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: keyboard > 0 ? keyboard : 0 }}>
       <Header app={app} />
+      <View style={{ flex: 1 }}>
       <FlatList
+        ref={list}
         inverted
         data={rows}
+        onScroll={(e) => {
+          // Inverted list: the distance from the newest item, whichever sign Android reports it with.
+          const atBottom = Math.abs(e.nativeEvent.contentOffset.y) <= PINNED_WITHIN;
+          if (atBottom !== pinnedRef.current) {
+            console.log(`chat: ${atBottom ? "following new items" : "reader scrolled up"} (offset ${Math.round(e.nativeEvent.contentOffset.y)})`);
+            pinnedRef.current = atBottom;
+            setPinned(atBottom);
+          }
+        }}
+        scrollEventThrottle={64}
+        // New rows land at offset 0: when pinned they are followed, otherwise the reader's place is kept.
+        maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: PINNED_WITHIN }}
+        onContentSizeChange={follow}
         keyExtractor={(r) => r.key}
         renderItem={({ item }) => <ChatRow row={item} app={app} />}
         // Inverted list: paddingTop is the bottom edge.
@@ -64,7 +96,38 @@ export default function Chat() {
         }
         style={{ backgroundColor: t.bg }}
       />
+      {pinned ? null : <JumpToLatest onPress={jumpToLatest} />}
+      </View>
       <Composer app={app} bottomInset={keyboard > 0 ? space.xs : insets.bottom + space.xs} />
+    </View>
+  );
+}
+
+function JumpToLatest({ onPress }: { onPress: () => void }) {
+  const t = useTheme();
+  return (
+    <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, bottom: space.md, alignItems: "center" }}>
+      <Pressable
+        testID="jump-to-latest"
+        accessibilityRole="button"
+        accessibilityLabel="Jump to latest"
+        onPress={onPress}
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          gap: space.sm,
+          minHeight: size.buttonHeightSmall,
+          paddingHorizontal: space.lg,
+          borderRadius: radius.full,
+          backgroundColor: pressed ? t.selectedBg : t.surfaceOverlay,
+          borderWidth: border.width,
+          borderColor: t.border,
+          ...elevation(t.mode, 2),
+        })}
+      >
+        <ArrowDown size={icon.size.sm} color={t.text} strokeWidth={icon.stroke} absoluteStrokeWidth />
+        <T variant="buttonSmall">Jump to latest</T>
+      </Pressable>
     </View>
   );
 }

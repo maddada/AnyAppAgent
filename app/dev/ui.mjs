@@ -117,9 +117,14 @@ switch (cmd) {
     break;
   }
   case "type": {
-    // adb input text: spaces as %s, and shell metacharacters escaped.
-    const text = rest.join(" ").replace(/([\\'"`$&|;<>()*?!#~])/g, "\\$1").replace(/ /g, "%s");
-    adb("shell", "input", "text", text);
+    // adb input text drops everything after about 35 characters, so type in chunks of 20 with a
+    // pause between them. Spaces become %s and shell metacharacters are escaped.
+    const whole = rest.join(" ");
+    for (let i = 0; i < whole.length; i += 20) {
+      const chunk = whole.slice(i, i + 20).replace(/([\\'"`$&|;<>()*?!#~])/g, "\\$1").replace(/ /g, "%s");
+      adb("shell", "input", "text", chunk);
+      await sleep(150);
+    }
     break;
   }
   case "clear": {

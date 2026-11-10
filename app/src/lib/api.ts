@@ -73,7 +73,7 @@ async function request<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-export const health = (baseUrl: string) => request<HealthResponse>(baseUrl, "/api/health", { timeoutMs: 5000 });
+export const health = (baseUrl: string, timeoutMs = 5000) => request<HealthResponse>(baseUrl, "/api/health", { timeoutMs });
 
 export const pair = (baseUrl: string, body: PairRequest) =>
   request<PairResponse>(baseUrl, "/api/pair", { method: "POST", body, timeoutMs: 10000 });
@@ -95,6 +95,8 @@ export class Client {
   listApps = () => this.call<App[]>("/api/apps");
   getApp = (id: string) => this.call<App>(`/api/apps/${encodeURIComponent(id)}`);
   createApp = (body: CreateAppRequest) => this.call<App>("/api/apps", "POST", body);
+  /** POST /api/unpair: the PC forgets this phone (its token, and its Easy Connect key). 204. */
+  unpair = () => request<void>(this.baseUrl, "/api/unpair", { method: "POST", token: this.token, timeoutMs: 5000 });
   deleteApp = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}`, "DELETE");
   messages = (id: string, afterSeq?: number) =>
     this.call<ChatItem[]>(`/api/apps/${encodeURIComponent(id)}/messages${afterSeq != null ? `?afterSeq=${afterSeq}` : ""}`);

@@ -19,12 +19,19 @@ export interface Prefs {
   offeredBuilds: Record<string, number>;
   askedNotifications: boolean; // Android gave a real answer (allowed, or "don't ask again")
   notificationAsks: number;
+  /**
+   * Downloads and installs that started but did not finish (AnyAppAgent was closed, replaced or
+   * lost the PC). Retried once, by themselves, after AnyAppAgent starts again.
+   */
+  unfinishedInstalls: Record<string, { build: number; retried: boolean }>;
+  /** The name this phone pairs under, chosen once and reused (the PC recognises it by name). */
+  deviceName?: string;
 }
 
 const PAIRING_KEY = "anyapp.pairing";
 const PREFS_KEY = "anyapp.prefs";
 
-export const defaultPrefs: Prefs = { theme: "system", offeredBuilds: {}, askedNotifications: false, notificationAsks: 0 };
+export const defaultPrefs: Prefs = { theme: "system", offeredBuilds: {}, askedNotifications: false, notificationAsks: 0, unfinishedInstalls: {} };
 
 async function readJson<T>(key: string): Promise<T | null> {
   try {

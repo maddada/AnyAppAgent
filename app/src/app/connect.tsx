@@ -44,6 +44,7 @@ export default function Connect() {
   const [otherWay, setOtherWay] = useState(false);
   const [linkPending, setLinkPending] = useState(!!params.link);
   const codeRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const paired = useStore((s) => !!s.pairing && !s.authLost);
 
   /** Either kind of code: Easy Connect (ANYAPP-EC1:...) or same network (anyappagent://pair?...). */
@@ -59,7 +60,7 @@ export default function Connect() {
         if (!found) throw new Error("That isn't an AnyAppAgent code. On your PC, choose Connect a phone and use the code it shows.");
         setAddress(found.address);
         setCode(found.code);
-        await pairWith(found.address, found.code);
+        await pairWith(found.address, found.code, setStep);
       }
       setLinkPending(false);
     } catch (e) {
@@ -76,13 +77,22 @@ export default function Connect() {
     setBusy(true);
     setError(null);
     try {
-      await pairWith(address, code); // once paired, this screen redirects home by itself
+      await pairWith(address, code, setStep); // once paired, this screen redirects home by itself
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      setStep(null);
     }
   };
+
+  // The keyboard must never cover the Connect button: the screen shrinks by the keyboard's height
+  // (below) and, with the typed fields open, scrolls so the fields and Connect sit above it.
+  useEffect(() => {
+    if (!otherWay || keyboard === 0) return;
+    const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
+    return () => clearTimeout(timer);
+  }, [keyboard, otherWay, error, step]);
 
   const handled = useRef(false);
   useEffect(() => {
@@ -95,10 +105,11 @@ export default function Connect() {
   if (paired && !linkPending) return <Redirect href="/" />;
 
   return (
+    <View style={{ flex: 1, backgroundColor: t.bg, paddingBottom: keyboard }}>
     <ScrollView
+      ref={scrollRef}
       keyboardShouldPersistTaps="handled"
-      style={{ backgroundColor: t.bg }}
-      contentContainerStyle={{ paddingTop: insets.top + space["5xl"], paddingHorizontal: size.screenGutter, paddingBottom: insets.bottom + space["2xl"] + keyboard }}
+      contentContainerStyle={{ paddingTop: insets.top + space["5xl"], paddingHorizontal: size.screenGutter, paddingBottom: (keyboard > 0 ? 0 : insets.bottom) + space["2xl"] }}
     >
       <Image source={MARK} style={{ width: size.appIcon, height: size.appIcon, borderRadius: radius.appIcon }} />
       <T variant="display" style={{ marginTop: space["2xl"] }}>
@@ -132,7 +143,7 @@ export default function Connect() {
         }}
       />
 
-      {step ? (
+      {step && !otherWay ? (
         <View testID="pair-step" style={{ marginTop: space.lg }}>
           <StateLine kind="working" label={`${step} This can take up to 20 seconds.`} lines={0} />
         </View>
@@ -170,6 +181,7 @@ export default function Connect() {
             autoCorrect={false}
             keyboardType="url"
             returnKeyType="next"
+            submitBehavior="submit"
             onSubmitEditing={() => codeRef.current?.focus()}
             help={onEmulator && address.trim() === EMULATOR_ADDRESS ? `This is an emulator, so your PC is at ${EMULATOR_ADDRESS}.` : undefined}
           />
@@ -190,6 +202,7 @@ export default function Connect() {
             inputStyle={{ ...typeStyle("titleSmall"), textAlign: "center", letterSpacing: space.sm }}
           />
           {error ? <ErrorBox text={error} /> : null}
+          {step ? <StateLine kind="working" label={step} /> : null}
           <Button
             testID="pair-connect"
             label="Connect"
@@ -218,6 +231,7 @@ export default function Connect() {
         }}
       />
     </ScrollView>
+    </View>
   );
 }
 

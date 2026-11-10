@@ -38,20 +38,25 @@ export function routeBaseUrl(pairing: Pairing, options: { reset?: boolean } = {}
 /** Opens (or reuses) the tunnel and returns http://127.0.0.1:<localPort> once the PC answers. */
 export async function dialEasyConnect(address: string, port: number, reset: boolean): Promise<string> {
   if (!AnyAppNative) throw new RouteError("Easy Connect needs the AnyAppAgent app, not a preview.");
+  const started = Date.now();
+  const took = () => `${((Date.now() - started) / 1000).toFixed(1)} s`;
   if (reset) await AnyAppNative.easyConnectStop().catch(() => undefined);
   let localPort: number;
   try {
     ({ localPort } = await AnyAppNative.easyConnectStart(address, port));
   } catch (e) {
+    console.log(`link: Easy Connect could not reach the PC (${took()})`);
     throw new RouteError(e instanceof Error ? scrub(e.message) : "tailcat: cannot reach paired machine");
   }
+  console.log(`link: Easy Connect tunnel ready in ${took()}`);
   const base = `http://127.0.0.1:${localPort}`;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     try {
-      await health(base);
+      await health(base, 3000);
+      console.log(`link: the PC answers through Easy Connect (${took()})`);
       return base;
     } catch {
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
   // The tunnel is up but the PC does not answer through it: drop it so the next dial rebuilds.

@@ -27,7 +27,7 @@ import type { LucideIcon } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { installApp, launchApp } from "@/lib/installer";
 import type { App, ChatItem, PlanEntry } from "@/lib/protocol";
-import { appAction, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
 import { Button } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
@@ -195,7 +195,10 @@ function splitDetail(item: ChatItem): { inline?: string; block?: string } {
   const raw = tool.detail?.trim() ?? "";
   const detail = raw && norm(title).includes(norm(raw)) ? "" : raw;
   const titleExtra = /\n/.test(title) || title.length > 60 ? title : "";
-  if (detail && detail !== title && !/\n/.test(detail) && detail.length <= 24) return { inline: detail, block: titleExtra || undefined };
+  // Only a short result goes on the row ("+48 -6", "14 passed"); a command line or a path never
+  // does: it opens below when the row is tapped.
+  const looksLikeResult = /^[+\-\u2212]\d+(\s+[+\-\u2212]\d+)?$/.test(detail) || /^\d+ (passed|failed|errors?|warnings?)\b/i.test(detail);
+  if (detail && detail !== title && looksLikeResult && detail.length <= 24) return { inline: detail, block: titleExtra || undefined };
   const block = detail && detail !== title ? detail : titleExtra;
   return { block: block || undefined };
 }
@@ -462,7 +465,9 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
   }
 
   // Succeeded. Only the newest build gets the card; older ones are a quiet line.
-  const newest = app?.latestApk?.number === b.number;
+  // The companion says "idle" a moment before apk.ready, so app.latestApk can still be the older
+  // build here: a succeeded build at least as new as it is the newest one.
+  const newest = (app?.latestApk?.number ?? 0) <= b.number;
   if (!app || !newest) {
     return (
       <LineRow>
@@ -471,7 +476,8 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
       </LineRow>
     );
   }
-  const action = appAction(app, pkg);
+  // Judge this build by its own number, not by app.latestApk (which may not have caught up yet).
+  const action = pkg && pkg.versionCode >= b.number ? "open" : pkg ? "update" : "install";
   const phase = install?.phase;
   const busy = phase === "waiting" || phase === "downloading" || phase === "checking" || phase === "installing" || phase === "confirm";
   const installed = action === "open" || phase === "done";
@@ -558,7 +564,14 @@ function RebuildRow({ app }: { app: App | undefined }) {
   const t = useTheme();
   const client = useStore((s) => s.client);
   const [sent, setSent] = useState(false);
-  if (!app || !client) return null;
+  // Status turns "idle" a moment before a build or apk.ready arrives: only say "no new version"
+  // once things have been quiet for a few seconds.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+  if (!app || !client || !settled) return null;
   return (
     <LineRow>
       <Glyph icon={Package} color={t.textTertiary} />

@@ -4,7 +4,7 @@ import { AnyAppNative, type InstallResult } from "anyapp-native";
 import { theme } from "@shared/theme/tokens";
 import type { App } from "./protocol";
 import { getState, setInstall, setState } from "./store";
-import { loadPrefs, savePrefs } from "./storage";
+import { loadPrefs, savePrefs, type Prefs } from "./storage";
 
 /** The notification icon's tint: the accent from the shared theme (README: color.light.accent). */
 const notificationTint = theme.color.light.accent;
@@ -73,6 +73,48 @@ export async function autoInstallIfNew(app: App, fresh = false) {
 }
 
 const pendingFromBackground = new Set<string>();
+
+// ---------- unfinished installs survive a restart of AnyAppAgent
+
+function patchUnfinished(change: (u: Prefs["unfinishedInstalls"]) => Prefs["unfinishedInstalls"]) {
+  const prefs = getState().prefs;
+  setState({ prefs: { ...prefs, unfinishedInstalls: change({ ...(prefs.unfinishedInstalls ?? {}) }) } });
+  void loadPrefs().then((p) => savePrefs({ ...p, unfinishedInstalls: change({ ...(p.unfinishedInstalls ?? {}) }) }));
+}
+
+function markUnfinished(appId: string, build: number) {
+  patchUnfinished((u) => ({ ...u, [appId]: { build, retried: u[appId]?.build === build ? u[appId].retried : false } }));
+}
+
+function clearUnfinished(appId: string) {
+  patchUnfinished((u) => {
+    delete u[appId];
+    return u;
+  });
+}
+
+let resumedThisRun = false;
+
+/**
+ * After AnyAppAgent starts (the first time the app list arrives): retry, once, every download or
+ * install that was cut off, for example when AnyAppAgent itself was replaced mid-download.
+ */
+export function resumeUnfinishedInstalls() {
+  if (resumedThisRun || !AnyAppNative) return;
+  resumedThisRun = true;
+  const unfinished = getState().prefs.unfinishedInstalls ?? {};
+  for (const [appId, entry] of Object.entries(unfinished)) {
+    const app = getState().apps[appId];
+    const installed = app ? installedVersion(app) : null;
+    const stillWanted = app?.latestApk && app.latestApk.number >= entry.build && (installed ?? 0) < app.latestApk.number;
+    if (!app || !stillWanted || entry.retried) {
+      clearUnfinished(appId);
+      continue;
+    }
+    patchUnfinished((u) => ({ ...u, [appId]: { build: entry.build, retried: true } }));
+    void installApp(app);
+  }
+}
 
 /** Back in front after a "ready" notification (tapped or not): install what was waiting. */
 export async function resumePendingInstall() {
@@ -143,14 +185,31 @@ async function runInstall(appId: string) {
     if (file.exists) file.delete();
 
     setInstall(appId, { buildNumber: build.number, phase: "downloading", progress: 0 });
-    const task = File.createDownloadTask(client.apkUrl(appId), file, {
-      headers: client.authHeaders(),
-      onProgress: ({ bytesWritten, totalBytes }) => {
-        const total = totalBytes > 0 ? totalBytes : (build.sizeBytes ?? 0);
-        if (total > 0) setInstall(appId, { buildNumber: build.number, phase: "downloading", progress: Math.min(1, bytesWritten / total) });
-      },
-    });
-    const downloaded = await task.downloadAsync();
+    markUnfinished(appId, build.number);
+    // A first connection can stall for seconds (seen on the emulator and on waking phones):
+    // try the download three times, 5 s and 15 s apart, before saying it stopped.
+    let downloaded: File | null | undefined = null;
+    for (let attempt = 0; attempt < 3 && !downloaded; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, attempt === 1 ? 5000 : 15000));
+        if (file.exists) file.delete();
+        setInstall(appId, { buildNumber: build.number, phase: "downloading", progress: 0 });
+      }
+      const from = getState().client ?? client; // the link may have been rebuilt meanwhile
+      const task = File.createDownloadTask(from.apkUrl(appId), file, {
+        headers: from.authHeaders(),
+        onProgress: ({ bytesWritten, totalBytes }) => {
+          const total = totalBytes > 0 ? totalBytes : (build.sizeBytes ?? 0);
+          if (total > 0) setInstall(appId, { buildNumber: build.number, phase: "downloading", progress: Math.min(1, bytesWritten / total) });
+        },
+      });
+      try {
+        downloaded = await task.downloadAsync();
+      } catch (e) {
+        console.warn(`download ${app.packageName}, try ${attempt + 1}: ${e instanceof Error ? e.message : String(e)}`);
+        if (attempt === 2) throw e;
+      }
+    }
     if (!downloaded) throw new Error("The download stopped.");
 
     setInstall(appId, { buildNumber: build.number, phase: "checking" });
@@ -193,6 +252,7 @@ function finish(app: App, buildNumber: number, result: InstallResult) {
   installedVersion(app);
   switch (result.status) {
     case "success":
+      clearUnfinished(app.id);
       setInstall(app.id, { buildNumber, phase: "done" });
       cleanup(app, buildNumber);
       setTimeout(() => {
@@ -200,9 +260,12 @@ function finish(app: App, buildNumber: number, result: InstallResult) {
       }, 4000);
       return;
     case "cancelled":
+      // The person said no: nothing to retry by itself.
+      clearUnfinished(app.id);
       setInstall(app.id, null);
       return;
     case "conflict":
+      clearUnfinished(app.id);
       setInstall(app.id, {
         buildNumber,
         phase: "failed",

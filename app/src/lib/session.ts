@@ -16,7 +16,7 @@ import {
   upsertChatItems,
 } from "./store";
 import { loadPairing, loadPrefs, savePairing, savePrefs, type Pairing, type Prefs } from "./storage";
-import { autoInstallIfNew, onApkReady, refreshPackages, resumePendingInstall } from "./installer";
+import { autoInstallIfNew, onApkReady, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
 import { updateKeepAlive } from "./keepalive";
 
 // ---------- startup, pairing
@@ -28,6 +28,7 @@ export async function boot() {
   AppState.addEventListener("change", (state) => {
     if (state === "active") onForeground();
   });
+  bootedAt = Date.now();
   AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
 }
 
@@ -45,18 +46,67 @@ function applyPairing(pairing: Pairing, client?: Client) {
 
 export class PairError extends Error {}
 
+/**
+ * The name the PC shows for this phone: the name the user gave the phone when Android has one
+ * (Settings, About phone, Device name), otherwise maker and model ("Pixel 8", "Samsung SM-S918B"),
+ * and "Android emulator" for an emulator, never a build code like "sdk_gphone64_x86_64".
+ */
+export function friendlyDeviceName(): string {
+  const saved = getState().prefs.deviceName;
+  if (saved) return saved;
+  const name = pickDeviceName();
+  updatePrefs({ deviceName: name });
+  return name;
+}
+
+function pickDeviceName(): string {
+  const model = (Device.modelName ?? "").trim();
+  const maker = (Device.manufacturer ?? Device.brand ?? "").trim();
+  const given = (Device.deviceName ?? "").trim();
+  const looksLikeCode = (v: string) => !v || /^sdk_|_x86|^generic|^[a-z0-9]+_[a-z0-9_]+$/i.test(v);
+  if (given && given !== model && !looksLikeCode(given)) return given;
+  if (Device.isDevice === false || /^sdk_gphone|emulator/i.test(model)) return "Android emulator";
+  if (!model) return maker ? `${maker} phone` : "Android phone";
+  if (!maker || model.toLowerCase().startsWith(maker.toLowerCase()) || /^pixel/i.test(model)) return model;
+  return `${maker.charAt(0).toUpperCase()}${maker.slice(1)} ${model}`;
+}
+
+/**
+ * Is the PC there? Patient on purpose: the very first request after a fresh install can stall for
+ * seconds while Android brings up the app's networking, so try three times (10 s each, 1.5 s
+ * apart) before saying the PC can't be found.
+ */
+async function findPc(baseUrl: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await health(baseUrl, 10000);
+      return true;
+    } catch {
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  return false;
+}
+
 /** Checks the PC is there, then trades the 6-digit code for a token. */
-export async function pairWith(address: string, code: string): Promise<void> {
+export async function pairWith(address: string, code: string, onStep?: (step: string) => void): Promise<void> {
   const baseUrl = toBaseUrl(address);
   if (!baseUrl) throw new PairError("That address doesn't look right. It looks like 192.168.1.20:8787.");
-  try {
-    await health(baseUrl);
-  } catch {
+  onStep?.("Looking for your PC…");
+  if (!(await findPc(baseUrl))) {
     throw new PairError(`Can't find your PC at ${address.trim()}. Check that AnyAppAgent is running on it and that both are on the same Wi-Fi.`);
   }
+  onStep?.("Connecting…");
   try {
-    const deviceName = Device.deviceName ?? Device.modelName ?? "Android phone";
-    const res = await pairRequest(baseUrl, { code, deviceName });
+    const deviceName = friendlyDeviceName();
+    // A pairing request that never reached the PC is safe to send again (the code is not used up).
+    const res = await pairRequest(baseUrl, { code, deviceName }).catch(async (e) => {
+      if (e instanceof ApiError && e.unreachable) {
+        await new Promise((r) => setTimeout(r, 1500));
+        return pairRequest(baseUrl, { code, deviceName });
+      }
+      throw e;
+    });
     const pairing: Pairing = { baseUrl, token: res.token, serverName: res.serverName };
     await savePairing(pairing);
     disconnectSocket();
@@ -96,7 +146,7 @@ export async function pairWithEasyConnect(text: string, onStep?: (step: string) 
   }
   onStep?.(`Connecting to ${code.name}…`);
   try {
-    const deviceName = Device.deviceName ?? Device.modelName ?? "Android phone";
+    const deviceName = friendlyDeviceName();
     const res = await pairEasyConnect(base, { secret: code.secret, deviceName, clientKey });
     const pairing: Pairing = { baseUrl: "", via: "easy", easy: { address: code.address, port: code.port }, token: res.token, serverName: res.serverName };
     await savePairing(pairing);
@@ -114,6 +164,10 @@ export async function pairWithEasyConnect(text: string, onStep?: (step: string) 
 }
 
 export async function unpair() {
+  // Tell the PC first (POST /api/unpair, phone token), so it forgets this phone and its Easy Connect
+  // key. If the PC is off or does not have that route yet, carry on: the phone forgets it anyway.
+  const client = getState().client;
+  if (client) await client.unpair().catch(() => undefined);
   disconnectSocket();
   if (usesEasyConnect(getState().pairing)) await AnyAppNative?.easyConnectStop().catch(() => undefined);
   await savePairing(null);
@@ -162,6 +216,7 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let healthTimer: ReturnType<typeof setInterval> | null = null;
 let attempts = 0;
 let healthFailures = 0;
+let healthTicks = 0;
 /** The next dial stops the old tunnel first (after a drop, a stall or a network change). */
 let resetNextDial = false;
 let lastRepair = 0;
@@ -169,8 +224,17 @@ let lastRepair = 0;
 // Retry ladders. Same network: 1, 2, 4, 8, 15 s. Easy Connect, from Ghostex: right after a drop the
 // PC's helper is usually restarting (a code was made, used or expired), so retry quickly first
 // (redialAfterServerStop: 2.5, 2, 2.5, 3, 5, 8 s), then its normal ladder (15, 30 s, repeating).
-const LAN_DELAYS = [1000, 2000, 4000, 8000, 15000];
-const EASY_DELAYS = [2500, 2000, 2500, 3000, 5000, 8000, 15000, 30000];
+// Measured: a growing backoff (1, 2, 4, 8, 15 s) plus sockets that hung while opening kept the
+// phone on "Connecting" for 99 s after the PC restarted. Now: retry every few seconds for the first
+// two minutes offline (a PC restart takes seconds), then slow down to save battery.
+const LAN_DELAYS = [1000, 1000, 2000, 2000, 3000];
+const EASY_DELAYS = [1500, 2000, 2500, 3000];
+const FAST_FOR_MS = 2 * 60 * 1000;
+const SLOW_DELAY = { lan: 10000, easy: 15000 };
+/** A socket that has not opened by then is dropped and tried again (a fresh connection is usually instant). */
+const OPEN_TIMEOUT_MS = 12000;
+let offlineSince = 0;
+let bootedAt = 0;
 
 async function connect() {
   const pairing = getState().pairing;
@@ -185,7 +249,10 @@ async function connect() {
     const reset = resetNextDial;
     resetNextDial = false;
     const base = await routeBaseUrl(pairing, { reset });
-    if (getState().pairing !== pairing) return; // disconnected meanwhile
+    if (getState().pairing !== pairing) {
+      connecting = false; // disconnected meanwhile
+      return;
+    }
     client = getState().client ?? new Client(base, pairing.token);
     if (client.baseUrl !== base) client = new Client(base, pairing.token);
     if (getState().client !== client) setState({ client });
@@ -201,8 +268,27 @@ async function connect() {
   if (socket) return;
   const ws = new WebSocket(client.socketUrl());
   socket = ws;
+  console.log(`link: opening the socket (${usesEasyConnect(pairing) ? "Easy Connect" : "same Wi-Fi"})`);
+  // A socket that neither opens nor fails would leave the app waiting for ever.
+  const openTimer = setTimeout(() => {
+    if (socket === ws && ws.readyState !== WebSocket.OPEN) {
+      console.log(`link: the socket did not open in ${OPEN_TIMEOUT_MS / 1000} s, trying again`);
+      socket = null;
+      try {
+        ws.close();
+      } catch {
+        // ignore
+      }
+      setState({ connection: "offline" });
+      if (usesEasyConnect(getState().pairing)) resetNextDial = true;
+      scheduleReconnect();
+    }
+  }, OPEN_TIMEOUT_MS);
   ws.onopen = () => {
+    clearTimeout(openTimer);
     if (socket !== ws) return;
+    console.log(offlineSince ? `link: socket open, back after ${((Date.now() - offlineSince) / 1000).toFixed(1)} s` : "link: socket open");
+    offlineSince = 0;
     attempts = 0;
     healthFailures = 0;
     setState({ connection: "online", routeError: null });
@@ -216,8 +302,10 @@ async function connect() {
       // ignore a malformed frame
     }
   };
-  ws.onclose = () => {
+  ws.onclose = (e) => {
+    clearTimeout(openTimer);
     if (socket !== ws) return;
+    console.log(`link: socket closed (${e.code}), reconnecting`);
     socket = null;
     setState({ connection: "offline" });
     // Through Easy Connect a drop usually means the PC's helper restarted: rebuild the tunnel.
@@ -228,14 +316,18 @@ async function connect() {
     // onclose follows
   };
   startHealthChecks();
+  startLivenessPings();
 }
 
 function scheduleReconnect() {
   if (!getState().pairing || getState().authLost) return;
   if (retryTimer) return;
   attempts++;
-  const ladder = usesEasyConnect(getState().pairing) ? EASY_DELAYS : LAN_DELAYS;
-  const delay = ladder[Math.min(attempts - 1, ladder.length - 1)];
+  if (!offlineSince) offlineSince = Date.now();
+  const easy = usesEasyConnect(getState().pairing);
+  const ladder = easy ? EASY_DELAYS : LAN_DELAYS;
+  const delay =
+    Date.now() - offlineSince < FAST_FOR_MS ? ladder[Math.min(attempts - 1, ladder.length - 1)] : easy ? SLOW_DELAY.easy : SLOW_DELAY.lan;
   retryTimer = setTimeout(() => {
     retryTimer = null;
     void connect();
@@ -263,6 +355,7 @@ function repair() {
   const now = Date.now();
   if (now - lastRepair < 5000) return; // Ghostex: at most one repair every 5 s
   lastRepair = now;
+  console.log("link: the PC stopped answering, reconnecting");
   if (usesEasyConnect(getState().pairing)) resetNextDial = true;
   const ws = socket;
   socket = null;
@@ -279,26 +372,78 @@ function repair() {
 }
 
 /**
+ * When the PC's process is killed, the close may never reach the phone (the Android emulator's
+ * network does not pass it on; some routers and sleeping Wi-Fi do the same), so the socket looks
+ * open for minutes while nothing arrives. Writing to it reveals that at once: a write on a dead
+ * connection fails and the socket closes, which starts the reconnect. The companion ignores
+ * these frames (shared/protocol.ts). Only while AnyAppAgent is in front.
+ */
+let livenessTimer: ReturnType<typeof setInterval> | null = null;
+function startLivenessPings() {
+  if (livenessTimer) return;
+  livenessTimer = setInterval(() => {
+    const ws = socket;
+    if (!ws || ws.readyState !== WebSocket.OPEN || AppState.currentState !== "active") return;
+    try {
+      ws.send("ping");
+    } catch {
+      // the close handler reconnects
+    }
+  }, 5000);
+}
+
+/**
  * A socket can look open long after the PC (or the tunnel) went away; a cheap HTTP check with a
  * 5 s timeout notices. Through Easy Connect one miss is enough to rebuild the tunnel (Ghostex's
  * chat link does the same after 5 s of silence); on the same network, two misses.
  */
 function startHealthChecks() {
   if (healthTimer) return;
+  // Every 5 s while AnyAppAgent is in front (one tiny request). If the PC stopped answering and
+  // answers again, it restarted: its old socket is dead even when the phone was never told (the
+  // emulator's network never passes the close on), so reconnect at once instead of waiting.
   healthTimer = setInterval(async () => {
     const client = getState().client;
     if (!client || AppState.currentState !== "active" || !socket) return;
+    healthTicks++;
     try {
-      await health(client.baseUrl);
+      await health(client.baseUrl, 4000);
+      const wasDown = healthFailures > 0;
       healthFailures = 0;
-    } catch {
-      healthFailures++;
-      if (healthFailures >= (usesEasyConnect(getState().pairing) ? 1 : 2)) {
-        healthFailures = 0;
+      if (wasDown) {
+        console.log("link: the PC answers again after a gap, reconnecting");
+        lastRepair = 0;
+        repair();
+        return;
+      }
+      if (healthTicks % 3 === 0 && getState().connection === "online" && (await socketMissedSomething())) {
+        console.log("link: the PC has changes the socket did not deliver, reconnecting");
+        lastRepair = 0;
         repair();
       }
+    } catch {
+      healthFailures++;
+      // Through Easy Connect the tunnel itself is suspect at once; on the same network wait for a
+      // second miss (the "answers again" rule above catches the restart either way).
+      if (healthFailures >= (usesEasyConnect(getState().pairing) ? 1 : 2)) repair();
     }
-  }, 15000);
+  }, 5000);
+}
+
+/**
+ * A socket can stay "open" on the phone after the PC stopped sending on it. The PC's app list is
+ * the truth: if it holds a change newer than anything the socket delivered, the socket is dead.
+ */
+async function socketMissedSomething(): Promise<boolean> {
+  const client = getState().client;
+  if (!client) return false;
+  try {
+    const remote = await client.listApps();
+    const local = getState().apps;
+    return remote.some((a) => !local[a.id] || Date.parse(a.updatedAt) > Date.parse(local[a.id].updatedAt) + 2000);
+  } catch {
+    return false;
+  }
 }
 
 async function checkAuth() {
@@ -324,15 +469,11 @@ export function reconnectNow() {
     void verifyThenResync();
     return;
   }
-  if (socket) {
-    const ws = socket;
-    socket = null;
-    try {
-      ws.close();
-    } catch {
-      // ignore
-    }
-  }
+  // A socket that is still opening is left alone: closing it would only start the wait again
+  // (its own open timeout drops it if it hangs).
+  if (socket || connecting) return;
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
   void connect();
 }
 
@@ -351,9 +492,12 @@ async function verifyThenResync() {
 /** The phone switched networks: the tunnel's path is gone, redial at once (Ghostex onNetworkChanged). */
 function onNetworkChanged() {
   if (!getState().pairing || getState().authLost) return;
-  if (usesEasyConnect(getState().pairing)) {
-    lastRepair = 0;
-    repair();
+  // Android reports the current network once when the listener is registered at start: that is
+  // not a change, and reacting to it closed the first socket while it was opening.
+  if (Date.now() - bootedAt < 3000) return;
+  if (usesEasyConnect(getState().pairing) && getState().connection === "online") {
+    // The tunnel's path may be gone with the old network: check it, rebuild only if it fails.
+    void verifyThenResync();
   } else {
     reconnectNow();
   }
@@ -398,6 +542,7 @@ async function resync() {
     setApps(apps);
     refreshPackages();
     updateKeepAlive();
+    resumeUnfinishedInstalls();
     for (const app of apps) void autoInstallIfNew(app);
     void resumePendingInstall();
     const { chatLoaded } = getState();

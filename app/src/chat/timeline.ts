@@ -48,6 +48,9 @@ function turnEndedWithoutBuild(items: ChatItem[], app: App | undefined): boolean
     }
   }
   if (lastUser < 0) return false;
+  // A build the PC started after this message counts, even before its chat item arrives.
+  const asked = Date.parse(items[lastUser].createdAt);
+  if (app.latestBuild && Date.parse(app.latestBuild.startedAt) >= asked) return false;
   const after = items.slice(lastUser + 1);
   return after.some((i) => i.kind === "assistant") && !after.some((i) => i.kind === "build");
 }

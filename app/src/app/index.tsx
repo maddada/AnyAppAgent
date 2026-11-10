@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, RefreshControl, View, useWindowDimensions } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FlatList, Pressable, RefreshControl, TextInput, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -371,6 +371,7 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   const client = useStore((s) => s.client);
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
+  const promptRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = name.trim().length > 0 && prompt.trim().length > 0;
@@ -399,9 +400,10 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
       <T variant="titleSmall" style={{ marginBottom: space.xl }}>
         New app
       </T>
-      <Field testID="new-app-name" label="Name" value={name} onChangeText={setName} placeholder="For example, Prayer Times" maxLength={40} autoCapitalize="words" returnKeyType="next" />
+      <Field testID="new-app-name" label="Name" value={name} onChangeText={setName} placeholder="For example, Prayer Times" maxLength={40} autoCapitalize="words" returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => promptRef.current?.focus()} />
       <Field
         testID="new-app-prompt"
+        ref={promptRef}
         label="What should it do?"
         value={prompt}
         onChangeText={setPrompt}
