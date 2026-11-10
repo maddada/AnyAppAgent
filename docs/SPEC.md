@@ -70,6 +70,31 @@ folder(s).
 - **Ports**: the companion listens on `0.0.0.0:8787` (HTTP and WebSocket). The emulator reaches the
   PC at `10.0.2.2:8787`.
 
+## Added by the user later (same night)
+
+- **The desktop part is an Electron + TypeScript app** (`desktop/`). There is no terminal anywhere
+  in the product: the user installs and opens one desktop app, and it runs the companion
+  (`server/`) for them as a child process. `server/` stays a headless program that can also be
+  started by hand for tests. The desktop app talks to it over `http://127.0.0.1:8787` with an
+  admin token (see "Desktop app to companion" in `shared/protocol.ts`).
+- **A very nice onboarding for people who are not technical**: imagine someone who does not know
+  what GitHub is. The desktop app walks them through everything in plain words, checks each thing
+  by itself, fixes what it can with one click, and lets them skip what is optional.
+- **Easy Connect, copied from Ghostex** (`C:\dev\Ghostex`, the user's own project; read only):
+  the phone pairs with the desktop by scanning one QR code and then reaches it from anywhere, not
+  only on the same Wi-Fi, with nothing else to install. In AnyAppAgent it carries only the
+  companion's HTTP and WebSocket port (no SSH, no terminal): chat, app list, and the APKs going
+  back to the phone. The design, and the contract between the desktop side and the phone side,
+  live in `docs/EASY-CONNECT.md`. The same-network path (address plus 6-digit code) stays as the
+  fallback and is what the emulator uses at `10.0.2.2:8787`.
+- **Toolchain for the builder**: the builder reads `JAVA_HOME` and `ANDROID_HOME` from its process
+  environment. The desktop app sets them for the companion from its own tools folder, or from the
+  paths the user's PC already has.
+
+| Folder     | What                                                                      |
+| ---------- | ------------------------------------------------------------------------- |
+| `desktop/` | The Electron desktop app: onboarding, runs the companion, connect a phone. |
+
 ## The contract between `builder/` and `server/`
 
 `builder/index.mjs` (plain ESM, no build step) exports:

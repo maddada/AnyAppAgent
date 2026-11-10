@@ -142,3 +142,46 @@ export type ServerEvent =
   | { type: "app.deleted"; appId: string }
   | { type: "chat.item"; item: ChatItem } // upsert by item.id
   | { type: "apk.ready"; app: App }; // a new APK can be downloaded and installed now
+
+// ---------- Desktop app (desktop/, Electron) to companion. The desktop app starts the companion
+// as a child process with the env var ANYAPP_ADMIN_TOKEN=<random secret>. That token is accepted
+// as a Bearer token on every route above and is the only thing accepted on /api/admin/*.
+// Phone tokens never work on /api/admin/*.
+
+export interface PairedDevice {
+  id: string;
+  name: string;
+  pairedAt: string;
+  lastSeenAt?: string;
+  connected: boolean; // has a live socket right now
+}
+
+export interface EasyConnectState {
+  state: "off" | "starting" | "ready" | "error";
+  code?: string; // when ready: the one-time Easy Connect code the QR encodes (opaque to the desktop)
+  expiresAt?: string;
+  error?: string; // plain sentence
+}
+
+// GET /api/admin/state
+export interface AdminState {
+  serverName: string;
+  version: string;
+  port: number;
+  pairing: {
+    code: string; // the 6-digit code for the same-network path
+    lanUrls: string[]; // http://<address>:8787, most likely first
+    qrPayload: string; // the anyappagent://pair?... URI for the same-network path
+  };
+  easyConnect: EasyConnectState;
+  devices: PairedDevice[];
+}
+
+// POST /api/admin/pairing/new -> AdminState (a fresh 6-digit code and, when on, a fresh Easy Connect code)
+// POST /api/admin/easy-connect -> AdminState (turn it on or off)
+export interface EasyConnectToggleRequest {
+  enabled: boolean;
+}
+// DELETE /api/admin/devices/:id -> 204 (unpair: its token stops working at once)
+// GET /api/admin/events -> the same WebSocket events as /ws, plus:
+export type AdminEvent = ServerEvent | { type: "admin.state"; state: AdminState };
