@@ -105,11 +105,11 @@ export default function Connect() {
   if (paired && !linkPending) return <Redirect href="/" />;
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg, paddingBottom: keyboard }}>
+    <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: keyboard }}>
     <ScrollView
       ref={scrollRef}
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ paddingTop: insets.top + space["5xl"], paddingHorizontal: size.screenGutter, paddingBottom: (keyboard > 0 ? 0 : insets.bottom) + space["2xl"] }}
+      contentContainerStyle={{ paddingTop: space["5xl"], paddingHorizontal: size.screenGutter, paddingBottom: (keyboard > 0 ? 0 : insets.bottom) + space["2xl"] }}
     >
       <Image source={MARK} style={{ width: size.appIcon, height: size.appIcon, borderRadius: radius.appIcon }} />
       <T variant="display" style={{ marginTop: space["2xl"] }}>

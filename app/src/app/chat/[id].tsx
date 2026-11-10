@@ -35,9 +35,32 @@ export default function Chat() {
   const loaded = useStore((s) => !!s.chatLoaded[appId]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Load the history, and keep trying by itself until it arrives (2, 4, 8, then every 15 s, and at
+  // once when the connection comes back); the error line goes away when it does.
+  const connection = useStore((s) => s.connection);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    loadChat(appId).catch((e) => setLoadError(e instanceof Error ? e.message : String(e)));
-  }, [appId]);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    loadChat(appId)
+      .then(() => {
+        if (!cancelled) setLoadError(null);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setLoadError(e instanceof Error ? e.message : String(e));
+        timer = setTimeout(() => setAttempt((a) => a + 1), [2000, 4000, 8000][attempt] ?? 15000);
+      });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [appId, attempt]);
+  const [lastConnection, setLastConnection] = useState(connection);
+  if (connection !== lastConnection) {
+    setLastConnection(connection);
+    if (connection === "online" && loadError) setAttempt((n) => n + 1);
+  }
 
   const rows = useMemo(() => buildRows(items, app).reverse(), [items, app]);
 

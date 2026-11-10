@@ -68,39 +68,28 @@ function workingLabel(items: ChatItem[], app: App | undefined): string | null {
   return "Working";
 }
 
-const NOUNS: Record<string, [string, string, string]> = {
-  // kind: [verb, singular, plural]
-  read: ["Read", "file", "files"],
-  edit: ["Edited", "file", "files"],
-  delete: ["Deleted", "file", "files"],
-  move: ["Moved", "file", "files"],
-  search: ["Searched", "time", "times"],
-  execute: ["Ran", "command", "commands"],
-  fetch: ["Looked up", "page", "pages"],
-  think: ["Thought", "time", "times"],
-};
-
-/** "Edited 3 files, ran 2 commands" */
+/**
+ * One line for a folded run of finished tool rows ("Edited 3 files, ran a command"). Files are
+ * counted once each, however often they were edited or read: the same rule and words as the
+ * desktop app (desktop/src/renderer/src/chatText.ts summarizeTools).
+ */
 export function summarizeTools(items: ChatItem[]): string {
-  const counts = new Map<string, number>();
-  for (const i of items) {
-    const k = i.tool?.kind && NOUNS[i.tool.kind] ? i.tool.kind : "other";
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
+  const tools = items.map((i) => i.tool).filter((t): t is NonNullable<ChatItem["tool"]> => !!t);
+  const files = (kinds: string[]) => new Set(tools.filter((t) => kinds.includes(t.kind)).map((t) => t.detail || t.title)).size;
+  const count = (kind: string) => tools.filter((t) => t.kind === kind).length;
+  const plural = (k: number, one: string, many: string) => (k === 1 ? one : many.replace("#", String(k)));
   const parts: string[] = [];
-  for (const [k, n] of counts) {
-    if (k === "other") parts.push(`${n} ${n === 1 ? "step" : "steps"}`);
-    else if (k === "search" || k === "think") {
-      const verb = NOUNS[k][0].toLowerCase();
-      parts.push(n === 1 ? `${verb} once` : `${verb} ${n} times`);
-    } else {
-      const [verb, one, many] = NOUNS[k];
-      parts.push(`${verb.toLowerCase()} ${n} ${n === 1 ? one : many}`);
-    }
-  }
+  const edited = files(["edit", "delete", "move"]);
+  const read = files(["read"]);
+  if (edited) parts.push(plural(edited, "edited a file", "edited # files"));
+  if (read) parts.push(plural(read, "read a file", "read # files"));
+  if (count("execute")) parts.push(plural(count("execute"), "ran a command", "ran # commands"));
+  if (count("search")) parts.push(plural(count("search"), "searched once", "searched # times"));
+  const known = ["edit", "delete", "move", "read", "execute", "search"];
+  const rest = tools.filter((t) => !known.includes(t.kind)).length;
+  if (rest > 0) parts.push(plural(rest, "one more step", "# more steps"));
   const text = parts.join(", ");
-  const sentence = /^\d/.test(text) ? `Did ${text}` : text;
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export function seconds(item: ChatItem): number {

@@ -29,6 +29,7 @@ export async function boot() {
     if (state === "active") onForeground();
   });
   bootedAt = Date.now();
+  startUnpairRetries();
   AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
 }
 
@@ -166,8 +167,25 @@ export async function pairWithEasyConnect(text: string, onStep?: (step: string) 
 export async function unpair() {
   // Tell the PC first (POST /api/unpair, phone token), so it forgets this phone and its Easy Connect
   // key. If the PC is off or does not have that route yet, carry on: the phone forgets it anyway.
+  // Over the same network this is a fresh connection to the PC, and a first connection can stall
+  // for seconds (8 s measured on the emulator): the old 5 s limit gave up before it reached the PC.
+  // Three tries of 8 s while the PC is reachable, one short one when it is not.
+  // If it still has not answered after two tries, the request is remembered and sent again in the
+  // background until the PC answers (same network only: an Easy Connect tunnel ends with the pairing).
   const client = getState().client;
-  if (client) await client.unpair().catch(() => undefined);
+  const pairing = getState().pairing;
+  if (client) {
+    let told = false;
+    for (let i = 0; i < 2 && !told; i++) {
+      told = await tellPcToForget(client, 8000);
+      if (!told) console.log(`unpair: try ${i + 1} did not reach the PC`);
+    }
+    if (!told && pairing && !usesEasyConnect(pairing)) {
+      const pending = [...(getState().prefs.pendingUnpairs ?? []), { baseUrl: client.baseUrl, token: client.token }];
+      updatePrefs({ pendingUnpairs: pending });
+      console.log("unpair: will keep telling the PC in the background");
+    }
+  }
   disconnectSocket();
   if (usesEasyConnect(getState().pairing)) await AnyAppNative?.easyConnectStop().catch(() => undefined);
   await savePairing(null);
@@ -184,6 +202,46 @@ export async function unpair() {
     installs: {},
     authLost: false,
   });
+}
+
+/** POST /api/unpair. True once the PC has answered: 204, or 401 (it already forgot this phone). */
+async function tellPcToForget(client: Client, timeoutMs: number): Promise<boolean> {
+  try {
+    await client.unpair(timeoutMs);
+    console.log("unpair: the PC forgot this phone");
+    return true;
+  } catch (e) {
+    if (e instanceof ApiError && !e.unreachable) {
+      console.log(`unpair: the PC answered ${e.status}, nothing more to do`);
+      return true;
+    }
+    return false;
+  }
+}
+
+let unpairTimer: ReturnType<typeof setInterval> | null = null;
+let flushing = false;
+
+/** Sends remembered disconnects again (at start, every 20 s while the app is in front). */
+async function flushPendingUnpairs() {
+  const pending = getState().prefs.pendingUnpairs ?? [];
+  if (flushing || pending.length === 0 || AppState.currentState !== "active") return;
+  flushing = true;
+  try {
+    for (const p of pending) {
+      if (await tellPcToForget(new Client(p.baseUrl, p.token), 10000)) {
+        updatePrefs({ pendingUnpairs: (getState().prefs.pendingUnpairs ?? []).filter((x) => x.token !== p.token) });
+      }
+    }
+  } finally {
+    flushing = false;
+  }
+}
+
+function startUnpairRetries() {
+  if (unpairTimer) return;
+  void flushPendingUnpairs();
+  unpairTimer = setInterval(() => void flushPendingUnpairs(), 20000);
 }
 
 export function updatePrefs(change: Partial<Prefs>) {

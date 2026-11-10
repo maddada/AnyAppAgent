@@ -26,6 +26,11 @@ export interface Prefs {
   unfinishedInstalls: Record<string, { build: number; retried: boolean }>;
   /** The name this phone pairs under, chosen once and reused (the PC recognises it by name). */
   deviceName?: string;
+  /**
+   * Disconnects the PC has not heard about yet (same network, the PC was off or the network
+   * dropped the request): sent again in the background until the PC answers.
+   */
+  pendingUnpairs?: { baseUrl: string; token: string }[];
 }
 
 const PAIRING_KEY = "anyapp.pairing";

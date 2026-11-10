@@ -25,6 +25,7 @@ export default function Settings() {
   const connection = useStore((s) => s.connection);
   const theme = useStore((s) => s.prefs.theme);
   const [confirm, setConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [perms, setPerms] = useState(readPermissions);
 
   const check = useCallback(() => setPerms(readPermissions()), []);
@@ -132,8 +133,9 @@ export default function Settings() {
             testID="confirm-disconnect"
             label="Disconnect"
             variant="problem"
+            busy={leaving}
             onPress={async () => {
-              setConfirm(false);
+              setLeaving(true); // the PC is told first, which can take a few seconds
               await unpair(); // with no PC, this screen redirects to Connect by itself
             }}
           />

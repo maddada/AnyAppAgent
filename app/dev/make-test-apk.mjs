@@ -30,7 +30,7 @@ function newestDir(parent, filter = () => true) {
   return dirs.length ? join(parent, dirs[dirs.length - 1]) : null;
 }
 
-function tool(dir, name) {
+export function tool(dir, name) {
   for (const ext of isWin ? [".exe", ".bat", ""] : [""]) {
     const p = join(dir, name + ext);
     if (existsSync(p)) return p;
@@ -38,7 +38,7 @@ function tool(dir, name) {
   return null;
 }
 
-function javaTool(name) {
+export function javaTool(name) {
   if (process.env.JAVA_HOME) {
     const p = tool(join(process.env.JAVA_HOME, "bin"), name);
     if (p) return p;
@@ -59,7 +59,7 @@ export function toolchain() {
   return { sdk, aapt2, zipalign, apksigner, androidJar: join(platform, "android.jar") };
 }
 
-function run(cmd, args) {
+export function run(cmd, args) {
   // .bat files (apksigner) go through cmd.exe on Windows.
   if (isWin && cmd.endsWith(".bat")) {
     const line = [cmd, ...args].map((a) => (/[\s&()]/.test(a) ? `"${a}"` : a)).join(" ");
@@ -68,9 +68,9 @@ function run(cmd, args) {
   return execFileSync(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
 }
 
-const KEYSTORE = join(TMP, "mock-apps.keystore");
+export const KEYSTORE = join(TMP, "mock-apps.keystore");
 
-function ensureKeystore() {
+export function ensureKeystore() {
   if (existsSync(KEYSTORE)) return;
   mkdirSync(TMP, { recursive: true });
   run(javaTool("keytool"), [

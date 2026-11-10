@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Keyboard, Modal, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
+import { Animated, Dimensions, Easing, Keyboard, Modal, Pressable, ScrollView, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { easing, elevation, motion, radius, space, useTheme } from "./theme";
 
@@ -75,10 +75,28 @@ export function Sheet({ visible, onClose, children }: { visible: boolean; onClos
   );
 }
 
+/**
+ * How much of the screen the keyboard covers, from its top edge to the bottom of the screen.
+ * The event's own `height` leaves out the system bar under the keyboard, and the app draws
+ * edge to edge down to the screen's bottom, so padding by `height` left the composer half
+ * covered. The keyboard's top edge (`screenY`) is exact.
+ */
+export function keyboardOverlap(e: { endCoordinates: { height: number; screenY: number } }): number {
+  const screen = Dimensions.get("screen").height;
+  const fromTop = e.endCoordinates.screenY > 0 ? screen - e.endCoordinates.screenY : 0;
+  return Math.max(e.endCoordinates.height, fromTop);
+}
+
 export function useKeyboardHeight() {
   const [height, setHeight] = useState(0);
   useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", (e) => setHeight(e.endCoordinates.height));
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      const overlap = keyboardOverlap(e);
+      console.log(
+        `keyboard: height ${Math.round(e.endCoordinates.height)}, top ${Math.round(e.endCoordinates.screenY)}, screen ${Math.round(Dimensions.get("screen").height)}, window ${Math.round(Dimensions.get("window").height)} -> covers ${Math.round(overlap)}`,
+      );
+      setHeight(overlap);
+    });
     const hide = Keyboard.addListener("keyboardDidHide", () => setHeight(0));
     return () => {
       show.remove();

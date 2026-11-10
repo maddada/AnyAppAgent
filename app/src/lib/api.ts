@@ -96,7 +96,7 @@ export class Client {
   getApp = (id: string) => this.call<App>(`/api/apps/${encodeURIComponent(id)}`);
   createApp = (body: CreateAppRequest) => this.call<App>("/api/apps", "POST", body);
   /** POST /api/unpair: the PC forgets this phone (its token, and its Easy Connect key). 204. */
-  unpair = () => request<void>(this.baseUrl, "/api/unpair", { method: "POST", token: this.token, timeoutMs: 5000 });
+  unpair = (timeoutMs = 8000) => request<void>(this.baseUrl, "/api/unpair", { method: "POST", token: this.token, timeoutMs });
   deleteApp = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}`, "DELETE");
   messages = (id: string, afterSeq?: number) =>
     this.call<ChatItem[]>(`/api/apps/${encodeURIComponent(id)}/messages${afterSeq != null ? `?afterSeq=${afterSeq}` : ""}`);
