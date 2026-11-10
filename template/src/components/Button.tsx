@@ -1,21 +1,22 @@
 import * as Haptics from 'expo-haptics';
 import { Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
-import { radius, spacing, useColors } from '@/theme';
+import { radius, spacing, type, useColors } from '@/theme';
 
 type Props = {
   title: string;
   onPress: () => void;
+  /** primary: the one main action on a screen. secondary: everything else. */
   variant?: 'primary' | 'secondary' | 'danger';
   disabled?: boolean;
   style?: ViewStyle;
 };
 
-/** A large, rounded button with a light haptic tap. */
+/** A large, calm button with a light haptic tap. */
 export function Button({ title, onPress, variant = 'primary', disabled, style }: Props) {
   const colors = useColors();
-  const bg = variant === 'primary' ? colors.primary : variant === 'danger' ? colors.danger : colors.surfaceMuted;
-  const fg = variant === 'secondary' ? colors.text : colors.primaryText;
+  const bg = variant === 'primary' ? colors.accent : variant === 'danger' ? colors.danger : colors.surfaceMuted;
+  const fg = variant === 'secondary' ? colors.text : colors.onAccent;
   return (
     <Pressable
       accessibilityRole="button"
@@ -26,11 +27,11 @@ export function Button({ title, onPress, variant = 'primary', disabled, style }:
       }}
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: bg, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
+        { backgroundColor: bg, opacity: disabled ? 0.45 : pressed ? 0.8 : 1 },
         style,
       ]}
     >
-      <Text style={[styles.label, { color: fg }]}>{title}</Text>
+      <Text style={[type.bodyStrong, { color: fg }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -43,5 +44,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { fontSize: 16, fontWeight: '700' },
 });

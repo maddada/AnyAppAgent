@@ -68,13 +68,32 @@ for crashes too (undefined values, unhandled promise rejections, permissions not
   text, comments, or your messages. Use a comma, colon, full stop or parentheses instead.
 - Short, friendly, plain words; no technical terms in anything the user sees.
 
-## Making it look good
+## Design: the user's taste (follow it)
 
-Use `src/theme.ts` (`useColors()`, `spacing`, `radius`, `font`) instead of hard-coded colours, so
-dark mode works. Big touch targets, short labels, one main action per screen. Icons:
+The user said: "no purple gradients or AI slop please". So, in every app:
+
+- **No purple gradients, and no gradients as decoration at all.** Flat colour, hairlines, space.
+- **No sparkle, magic wand, stars or "AI" icons**, and no "magical" wording.
+- **No generic AI look**: no glowing cards, glassmorphism, neon, emoji as decoration, big
+  rounded hero banners, or the same purple-blue template every app has.
+- **Design each app for what it is for.** A prayer-time app, a shopping list and a workout timer
+  should not look alike. Choose an accent, an icon and a layout that fit the subject (and its
+  culture: a prayer app might use a calm deep green or ink colour and clear, large times).
+- **Calm and well made**: good typography with a clear hierarchy (one large title per screen,
+  then headings, body, small labels), generous spacing, one restrained accent colour used
+  sparingly, and light and dark both looking deliberate.
+- No em dashes (see above).
+
+How: everything visual comes from `src/theme.ts`. Use `useColors()` (`background`, `surface`,
+`surfaceMuted`, `border`, `text`, `textMuted`, `textFaint`, `accent`, `onAccent`, `accentSoft`,
+`success`, `warning`, `danger`), `type` (`display`, `title`, `heading`, `body`, `bodyStrong`,
+`small`, `label`, `numeric`), `spacing` and `radius`, never hard-coded colours, so dark mode works.
+To give the app its character, change `accent` (and, if fitting, `background`) in both palettes
+of `theme.ts` first. Big touch targets, short labels, one main action per screen. Icons:
 `import { MaterialCommunityIcons } from '@expo/vector-icons'` (names at
-https://pictogrammers.com/library/mdi/). Gradients: `expo-linear-gradient`. Wrap every screen in
-`<Screen>` so content stays clear of the status bar and the gesture bar (the app is edge-to-edge).
+https://pictogrammers.com/library/mdi/), used sparingly and in `textMuted` or `accent`. Wrap every
+screen in `<Screen>` so content stays clear of the status bar and the gesture bar (the app is
+edge-to-edge). The starter screen (`src/screens/HomeScreen.tsx`) shows the intended level of care.
 
 ## Built-in capabilities
 
@@ -217,7 +236,7 @@ DateTimePickerAndroid.open({
 
 ### Other things already installed
 
-`expo-constants` (app name/version: `Constants.expoConfig?.name`), `expo-linear-gradient`,
+`expo-constants` (app name/version: `Constants.expoConfig?.name`),
 `@expo/vector-icons`, `react-native-safe-area-context`, `expo-status-bar`. `fetch` works for the
 internet (HTTPS). `expo-updates` is installed for later over-the-air updates but **off**; leave it.
 
@@ -226,15 +245,16 @@ internet (HTTPS). `expo-updates` is installed for later over-the-air updates but
 The launcher icon is **`assets/icon.png`**: a 1024x1024 PNG, square, opaque, full-bleed (no
 rounded corners, no transparency). Android crops about a sixth from every edge into a circle or
 squircle, so keep the picture in the middle ~60%. Give every app its own icon that matches what it
-does (the starter icon is a placeholder):
+does (the starter icon, a plain outline on graphite, is a placeholder). Flat colour, one simple
+glyph that says what the app is for, no gradients, no sparkles:
 
 ```
-npm run icon -- --bg "#0E7C66" --bg2 "#0A4F44" --glyph mosque      # gradient + glyph
-npm run icon -- --bg "#E8590C" --letter W                          # colour + letter
-npm run icon -- --search alarm                                     # find glyph names
+npm run icon -- --bg "#14532D" --fg "#F4F1E8" --glyph mosque      # flat colour + glyph
+npm run icon -- --bg "#1E2023" --letter W                         # colour + letter
+npm run icon -- --search alarm                                    # find glyph names
 ```
 
-Options: `--fg` glyph colour (default white), `--scale` glyph size 0.2–0.7 (default 0.46). Glyphs
+Options: `--fg` glyph colour (default white), `--scale` glyph size 0.2 to 0.7 (default 0.46). Glyphs
 are Material Design Icons (https://pictogrammers.com/library/mdi/). You may also write any other
 1024x1024 PNG to that path. The icon change ships with the next build.
 

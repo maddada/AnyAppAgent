@@ -18,7 +18,7 @@ export function Screen({ children, scroll = true, style }: Props) {
   const padding: ViewStyle = {
     paddingTop: insets.top + spacing.md,
     paddingBottom: insets.bottom + spacing.lg,
-    paddingHorizontal: spacing.md + 4,
+    paddingHorizontal: spacing.lg,
   };
   if (!scroll) {
     return <View style={[styles.fill, { backgroundColor: colors.background }, padding, style]}>{children}</View>;

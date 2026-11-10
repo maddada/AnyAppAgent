@@ -1,70 +1,65 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-import { Card } from '@/components/Card';
 import { Screen } from '@/components/Screen';
-import { font, radius, spacing, useColors } from '@/theme';
+import { radius, spacing, type, useColors } from '@/theme';
 
 const appName = Constants.expoConfig?.name ?? 'My App';
+const version = Constants.expoConfig?.version ?? '1.0.0';
 
 const steps = [
-  { icon: 'message-text-outline', text: 'Tell AnyAppAgent what this app should do.' },
-  { icon: 'hammer-wrench', text: 'Your PC builds it while you wait.' },
-  { icon: 'cellphone-arrow-down', text: 'The new version installs over this one.' },
-] as const;
+  { title: 'Describe it', text: 'Tell AnyAppAgent what this app should do, in your own words.' },
+  { title: 'It gets built', text: 'Your PC makes the new version while you wait.' },
+  { title: 'It updates here', text: 'The new version installs over this one. Nothing to set up.' },
+];
 
+/** The starter screen. Replace it with the app's real first screen. */
 export function HomeScreen() {
   const colors = useColors();
   return (
-    <Screen>
-      <LinearGradient
-        colors={[colors.primary, colors.accent]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.hero}
-      >
-        <Image source={require('../../assets/icon.png')} style={styles.icon} />
-        <Text style={styles.heroTitle}>{appName}</Text>
-        <Text style={styles.heroSubtitle}>Your new app is ready.</Text>
-      </LinearGradient>
+    <Screen style={styles.page}>
+      <Image source={require('../../assets/icon.png')} style={[styles.icon, { borderColor: colors.border }]} />
 
-      <Card style={styles.card}>
-        <Text style={[font.heading, { color: colors.text }]}>What happens next</Text>
-        {steps.map((s) => (
-          <View key={s.icon} style={styles.step}>
-            <View style={[styles.stepIcon, { backgroundColor: colors.surfaceMuted }]}>
-              <MaterialCommunityIcons name={s.icon} size={20} color={colors.primary} />
+      <Text style={[type.display, styles.name, { color: colors.text }]}>{appName}</Text>
+      <Text style={[type.body, { color: colors.textMuted }]}>Ready for its first idea.</Text>
+
+      <Text style={[type.label, styles.section, { color: colors.textFaint }]}>WHAT HAPPENS NEXT</Text>
+      <View style={[styles.list, { borderColor: colors.border }]}>
+        {steps.map((s, i) => (
+          <View
+            key={s.title}
+            style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
+          >
+            <Text style={[type.bodyStrong, type.numeric, styles.number, { color: colors.accent }]}>{i + 1}</Text>
+            <View style={styles.rowText}>
+              <Text style={[type.bodyStrong, { color: colors.text }]}>{s.title}</Text>
+              <Text style={[type.small, { color: colors.textMuted }]}>{s.text}</Text>
             </View>
-            <Text style={[font.body, styles.stepText, { color: colors.textMuted }]}>{s.text}</Text>
           </View>
         ))}
-      </Card>
+      </View>
+
+      <View style={styles.spacer} />
+      <Text style={[type.small, type.numeric, { color: colors.textFaint }]}>Version {version}</Text>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: {
-    borderRadius: radius.lg,
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
+  page: { flexGrow: 1 },
   icon: {
-    width: 88,
-    height: 88,
-    borderRadius: 24,
-    marginBottom: spacing.sm,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.6)',
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
   },
-  heroTitle: { ...font.title, color: '#FFFFFF', textAlign: 'center' },
-  heroSubtitle: { ...font.body, color: 'rgba(255,255,255,0.85)', textAlign: 'center' },
-  card: { marginTop: spacing.lg },
-  step: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs },
-  stepIcon: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  stepText: { flex: 1 },
+  name: { marginBottom: spacing.sm },
+  section: { marginTop: spacing.xxl + spacing.md, marginBottom: spacing.sm },
+  list: { borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.md + 2 },
+  number: { width: 20 },
+  rowText: { flex: 1, gap: 2 },
+  spacer: { flex: 1, minHeight: spacing.xxl },
 });

@@ -1,43 +1,72 @@
-// Colours, spacing and type for the whole app. Change the palette here, not in each screen.
+// The app's look in one place: colours (light and dark), type, spacing and radii.
+// Screens use these tokens instead of hard-coded values so dark mode and redesigns stay easy.
+// To give an app its own character, change `accent` (and maybe `background`) here first.
 import { useColorScheme } from 'react-native';
 
 const light = {
-  background: '#F6F7FB',
+  /** Screen background: a quiet, slightly warm neutral. */
+  background: '#F5F5F2',
+  /** Cards, sheets, inputs. */
   surface: '#FFFFFF',
-  surfaceMuted: '#EEF0F6',
-  text: '#11131A',
-  textMuted: '#5D6475',
-  border: '#E3E6EE',
-  primary: '#5B4BE5',
-  primaryText: '#FFFFFF',
-  accent: '#9333EA',
-  success: '#12805C',
-  danger: '#D93636',
+  /** Pressed rows, chips, secondary buttons, icon wells. */
+  surfaceMuted: '#ECECE8',
+  /** Hairlines and outlines. */
+  border: '#DFDFDA',
+  /** Main text. */
+  text: '#18191B',
+  /** Secondary text. */
+  textMuted: '#5E6167',
+  /** Hints, captions, disabled text. */
+  textFaint: '#8D9096',
+  /** The one accent colour: primary buttons, links, selected states. Use it sparingly. */
+  accent: '#2C4F9E',
+  /** Text and icons on top of `accent`. */
+  onAccent: '#FFFFFF',
+  /** A pale tint of the accent for selected rows and badges. */
+  accentSoft: '#E6EBF5',
+  success: '#1F7A4D',
+  warning: '#A86400',
+  danger: '#C2362F',
 };
 
 const dark: typeof light = {
-  background: '#0E1116',
-  surface: '#171A21',
-  surfaceMuted: '#20242D',
-  text: '#F2F4F8',
-  textMuted: '#9AA1B2',
-  border: '#2A2F3A',
-  primary: '#8B7FFF',
-  primaryText: '#0E1116',
-  accent: '#C084FC',
-  success: '#3DD68C',
-  danger: '#FF6B6B',
+  background: '#111214',
+  surface: '#1A1B1E',
+  surfaceMuted: '#232428',
+  border: '#2D2E33',
+  text: '#ECECEA',
+  textMuted: '#A2A5AB',
+  textFaint: '#6F7278',
+  accent: '#8DA8E8',
+  onAccent: '#0F1114',
+  accentSoft: '#1D2433',
+  success: '#55C08A',
+  warning: '#E0A443',
+  danger: '#EE7A72',
 };
 
 export type Colors = typeof light;
 
-export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48 } as const;
-export const radius = { sm: 8, md: 14, lg: 22, pill: 999 } as const;
-export const font = {
-  title: { fontSize: 30, fontWeight: '800' as const, letterSpacing: -0.5 },
-  heading: { fontSize: 20, fontWeight: '700' as const },
-  body: { fontSize: 16, lineHeight: 23 },
-  small: { fontSize: 13, lineHeight: 18 },
+/** Spacing scale (dp). Prefer these to one-off numbers. */
+export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48, xxxl: 64 } as const;
+
+export const radius = { sm: 6, md: 12, lg: 18, pill: 999 } as const;
+
+/**
+ * Type scale (system font: Roboto on Android). Weights and tracking do the work:
+ * one large title per screen, then headings, body and small labels.
+ */
+export const type = {
+  display: { fontSize: 40, lineHeight: 46, fontWeight: '700' as const, letterSpacing: -1 },
+  title: { fontSize: 28, lineHeight: 34, fontWeight: '700' as const, letterSpacing: -0.5 },
+  heading: { fontSize: 19, lineHeight: 25, fontWeight: '600' as const, letterSpacing: -0.2 },
+  body: { fontSize: 16, lineHeight: 24, fontWeight: '400' as const },
+  bodyStrong: { fontSize: 16, lineHeight: 24, fontWeight: '600' as const },
+  small: { fontSize: 14, lineHeight: 20, fontWeight: '400' as const },
+  /** Uppercase section labels: pair with `textTransform: 'uppercase'`. */
+  label: { fontSize: 12, lineHeight: 16, fontWeight: '600' as const, letterSpacing: 1.2 },
+  /** Numbers that line up (times, counters). */
+  numeric: { fontVariant: ['tabular-nums' as const] },
 };
 
 /** The current palette (follows the phone's light/dark setting). */

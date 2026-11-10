@@ -8,8 +8,9 @@ edits a copy reads [AGENTS.md](AGENTS.md); this file is for people working on th
 
 - Expo SDK 58 (`expo@58.0.x`, React Native 0.88, React 19.3, TypeScript strict), Android only,
   Continuous Native Generation: `android/` is never committed, the builder runs `expo prebuild`.
-- A starter screen (`src/screens/HomeScreen.tsx`), a small theme with dark mode, three reusable
-  components, and React Navigation 7 (static config, typed).
+- A calm starter screen (`src/screens/HomeScreen.tsx`: system type with a clear hierarchy,
+  hairlines, one ink-blue accent, light and dark), a theme (`src/theme.ts`) with a neutral palette
+  and type scale any app can build on, three reusable components, and React Navigation 7 (static config, typed).
 - Native capabilities wired in so most prompts need only JavaScript (see AGENTS.md for usage):
 
 | Capability | Library | Why this one |
@@ -24,7 +25,7 @@ edits a copy reads [AGENTS.md](AGENTS.md); this file is for people working on th
 | Keep screen awake | `expo-keep-awake` | First-party. |
 | Time/date picker | `@react-native-community/datetimepicker` | The picker Expo recommends; native Material dialogs. |
 | Navigation | `@react-navigation/native` + `native-stack` | Explicit, typed screen registration (less magic for an agent than file-based routing). |
-| UI | `@expo/vector-icons`, `expo-linear-gradient`, `react-native-safe-area-context` | Icons, gradients, edge-to-edge insets. |
+| UI | `@expo/vector-icons`, `react-native-safe-area-context` | Icons, edge-to-edge insets. (No gradient library: the user does not want gradients.) |
 | OTA later | `expo-updates` (installed, `updates.enabled: false`) | Ready for over-the-air updates without another native change of the dependency set. |
 
 All versions were chosen with `npx expo install`, so they match SDK 58.
@@ -42,7 +43,7 @@ Declared in `app.json` and merged from the libraries: `POST_NOTIFICATIONS`, `USE
 `assets/icon.png` (1024x1024, opaque, full-bleed) is the only icon file: `app.json` uses it as the
 legacy icon, the adaptive icon foreground and the splash image. `scripts/make-icon.mjs` draws a
 Material Design Icons glyph (read from the font inside `@expo/vector-icons` with a small TrueType
-rasterizer) or a letter on a colour or gradient and writes the PNG with Node's `zlib`, with no
+rasterizer) or a letter on a flat colour and writes the PNG with Node's `zlib`, with no
 other tools: `npm run icon -- --bg "#0E7C66" --glyph mosque`.
 
 ## Checks

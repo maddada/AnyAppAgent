@@ -3,11 +3,11 @@
 // No external tools: draws a Material Community Icons glyph (7000+ icons, from @expo/vector-icons)
 // with a tiny TrueType rasterizer and writes the PNG with Node's zlib.
 //
-//   node scripts/make-icon.mjs --bg "#0E7C66" --glyph mosque
-//   node scripts/make-icon.mjs --bg "#3B5BDB" --bg2 "#7048E8" --letter T
+//   node scripts/make-icon.mjs --bg "#14532D" --glyph mosque
+//   node scripts/make-icon.mjs --bg "#1E2023" --letter T
 //   node scripts/make-icon.mjs --search alarm          (list glyph names containing "alarm")
 //
-// Options: --bg <hex>  background (required unless --search)   --bg2 <hex>  second colour: gradient
+// Options: --bg <hex>  flat background (required unless --search)
 //          --fg <hex>  glyph colour (default #FFFFFF)           --scale <0.2..0.7> glyph size (0.46)
 //          --glyph <name> | --letter <A-Z or 0-9>                --out <file> (default assets/icon.png)
 // Icons at https://pictogrammers.com/library/mdi/ (same names).
@@ -388,7 +388,6 @@ if (cp === undefined) {
   fail(`unknown glyph "${glyphName}".${close.length ? ` Similar: ${close.join(', ')}` : ''} (try --search <word>)`);
 }
 
-const bg2 = args.bg2 ? parseColor(args.bg2, '--bg2') : bg;
 const fg = parseColor(args.fg ?? '#FFFFFF', '--fg');
 const scale = Math.min(0.7, Math.max(0.2, Number(args.scale ?? 0.46) || 0.46));
 const outFile = path.resolve(ROOT, args.out ?? 'assets/icon.png');
@@ -419,13 +418,11 @@ const cov = rasterize(placed, SIZE, SIZE);
 
 const rgb = Buffer.alloc(SIZE * SIZE * 3);
 for (let y = 0; y < SIZE; y++) {
-  // Diagonal gradient from top-left (bg) to bottom-right (bg2).
   for (let x = 0; x < SIZE; x++) {
-    const t = (x + y) / (2 * (SIZE - 1));
     const a = Math.min(1, Math.max(0, cov[y * SIZE + x]));
     const o = (y * SIZE + x) * 3;
     for (let ch = 0; ch < 3; ch++) {
-      const back = bg[ch] + (bg2[ch] - bg[ch]) * t;
+      const back = bg[ch];
       rgb[o + ch] = Math.round(back + (fg[ch] - back) * a);
     }
   }
