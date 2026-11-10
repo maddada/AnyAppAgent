@@ -85,6 +85,50 @@ export function plainCommandTitle(command: string | undefined, description: stri
   return "Ran a command";
 }
 
+/** The last part of a path, whichever slash it uses. */
+function fileName(path: string): string {
+  const parts = path.replace(/[\\/]+$/, "").split(/[\\/]/);
+  return parts[parts.length - 1] || path;
+}
+
+/** A title that still carries a path, a command or code formatting is not for the person. */
+function looksTechnical(title: string): boolean {
+  return /[\\/`]|^[a-z_]+$|\b(Bash|Grep|Glob|TodoWrite|mcp__)\b/.test(title);
+}
+
+/**
+ * A short plain title for any tool row (the person on the phone is not technical). File rows
+ * name the file only ("Changed App.tsx"); raw commands, patterns, URLs and full paths stay in
+ * the row's detail.
+ */
+export function plainToolTitle(kind: string, event: JsonObject, input: JsonObject, path: string | undefined): string {
+  const raw = (readString(event, "title") ?? readString(event, "name") ?? "").trim();
+  const file = path ? fileName(path) : undefined;
+  switch (kind) {
+    case "execute":
+      return plainCommandTitle(readString(input, "command"), readString(input, "description"));
+    case "search":
+      return "Searched the app";
+    case "read":
+      return file ? `Read ${file}` : "Read a file";
+    case "edit":
+      if (!file) return "Changed a file";
+      return /^(Write|Create)\b/i.test(raw) && !/^Edit/i.test(raw) ? `Wrote ${file}` : `Changed ${file}`;
+    case "delete":
+      return file ? `Removed ${file}` : "Removed a file";
+    case "move":
+      return file ? `Moved ${file}` : "Moved a file";
+    case "fetch":
+      return "Looked something up online";
+    case "think":
+      return raw && !looksTechnical(raw) ? raw : "Thought it through";
+    case "switch_mode":
+      return "Changed how it works";
+    default:
+      return raw && !looksTechnical(raw) ? shorten(raw, 80) : "Used a tool";
+  }
+}
+
 export function toolInfo(event: JsonObject, cwd: string): ToolCallInfo {
   const rawKind = readString(event, "kind") ?? "other";
   const kind = TOOL_KINDS.has(rawKind) ? rawKind : "other";
@@ -92,26 +136,23 @@ export function toolInfo(event: JsonObject, cwd: string): ToolCallInfo {
   const status: ToolCallInfo["status"] =
     rawStatus === "in_progress" || rawStatus === "completed" || rawStatus === "failed" ? rawStatus : "pending";
   const input = isJsonObject(event["rawInput"]) ? event["rawInput"] : {};
-  const title =
-    kind === "execute"
-      ? plainCommandTitle(readString(input, "command"), readString(input, "description"))
-      : (readString(event, "title") ?? readString(event, "name") ?? "Tool").trim() || "Tool";
   const locations = Array.isArray(event["locations"]) ? event["locations"] : [];
   const firstPath = locations.map((l) => (isJsonObject(l) ? readString(l, "path") : undefined)).find(Boolean);
+  const path = firstPath ?? readString(input, "file_path") ?? readString(input, "path") ?? readString(input, "notebook_path");
+  const title = plainToolTitle(kind, event, input, path);
   let detail: string | undefined;
   if (kind === "execute") {
     detail = readString(input, "command");
   } else if (kind === "fetch") {
     detail = readString(input, "url") ?? readString(input, "query");
   } else if (kind === "search") {
-    detail = readString(input, "pattern") ?? readString(input, "query");
+    const pattern = readString(input, "pattern") ?? readString(input, "query");
+    detail = pattern && path ? `${pattern} in ${relativeTo(cwd, path)}` : pattern;
   } else {
-    const path = firstPath ?? readString(input, "file_path") ?? readString(input, "path");
     detail = path ? relativeTo(cwd, path) : undefined;
   }
   if (detail === undefined && status === "failed") detail = toolContentText(event);
-  const bare = (s: string) => s.replace(/`/g, "").trim();
-  if (detail !== undefined && (bare(detail) === bare(title) || title.endsWith(bare(detail)))) detail = undefined;
+  if (detail !== undefined && title.endsWith(detail)) detail = undefined;
   return { title, kind, status, ...(detail ? { detail: shorten(detail) } : {}) };
 }
 

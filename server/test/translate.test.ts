@@ -100,7 +100,32 @@ describe("ChatTranslator", () => {
       status: "in_progress",
       locations: [{ path: "C:\\aa\\apps\\demo\\src\\App.tsx" }],
     });
-    expect(out[0].tool).toEqual({ title: "Edit App.tsx", kind: "edit", status: "in_progress", detail: "src/App.tsx" });
+    expect(out[0].tool).toEqual({ title: "Changed App.tsx", kind: "edit", status: "in_progress", detail: "src/App.tsx" });
+  });
+
+  it("gives every kind of row a plain title; paths, patterns and URLs stay in the detail", () => {
+    const t = translator();
+    const row = (u: Record<string, unknown>) => t.translate({ sessionUpdate: "tool_call", toolCallId: Math.random().toString(), ...u })[0].tool!;
+    expect(row({ title: "grep waterglass", kind: "search", rawInput: { pattern: "waterglass", path: "C:\\aa\\apps\\demo\\src" } })).toEqual({
+      title: "Searched the app",
+      kind: "search",
+      status: "pending",
+      detail: "waterglass in src",
+    });
+    expect(row({ title: "Read C:\\aa\\apps\\demo\\src\\screens\\HomeScreen.tsx", kind: "read", locations: [{ path: "C:\\aa\\apps\\demo\\src\\screens\\HomeScreen.tsx" }] })).toEqual({
+      title: "Read HomeScreen.tsx",
+      kind: "read",
+      status: "pending",
+      detail: "src/screens/HomeScreen.tsx",
+    });
+    expect(row({ title: "Read File", kind: "read" }).title).toBe("Read a file");
+    expect(row({ title: "Write C:/aa/apps/demo/APP_MEMORY.md", kind: "edit", rawInput: { file_path: "C:/aa/apps/demo/APP_MEMORY.md" } }).title).toBe("Wrote APP_MEMORY.md");
+    expect(row({ title: "Edit `C:\\aa\\apps\\demo\\App.tsx`", kind: "edit", rawInput: { file_path: "C:\\aa\\apps\\demo\\App.tsx" } }).title).toBe("Changed App.tsx");
+    expect(row({ title: "Fetch https://example.com/x", kind: "fetch", rawInput: { url: "https://example.com/x" } })).toMatchObject({ title: "Looked something up online", detail: "https://example.com/x" });
+    expect(row({ title: "mcp__x__y", kind: "other" }).title).toBe("Used a tool");
+    for (const tool of [row({ title: "Find `src/**/*.tsx`", kind: "search", rawInput: { pattern: "src/**/*.tsx" } })]) {
+      expect(tool.title).not.toMatch(/[\\/`]/);
+    }
   });
 
   it("maps unknown tool kinds to other and failed calls carry their output", () => {

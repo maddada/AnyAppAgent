@@ -19,7 +19,7 @@ import type {
   ServerEvent,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
-import { ADMIN_DEVICE_ID, type Auth } from "./auth.ts";
+import { ADMIN_DEVICE_ID, cleanDeviceName, type Auth } from "./auth.ts";
 import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
@@ -118,6 +118,37 @@ export function startHttpServer(deps: {
     return new Set(phoneSockets.values());
   }
 
+  /**
+   * Forgets a paired phone at once: its token stops working, its Easy Connect key leaves the
+   * allow-list, its sockets close, and the desktop gets a new admin.state (through auth.onChange).
+   */
+  function forgetDevice(id: string, why: string, allowListLater?: ServerResponse): boolean {
+    const name = auth.list().find((device) => device.id === id)?.deviceName;
+    if (!auth.remove(id)) return false;
+    for (const [ws, deviceId] of phoneSockets) if (deviceId === id) ws.close(4001, "unpaired");
+    // A phone that unpairs itself over Easy Connect is answered through the tunnel the new
+    // allow-list closes, so its key leaves the list only once that answer is on its way.
+    if (allowListLater) allowListLater.once("finish", () => setTimeout(() => easyConnect.devicesChanged(), 1500));
+    else easyConnect.devicesChanged();
+    log(`forgot device ${name ?? id} (${why})`);
+    return true;
+  }
+
+  /**
+   * A phone that pairs again under the same name replaces its older entries that are not
+   * connected now, so the PC never lists two phones the user cannot tell apart.
+   */
+  function replaceOlderTwins(token: string): void {
+    const id = auth.identify(token);
+    const fresh = auth.list().find((device) => device.id === id);
+    if (!fresh) return;
+    const connected = connectedDeviceIds();
+    const same = (name: string) => name.trim().toLowerCase() === fresh.deviceName.trim().toLowerCase();
+    for (const older of [...auth.list()]) {
+      if (older.id !== fresh.id && same(older.deviceName) && !connected.has(older.id)) forgetDevice(older.id, "paired again");
+    }
+  }
+
   function adminState(): AdminState {
     const lanUrls = lanAddresses().map((address) => `http://${address}:${deps.port}`);
     const connected = connectedDeviceIds();
@@ -127,6 +158,7 @@ export function startHttpServer(deps: {
       pairedAt: device.createdAt,
       ...(device.lastSeenAt ? { lastSeenAt: device.lastSeenAt } : {}),
       connected: connected.has(device.id),
+      via: device.via === "easy-connect" ? "easy-connect" : "same-network",
     }));
     return {
       serverName: serverName(),
@@ -174,10 +206,7 @@ export function startHttpServer(deps: {
     const device = /^\/api\/admin\/devices\/([^/]+)$/.exec(path);
     if (method === "DELETE" && device) {
       const id = decodeURIComponent(device[1]);
-      if (!auth.remove(id)) return sendError(res, 404, "There is no paired device with that id.");
-      for (const [ws, deviceId] of phoneSockets) if (deviceId === id) ws.close(4001, "unpaired");
-      easyConnect.devicesChanged();
-      log(`unpaired device ${id}`);
+      if (!forgetDevice(id, "removed on the PC")) return sendError(res, 404, "There is no paired device with that id.");
       res.writeHead(204);
       return void res.end();
     }
@@ -202,17 +231,27 @@ export function startHttpServer(deps: {
     }
     if (method === "POST" && path === "/api/pair") {
       const body = await readBody<PairRequest>(req);
-      const deviceName = typeof body.deviceName === "string" ? body.deviceName : "Phone";
+      const deviceName = cleanDeviceName(body.deviceName);
       const token = auth.pair(str(body.code, "code"), deviceName);
       if (token === "locked") return sendError(res, 429, "Too many wrong codes. Wait a minute and try again.");
       if (token === null) return sendError(res, 401, "That pairing code is not right. Check the code on your PC.");
-      log(`paired a new device: ${deviceName.slice(0, 80)}`);
+      log(`paired a new device: ${deviceName}`);
+      replaceOlderTwins(token);
       return sendJson(res, 200, { token, serverName: serverName() } satisfies PairResponse);
     }
     if (method === "POST" && path === "/api/pair/easy-connect") {
       const body = await readBody<Partial<EasyConnectPairRequest>>(req);
-      const { token } = easyConnect.pair(body);
+      const { token } = easyConnect.pair({ ...body, deviceName: cleanDeviceName(body.deviceName) });
+      replaceOlderTwins(token);
       return sendJson(res, 200, { token, serverName: serverName() } satisfies PairResponse);
+    }
+    if (method === "POST" && path === "/api/unpair") {
+      const id = auth.identify(bearer(req));
+      if (id === null) return sendError(res, 401, "This phone is not paired with this PC.");
+      if (id === ADMIN_DEVICE_ID) return sendError(res, 400, "Only a paired phone can disconnect itself.");
+      forgetDevice(id, "the phone disconnected", res);
+      res.writeHead(204);
+      return void res.end();
     }
     if (path.startsWith("/api/admin/")) return adminRoute(req, res, path, method);
     if (!path.startsWith("/api/")) return sendError(res, 404, "Not found.");

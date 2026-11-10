@@ -19,6 +19,20 @@ export interface DeviceRecord {
 const MAX_FAILURES_PER_MINUTE = 10;
 export const ADMIN_DEVICE_ID = "admin";
 
+const DEVICE_NAME_MAX = 60;
+
+/** What a phone calls itself, made safe to show: no control characters, single spaces, at most 60 characters. */
+export function cleanDeviceName(name: unknown): string {
+  const text = typeof name === "string" ? name : "";
+  const invisible = (code: number) =>
+    code < 0x20 || (code >= 0x7f && code <= 0x9f) || (code >= 0x200b && code <= 0x200f) ||
+    (code >= 0x2028 && code <= 0x202e) || (code >= 0x2060 && code <= 0x206f) || code === 0xfeff;
+  const visible = [...text].map((ch) => (invisible(ch.codePointAt(0) ?? 0) ? " " : ch)).join("");
+  const flat = visible.replace(/\s+/g, " ").trim();
+  const short = [...flat].slice(0, DEVICE_NAME_MAX).join("").trim();
+  return short || "Phone";
+}
+
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -101,7 +115,7 @@ export class Auth {
     const device: DeviceRecord = {
       id: randomUUID(),
       hash: hashToken(token),
-      deviceName: deviceName.trim().slice(0, 80) || "Phone",
+      deviceName: cleanDeviceName(deviceName),
       createdAt: nowIso(),
       lastSeenAt: nowIso(),
       ...(via ? { via } : {}),

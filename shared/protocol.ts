@@ -115,6 +115,10 @@ export interface EasyConnectPairRequest {
   clientKey: string; // the phone's tailcat client public key, "nodekey:<64 hex>"
 }
 
+// POST /api/unpair -> 204 (phone token as Bearer, no body): the phone forgets this PC (the user tapped
+// Disconnect) and the PC forgets the phone at once, as DELETE /api/admin/devices/:id does: its token stops
+// working, its Easy Connect key leaves the allow-list and its socket closes.
+
 // GET /download/anyappagent.apk (no token) -> the AnyAppAgent phone app's own APK, for the desktop's
 // install QR (the companion serves the file named by its env var ANYAPP_HOST_APK; 404 + ErrorBody when unset)
 
@@ -146,6 +150,8 @@ export interface PermissionAnswerRequest {
 }
 
 // ---------- WebSocket: GET /ws?token=<token>. Server to app only; JSON text frames.
+// The app may send the text frame "ping" every few seconds: writing is how a phone notices a dead
+// connection whose close never reached it. The companion ignores frames from the app.
 
 export type ServerEvent =
   | { type: "hello"; serverName: string; protocol: 1 }
@@ -165,6 +171,7 @@ export interface PairedDevice {
   pairedAt: string;
   lastSeenAt?: string;
   connected: boolean; // has a live socket right now
+  via: "same-network" | "easy-connect"; // how it paired (and reaches the PC)
 }
 
 export interface EasyConnectState {

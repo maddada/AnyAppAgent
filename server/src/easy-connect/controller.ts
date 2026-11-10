@@ -149,6 +149,9 @@ export class EasyConnect {
 
   /** Devices were added or removed: serve the new allow-list. */
   devicesChanged(): void {
+    // Right after a pairing the restore below applies the new list anyway; restarting the helper
+    // now would cut off the pairing answer that is still on its way back through the tunnel.
+    if (this.restoreTimer) return;
     if (this.status === "ready" || this.status === "starting") this.apply("allowListChanged");
   }
 
@@ -202,6 +205,7 @@ export class EasyConnect {
     this.log(`paired a new device over Easy Connect: ${deviceName.slice(0, 80)}`);
     if (this.expiryTimer) clearTimeout(this.expiryTimer);
     this.restoreTimer = setTimeout(() => {
+      this.restoreTimer = undefined;
       this.secret = undefined;
       this.apply("allowListRestored");
       this.onChange();

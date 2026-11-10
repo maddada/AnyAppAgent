@@ -181,7 +181,7 @@ check(!!event && socketEvents.some((e) => e.type === "chat.item" && e.item.appId
 await fetch(`${tunnel}/api/apps/${created.id}`, { method: "DELETE", headers: auth });
 state = await admin("GET", "/api/admin/state");
 const device = state.devices.find((d) => d.name === "Tunnel test phone");
-check(device?.connected === true, `admin state lists "Tunnel test phone" as connected`);
+check(device?.connected === true && device?.via === "easy-connect", `admin state lists "Tunnel test phone" as connected, via "${device?.via}"`);
 
 // ---------- a companion restart: Easy Connect comes back for paired phones, with no code
 ws.close();
@@ -219,8 +219,12 @@ if (strangerResult.startsWith("LOCALPORT")) {
 }
 check(!strangerIn, `a client whose key is not on the allow-list cannot reach the companion (${strangerResult.slice(0, 120)})`);
 
-res = await fetch(`${BASE}/api/admin/devices/${device.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${ADMIN}` } });
-check(res.status === 204, `unpair the phone on the PC -> ${res.status}`);
+// The phone disconnects itself, through the tunnel, as the app's Disconnect button does.
+const tunnelNow = afterRestart.startsWith("LOCALPORT") ? `http://127.0.0.1:${afterRestart.split(" ")[1]}` : tunnel;
+res = await fetch(`${tunnelNow}/api/unpair`, { method: "POST", headers: auth });
+check(res.status === 204, `the phone disconnects itself: POST /api/unpair through the tunnel -> ${res.status}`);
+state = await admin("GET", "/api/admin/state");
+check(!state.devices.some((d) => d.id === device.id), "the PC no longer lists it");
 for (let i = 0; i < 100 && !/allowListChanged; no devices allowed yet/.test(serverLog); i++) await new Promise((r) => setTimeout(r, 100));
 await new Promise((r) => setTimeout(r, 1500));
 phone.send("reconnect");

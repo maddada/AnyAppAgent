@@ -122,6 +122,50 @@ res = await call("GET", "/api/apps", pair.token);
 check(res.status === 401, `the unpaired phone's token stops working at once (${res.status})`);
 res = await call("DELETE", `/api/admin/devices/${device.id}`, ADMIN);
 check(res.status === 404, `unpairing it again -> ${res.status}`);
+check(device.via === "same-network", `a phone paired with the 6-digit code is listed with via "${device.via}"`);
+
+// ---------- the phone disconnects itself: POST /api/unpair
+const pairWith = async (deviceName) => {
+  const code = (await (await call("GET", "/api/admin/state", ADMIN)).json()).pairing.code;
+  return (await (await call("POST", "/api/pair", undefined, { code, deviceName })).json()).token;
+};
+const listed = async () => (await (await call("GET", "/api/admin/state", ADMIN)).json()).devices;
+const leaver = await pairWith("Leaving phone");
+const leaverWs = new WebSocket(`ws://127.0.0.1:${PORT}/ws?token=${encodeURIComponent(leaver)}`);
+await new Promise((r) => leaverWs.addEventListener("open", r, { once: true }));
+const leaverClosed = new Promise((r) => leaverWs.addEventListener("close", (e) => r(e.code), { once: true }));
+const eventsBefore = events.length;
+res = await call("POST", "/api/unpair", leaver);
+check(res.status === 204, `POST /api/unpair with the phone's own token -> ${res.status}`);
+check((await leaverClosed) === 4001, "its socket is closed at once");
+res = await call("GET", "/api/apps", leaver);
+check(res.status === 401, `its token stops working at once (${res.status})`);
+await new Promise((r) => setTimeout(r, 300));
+check(!(await listed()).some((d) => d.name === "Leaving phone"), "the PC no longer lists it");
+check(events.slice(eventsBefore).some((e) => e.type === "admin.state" && !e.state.devices.some((d) => d.name === "Leaving phone")), "the desktop got an admin.state without it");
+res = await call("POST", "/api/unpair", leaver);
+check(res.status === 401, `POST /api/unpair again -> ${res.status}`);
+res = await call("POST", "/api/unpair", ADMIN);
+check(res.status === 400, `POST /api/unpair with the admin token -> ${res.status}`);
+
+// ---------- pairing again under the same name replaces the old entry, unless it is connected
+await pairWith("Pixel 7");
+const second = await pairWith("Pixel 7");
+let twins = (await listed()).filter((d) => d.name === "Pixel 7");
+check(twins.length === 1, `pairing again as "Pixel 7" while the old one is not connected leaves ${twins.length} entry`);
+const secondWs = new WebSocket(`ws://127.0.0.1:${PORT}/ws?token=${encodeURIComponent(second)}`);
+await new Promise((r) => secondWs.addEventListener("open", r, { once: true }));
+await pairWith("pixel 7 ");
+twins = (await listed()).filter((d) => d.name.toLowerCase() === "pixel 7");
+check(twins.length === 2, `a third pairing while the second is connected keeps both (${twins.length}), so a live phone is never cut off`);
+secondWs.close();
+
+// ---------- names are cleaned
+await pairWith(`  Sam\u0000sung\t\u200bGalaxy   ${"X".repeat(200)}  `);
+const cleaned = (await listed()).find((d) => d.name.startsWith("Sam"));
+check(cleaned && cleaned.name.length <= 60 && !/[\u0000-\u001f\u200b]/.test(cleaned.name) && cleaned.name.startsWith("Sam sung Galaxy X"), `a messy name is cleaned: "${cleaned?.name}" (${cleaned?.name.length} chars)`);
+await pairWith("   ");
+check((await listed()).some((d) => d.name === "Phone"), 'an empty name becomes "Phone"');
 
 res = await fetch(`${BASE}/download/anyappagent.apk`);
 const apk = Buffer.from(await res.arrayBuffer());
