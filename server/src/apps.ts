@@ -64,8 +64,13 @@ export function slugify(name: string): string {
   return slug;
 }
 
+/** The user's rule: no em dashes anywhere, so texts the server derives from the agent lose them too. */
+export function withoutEmDashes(text: string): string {
+  return text.replace(/\s*\u{2014}\s*/gu, ", ");
+}
+
 function shorten(text: string, max: number): string {
-  const flat = text.replace(/\s+/g, " ").trim();
+  const flat = withoutEmDashes(text).replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
@@ -244,7 +249,9 @@ export class AppManager {
     this.store.add(record);
     this.broadcast({ type: "app.updated", app });
     this.emitItem(record, { id: randomUUID(), kind: "user", text: prompt.trim() });
-    void this.finishCreate(record, prompt.trim());
+    this.finishCreate(record, prompt.trim()).catch((error: unknown) => {
+      if (!record.deleted) this.log(`[${app.slug}] creation stopped:`, (error as Error).message);
+    });
     return app;
   }
 
@@ -264,6 +271,7 @@ export class AppManager {
       this.setStatus(record, "error", "The app could not be created on the PC.");
       return;
     }
+    if (record.deleted) return;
     if (this.config.github) {
       try {
         app.repoUrl = await git.createGithubRepo(dir, `anyapp-${app.slug}`);
@@ -337,6 +345,7 @@ export class AppManager {
   // ---------- the per-app work queue
 
   private enqueue(record: AppRecord, job: Job): void {
+    if (record.deleted) return;
     const rt = this.runtime(record.app.id);
     rt.queue.push(job);
     if (!rt.running) void this.drain(record);
@@ -353,6 +362,7 @@ export class AppManager {
           if (job.kind === "prompt") await this.userTurn(record, job.text);
           else await this.buildCycle(record);
         } catch (error) {
+          if (record.deleted) break;
           this.log(`[${record.app.slug}] job failed:`, (error as Error).message);
           this.errorItem(record, firstLine((error as Error).message));
           this.setStatus(record, "error", firstLine((error as Error).message, 160));

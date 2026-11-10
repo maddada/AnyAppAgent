@@ -34,3 +34,21 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Ghostex (C:\dev\Ghostex, same owner)
+
+Easy Connect is copied from Ghostex. Copied as is: `easy-connect/tailcat-bridge/bridge.go`,
+`interfaces.go`, `go.mod`, `go.sum`, `path_test.go`, `build.sh` (from
+`apps/mobile/tailcat-bridge/` at Ghostex commit f91b5fb5, 2026-11-08; one em dash in a comment of
+`interfaces.go` and `build.sh` replaced). Adapted: `easy-connect/android/EasyConnectInterfaces.kt`
+(from `apps/mobile/app/modules/ghostex-native/android/.../GhostexTailcatInterfaces.kt`),
+`src/easy-connect/tailcat.ts` (from `server/src/tailcat/install.rs`, `keys.rs`, `supervisor.rs`),
+`src/easy-connect/code.ts` (from `server/src/remote_access/pairing_code.rs` and the phone's
+`pairingCodes.ts`), `easy-connect/build-android-bridge.mjs` (from `build.sh` and the gomobile pin
+in `.github/workflows/release-gpui-android.yml`).
+
+## Tailcat (github.com/tailscale/tailcat)
+
+The Easy Connect helper and the client library the bridge uses (BSD-3-Clause, Tailscale Inc.). It
+is downloaded and built at install time into `%USERPROFILE%\.anyappagent\tools`, never stored in
+this repository.

@@ -1,12 +1,17 @@
-// HTTP routes and the WebSocket of shared/protocol.ts.
-import { createReadStream, statSync } from "node:fs";
+// HTTP routes and the WebSockets of shared/protocol.ts, including the desktop app's admin surface.
+import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { hostname } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
 import type {
+  AdminEvent,
+  AdminState,
   CreateAppRequest,
+  EasyConnectPairRequest,
+  EasyConnectToggleRequest,
   ErrorBody,
   HealthResponse,
+  PairedDevice,
   PairRequest,
   PairResponse,
   PermissionAnswerRequest,
@@ -14,8 +19,10 @@ import type {
   ServerEvent,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
-import type { Auth } from "./auth.ts";
+import { ADMIN_DEVICE_ID, type Auth } from "./auth.ts";
+import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
+import { lanAddresses, pairingUri } from "./net.ts";
 
 const MAX_BODY = 1024 * 1024;
 
@@ -93,9 +100,89 @@ export function startHttpServer(deps: {
   version: string;
   auth: Auth;
   apps: AppManager;
-}): { server: Server; broadcast(event: ServerEvent): void; ready: Promise<void> } {
-  const { auth, apps } = deps;
-  const sockets = new Set<WebSocket>();
+  easyConnect: EasyConnect;
+  hostApkPath?: string;
+}): {
+  server: Server;
+  broadcast(event: ServerEvent): void;
+  adminChanged(): void;
+  adminState(): AdminState;
+  ready: Promise<void>;
+  close(): void;
+} {
+  const { auth, apps, easyConnect } = deps;
+  const phoneSockets = new Map<WebSocket, string>();
+  const adminSockets = new Set<WebSocket>();
+
+  function connectedDeviceIds(): Set<string> {
+    return new Set(phoneSockets.values());
+  }
+
+  function adminState(): AdminState {
+    const lanUrls = lanAddresses().map((address) => `http://${address}:${deps.port}`);
+    const connected = connectedDeviceIds();
+    const devices: PairedDevice[] = auth.list().map((device) => ({
+      id: device.id,
+      name: device.deviceName,
+      pairedAt: device.createdAt,
+      ...(device.lastSeenAt ? { lastSeenAt: device.lastSeenAt } : {}),
+      connected: connected.has(device.id),
+    }));
+    return {
+      serverName: serverName(),
+      version: deps.version,
+      port: deps.port,
+      pairing: {
+        code: auth.code,
+        lanUrls,
+        qrPayload: pairingUri(lanAddresses()[0] ?? "10.0.2.2", deps.port, auth.code),
+      },
+      easyConnect: easyConnect.state(),
+      devices,
+    };
+  }
+
+  function sendAdmin(event: AdminEvent): void {
+    const data = JSON.stringify(event);
+    for (const ws of adminSockets) if (ws.readyState === ws.OPEN) ws.send(data);
+  }
+
+  let adminTimer: NodeJS.Timeout | undefined;
+  function adminChanged(): void {
+    adminTimer ??= setTimeout(() => {
+      adminTimer = undefined;
+      sendAdmin({ type: "admin.state", state: adminState() });
+    }, 50);
+  }
+
+  async function adminRoute(req: IncomingMessage, res: ServerResponse, path: string, method: string): Promise<void> {
+    if (!auth.isAdmin(bearer(req))) return sendError(res, 401, "Only the AnyAppAgent desktop app may do this.");
+    if (method === "GET" && path === "/api/admin/state") return sendJson(res, 200, adminState());
+    if (method === "POST" && path === "/api/admin/pairing/new") {
+      auth.newCode();
+      easyConnect.newCode();
+      adminChanged();
+      return sendJson(res, 200, adminState());
+    }
+    if (method === "POST" && path === "/api/admin/easy-connect") {
+      const body = await readBody<EasyConnectToggleRequest>(req);
+      if (typeof body.enabled !== "boolean") throw new HttpError(400, '"enabled" must be true or false.');
+      await easyConnect.setEnabled(body.enabled);
+      adminChanged();
+      return sendJson(res, 200, adminState());
+    }
+    const device = /^\/api\/admin\/devices\/([^/]+)$/.exec(path);
+    if (method === "DELETE" && device) {
+      const id = decodeURIComponent(device[1]);
+      if (!auth.remove(id)) return sendError(res, 404, "There is no paired device with that id.");
+      for (const [ws, deviceId] of phoneSockets) if (deviceId === id) ws.close(4001, "unpaired");
+      easyConnect.devicesChanged();
+      log(`unpaired device ${id}`);
+      res.writeHead(204);
+      return void res.end();
+    }
+    return sendError(res, 404, "Not found.");
+  }
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -105,14 +192,29 @@ export function startHttpServer(deps: {
     if (method === "GET" && path === "/api/health") {
       return sendJson(res, 200, { ok: true, name: serverName(), version: deps.version, protocol: 1 } satisfies HealthResponse);
     }
+    if ((method === "GET" || method === "HEAD") && path === "/download/anyappagent.apk") {
+      const apk = deps.hostApkPath;
+      if (!apk || !existsSync(apk)) return sendError(res, 404, "The AnyAppAgent phone app is not available from this PC yet.");
+      return sendFileWithRange(req, res, apk, {
+        "Content-Type": "application/vnd.android.package-archive",
+        "Content-Disposition": 'attachment; filename="anyappagent.apk"',
+      });
+    }
     if (method === "POST" && path === "/api/pair") {
       const body = await readBody<PairRequest>(req);
-      const token = auth.pair(str(body.code, "code"), typeof body.deviceName === "string" ? body.deviceName : "Phone");
+      const deviceName = typeof body.deviceName === "string" ? body.deviceName : "Phone";
+      const token = auth.pair(str(body.code, "code"), deviceName);
       if (token === "locked") return sendError(res, 429, "Too many wrong codes. Wait a minute and try again.");
       if (token === null) return sendError(res, 401, "That pairing code is not right. Check the code on your PC.");
-      log(`paired a new device: ${typeof body.deviceName === "string" ? body.deviceName.slice(0, 80) : "Phone"}`);
+      log(`paired a new device: ${deviceName.slice(0, 80)}`);
       return sendJson(res, 200, { token, serverName: serverName() } satisfies PairResponse);
     }
+    if (method === "POST" && path === "/api/pair/easy-connect") {
+      const body = await readBody<Partial<EasyConnectPairRequest>>(req);
+      const { token } = easyConnect.pair(body);
+      return sendJson(res, 200, { token, serverName: serverName() } satisfies PairResponse);
+    }
+    if (path.startsWith("/api/admin/")) return adminRoute(req, res, path, method);
     if (!path.startsWith("/api/")) return sendError(res, 404, "Not found.");
     if (!auth.check(bearer(req))) return sendError(res, 401, "This phone is not paired with this PC. Pair it again.");
 
@@ -183,7 +285,7 @@ export function startHttpServer(deps: {
 
   const server = createServer((req, res) => {
     route(req, res).catch((error: unknown) => {
-      if (error instanceof HttpError) return sendError(res, error.status, error.message);
+      if (error instanceof HttpError || error instanceof PairingRefused) return sendError(res, error.status, error.message);
       log(`${req.method} ${(req.url ?? "").split("?")[0]} failed:`, error instanceof Error ? error.message : error);
       if (!res.headersSent) sendError(res, 500, "Something went wrong on the PC.");
       else res.end();
@@ -193,20 +295,37 @@ export function startHttpServer(deps: {
   const wss = new WebSocketServer({ noServer: true });
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    if (url.pathname !== "/ws" || !auth.check(url.searchParams.get("token"))) {
+    const token = url.searchParams.get("token");
+    const isAdminEvents = url.pathname === "/api/admin/events";
+    const deviceId = url.pathname === "/ws" ? auth.identify(token) : isAdminEvents && auth.isAdmin(token) ? ADMIN_DEVICE_ID : null;
+    if (deviceId === null) {
       socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
       socket.destroy();
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
-      sockets.add(ws);
-      ws.on("close", () => sockets.delete(ws));
-      ws.on("error", () => sockets.delete(ws));
-      ws.send(JSON.stringify({ type: "hello", serverName: serverName(), protocol: 1 } satisfies ServerEvent));
+      const hello = JSON.stringify({ type: "hello", serverName: serverName(), protocol: 1 } satisfies ServerEvent);
+      if (isAdminEvents) {
+        adminSockets.add(ws);
+        const drop = () => adminSockets.delete(ws);
+        ws.on("close", drop);
+        ws.on("error", drop);
+        ws.send(hello);
+        ws.send(JSON.stringify({ type: "admin.state", state: adminState() } satisfies AdminEvent));
+        return;
+      }
+      phoneSockets.set(ws, deviceId);
+      const drop = () => {
+        if (phoneSockets.delete(ws)) adminChanged();
+      };
+      ws.on("close", drop);
+      ws.on("error", drop);
+      ws.send(hello);
+      adminChanged();
     });
   });
   const ping = setInterval(() => {
-    for (const ws of sockets) ws.ping();
+    for (const ws of [...phoneSockets.keys(), ...adminSockets]) ws.ping();
   }, 25_000);
   server.on("close", () => clearInterval(ping));
 
@@ -218,9 +337,16 @@ export function startHttpServer(deps: {
   return {
     server,
     ready,
+    adminChanged,
+    adminState,
     broadcast(event) {
       const data = JSON.stringify(event);
-      for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(data);
+      for (const ws of phoneSockets.keys()) if (ws.readyState === ws.OPEN) ws.send(data);
+      for (const ws of adminSockets) if (ws.readyState === ws.OPEN) ws.send(data);
+    },
+    close() {
+      for (const ws of [...phoneSockets.keys(), ...adminSockets]) ws.terminate();
+      server.close();
     },
   };
 }

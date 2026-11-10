@@ -27,6 +27,10 @@ stay paired.
 | `ANYAPP_BUILDER`        | `auto`                        | `real` = `../builder/index.mjs`, `fake` = built-in fake, `auto` = real when it exists |
 | `ANYAPP_GITHUB`         | `on`                          | `off` skips creating and pushing GitHub repos                    |
 | `ANYAPP_ACP_LAUNCH`     | `local`                       | `npx` launches Claude with bb's exact registry command (`npx -y @agentclientprotocol/claude-agent-acp@0.102.0`) |
+| `ANYAPP_ADMIN_TOKEN`    | unset                         | The desktop app's secret: accepted on every route, the only key to `/api/admin/*` |
+| `ANYAPP_HOST_APK`       | unset                         | The AnyAppAgent phone app's APK, served at `GET /download/anyappagent.apk` |
+| `ANYAPP_TAILCAT_BIN`    | `tools\tailcat\tailcat.exe` | An existing tailcat v0.6.0+ for Easy Connect instead of building one |
+| `ANYAPP_STOP_ON_STDIN_END` | unset                      | `1`: stop (and stop the Easy Connect helper) when stdin closes, for a parent process |
 | `ANYAPP_FAKE_BUILD_MS`  | `1500`                        | Fake builder: how long a build takes                             |
 | `ANYAPP_FAKE_BUILD_FAIL`| unset                         | Fake builder: `always`, or `N` = the first N builds fail          |
 
@@ -36,6 +40,8 @@ stay paired.
 npm test             # unit tests (stream -> ChatItem translation, build retries, helpers)
 npm run typecheck
 npm run e2e          # real Claude Code session + fake builder, GitHub off, temp dirs, port 8797
+node scripts/admin-check.mjs          # the desktop app's admin contract (port 8796)
+node scripts/easy-connect-check.mjs   # Easy Connect through the public relay (port 8795)
 ```
 
 ## Layout
@@ -44,6 +50,9 @@ npm run e2e          # real Claude Code session + fake builder, GitHub off, temp
   `session/update` → `ChatItem` translation.
 - `src/apps.ts` – app lifecycle: create, per-app work queue, turns, build-after-turn with up to 3
   fix attempts, Git/GitHub, icons.
+- `src/easy-connect/`: Easy Connect (the Tailcat helper, the code, the pairing window and
+  allow-list). `easy-connect/`: the phone bridge copied from Ghostex, the Android build script, the
+  Kotlin files for the phone app. Design and phone contract: `../docs/EASY-CONNECT.md`.
 - `src/playbook.ts` – the instructions every app session gets.
 - `src/http.ts` – routes and WebSocket; `src/auth.ts` – pairing and tokens; `src/store.ts` – JSON
   persistence; `src/builder.ts` – the adapter to `builder/`; `src/fake-builder.ts` – the fake.

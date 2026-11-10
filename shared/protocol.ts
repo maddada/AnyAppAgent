@@ -107,6 +107,17 @@ export interface PairResponse {
   serverName: string;
 }
 
+// POST /api/pair/easy-connect -> PairResponse (no token). Sent through the Easy Connect tunnel with
+// the secret from the Easy Connect code; see docs/EASY-CONNECT.md for the code and the tunnel.
+export interface EasyConnectPairRequest {
+  secret: string; // from the scanned Easy Connect code
+  deviceName: string;
+  clientKey: string; // the phone's tailcat client public key, "nodekey:<64 hex>"
+}
+
+// GET /download/anyappagent.apk (no token) -> the AnyAppAgent phone app's own APK, for the desktop's
+// install QR (the companion serves the file named by its env var ANYAPP_HOST_APK; 404 + ErrorBody when unset)
+
 // GET /api/apps -> App[]
 // GET /api/apps/:id -> App
 // DELETE /api/apps/:id -> 204 (removes the app from the list; keeps files and repo on the PC)
@@ -161,6 +172,9 @@ export interface EasyConnectState {
   code?: string; // when ready: the one-time Easy Connect code the QR encodes (opaque to the desktop)
   expiresAt?: string;
   error?: string; // plain sentence
+  detail?: string; // while starting: what it is doing now, a plain sentence
+  // When ready without a code, no code is live (it was used or is older than 5 minutes):
+  // POST /api/admin/pairing/new makes a new one.
 }
 
 // GET /api/admin/state

@@ -107,7 +107,7 @@ function onEvent(event) {
   } else if (event.type === "chat.item") {
     const item = event.item;
     let line;
-    if (item.kind === "tool") line = `tool  [${item.tool.status}] ${short(item.tool.title, 60)}${item.tool.detail ? ` — ${short(item.tool.detail, 50)}` : ""}`;
+    if (item.kind === "tool") line = `tool  [${item.tool.status}] ${short(item.tool.title, 60)}${item.tool.detail ? ` (${short(item.tool.detail, 50)})` : ""}`;
     else if (item.kind === "build") line = `build #${item.build.number} ${item.build.status}${item.build.error ? `: ${item.build.error}` : ""}`;
     else if (item.kind === "plan") line = `plan  ${item.plan.map((p) => `[${p.status[0]}] ${short(p.content, 30)}`).join(" ")}`;
     else if (item.kind === "permission") line = `permission ${short(item.permission.title, 60)} -> ${item.permission.selectedOptionId ?? "waiting"}`;
