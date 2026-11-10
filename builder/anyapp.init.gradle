@@ -1,0 +1,27 @@
+// Gradle init script applied by the AnyAppAgent builder (--init-script). It keeps everything about
+// signing and versioning out of the app's own files:
+//   - signs release builds with the shared AnyAppAgent key (properties passed as
+//     ORG_GRADLE_PROJECT_anyapp* environment variables, never written to disk in the app),
+//   - sets versionCode to the build number (-PanyappVersionCode=<n>),
+//   - skips the release lint check (slow, and not useful for side-loaded apps).
+gradle.allprojects { p ->
+  p.tasks.configureEach { t ->
+    if (t.name.startsWith('lintVital')) t.enabled = false
+  }
+  p.plugins.withId('com.android.application') {
+    def code = p.findProperty('anyappVersionCode')
+    def store = p.findProperty('anyappStoreFile')
+    p.extensions.getByName('androidComponents').finalizeDsl { android ->
+      if (store) {
+        def cfg = android.signingConfigs.findByName('anyapp') ?: android.signingConfigs.create('anyapp')
+        cfg.storeFile = new File(store.toString())
+        cfg.storePassword = p.findProperty('anyappStorePassword')?.toString()
+        cfg.keyAlias = p.findProperty('anyappKeyAlias')?.toString()
+        cfg.keyPassword = p.findProperty('anyappKeyPassword')?.toString()
+        cfg.storeType = 'PKCS12'
+        android.buildTypes.getByName('release').signingConfig = cfg
+      }
+      if (code) android.defaultConfig.versionCode = Integer.parseInt(code.toString())
+    }
+  }
+}

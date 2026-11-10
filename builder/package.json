@@ -1,0 +1,20 @@
+{
+  "name": "anyapp-builder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Creates AnyAppAgent apps from the template and builds their signed release APKs.",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs"
+  },
+  "bin": {
+    "anyapp-builder": "./cli.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "warm": "node cli.mjs warm"
+  }
+}

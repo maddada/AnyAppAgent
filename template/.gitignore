@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# Generated native project (made by the builder with `expo prebuild`; never edit by hand)
+/android
+/ios
+
+# Build output (APKs land in build/apk/)
+/build/
+dist/
+
+# Expo / Metro
+.expo/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+*.tsbuildinfo
+
+# Signing material never lives in the app
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+
+# logs and local env
+*.log
+npm-debug.*
+.env*.local
+.DS_Store
+.kotlin/
+*.orig.*
