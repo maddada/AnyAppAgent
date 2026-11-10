@@ -1,31 +1,8 @@
-import { Text as RNText, type TextProps, type TextStyle } from "react-native";
-import { font, type, useTheme } from "./theme";
+import { Text as RNText, type TextProps } from "react-native";
+import { typeStyle, useTheme, type ColorToken, type TypeRole } from "./theme";
 
-type Size = keyof typeof type;
-type Weight = "regular" | "medium" | "semibold" | "bold";
-type Tone = "foreground" | "muted" | "subtle" | "destructive" | "success" | "inverse";
-
-export function T({
-  size = "sm",
-  weight = "regular",
-  tone = "foreground",
-  mono,
-  style,
-  ...rest
-}: TextProps & { size?: Size; weight?: Weight; tone?: Tone; mono?: boolean }) {
+/** Text in one type role and one colour token (COMPONENTS.md: never mix two roles). */
+export function T({ variant = "body", color = "text", style, ...rest }: TextProps & { variant?: TypeRole; color?: ColorToken }) {
   const t = useTheme();
-  const color =
-    tone === "muted"
-      ? t.mutedForeground
-      : tone === "subtle"
-        ? t.subtleForeground
-        : tone === "destructive"
-          ? t.destructiveText
-          : tone === "success"
-            ? t.successText
-            : tone === "inverse"
-              ? t.primaryForeground
-              : t.foreground;
-  const base: TextStyle = { ...type[size], color, fontFamily: mono ? font.mono : font[weight] };
-  return <RNText {...rest} style={[base, style]} />;
+  return <RNText {...rest} style={[typeStyle(variant), { color: t[color] }, style]} />;
 }

@@ -1,15 +1,20 @@
 import { ActivityIndicator, Pressable, View, type StyleProp, type ViewStyle } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { T } from "./Text";
-import { radius, useTheme, space } from "./theme";
+import { border, icon, radius, size, space, useTheme } from "./theme";
 
-type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
+/**
+ * Buttons (COMPONENTS.md 1). primary: the one next action on a screen (green). quiet: everything
+ * else (outlined ink). problem: confirms losing data or a connection. text: an escape hatch.
+ * `small` is the in-card / header size. At most one primary per screen.
+ */
+export type ButtonVariant = "primary" | "quiet" | "problem" | "text";
 
 export function Button({
   label,
   onPress,
   variant = "primary",
-  size = "lg",
+  small,
   icon: Icon,
   disabled,
   busy,
@@ -18,8 +23,8 @@ export function Button({
 }: {
   label: string;
   onPress?: () => void;
-  variant?: Variant;
-  size?: "sm" | "md" | "lg" | "xl";
+  variant?: ButtonVariant;
+  small?: boolean;
   icon?: LucideIcon;
   disabled?: boolean;
   busy?: boolean;
@@ -27,29 +32,54 @@ export function Button({
   testID?: string;
 }) {
   const t = useTheme();
-  const height = size === "xl" ? 64 : size === "lg" ? 52 : size === "md" ? 40 : 32;
-  const bg =
-    variant === "primary" ? t.primary : variant === "secondary" ? t.secondary : variant === "danger" ? t.destructiveSurface : "transparent";
-  const fg = variant === "primary" ? t.primaryForeground : variant === "danger" ? t.destructiveText : t.foreground;
+  const off = disabled && !busy;
+  const fg = off
+    ? t.textTertiary
+    : variant === "primary"
+      ? t.onAccent
+      : variant === "problem"
+        ? t.onProblem
+        : t.text;
+  const fill = (pressed: boolean) =>
+    off
+      ? t.surfaceSunken
+      : variant === "primary"
+        ? pressed
+          ? t.accentPressed
+          : t.accent
+        : variant === "problem"
+          ? t.problem
+          : pressed
+            ? t.selectedBg
+            : "transparent";
+  if (variant === "text") {
+    return (
+      <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={off ? undefined : onPress} hitSlop={space.md} style={style}>
+        <T variant={small ? "buttonSmall" : "button"} style={{ color: fg, textDecorationLine: "underline", textDecorationColor: t.borderStrong }}>
+          {label}
+        </T>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
-      onPress={disabled || busy ? undefined : onPress}
+      accessibilityState={{ disabled: !!off, busy: !!busy }}
+      onPress={off || busy ? undefined : onPress}
       style={({ pressed }) => [
         {
-          height,
-          borderRadius: size === "sm" ? radius.md : size === "md" ? radius.lg : radius.xl,
-          backgroundColor: bg,
-          borderWidth: variant === "outline" ? 1 : 0,
-          borderColor: t.input,
-          paddingHorizontal: size === "sm" ? 12 : 18,
+          minHeight: small ? size.buttonHeightSmall : size.buttonHeight,
+          paddingHorizontal: small ? space.lg : space.xl,
+          borderRadius: radius.button,
+          backgroundColor: fill(pressed),
+          borderWidth: variant === "quiet" && !off ? border.width : 0,
+          borderColor: t.borderStrong,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
           gap: space.sm,
-          opacity: disabled ? 0.5 : pressed ? 0.8 : 1,
         },
         style,
       ]}
@@ -58,29 +88,30 @@ export function Button({
         <ActivityIndicator color={fg} size="small" />
       ) : Icon ? (
         <View>
-          <Icon size={size === "sm" ? 14 : size === "xl" ? 22 : 18} color={fg} strokeWidth={2} />
+          <Icon size={icon.size.button} color={fg} strokeWidth={icon.stroke} absoluteStrokeWidth />
         </View>
       ) : null}
-      <T size={size === "sm" ? "xs" : size === "xl" ? "lg" : size === "lg" ? "base" : "sm"} weight={size === "sm" ? "medium" : "semibold"} style={{ color: fg }}>
+      <T variant={small ? "buttonSmall" : "button"} style={{ color: fg }}>
         {label}
       </T>
     </Pressable>
   );
 }
 
+/** Icon-only button for the universal icons (back, settings, close). Hit area: size.touch. */
 export function IconButton({
   icon: Icon,
   onPress,
   label,
-  size = 40,
   color,
+  iconSize = icon.size.lg,
   testID,
 }: {
   icon: LucideIcon;
   onPress: () => void;
   label: string;
-  size?: number;
   color?: string;
+  iconSize?: number;
   testID?: string;
 }) {
   const t = useTheme();
@@ -90,17 +121,16 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      hitSlop={8}
       style={({ pressed }) => ({
-        width: size,
-        height: size,
-        borderRadius: size / 2,
+        width: size.touch,
+        height: size.touch,
+        borderRadius: radius.full,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: pressed ? t.hover : "transparent",
+        backgroundColor: pressed ? t.selectedBg : "transparent",
       })}
     >
-      <Icon size={22} color={color ?? t.foreground} strokeWidth={1.75} />
+      <Icon size={iconSize} color={color ?? t.text} strokeWidth={icon.stroke} absoluteStrokeWidth />
     </Pressable>
   );
 }

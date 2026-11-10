@@ -8,7 +8,7 @@ It talks to the PC companion (`../server`) through `../shared/protocol.ts`.
 | What | Command |
 | --- | --- |
 | Installable APK (release, JS inside, no dev server) | `npm run apk` (prints the APK path: `dist/AnyAppAgent.apk`) |
-| Regenerate `android/` after changing `app.json` or the native module's manifest | `npm run apk -- --clean` |
+| Regenerate `android/` after changing `app.json` (icon, fonts, permissions) | `npm run apk:clean` (in PowerShell `npm run apk -- --clean` loses the flag) |
 | Typecheck / lint | `npm run typecheck` / `npm run lint` |
 | JS bundle only | `npm run export:android` |
 | Mock PC (whole contract, canned data, real tiny APKs) | `npm run mock` (code `123456`, emulator address `10.0.2.2:8787`) |

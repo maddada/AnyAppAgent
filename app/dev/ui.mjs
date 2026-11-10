@@ -7,14 +7,41 @@
 //   node dev/ui.mjs dump                             list visible ids and texts
 //   node dev/ui.mjs wait <testID|text:...> [sec]     wait until it is on screen
 //   node dev/ui.mjs key <BACK|HOME|ENTER|...>
+//   any command: --serial <emulator-55xx> (else ANYAPP_ADB_SERIAL, else emulator-5560)
+//
+// adb: always the Android SDK's (ANDROID_HOME, else D:\tools\android\sdk). Never the `adb` on PATH:
+// an older adb there (1.0.39) restarts the shared adb server and breaks every other thread.
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SERIAL = process.env.ANYAPP_ADB_SERIAL || "emulator-5560";
-const ADB = process.env.ANDROID_HOME ? join(process.env.ANDROID_HOME, "platform-tools", "adb.exe") : "adb";
+
+const argv = process.argv.slice(2);
+const serialAt = argv.indexOf("--serial");
+const serialArg = serialAt >= 0 ? argv.splice(serialAt, 2)[1] : undefined;
+const SERIAL = serialArg || process.env.ANYAPP_ADB_SERIAL || "emulator-5560";
+
+function sdkAdb() {
+  const exe = process.platform === "win32" ? "adb.exe" : "adb";
+  const candidates = [
+    process.env.ANDROID_HOME && join(process.env.ANDROID_HOME, "platform-tools", exe),
+    process.env.ANDROID_SDK_ROOT && join(process.env.ANDROID_SDK_ROOT, "platform-tools", exe),
+    "D:\\tools\\android\\sdk\\platform-tools\\adb.exe",
+  ].filter(Boolean);
+  const found = candidates.find((p) => existsSync(p));
+  if (!found) {
+    console.error(
+      "No Android SDK adb found (looked in ANDROID_HOME, ANDROID_SDK_ROOT and D:\\tools\\android\\sdk).\n" +
+        "Load the environment first: . C:\\dev\\AnyAppAgent\\scripts\\android-env.ps1 (see docs/ENVIRONMENT.md).\n" +
+        "The adb on PATH is never used: an old one restarts the shared adb server.",
+    );
+    process.exit(3);
+  }
+  return found;
+}
+const ADB = sdkAdb();
 
 const adb = (...args) => execFileSync(ADB, ["-s", SERIAL, ...args], { encoding: "buffer", maxBuffer: 64 << 20, timeout: 45000 });
 
@@ -48,7 +75,7 @@ function find(nodes, query) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const [cmd, ...rest] = process.argv.slice(2);
+const [cmd, ...rest] = argv;
 
 // The emulator is shared with other threads: only ever send input to our own windows (and the
 // system screens our flow opens). If someone else's app is in front, bring ours back first.
@@ -68,7 +95,7 @@ async function ensureOurs() {
   console.error("could not get AnyAppAgent to the front");
   process.exit(2);
 }
-if (["tap", "longpress", "type", "key", "clear"].includes(cmd)) await ensureOurs();
+if (["tap", "longpress", "type", "key", "clear"].includes(cmd) || (cmd === "shot" && !process.env.UI_ANY_WINDOW)) await ensureOurs();
 
 switch (cmd) {
   case "tap": {

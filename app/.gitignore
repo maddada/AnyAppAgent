@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Easy Connect bridge (build output, staged by scripts/stage-bridge.mjs)
+/modules/anyapp-native/android/libs/
+/modules/anyapp-native/android/src/main/jniLibs/
+/modules/anyapp-native/android/src/main/res/drawable-*/ic_stat_anyappagent.png

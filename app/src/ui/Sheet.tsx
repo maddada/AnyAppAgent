@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
 import { Animated, Easing, Keyboard, Modal, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { radius, useTheme, space } from "./theme";
+import { easing, elevation, motion, radius, space, useTheme } from "./theme";
 
-/** A bottom sheet: slides up over a dimmed screen, tap outside or back to close. */
+/**
+ * Bottom sheet (COMPONENTS.md 4): scrim, surfaceOverlay, top corners radius.sheet, elevation 3,
+ * grabber in borderStrong. Slides up over motion.duration.slow; tap the scrim or Back to close.
+ */
+/** COMPONENTS.md 4: the grabber is 36 x 4 (no size token for it). */
+const GRABBER = { width: 36, height: 4 };
+
 export function Sheet({ visible, onClose, children }: { visible: boolean; onClose: () => void; children: React.ReactNode }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -14,9 +20,11 @@ export function Sheet({ visible, onClose, children }: { visible: boolean; onClos
 
   useEffect(() => {
     if (visible) {
-      Animated.timing(slide, { toValue: 1, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      Animated.timing(slide, { toValue: 1, duration: motion.duration.slow, easing: Easing.bezier(...easing("enter")), useNativeDriver: true }).start();
     } else if (mounted) {
-      Animated.timing(slide, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setMounted(false));
+      Animated.timing(slide, { toValue: 0, duration: motion.duration.base, easing: Easing.bezier(...easing("exit")), useNativeDriver: true }).start(() =>
+        setMounted(false),
+      );
     }
   }, [visible, mounted, slide]);
 
@@ -32,22 +40,21 @@ export function Sheet({ visible, onClose, children }: { visible: boolean; onClos
           left: 0,
           right: 0,
           bottom: keyboard,
-          transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [500, 0] }) }],
+          transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [600, 0] }) }],
         }}
       >
         <View
           style={{
-            backgroundColor: t.background,
-            borderTopLeftRadius: radius.xxl + 8,
-            borderTopRightRadius: radius.xxl + 8,
-            borderWidth: t.dark ? 1 : 0,
-            borderColor: t.border,
+            backgroundColor: t.surfaceOverlay,
+            borderTopLeftRadius: radius.sheet,
+            borderTopRightRadius: radius.sheet,
             paddingHorizontal: space.xl,
-            paddingTop: space.sm,
-            paddingBottom: (keyboard > 0 ? 12 : insets.bottom) + 16,
+            paddingTop: space.md,
+            paddingBottom: (keyboard > 0 ? 0 : insets.bottom) + space["2xl"],
+            ...elevation(t.mode, 3),
           }}
         >
-          <View style={{ alignSelf: "center", width: 36, height: 4, borderRadius: 2, backgroundColor: t.muted, marginBottom: space.md }} />
+          <View style={{ alignSelf: "center", ...GRABBER, borderRadius: radius.full, backgroundColor: t.borderStrong, marginBottom: space.lg }} />
           {children}
         </View>
       </Animated.View>

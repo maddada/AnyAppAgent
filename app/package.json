@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo-google-fonts/inter": "^0.4.2",
     "expo": "~58.0.23",
     "expo-build-properties": "~58.0.12",
     "expo-camera": "~58.0.14",
+    "expo-clipboard": "~58.0.4",
     "expo-constants": "~58.0.15",
     "expo-crypto": "~58.0.7",
     "expo-device": "~58.0.5",
@@ -43,7 +43,8 @@
     "lint": "eslint .",
     "mock": "node dev/mock-server.mjs",
     "export:android": "expo export --platform android --output-dir dist/bundle",
-    "apk": "node scripts/build-apk.mjs"
+    "apk": "node scripts/build-apk.mjs",
+    "apk:clean": "node scripts/build-apk.mjs --clean"
   },
   "private": true
 }

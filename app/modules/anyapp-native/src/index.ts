@@ -33,6 +33,8 @@ export interface InstallStatusEvent {
 
 type Events = {
   onInstallStatus: (event: InstallStatusEvent) => void;
+  /** The phone's network changed (debounced 750 ms). */
+  onNetworkChanged: () => void;
 };
 
 declare class AnyAppNativeModule extends NativeModule<Events> {
@@ -48,10 +50,20 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   installWithIntent(path: string): boolean;
   notificationsEnabled(): boolean;
   openNotificationSettings(): boolean;
-  notify(id: number, title: string, body: string, url: string | null): boolean;
+  /** `color`: the accent from the shared theme tokens (the small icon's tint). */
+  notify(id: number, title: string, body: string, url: string | null, color: string | null): boolean;
   cancelNotification(id: number): void;
-  startKeepAlive(text: string): boolean;
+  startKeepAlive(text: string, color: string | null): boolean;
   stopKeepAlive(): void;
+
+  // Easy Connect (docs/EASY-CONNECT.md 4.2)
+  easyConnectClientKey(): Promise<string>; // "nodekey:<64 hex>"
+  /** Opens (or reuses after probing) the tunnel; blocks up to ~20 s on a cold start. */
+  easyConnectStart(address: string, port: number): Promise<{ localPort: number }>;
+  easyConnectStop(): Promise<void>;
+  /** '{"path":"relay"|"direct","route":"lan"|"internet",...}' or "". */
+  easyConnectPath(): string;
+  easyConnectAvailable(): boolean;
 }
 
 /** Null when the native side is missing (web, Expo Go): callers degrade gracefully. */

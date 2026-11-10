@@ -2,10 +2,10 @@
 
 ## bb
 
-The chat screen (`src/chat/`, `src/ui/theme.ts`, parts of `src/app/chat/[id].tsx`) recreates the
-look of bb's thread view: its colour tokens (`apps/app/src/components/ui/theme.css`), type scale,
-message, thinking, tool-call, plan, approval and composer styling. No bb code is imported; the
-values and layout were copied and rebuilt in React Native. Source: https://github.com/get-bb/bb
+The chat screen (`src/chat/`, `src/app/chat/[id].tsx`) keeps the structure of bb's thread view:
+right-aligned user bubbles, assistant text without a bubble, one-line work rows that expand and
+fold, a collapsed thinking row, a plan and a composer. Its colours and type now come from the shared
+AnyAppAgent theme (`../shared/theme`); no bb code is imported. Source: https://github.com/get-bb/bb
 
 ```
 MIT License
@@ -31,6 +31,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Inter
+## Fonts
 
-The Inter typeface (`@expo-google-fonts/inter`) is licensed under the SIL Open Font License 1.1.
+Bricolage Grotesque and IBM Plex Mono, bundled from `../shared/theme/fonts`, under the SIL Open
+Font License 1.1 (the licence files are next to the fonts there).
+
+## Easy Connect bridge (Ghostex, Tailcat)
+
+The phone's Easy Connect tunnel is Ghostex's tailcat bridge (`bridge.go`, `interfaces.go`, same
+owner), built with gomobile into `tailcatbridge.jar` and `libgojni.so` (staged at build time by
+`scripts/stage-bridge.mjs`, not kept in Git), plus `EasyConnect.kt` and `EasyConnectInterfaces.kt`
+copied from `../server/easy-connect/android/` (Ghostex's `GhostexTailcatInterfaces.kt`). The bridge
+links Tailcat (github.com/tailscale/tailcat, BSD-3-Clause, Tailscale Inc.) and its Go dependencies;
+their notices are listed in `../server/THIRD_PARTY_NOTICES.md`.

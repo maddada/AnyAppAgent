@@ -12,6 +12,13 @@ object Notifications {
   const val CHANNEL_READY = "anyapp_ready"
   const val CHANNEL_WORKING = "anyapp_working"
 
+  /** The accent colour JS passes from the shared theme tokens, or null. */
+  fun tint(color: String?): Int? = try {
+    if (color.isNullOrBlank()) null else android.graphics.Color.parseColor(color)
+  } catch (_: IllegalArgumentException) {
+    null
+  }
+
   fun ensureChannels(context: Context) {
     if (Build.VERSION.SDK_INT < 26) return
     val nm = context.getSystemService(NotificationManager::class.java) ?: return

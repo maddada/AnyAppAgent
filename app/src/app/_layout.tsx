@@ -23,19 +23,20 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(t.background);
-  }, [t.background]);
+    void SystemUI.setBackgroundColorAsync(t.bg);
+  }, [t.bg]);
 
   return (
     <SafeAreaProvider>
       <StatusBar style={t.dark ? "light" : "dark"} />
-      <View style={{ flex: 1, backgroundColor: t.background }}>
+      <View style={{ flex: 1, backgroundColor: t.bg }}>
         {ready ? (
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.background }, animation: "slide_from_right" }}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.bg }, animation: "slide_from_right" }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="connect" options={{ animation: "fade" }} />
             <Stack.Screen name="chat/[id]" />
             <Stack.Screen name="settings" />
+            <Stack.Screen name="pair" options={{ animation: "none" }} />
           </Stack>
         ) : null}
         <InstallPermissionSheet />

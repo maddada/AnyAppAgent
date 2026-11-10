@@ -19,7 +19,8 @@ class KeepAliveService : Service() {
     val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Your PC is working on your app"
     Notifications.ensureChannels(this)
     val notification = NotificationCompat.Builder(this, Notifications.CHANNEL_WORKING)
-      .setSmallIcon(R.drawable.ic_anyapp_notification)
+      .setSmallIcon(R.drawable.ic_stat_anyappagent)
+      .apply { Notifications.tint(intent?.getStringExtra(EXTRA_COLOR))?.let { setColor(it) } }
       .setContentTitle(text)
       .setContentText("You'll get a message when it's ready.")
       .setOngoing(true)
@@ -43,6 +44,7 @@ class KeepAliveService : Service() {
 
   companion object {
     const val EXTRA_TEXT = "text"
+    const val EXTRA_COLOR = "color"
     const val NOTIFICATION_ID = 7301
   }
 }

@@ -2,6 +2,7 @@ import type {
   App,
   ChatItem,
   CreateAppRequest,
+  EasyConnectPairRequest,
   ErrorBody,
   HealthResponse,
   PairRequest,
@@ -76,6 +77,9 @@ export const health = (baseUrl: string) => request<HealthResponse>(baseUrl, "/ap
 
 export const pair = (baseUrl: string, body: PairRequest) =>
   request<PairResponse>(baseUrl, "/api/pair", { method: "POST", body, timeoutMs: 10000 });
+
+export const pairEasyConnect = (baseUrl: string, body: EasyConnectPairRequest) =>
+  request<PairResponse>(baseUrl, "/api/pair/easy-connect", { method: "POST", body, timeoutMs: 20000 });
 
 /** Calls bound to one paired PC. */
 export class Client {

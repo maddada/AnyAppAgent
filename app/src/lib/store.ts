@@ -20,6 +20,8 @@ export interface State {
   client: Client | null;
   prefs: Prefs;
   connection: Connection;
+  /** Why the last Easy Connect dial failed (bridge text, address scrubbed), for Settings. */
+  routeError: string | null;
   serverName: string | null;
   authLost: boolean;
 
@@ -38,6 +40,7 @@ export const useStore = create<State>(() => ({
   client: null,
   prefs: defaultPrefs,
   connection: "offline",
+  routeError: null,
   serverName: null,
   authLost: false,
   apps: {},

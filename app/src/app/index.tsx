@@ -1,20 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, RefreshControl, TextInput, View, useWindowDimensions } from "react-native";
+import { FlatList, Pressable, RefreshControl, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { MessageCircle, Plus, Settings, Smartphone, Trash2, WifiOff } from "lucide-react-native";
+import { Download, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
-import { actionLabel, describeApp, type Tone } from "@/lib/describe";
+import { actionLabel, describeApp } from "@/lib/describe";
 import { installApp, installFromLink, launchApp } from "@/lib/installer";
 import type { App } from "@/lib/protocol";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
 import { appAction, removeApp, sortedApps, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
+import { Field } from "@/ui/Field";
 import { Sheet } from "@/ui/Sheet";
-import { Shine } from "@/ui/Shine";
+import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
-import { font, radius, type as typeScale, useTheme, type Theme, space } from "@/ui/theme";
+import { border, elevation, icon, look, radius, size, space, useTheme } from "@/ui/theme";
+
+const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
+/** COMPONENTS.md 3 and 4: the New app plus is 28, the sheet head icon 56 (no icon-size token for either). */
+const NEW_TILE_PLUS = 28;
+const SHEET_ICON = 56;
 
 type Tile = { kind: "new" } | { kind: "app"; app: App };
 
@@ -42,30 +49,23 @@ function AppGrid() {
   const { width } = useWindowDimensions();
   const apps = useStore((s) => s.apps);
   const appsLoaded = useStore((s) => s.appsLoaded);
-  const connection = useStore((s) => s.connection);
   const [selected, setSelected] = useState<{ id: string; manage: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const tiles: Tile[] = useMemo(() => [{ kind: "new" }, ...sortedApps(apps).map((app) => ({ kind: "app" as const, app }))], [apps]);
-  const gap = 12;
-  const tileWidth = (width - 16 * 2 - gap) / 2;
+  // The user's apps first, newest first; the New app slot closes the grid (as in the renders).
+  const tiles: Tile[] = useMemo(() => [...sortedApps(apps).map((app) => ({ kind: "app" as const, app })), { kind: "new" }], [apps]);
+  const tileWidth = (width - size.screenGutter * 2 - size.gridGap) / 2;
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: space.xl, paddingRight: space.sm, paddingTop: space.sm, paddingBottom: space.xs }}>
-        <T size="xxl" weight="semibold" style={{ flex: 1 }}>
-          Your apps
-        </T>
-        <IconButton testID="open-settings" icon={Settings} label="Settings" onPress={() => router.push("/settings")} />
-      </View>
-      <ConnectionBanner connection={connection} loaded={appsLoaded} />
       <FlatList
         data={tiles}
         keyExtractor={(item) => (item.kind === "new" ? "new" : item.app.id)}
         numColumns={2}
-        columnWrapperStyle={{ gap }}
-        contentContainerStyle={{ padding: space.lg, gap, paddingBottom: insets.bottom + 24 }}
-        refreshControl={<RefreshControl refreshing={false} onRefresh={reconnectNow} colors={[t.foreground]} progressBackgroundColor={t.background} />}
+        columnWrapperStyle={{ gap: size.gridGap }}
+        contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: insets.bottom + space["2xl"] }}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={reconnectNow} colors={[t.text]} progressBackgroundColor={t.surface} />}
+        ListHeaderComponent={<Header />}
         renderItem={({ item }) =>
           item.kind === "new" ? (
             <NewTile width={tileWidth} empty={appsLoaded && tiles.length === 1} onPress={() => setCreating(true)} />
@@ -85,151 +85,154 @@ function AppGrid() {
   );
 }
 
-function ConnectionBanner({ connection, loaded }: { connection: string; loaded: boolean }) {
+function Header() {
   const t = useTheme();
-  const [show, setShow] = useState(false);
-  // Don't flash the banner for a quick reconnect.
+  const connection = useStore((s) => s.connection);
+  const loaded = useStore((s) => s.appsLoaded);
+  // Don't flash "can't reach" for a quick reconnect.
+  const [slow, setSlow] = useState(false);
   useEffect(() => {
     if (connection === "online") return;
-    const timer = setTimeout(() => setShow(true), loaded ? 2500 : 600);
+    const timer = setTimeout(() => setSlow(true), loaded ? 2500 : 600);
     return () => {
       clearTimeout(timer);
-      setShow(false);
+      setSlow(false);
     };
   }, [connection, loaded]);
-  if (!show) return null;
-  const connecting = connection === "connecting";
+  const markSize = icon.size.md;
   return (
-    <Pressable
-      onPress={reconnectNow}
-      style={{
-        marginHorizontal: space.lg,
-        marginTop: space.sm,
-        borderRadius: radius.xl,
-        backgroundColor: t.recessed,
-        borderWidth: 1,
-        borderColor: t.seam,
-        paddingHorizontal: space.md,
-        paddingVertical: space.md,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: space.sm,
-      }}
-    >
-      <WifiOff size={18} color={t.mutedForeground} strokeWidth={1.75} />
-      <View style={{ flex: 1 }}>
-        <T size="sm" weight="medium">
-          {connecting ? "Connecting to your PC…" : "Can't reach your PC"}
+    <View style={{ paddingTop: space.md, paddingBottom: space.xl }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, marginRight: -space.md }}>
+        <Image source={MARK} style={{ width: markSize, height: markSize, borderRadius: (markSize * radius.appIcon) / size.appIcon }} />
+        <T variant="heading" style={{ flex: 1 }}>
+          AnyAppAgent
         </T>
-        {!connecting ? (
-          <T size="xs" tone="muted">
-            Make sure it’s on and AnyAppAgent is running. Tap to try again.
-          </T>
-        ) : null}
+        <IconButton testID="open-settings" icon={Settings} label="Settings" iconSize={icon.size.md} color={t.textSecondary} onPress={() => router.push("/settings")} />
       </View>
-    </Pressable>
+      <T variant="display" style={{ marginTop: space.xl }}>
+        Your apps
+      </T>
+      <Pressable testID="connection-state" onPress={reconnectNow} style={{ marginTop: space.sm, minHeight: size.touch / 2, justifyContent: "center" }}>
+        {connection === "online" ? (
+          <StateLine kind="ready" label="Connected to your PC" quietText />
+        ) : !slow || connection === "connecting" ? (
+          <StateLine kind="working" label="Connecting to your PC" quietText />
+        ) : (
+          <StateLine kind="problem" label="Can't reach your PC. Tap to try again." lines={2} />
+        )}
+      </Pressable>
+    </View>
   );
 }
 
-function toneColor(t: Theme, tone: Tone) {
-  return tone === "busy" ? t.attention : tone === "ready" ? t.success : tone === "problem" ? t.destructiveText : t.subtleForeground;
-}
-
-function StateLine({ app, center = true }: { app: App; center?: boolean }) {
-  const t = useTheme();
+function TileStateLine({ app }: { app: App }) {
   const pkg = useStore((s) => s.packages[app.packageName]);
   const install = useStore((s) => s.installs[app.id]);
   const state = describeApp(app, pkg, install);
-  if (!state) {
-    return (
-      <T size="xs" tone="subtle" style={{ textAlign: center ? "center" : "left" }}>
-        {pkg ? "On your phone" : " "}
-      </T>
-    );
-  }
-  const color = toneColor(t, state.tone);
+  if (!state) return null;
+  // On a tile the idle line is short; the sheet says the full sentence.
+  const label = state.kind === "idle" && pkg ? `Version ${pkg.versionCode}` : state.label;
+  return <StateLine kind={state.kind} label={label} />;
+}
+
+/** Tiles: scale to 0.98 while pressed (COMPONENTS.md 3). */
+function PressScale({
+  onPress,
+  onLongPress,
+  children,
+  style,
+  testID,
+  label,
+}: {
+  onPress: () => void;
+  onLongPress?: () => void;
+  children: React.ReactNode;
+  style: object;
+  testID?: string;
+  label: string;
+}) {
+  const [pressed, setPressed] = useState(false);
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: center ? "center" : "flex-start", gap: space.sm }}>
-      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color }} />
-      <Shine active={state.live} style={{ ...typeScale.xs, fontFamily: font.medium, color: state.tone === "quiet" ? t.mutedForeground : t.foreground }}>
-        {state.label}
-      </Shine>
-    </View>
+    <Pressable
+      testID={testID}
+      accessibilityLabel={label}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={[style, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}
+    >
+      {children}
+    </Pressable>
   );
 }
 
 function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number; onPress: () => void; onLongPress: () => void }) {
   const t = useTheme();
   return (
-    <Pressable
+    <PressScale
       testID={`app-tile-${app.slug}`}
-      accessibilityLabel={app.name}
+      label={app.name}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => ({
+      style={{
         width,
+        minHeight: size.tileMinHeight,
         borderRadius: radius.tile,
-        backgroundColor: pressed ? t.hover : t.recessed,
-        borderWidth: 1,
-        borderColor: t.seam,
-        alignItems: "center",
-        paddingTop: space.xxl,
-        paddingBottom: space.lg,
-        paddingHorizontal: space.sm,
-        gap: space.sm,
-      })}
+        backgroundColor: t.tileBg,
+        borderWidth: border.width,
+        borderColor: t.tileBorder,
+        padding: look.tilePadding,
+        alignItems: look.tileAlign,
+        ...elevation(t.mode, look.tileElevation as 1),
+      }}
     >
-      <AppIcon app={app} size={76} />
-      <View style={{ alignSelf: "stretch", gap: space.xs }}>
-        <T size="base" weight="semibold" numberOfLines={1} style={{ textAlign: "center" }}>
-          {app.name}
-        </T>
-        <StateLine app={app} />
-      </View>
-    </Pressable>
+      <AppIcon app={app} size={size.appIcon} />
+      <T variant="name" numberOfLines={2} style={{ marginTop: space.md, textAlign: look.tileTextAlign }}>
+        {app.name}
+      </T>
+      <View style={{ flex: 1, minHeight: space.xs }} />
+      <TileStateLine app={app} />
+    </PressScale>
   );
 }
 
 function NewTile({ width, empty, onPress }: { width: number; empty: boolean; onPress: () => void }) {
   const t = useTheme();
   return (
-    <Pressable
+    <PressScale
       testID="new-app"
-      accessibilityLabel="New app"
+      label="New app"
       onPress={onPress}
-      style={({ pressed }) => ({
+      style={{
         width,
-        minHeight: 172,
+        minHeight: size.tileMinHeight,
         borderRadius: radius.tile,
-        borderWidth: 1.5,
-        borderStyle: "dashed",
-        borderColor: t.input,
-        backgroundColor: pressed ? t.hover : "transparent",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: space.sm,
-        padding: space.md,
-      })}
+        borderWidth: border.tileWidth,
+        borderStyle: border.tileNewStyle,
+        borderColor: t.tileNewBorder,
+        backgroundColor: t.tileNewBg,
+        padding: look.tilePadding,
+        alignItems: look.tileAlign,
+      }}
     >
-      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: t.primary, alignItems: "center", justifyContent: "center" }}>
-        <Plus size={30} color={t.primaryForeground} strokeWidth={2} />
+      <View style={{ width: size.appIcon, height: size.appIcon, borderRadius: radius.appIcon, backgroundColor: t.accent, alignItems: "center", justifyContent: "center" }}>
+        <Plus size={NEW_TILE_PLUS} color={t.onAccent} strokeWidth={icon.stroke} absoluteStrokeWidth />
       </View>
-      <T size="base" weight="semibold">
+      <T variant="name" style={{ marginTop: space.md }}>
         New app
       </T>
-      {empty ? (
-        <T size="xs" tone="muted" style={{ textAlign: "center" }}>
-          Describe an app and your PC makes it
-        </T>
-      ) : null}
-    </Pressable>
+      <View style={{ flex: 1, minHeight: space.xs }} />
+      <T variant="label" color="textSecondary">
+        {empty ? "Describe your idea, your PC makes it" : "Describe your idea"}
+      </T>
+    </PressScale>
   );
 }
 
-// ---------- tap an app: Open / Change it
+// ---------- tap an app: Install / Open / Change it
 
 function AppSheet({ selection, onClose }: { selection: { id: string; manage: boolean } | null; onClose: () => void }) {
-  const t = useTheme();
   const client = useStore((s) => s.client);
   const app = useStore((s) => (selection ? s.apps[selection.id] : undefined));
   const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
@@ -248,14 +251,17 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
 
   const action = shown ? appAction(shown, pkg) : "notReady";
   const installing = !!install && ["waiting", "downloading", "checking", "installing", "confirm"].includes(install.phase);
-  const primary = () => {
+  const state = shown ? describeApp(shown, pkg, install) : null;
+  const doInstall = () => shown && void installApp(shown);
+  const doOpen = () => {
     if (!shown) return;
-    if (action === "open") {
-      if (!launchApp(shown)) AnyAppNative?.openAppSettings(shown.packageName);
-      onClose();
-    } else if (action === "install" || action === "update") {
-      void installApp(shown);
-    }
+    if (!launchApp(shown)) AnyAppNative?.openAppSettings(shown.packageName);
+    onClose();
+  };
+  const doChange = () => {
+    if (!shown) return;
+    onClose();
+    router.push(`/chat/${shown.id}`);
   };
 
   return (
@@ -263,25 +269,23 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
       {shown ? (
         <View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.xl }}>
-            <AppIcon app={shown} size={60} />
-            <View style={{ flex: 1, gap: space.xxs }}>
-              <T size="lg" weight="semibold" numberOfLines={1}>
+            <AppIcon app={shown} size={SHEET_ICON} />
+            <View style={{ flex: 1, gap: space.xs }}>
+              <T variant="titleSmall" numberOfLines={1}>
                 {shown.name}
               </T>
-              <StateLine app={shown} center={false} />
+              {state ? <StateLine kind={state.kind} label={state.label} /> : null}
             </View>
           </View>
           {confirmRemove ? (
             <View style={{ gap: space.sm }}>
-              <T size="sm" tone="muted">
+              <T variant="callout" color="textSecondary" style={{ marginBottom: space.sm }}>
                 {`Remove ${shown.name} from this list? Your PC keeps its files${pkg ? ", and the app stays on your phone" : ""}.`}
               </T>
               <Button
                 testID="confirm-remove"
                 label="Remove from list"
-                variant="danger"
-                size="lg"
-                icon={Trash2}
+                variant="problem"
                 busy={removing}
                 onPress={async () => {
                   if (!client) return;
@@ -291,54 +295,60 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                     removeApp(shown.id);
                     onClose();
                   } catch {
-                    // the banner tells the user if the PC is gone
+                    // the connection line tells the user if the PC is gone
                   } finally {
                     setRemoving(false);
                   }
                 }}
               />
-              <Button label="Keep it" variant="ghost" onPress={() => (selection?.manage ? onClose() : setConfirmRemove(false))} />
+              <Button label="Keep it" variant="quiet" onPress={() => (selection?.manage ? onClose() : setConfirmRemove(false))} />
             </View>
           ) : (
             <View style={{ gap: space.sm }}>
               {install?.phase === "failed" ? <InstallFailure app={shown} message={install.message} conflict={install.conflict} /> : null}
-              <Button
-                testID="app-primary"
-                label={installing ? (install?.phase === "downloading" ? `Downloading ${Math.round((install.progress ?? 0) * 100)}%` : "Installing…") : actionLabel(action)}
-                icon={Smartphone}
-                size="xl"
-                disabled={action === "notReady" && !installing}
-                busy={installing}
-                onPress={primary}
-              />
-              {action === "update" && !installing ? (
-                <Pressable onPress={() => (launchApp(shown), onClose())} style={{ alignSelf: "center", padding: space.xs }}>
-                  <T size="xs" tone="muted" style={{ textDecorationLine: "underline" }}>
-                    Open the current version
-                  </T>
-                </Pressable>
+              {action === "install" || action === "update" || installing ? (
+                <>
+                  <Button
+                    testID="app-primary"
+                    label={
+                      installing
+                        ? install?.phase === "downloading"
+                          ? `Downloading ${Math.round((install.progress ?? 0) * 100)}%`
+                          : "Installing"
+                        : actionLabel(action, shown.latestApk?.number)
+                    }
+                    icon={Download}
+                    busy={installing}
+                    onPress={doInstall}
+                  />
+                  {pkg ? <Button testID="app-open" label="Open" icon={Smartphone} variant="quiet" onPress={doOpen} /> : null}
+                  <Button testID="app-change" label="Change it" icon={MessageCircle} variant="quiet" onPress={doChange} />
+                </>
+              ) : action === "open" ? (
+                <>
+                  <Button testID="app-primary" label="Open" icon={Smartphone} onPress={doOpen} />
+                  <Button testID="app-change" label="Change it" icon={MessageCircle} variant="quiet" onPress={doChange} />
+                </>
+              ) : (
+                <Button testID="app-change" label="Change it" icon={MessageCircle} onPress={doChange} />
+              )}
+              {pkg && action === "update" ? (
+                <T variant="caption" color="textSecondary" style={{ textAlign: "center", marginTop: space.xs }}>
+                  {`Version ${pkg.versionCode} is on this phone.`}
+                </T>
               ) : null}
               <Button
-                testID="app-change"
-                label="Change it"
-                icon={MessageCircle}
-                variant="secondary"
-                size="xl"
-                onPress={() => {
-                  onClose();
-                  router.push(`/chat/${shown.id}`);
-                }}
+                testID="app-remove"
+                label="Remove from list"
+                variant="text"
+                small
+                style={{ alignSelf: "center", marginTop: space.md }}
+                onPress={() => setConfirmRemove(true)}
               />
-              <Pressable testID="app-remove" onPress={() => setConfirmRemove(true)} style={{ alignSelf: "center", paddingTop: space.sm, paddingHorizontal: space.md }}>
-                <T size="xs" tone="subtle">
-                  Remove from list
-                </T>
-              </Pressable>
             </View>
           )}
         </View>
       ) : null}
-      <View style={{ height: 0, backgroundColor: t.background }} />
     </Sheet>
   );
 }
@@ -346,17 +356,11 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
 export function InstallFailure({ app, message, conflict }: { app: App; message?: string; conflict?: boolean }) {
   const t = useTheme();
   return (
-    <View style={{ borderRadius: radius.md, borderWidth: 1, borderColor: t.destructiveSurface, backgroundColor: t.destructiveSurface, padding: space.sm, gap: space.sm }}>
-      <T size="xs" tone="destructive">
+    <View style={{ borderRadius: radius.card, backgroundColor: t.problemSoft, padding: space.md, gap: space.xs, marginBottom: space.xs }}>
+      <T variant="row" color="problem">
         {message ?? "It didn't install."}
       </T>
-      {conflict ? (
-        <Pressable onPress={() => AnyAppNative?.requestUninstall(app.packageName)}>
-          <T size="xs" weight="semibold" tone="destructive" style={{ textDecorationLine: "underline" }}>
-            Remove the old one
-          </T>
-        </Pressable>
-      ) : null}
+      {conflict ? <Button label="Remove the old one" variant="text" small onPress={() => AnyAppNative?.requestUninstall(app.packageName)} /> : null}
     </View>
   );
 }
@@ -364,7 +368,6 @@ export function InstallFailure({ app, message, conflict }: { app: App; message?:
 // ---------- New app
 
 function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const t = useTheme();
   const client = useStore((s) => s.client);
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -391,56 +394,32 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
     }
   };
 
-  const input = {
-    ...typeScale.base,
-    fontFamily: font.regular,
-    color: t.foreground,
-    backgroundColor: t.recessed,
-    borderWidth: 1,
-    borderColor: t.seam,
-    borderRadius: radius.xl,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-  } as const;
-
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <T size="xl" weight="semibold" style={{ marginBottom: space.lg }}>
+      <T variant="titleSmall" style={{ marginBottom: space.xl }}>
         New app
       </T>
-      <T size="xs" weight="medium" tone="muted" style={{ marginBottom: space.sm }}>
-        Name
-      </T>
-      <TextInput
-        testID="new-app-name"
-        value={name}
-        onChangeText={setName}
-        placeholder="Prayer Alarm"
-        placeholderTextColor={t.subtleForeground}
-        maxLength={40}
-        autoCapitalize="words"
-        returnKeyType="next"
-        style={input}
-      />
-      <T size="xs" weight="medium" tone="muted" style={{ marginTop: space.md, marginBottom: space.sm }}>
-        What should it do?
-      </T>
-      <TextInput
+      <Field testID="new-app-name" label="Name" value={name} onChangeText={setName} placeholder="For example, Prayer Times" maxLength={40} autoCapitalize="words" returnKeyType="next" />
+      <Field
         testID="new-app-prompt"
+        label="What should it do?"
         value={prompt}
         onChangeText={setPrompt}
         placeholder="Wake me up for each prayer in Ajman, with a reminder before it."
-        placeholderTextColor={t.subtleForeground}
         multiline
-        textAlignVertical="top"
-        style={[input, { minHeight: 120, maxHeight: 220 }]}
+        containerStyle={{ marginTop: space.lg }}
       />
       {error ? (
-        <T size="xs" tone="destructive" style={{ marginTop: space.sm }}>
+        <T variant="caption" color="problem" style={{ marginTop: space.sm }}>
           {error}
         </T>
       ) : null}
-      <Button testID="new-app-submit" label="Make it" size="xl" style={{ marginTop: space.lg }} disabled={!ready} busy={busy} onPress={submit} />
+      <Button testID="new-app-submit" label="Make it" style={{ marginTop: space.xl }} disabled={!ready} busy={busy} onPress={submit} />
+      {!ready ? (
+        <T variant="caption" color="textSecondary" style={{ marginTop: space.sm, textAlign: "center" }}>
+          Give it a name and say what it should do.
+        </T>
+      ) : null}
     </Sheet>
   );
 }
@@ -450,14 +429,12 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
 function AuthLost() {
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ flex: 1, paddingTop: insets.top + 80, paddingHorizontal: space.xxl, gap: space.md }}>
-      <T size="xl" weight="semibold">
-        Connect again
-      </T>
-      <T size="base" tone="muted">
+    <View style={{ flex: 1, paddingTop: insets.top + space["7xl"], paddingHorizontal: size.screenGutter, gap: space.lg }}>
+      <T variant="display">Connect again</T>
+      <T variant="lede" color="textSecondary">
         Your PC doesn’t recognise this phone any more. This happens if AnyAppAgent was reset on the PC.
       </T>
-      <Button label="Connect your PC" size="xl" style={{ marginTop: space.md }} onPress={() => void unpair()} />
+      <Button label="Connect your PC" style={{ marginTop: space.lg }} onPress={() => void unpair()} />
     </View>
   );
 }

@@ -1,4 +1,5 @@
 import { AnyAppNative } from "anyapp-native";
+import { theme } from "@shared/theme/tokens";
 import { getState } from "./store";
 
 let running = false;
@@ -14,7 +15,7 @@ export function updateKeepAlive() {
     const text = busy.length === 1 ? `Your PC is working on ${busy[0].name}` : `Your PC is working on ${busy.length} apps`;
     // Re-sent when the text changes; Android only allows starting it while we're in front.
     if (!running || lastText !== text) {
-      running = AnyAppNative.startKeepAlive(text) || running;
+      running = AnyAppNative.startKeepAlive(text, theme.color.light.accent) || running;
       lastText = text;
     }
   } else if (running) {

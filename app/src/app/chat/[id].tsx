@@ -2,22 +2,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Keyboard, Pressable, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, ArrowUp, ChevronDown, ListChecks } from "lucide-react-native";
-import { ChatRow, PlanEntries } from "@/chat/ChatRows";
+import { ArrowUp, ChevronLeft, Square } from "lucide-react-native";
+import { ChatRow } from "@/chat/ChatRows";
 import { buildRows } from "@/chat/timeline";
-import { actionLabel, describeApp } from "@/lib/describe";
+import { describeApp } from "@/lib/describe";
 import { installApp, launchApp } from "@/lib/installer";
 import type { App, ChatItem } from "@/lib/protocol";
 import { askForNotificationsOnce, loadChat } from "@/lib/session";
 import { appAction, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
-import { IconButton } from "@/ui/Button";
+import { Button, IconButton } from "@/ui/Button";
 import { useKeyboardHeight } from "@/ui/Sheet";
-import { Shine } from "@/ui/Shine";
+import { Spinner } from "@/ui/Spinner";
+import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
-import { font, radius, sizes, space, type as typeScale, useTheme } from "@/ui/theme";
+import { border, elevation, icon, radius, size, space, typeStyle, useTheme } from "@/ui/theme";
 
 const EMPTY: ChatItem[] = [];
+/** The composer grows to six lines of type.body, then scrolls (COMPONENTS.md, Composer). */
+const COMPOSER_MAX_LINES = 6;
 
 export default function Chat() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -35,11 +38,6 @@ export default function Chat() {
   }, [appId]);
 
   const rows = useMemo(() => buildRows(items, app).reverse(), [items, app]);
-  const plan = useMemo(() => {
-    if (app?.status !== "working") return null;
-    for (let i = items.length - 1; i >= 0; i--) if (items[i].kind === "plan") return items[i].plan ?? null;
-    return null;
-  }, [items, app?.status]);
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: keyboard > 0 ? keyboard : 0 }}>
@@ -49,25 +47,24 @@ export default function Chat() {
         data={rows}
         keyExtractor={(r) => r.key}
         renderItem={({ item }) => <ChatRow row={item} app={app} />}
-        contentContainerStyle={{ paddingHorizontal: space.lg, paddingVertical: space.lg, gap: space.sm, maxWidth: 760, width: "100%", alignSelf: "center" }}
+        // Inverted list: paddingTop is the bottom edge.
+        contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.lg, gap: space.md }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         ListFooterComponent={
           loaded ? undefined : (
-            <View style={{ padding: space.xxl, alignItems: "center" }}>
+            <View style={{ padding: space["2xl"], alignItems: "center" }}>
               {loadError ? (
-                <T size="sm" tone="destructive">
-                  {loadError}
-                </T>
+                <StateLine kind="problem" label={loadError} role="row" lines={0} />
               ) : (
-                <Shine style={{ ...typeScale.sm, fontFamily: font.regular, color: t.mutedForeground }}>Loading…</Shine>
+                <Spinner color={t.working} />
               )}
             </View>
           )
         }
+        style={{ backgroundColor: t.bg }}
       />
-      {plan ? <TodoCard entries={plan} /> : null}
-      <Composer app={app} bottomInset={keyboard > 0 ? 8 : insets.bottom + 8} />
+      <Composer app={app} bottomInset={keyboard > 0 ? space.xs : insets.bottom + space.xs} />
     </View>
   );
 }
@@ -80,65 +77,34 @@ function Header({ app }: { app: App | undefined }) {
   const action = app ? appAction(app, pkg) : "notReady";
   const installing = !!install && ["waiting", "downloading", "checking", "installing", "confirm"].includes(install.phase);
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", height: 60, paddingLeft: space.xs, paddingRight: space.md, gap: space.sm, borderBottomWidth: 1, borderBottomColor: t.seam }}>
-      <IconButton testID="chat-back" icon={ArrowLeft} label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
-      {app ? <AppIcon app={app} size={34} /> : null}
-      <View style={{ flex: 1, marginLeft: space.sm }}>
-        <T size="base" weight="semibold" numberOfLines={1}>
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        height: size.chatHeaderHeight,
+        paddingLeft: space.xs,
+        paddingRight: space.lg,
+        gap: space.sm,
+        borderBottomWidth: border.width,
+        borderBottomColor: t.border,
+      }}
+    >
+      <IconButton testID="chat-back" icon={ChevronLeft} label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+      {app ? <AppIcon app={app} size={size.appIconSmall} /> : null}
+      <View style={{ flex: 1, marginLeft: space.xs }}>
+        <T variant="heading" numberOfLines={1}>
           {app?.name ?? ""}
         </T>
-        {state ? (
-          <Shine active={state.live} style={{ ...typeScale.xs, fontSize: 13, lineHeight: 17, fontFamily: font.regular, color: t.mutedForeground }}>
-            {state.label}
-          </Shine>
-        ) : pkg ? (
-          <T size="xs" tone="subtle" style={{ fontSize: 13, lineHeight: 17 }}>
-            On your phone
-          </T>
-        ) : null}
+        {state ? <StateLine kind={state.kind} label={state.label} role="caption" /> : null}
       </View>
       {app && action !== "notReady" && !installing ? (
-        <Pressable
+        <Button
           testID="chat-header-action"
+          label={action === "open" ? "Open" : "Install"}
+          variant="quiet"
+          small
           onPress={() => (action === "open" ? launchApp(app) : void installApp(app))}
-          style={({ pressed }) => ({
-            height: 34,
-            paddingHorizontal: space.md,
-            borderRadius: 17,
-            backgroundColor: action === "open" ? t.secondary : t.primary,
-            justifyContent: "center",
-            opacity: pressed ? 0.8 : 1,
-          })}
-        >
-          <T size="xs" weight="semibold" style={{ color: action === "open" ? t.foreground : t.primaryForeground }}>
-            {actionLabel(action)}
-          </T>
-        </Pressable>
-      ) : null}
-    </View>
-  );
-}
-
-/** bb's todo card above the composer: "2/5 complete", opens to the list. */
-function TodoCard({ entries }: { entries: NonNullable<ChatItem["plan"]> }) {
-  const t = useTheme();
-  const [open, setOpen] = useState(false);
-  const done = entries.filter((e) => e.status === "completed").length;
-  const order = { in_progress: 0, pending: 1, completed: 2 } as const;
-  const sorted = [...entries].sort((a, b) => order[a.status] - order[b.status]);
-  return (
-    <View style={{ marginHorizontal: space.lg, marginBottom: space.sm, borderRadius: radius.lg, borderWidth: 1, borderColor: t.border, backgroundColor: t.raised, overflow: "hidden" }}>
-      <Pressable onPress={() => setOpen(!open)} style={{ flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 36, paddingHorizontal: space.md }}>
-        <ListChecks size={16} color={t.mutedForeground} strokeWidth={1.75} />
-        <Shine style={{ ...typeScale.xs, fontFamily: font.medium, color: t.foreground, flex: 1 }}>{`${done}/${entries.length} complete`}</Shine>
-        <View style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}>
-          <ChevronDown size={16} color={t.subtleForeground} strokeWidth={1.75} />
-        </View>
-      </Pressable>
-      {open ? (
-        <View style={{ maxHeight: 200, paddingHorizontal: space.xs, paddingBottom: space.sm }}>
-          <PlanEntries entries={sorted} />
-        </View>
+        />
       ) : null}
     </View>
   );
@@ -152,16 +118,18 @@ function Composer({ app, bottomInset }: { app: App | undefined; bottomInset: num
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const running = app?.status === "working";
-  const showStop = running && text.trim().length === 0;
-  const canSend = !!client && !!app && text.trim().length > 0 && !sending;
+  const hasText = text.trim().length > 0;
+  const showStop = running && !hasText;
+  const canSend = !!client && !!app && hasText && !sending;
+  const body = typeStyle("body");
 
   const send = async () => {
     if (!canSend || !client || !app) return;
-    const body = text.trim();
+    const message = text.trim();
     setSending(true);
     setError(null);
     try {
-      await client.send(app.id, { text: body });
+      await client.send(app.id, { text: message });
       setText("");
       input.current?.blur();
       Keyboard.dismiss();
@@ -182,24 +150,26 @@ function Composer({ app, bottomInset }: { app: App | undefined; bottomInset: num
     }
   };
 
+  const buttonFill = showStop || !hasText ? t.surfaceSunken : t.accent;
   return (
-    <View style={{ paddingHorizontal: space.md, paddingBottom: bottomInset, backgroundColor: t.background }}>
+    <View style={{ paddingTop: space.sm, paddingHorizontal: space.md, paddingBottom: bottomInset, backgroundColor: t.bg }}>
       {error ? (
-        <T size="xs" tone="destructive" style={{ paddingHorizontal: space.sm, paddingBottom: space.sm }}>
-          {error}
-        </T>
+        <View style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }}>
+          <StateLine kind="problem" label={error} role="caption" lines={0} />
+        </View>
       ) : null}
       <View
         style={{
-          borderRadius: radius.xl,
-          borderWidth: 1,
-          borderColor: t.border,
-          backgroundColor: t.background,
-          shadowColor: t.shadowColor,
-          shadowOpacity: t.dark ? 0.26 : 0.07,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: -4 },
-          elevation: 3,
+          flexDirection: "row",
+          alignItems: "flex-end",
+          minHeight: size.composerMinHeight,
+          borderRadius: radius.composer,
+          backgroundColor: t.fieldBg,
+          borderWidth: border.width,
+          borderColor: t.fieldBorder,
+          paddingLeft: space.lg,
+          gap: space.sm,
+          ...elevation(t.mode, 1),
         }}
       >
         <TextInput
@@ -208,52 +178,37 @@ function Composer({ app, bottomInset }: { app: App | undefined; bottomInset: num
           value={text}
           onChangeText={setText}
           placeholder={app?.status === "creating" ? "Your app is being set up…" : "Ask for a change"}
-          placeholderTextColor={t.placeholder}
+          placeholderTextColor={t.textTertiary}
+          cursorColor={t.accent}
+          selectionColor={t.accent}
           multiline
-          textAlignVertical="top"
+          textAlignVertical="center"
           style={{
-            ...typeScale.sm,
-            lineHeight: 24,
-            fontFamily: font.regular,
-            color: t.foreground,
-            minHeight: 56,
-            maxHeight: 180,
-            paddingLeft: space.lg,
-            paddingRight: sizes.composerTrailing,
-            paddingTop: space.md,
-            paddingBottom: space.md,
+            ...body,
+            flex: 1,
+            color: t.text,
+            minHeight: size.composerMinHeight - border.width * 2,
+            maxHeight: (body.lineHeight ?? 0) * COMPOSER_MAX_LINES + space.md * 2,
+            paddingVertical: space.md,
           }}
         />
-        <View style={{ position: "absolute", right: 10, bottom: 10 }}>
-          {showStop ? (
-            <Pressable
-              testID="composer-stop"
-              accessibilityLabel="Stop"
-              onPress={() => void stop()}
-              style={{ width: 36, height: 36, borderRadius: radius.md, backgroundColor: t.secondary, alignItems: "center", justifyContent: "center" }}
-            >
-              <View style={{ width: 13, height: 13, borderRadius: 2, backgroundColor: t.foreground }} />
-            </Pressable>
-          ) : (
-            <Pressable
-              testID="composer-send"
-              accessibilityLabel="Send"
-              onPress={() => void send()}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: radius.md,
-                backgroundColor: t.primary,
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: canSend ? 1 : 0.5,
-              }}
-            >
-              <ArrowUp size={18} color={t.primaryForeground} strokeWidth={2.25} />
-            </Pressable>
-          )}
+        <View style={{ paddingBottom: (size.composerMinHeight - border.width * 2 - size.sendButton) / 2, paddingRight: (size.composerMinHeight - border.width * 2 - size.sendButton) / 2 }}>
+          <Pressable
+            testID={showStop ? "composer-stop" : "composer-send"}
+            accessibilityLabel={showStop ? "Stop" : "Send"}
+            onPress={() => void (showStop ? stop() : send())}
+            disabled={!showStop && !canSend}
+            style={{ width: size.sendButton, height: size.sendButton, borderRadius: radius.send, backgroundColor: buttonFill, alignItems: "center", justifyContent: "center" }}
+          >
+            {showStop ? (
+              <Square size={icon.size.sm} color={t.text} fill={t.text} strokeWidth={icon.stroke} absoluteStrokeWidth />
+            ) : (
+              <ArrowUp size={icon.size.md} color={hasText ? t.onAccent : t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+            )}
+          </Pressable>
         </View>
       </View>
     </View>
   );
 }
+

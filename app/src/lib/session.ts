@@ -1,8 +1,10 @@
 import { AppState, PermissionsAndroid, Platform } from "react-native";
 import * as Device from "expo-device";
 import { AnyAppNative } from "anyapp-native";
-import { ApiError, Client, health, pair as pairRequest, UNREACHABLE } from "./api";
+import { ApiError, Client, health, pair as pairRequest, pairEasyConnect, UNREACHABLE } from "./api";
 import { toBaseUrl } from "./address";
+import { decodeEasyConnectCode } from "./easyConnectCode";
+import { dialEasyConnect, RouteError, routeBaseUrl, usesEasyConnect } from "./route";
 import type { ChatItem, ServerEvent } from "./protocol";
 import {
   getState,
@@ -26,16 +28,19 @@ export async function boot() {
   AppState.addEventListener("change", (state) => {
     if (state === "active") onForeground();
   });
+  AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
 }
 
-function applyPairing(pairing: Pairing) {
+function applyPairing(pairing: Pairing, client?: Client) {
   setState({
     pairing,
-    client: new Client(pairing.baseUrl, pairing.token),
+    // Easy Connect's base URL is only known once the tunnel is up (connect() dials it).
+    client: client ?? (usesEasyConnect(pairing) ? null : new Client(pairing.baseUrl, pairing.token)),
     serverName: pairing.serverName,
     authLost: false,
+    routeError: null,
   });
-  connect();
+  void connect();
 }
 
 export class PairError extends Error {}
@@ -68,8 +73,49 @@ export async function pairWith(address: string, code: string): Promise<void> {
   }
 }
 
+/**
+ * Easy Connect pairing (docs/EASY-CONNECT.md 4.3): decode the code, open the tunnel with this
+ * phone's client key, trade the one-time secret for a token. About 3 s later the PC restarts its
+ * helper with this phone on the allow-list, which drops the tunnel once; the socket's reconnect
+ * ladder redials it (the contract's "reconnect once after pairing").
+ */
+export async function pairWithEasyConnect(text: string, onStep?: (step: string) => void): Promise<void> {
+  const code = decodeEasyConnectCode(text);
+  if (!code) throw new PairError("That isn't an AnyAppAgent code. On your PC, choose Connect a phone and use the code it shows.");
+  if (!AnyAppNative || !AnyAppNative.easyConnectAvailable()) {
+    throw new PairError("This copy of AnyAppAgent can't use Easy Connect. Connect another way, on the same Wi-Fi.");
+  }
+  onStep?.(`Reaching ${code.name}…`);
+  let clientKey: string;
+  let base: string;
+  try {
+    clientKey = await AnyAppNative.easyConnectClientKey();
+    base = await dialEasyConnect(code.address, code.port, true);
+  } catch {
+    throw new PairError(`Can't reach ${code.name}. Keep AnyAppAgent open on your PC and check that both have internet, then try again.`);
+  }
+  onStep?.(`Connecting to ${code.name}…`);
+  try {
+    const deviceName = Device.deviceName ?? Device.modelName ?? "Android phone";
+    const res = await pairEasyConnect(base, { secret: code.secret, deviceName, clientKey });
+    const pairing: Pairing = { baseUrl: "", via: "easy", easy: { address: code.address, port: code.port }, token: res.token, serverName: res.serverName };
+    await savePairing(pairing);
+    disconnectSocket();
+    setState({ apps: {}, appsLoaded: false, chats: {}, chatLoaded: {}, installs: {} });
+    applyPairing(pairing, new Client(base, res.token));
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) {
+      throw new PairError("That code is used up. A code works once, for 5 minutes. On your PC, show a new code, then scan it.");
+    }
+    if (e instanceof ApiError && e.status === 429) throw new PairError("Too many tries. Wait a minute, then try again.");
+    if (e instanceof ApiError && !e.unreachable) throw new PairError(e.message);
+    throw new PairError(`Reached ${code.name}, but AnyAppAgent there did not answer. Keep it open on your PC and try again.`);
+  }
+}
+
 export async function unpair() {
   disconnectSocket();
+  if (usesEasyConnect(getState().pairing)) await AnyAppNative?.easyConnectStop().catch(() => undefined);
   await savePairing(null);
   AnyAppNative?.stopKeepAlive();
   setState({
@@ -108,28 +154,58 @@ export async function askForNotificationsOnce() {
   }
 }
 
-// ---------- the socket
+// ---------- the socket (over the same network, or through the Easy Connect tunnel)
 
 let socket: WebSocket | null = null;
+let connecting = false;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let healthTimer: ReturnType<typeof setInterval> | null = null;
 let attempts = 0;
 let healthFailures = 0;
+/** The next dial stops the old tunnel first (after a drop, a stall or a network change). */
+let resetNextDial = false;
+let lastRepair = 0;
 
-function connect() {
-  const client = getState().client;
-  if (!client) return;
+// Retry ladders. Same network: 1, 2, 4, 8, 15 s. Easy Connect, from Ghostex: right after a drop the
+// PC's helper is usually restarting (a code was made, used or expired), so retry quickly first
+// (redialAfterServerStop: 2.5, 2, 2.5, 3, 5, 8 s), then its normal ladder (15, 30 s, repeating).
+const LAN_DELAYS = [1000, 2000, 4000, 8000, 15000];
+const EASY_DELAYS = [2500, 2000, 2500, 3000, 5000, 8000, 15000, 30000];
+
+async function connect() {
+  const pairing = getState().pairing;
+  if (!pairing || getState().authLost) return;
   if (retryTimer) clearTimeout(retryTimer);
   retryTimer = null;
-  if (socket) return;
+  if (socket || connecting) return;
+  connecting = true;
   setState({ connection: "connecting" });
+  let client: Client;
+  try {
+    const reset = resetNextDial;
+    resetNextDial = false;
+    const base = await routeBaseUrl(pairing, { reset });
+    if (getState().pairing !== pairing) return; // disconnected meanwhile
+    client = getState().client ?? new Client(base, pairing.token);
+    if (client.baseUrl !== base) client = new Client(base, pairing.token);
+    if (getState().client !== client) setState({ client });
+  } catch (e) {
+    connecting = false;
+    if (getState().pairing !== pairing) return;
+    setState({ connection: "offline", routeError: e instanceof RouteError ? e.message : String(e) });
+    resetNextDial = usesEasyConnect(pairing);
+    scheduleReconnect();
+    return;
+  }
+  connecting = false;
+  if (socket) return;
   const ws = new WebSocket(client.socketUrl());
   socket = ws;
   ws.onopen = () => {
     if (socket !== ws) return;
     attempts = 0;
     healthFailures = 0;
-    setState({ connection: "online" });
+    setState({ connection: "online", routeError: null });
     void resync();
   };
   ws.onmessage = (event) => {
@@ -144,6 +220,8 @@ function connect() {
     if (socket !== ws) return;
     socket = null;
     setState({ connection: "offline" });
+    // Through Easy Connect a drop usually means the PC's helper restarted: rebuild the tunnel.
+    if (usesEasyConnect(getState().pairing)) resetNextDial = true;
     scheduleReconnect();
   };
   ws.onerror = () => {
@@ -153,13 +231,14 @@ function connect() {
 }
 
 function scheduleReconnect() {
-  if (!getState().client || getState().authLost) return;
+  if (!getState().pairing || getState().authLost) return;
   if (retryTimer) return;
   attempts++;
-  const delay = Math.min(1000 * 2 ** Math.min(attempts - 1, 4), 15000);
+  const ladder = usesEasyConnect(getState().pairing) ? EASY_DELAYS : LAN_DELAYS;
+  const delay = ladder[Math.min(attempts - 1, ladder.length - 1)];
   retryTimer = setTimeout(() => {
     retryTimer = null;
-    connect();
+    void connect();
     // The socket API can't tell "wrong token" from "PC is off"; ask over HTTP (first failure, then every third).
     if (attempts === 1 || attempts % 3 === 0) void checkAuth();
   }, delay);
@@ -179,7 +258,31 @@ function disconnectSocket() {
   }
 }
 
-/** A socket can look open long after the PC went away; a cheap HTTP check notices. */
+/** Drop the socket (and, through Easy Connect, the tunnel) and dial again at once. */
+function repair() {
+  const now = Date.now();
+  if (now - lastRepair < 5000) return; // Ghostex: at most one repair every 5 s
+  lastRepair = now;
+  if (usesEasyConnect(getState().pairing)) resetNextDial = true;
+  const ws = socket;
+  socket = null;
+  try {
+    ws?.close();
+  } catch {
+    // ignore
+  }
+  setState({ connection: "offline" });
+  attempts = 0;
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
+  void connect();
+}
+
+/**
+ * A socket can look open long after the PC (or the tunnel) went away; a cheap HTTP check with a
+ * 5 s timeout notices. Through Easy Connect one miss is enough to rebuild the tunnel (Ghostex's
+ * chat link does the same after 5 s of silence); on the same network, two misses.
+ */
 function startHealthChecks() {
   if (healthTimer) return;
   healthTimer = setInterval(async () => {
@@ -190,20 +293,12 @@ function startHealthChecks() {
       healthFailures = 0;
     } catch {
       healthFailures++;
-      if (healthFailures >= 2) {
+      if (healthFailures >= (usesEasyConnect(getState().pairing) ? 1 : 2)) {
         healthFailures = 0;
-        const ws = socket;
-        socket = null;
-        setState({ connection: "offline" });
-        try {
-          ws?.close();
-        } catch {
-          // ignore
-        }
-        scheduleReconnect();
+        repair();
       }
     }
-  }, 20000);
+  }, 15000);
 }
 
 async function checkAuth() {
@@ -223,10 +318,10 @@ export function onAuthLost() {
 
 /** Reconnect now (pull to refresh, retry button, app back in front). */
 export function reconnectNow() {
-  if (!getState().client || getState().authLost) return;
+  if (!getState().pairing || getState().authLost) return;
   attempts = 0;
   if (socket && getState().connection === "online") {
-    void resync();
+    void verifyThenResync();
     return;
   }
   if (socket) {
@@ -238,7 +333,30 @@ export function reconnectNow() {
       // ignore
     }
   }
-  connect();
+  void connect();
+}
+
+/** Back in front, or pulled to refresh: check the link really answers before trusting it. */
+async function verifyThenResync() {
+  const client = getState().client;
+  if (!client) return;
+  try {
+    await health(client.baseUrl);
+    void resync();
+  } catch {
+    repair();
+  }
+}
+
+/** The phone switched networks: the tunnel's path is gone, redial at once (Ghostex onNetworkChanged). */
+function onNetworkChanged() {
+  if (!getState().pairing || getState().authLost) return;
+  if (usesEasyConnect(getState().pairing)) {
+    lastRepair = 0;
+    repair();
+  } else {
+    reconnectNow();
+  }
 }
 
 function onForeground() {

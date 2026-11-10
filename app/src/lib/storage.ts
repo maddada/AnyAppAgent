@@ -1,9 +1,14 @@
 import * as SecureStore from "expo-secure-store";
 
 export interface Pairing {
-  baseUrl: string; // http://10.0.2.2:8787
+  /** Same network: http://10.0.2.2:8787. Easy Connect: "" (the tunnel's local port changes). */
+  baseUrl: string;
   token: string;
   serverName: string;
+  /** How this phone reaches the PC. Missing means "lan" (pairings saved before Easy Connect). */
+  via?: "lan" | "easy";
+  /** Easy Connect: the tailcat address (a secret: never log or show it) and the companion's port. */
+  easy?: { address: string; port: number };
 }
 
 export type ThemePref = "system" | "light" | "dark";

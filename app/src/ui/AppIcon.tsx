@@ -3,20 +3,21 @@ import { Image } from "expo-image";
 import type { App } from "@/lib/protocol";
 import { useStore } from "@/lib/store";
 import { T } from "./Text";
-import { useTheme } from "./theme";
+import { border, radius, size as sizes, typeStyle, useTheme } from "./theme";
 
-
-/** The app's launcher icon from the PC (GET /icon), cached per iconVersion. */
+/**
+ * The app's own launcher icon from the PC (GET /icon), cached per iconVersion. Corner radius is
+ * size / 4 (radius.appIcon at size.appIcon), with a 1px inner line in iconEdge so pale icons keep
+ * their edge. Until it loads, the first letter on surfaceSunken (users' icons are the only colour).
+ */
 export function AppIcon({ app, size }: { app: App; size: number }) {
   const t = useTheme();
   const client = useStore((s) => s.client);
-  const r = Math.round(size * 0.24);
-  const color = t.appColors[Math.abs(hash(app.id)) % t.appColors.length];
+  const r = (size * radius.appIcon) / sizes.appIcon;
   return (
-    <View style={{ width: size, height: size, borderRadius: r, overflow: "hidden", backgroundColor: t.recessed }}>
-      {/* Letter underneath: shows while the icon loads, or if the PC has none. */}
-      <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", backgroundColor: color }}>
-        <T style={{ color: t.onColor, fontSize: size * 0.42, lineHeight: size * 0.52 }} weight="semibold">
+    <View style={{ width: size, height: size, borderRadius: r, overflow: "hidden", backgroundColor: t.surfaceSunken }}>
+      <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
+        <T style={{ ...typeStyle("titleSmall"), color: t.textSecondary, fontSize: size * 0.42, lineHeight: size * 0.52 }}>
           {(app.name.trim()[0] ?? "?").toUpperCase()}
         </T>
       </View>
@@ -29,12 +30,7 @@ export function AppIcon({ app, size }: { app: App; size: number }) {
           recyclingKey={`${app.id}-${app.iconVersion}`}
         />
       ) : null}
+      <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: r, borderWidth: border.width, borderColor: t.iconEdge }} />
     </View>
   );
-}
-
-function hash(s: string) {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
 }

@@ -1,43 +1,49 @@
 import { memo, useEffect, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Animated, Easing, Pressable, View } from "react-native";
 import {
   Brain,
   Check,
+  ChevronDown,
   ChevronRight,
-  File as FileIcon,
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  Download,
   FilePen,
-  FolderInput,
+  FileText,
+  Folder,
   Globe,
-  Hammer,
-  ListChecks,
+  ListTodo,
   Lock,
-  Puzzle,
+  Package,
   Search,
   Smartphone,
-  Square,
-  SquareTerminal,
-  Trash2,
-  Wrench,
+  Terminal,
+  Trash,
   X,
 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
-import { actionLabel } from "@/lib/describe";
 import { installApp, launchApp } from "@/lib/installer";
 import type { App, ChatItem, PlanEntry } from "@/lib/protocol";
 import { appAction, useStore } from "@/lib/store";
-import { AppIcon } from "@/ui/AppIcon";
 import { Button } from "@/ui/Button";
-import { Shine } from "@/ui/Shine";
+import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
-import { font, radius, type as typeScale, useTheme, space } from "@/ui/theme";
+import { easing, elevation, fonts, icon, motion, radius, size, space, typeStyle, useTheme, border } from "@/ui/theme";
 import { Markdown } from "./Markdown";
 import { duration, seconds, summarizeTools, toolActive, type Row } from "./timeline";
 
-const ROW_TEXT = { ...typeScale.sm, fontFamily: font.regular };
+/** COMPONENTS.md: tool detail blocks are indented 28 and show at most 12 lines; the permission badge is 36. */
+const DETAIL_INDENT = 28;
+const DETAIL_MAX_LINES = 12;
+const PERMISSION_BADGE = 36;
+const ROW_LINE = typeStyle("row").lineHeight ?? icon.size.sm;
 
 export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App | undefined }) {
   if (row.type === "working") return <WorkingRow label={row.label} />;
+  if (row.type === "rebuild") return <RebuildRow app={app} />;
   if (row.type === "tools") return <ToolGroup items={row.items} />;
   const item = row.item;
   switch (item.kind) {
@@ -50,7 +56,7 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
     case "tool":
       return <ToolRow item={item} />;
     case "plan":
-      return <PlanRow item={item} />;
+      return <PlanBox item={item} />;
     case "permission":
       return <PermissionCard item={item} />;
     case "build":
@@ -62,6 +68,10 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
   }
 });
 
+function Glyph({ icon: Icon, color }: { icon: LucideIcon; color: string }) {
+  return <Icon size={icon.size.sm} color={color} strokeWidth={icon.stroke} absoluteStrokeWidth />;
+}
+
 // ---------- messages
 
 function UserMessage({ item }: { item: ChatItem }) {
@@ -69,10 +79,24 @@ function UserMessage({ item }: { item: ChatItem }) {
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(false);
   return (
-    <View style={{ alignItems: "flex-end", paddingLeft: space.huge }}>
-      <View style={{ maxWidth: "100%", borderRadius: radius.xl, borderWidth: 1, borderColor: t.seam, backgroundColor: t.recessed, paddingHorizontal: space.lg, paddingVertical: space.sm }}>
+    <View style={{ alignItems: "flex-end" }}>
+      <View
+        style={{
+          maxWidth: `${size.bubbleMaxWidthPercent}%`,
+          backgroundColor: t.bubbleBg,
+          borderWidth: border.width,
+          borderColor: t.bubbleBorder,
+          borderTopLeftRadius: radius.bubble.topLeft,
+          borderTopRightRadius: radius.bubble.topRight,
+          borderBottomRightRadius: radius.bubble.bottomRight,
+          borderBottomLeftRadius: radius.bubble.bottomLeft,
+          paddingVertical: space.md,
+          paddingHorizontal: space.lg,
+        }}
+      >
         <T
-          size="sm"
+          variant="callout"
+          color="bubbleText"
           selectable
           numberOfLines={open ? undefined : 15}
           onTextLayout={(e) => {
@@ -82,13 +106,7 @@ function UserMessage({ item }: { item: ChatItem }) {
           {item.text}
         </T>
       </View>
-      {long ? (
-        <Pressable onPress={() => setOpen(!open)} hitSlop={8} style={{ marginTop: space.xs }}>
-          <T size="xs" weight="medium" tone="muted">
-            {open ? "Show less" : "Show more"}
-          </T>
-        </Pressable>
-      ) : null}
+      {long ? <Button label={open ? "Show less" : "Show more"} variant="text" small onPress={() => setOpen(!open)} style={{ marginTop: space.xs }} /> : null}
     </View>
   );
 }
@@ -96,46 +114,26 @@ function UserMessage({ item }: { item: ChatItem }) {
 function AssistantMessage({ item }: { item: ChatItem }) {
   if (!item.text) return null;
   return (
-    <View style={{ paddingHorizontal: space.sm }}>
+    <View style={{ paddingHorizontal: space.xs }}>
       <Markdown text={item.text} />
     </View>
   );
 }
 
-// ---------- disclosure rows (thinking, tools, plan updates): bb's 20px timeline rows
+// ---------- one-line rows (thinking, tools, folded tools, answered permission)
 
-function DisclosureHeader({
-  icon: Icon,
-  children,
-  open,
-  onPress,
-  dim,
-  expandable = true,
-  trailing,
-}: {
-  icon: LucideIcon;
-  children: React.ReactNode;
-  open: boolean;
-  onPress?: () => void;
-  dim?: boolean;
-  expandable?: boolean;
-  trailing?: React.ReactNode;
-}) {
-  const t = useTheme();
+/** A row drawn at size.toolRowHeight with its hit area padded to size.touch (COMPONENTS.md, tool row). */
+function LineRow({ children, onPress, testID }: { children: React.ReactNode; onPress?: () => void; testID?: string }) {
+  const pad = (size.touch - size.toolRowHeight) / 2;
   return (
     <Pressable
-      onPress={expandable ? onPress : undefined}
-      hitSlop={{ top: 8, bottom: 8 }}
-      style={{ flexDirection: "row", alignItems: "center", minHeight: 28, paddingHorizontal: space.sm, gap: space.sm, opacity: dim && !open ? 0.45 : 1 }}
+      testID={testID}
+      onPress={onPress}
+      disabled={!onPress}
+      hitSlop={{ top: pad, bottom: pad }}
+      style={{ minHeight: size.toolRowHeight, flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: space.xs }}
     >
-      <Icon size={16} color={t.mutedForeground} strokeWidth={1.75} />
-      <View style={{ flexShrink: 1, flexDirection: "row", alignItems: "center" }}>{children}</View>
-      {trailing}
-      {expandable ? (
-        <View style={{ transform: [{ rotate: open ? "90deg" : "0deg" }], opacity: 0.6 }}>
-          <ChevronRight size={14} color={t.subtleForeground} strokeWidth={2} />
-        </View>
-      ) : null}
+      {children}
     </Pressable>
   );
 }
@@ -143,138 +141,151 @@ function DisclosureHeader({
 function ThoughtRow({ item }: { item: ChatItem }) {
   const t = useTheme();
   const live = !!item.streaming;
-  const [toggled, setToggled] = useState<boolean | null>(null);
-  // bb: live reasoning opens by itself and closes when done, unless the user chose.
-  const open = toggled ?? live;
+  const [open, setOpen] = useState(false);
   const secs = seconds(item);
   return (
     <View>
-      <DisclosureHeader icon={Brain} open={open} onPress={() => setToggled(!open)} dim={!live}>
+      <LineRow onPress={item.text ? () => setOpen(!open) : undefined}>
         {live ? (
-          <Shine style={{ ...ROW_TEXT, color: t.mutedForeground }}>Thinking…</Shine>
-        ) : (
-          <T size="sm" tone="muted">
-            Thought
-            {secs > 1 ? <T size="sm" tone="subtle">{`  ${duration(secs)}`}</T> : null}
-          </T>
-        )}
-      </DisclosureHeader>
-      {open && item.text ? (
-        <ScrollView nestedScrollEnabled style={{ maxHeight: 220, marginLeft: space.lg, marginTop: space.xs }}>
-          <View style={{ borderLeftWidth: 1, borderLeftColor: t.border, paddingLeft: space.md }}>
-            <T size="sm" tone="muted">
-              {item.text}
-            </T>
+          <View style={{ width: icon.size.sm, alignItems: "center" }}>
+            <Spinner color={t.textTertiary} />
           </View>
-        </ScrollView>
+        ) : (
+          <Glyph icon={open ? ChevronDown : ChevronRight} color={t.textTertiary} />
+        )}
+        <T variant="row" color="textTertiary">
+          {live ? "Thinking" : secs > 1 ? `Thought for ${duration(secs)}` : "Thought"}
+        </T>
+      </LineRow>
+      {open && item.text ? (
+        <View style={{ borderLeftWidth: 2, borderLeftColor: t.border, paddingLeft: space.md, marginLeft: space.sm, marginTop: space.xs }}>
+          <T variant="callout" color="textSecondary">
+            {item.text}
+          </T>
+        </View>
       ) : null}
     </View>
   );
 }
 
-const TOOL_ICONS: Record<string, LucideIcon> = {
-  read: FileIcon,
+const TOOL_GLYPHS: Record<string, LucideIcon> = {
+  read: FileText,
   edit: FilePen,
-  delete: Trash2,
-  move: FolderInput,
+  delete: Trash,
+  move: Folder,
   search: Search,
-  execute: SquareTerminal,
+  execute: Terminal,
   think: Brain,
   fetch: Globe,
 };
 
-function ToolTitle({ item }: { item: ChatItem }) {
-  const t = useTheme();
-  const tool = item.tool;
-  if (!tool) return null;
-  if (toolActive(item)) {
-    return (
-      <Shine style={{ ...ROW_TEXT, color: t.mutedForeground }} active>
-        {tool.title}
-      </Shine>
-    );
-  }
-  return (
-    <T size="sm" tone="muted" numberOfLines={1}>
-      {tool.title}
-    </T>
-  );
+/** Real titles can be whole scripts: the first line here; the rest opens below. */
+function firstLine(title: string) {
+  const line = title.split(/\r?\n/)[0].trim();
+  return line.length < title.trim().length ? `${line} …` : line;
 }
 
-function ToolRow({ item, nested }: { item: ChatItem; nested?: boolean }) {
+/** A short detail (diff counts, "14 passed") goes on the row; anything longer opens below. */
+function splitDetail(item: ChatItem): { inline?: string; block?: string } {
+  const tool = item.tool;
+  if (!tool) return {};
+  const title = tool.title.trim();
+  // A detail that only restates the title (the same path with other slashes) adds nothing.
+  const norm = (v: string) => v.split("\\").join("/").toLowerCase();
+  const raw = tool.detail?.trim() ?? "";
+  const detail = raw && norm(title).includes(norm(raw)) ? "" : raw;
+  const titleExtra = /\n/.test(title) || title.length > 60 ? title : "";
+  if (detail && detail !== title && !/\n/.test(detail) && detail.length <= 24) return { inline: detail, block: titleExtra || undefined };
+  const block = detail && detail !== title ? detail : titleExtra;
+  return { block: block || undefined };
+}
+
+function ToolRow({ item }: { item: ChatItem }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
   const tool = item.tool;
   if (!tool) return null;
+  const { inline, block } = splitDetail(item);
   const failed = tool.status === "failed";
+  const titleColor = tool.status === "in_progress" ? "text" : tool.status === "pending" ? "textTertiary" : "textSecondary";
   return (
     <View>
-      <DisclosureHeader
-        icon={TOOL_ICONS[tool.kind] ?? Puzzle}
-        open={open}
-        onPress={() => setOpen(!open)}
-        dim={!toolActive(item)}
-        expandable={!!tool.detail}
-        trailing={
-          failed ? (
-            <T mono style={{ fontSize: 12, color: t.destructiveText }}>
-              error
-            </T>
-          ) : null
-        }
-      >
-        <ToolTitle item={item} />
-      </DisclosureHeader>
-      {open && tool.detail ? <DetailCard text={tool.detail} indent={nested ? 0 : 8} /> : null}
-    </View>
-  );
-}
-
-function DetailCard({ text, indent = 8 }: { text: string; indent?: number }) {
-  const t = useTheme();
-  return (
-    <View style={{ marginHorizontal: indent, marginTop: space.xs, marginBottom: space.xs, borderRadius: radius.lg, borderWidth: 1, borderColor: t.border, backgroundColor: t.card }}>
-      <ScrollView nestedScrollEnabled style={{ maxHeight: 288 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <T mono selectable style={{ fontSize: 12, lineHeight: 17, color: t.foreground, opacity: 0.75, paddingHorizontal: space.md, paddingVertical: space.md }}>
-            {text}
+      <LineRow onPress={block ? () => setOpen(!open) : undefined}>
+        <Glyph icon={TOOL_GLYPHS[tool.kind] ?? CircleDot} color={t.textTertiary} />
+        <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline", gap: space.sm, overflow: "hidden" }}>
+          <T variant="row" color={titleColor} numberOfLines={1} style={{ flexShrink: 1 }}>
+            {firstLine(tool.title)}
           </T>
-        </ScrollView>
-      </ScrollView>
+          {inline ? (
+            <T variant="mono" color={failed ? "problem" : "textTertiary"} numberOfLines={1}>
+              {inline}
+            </T>
+          ) : null}
+        </View>
+        {tool.status === "in_progress" ? <Spinner color={t.working} /> : null}
+        {tool.status === "completed" ? <Glyph icon={Check} color={t.textTertiary} /> : null}
+        {failed ? <Glyph icon={X} color={t.problem} /> : null}
+      </LineRow>
+      {open && block ? <DetailBlock text={block} failed={failed} /> : null}
     </View>
   );
 }
 
+function DetailBlock({ text, failed }: { text: string; failed?: boolean }) {
+  const t = useTheme();
+  const [all, setAll] = useState(false);
+  const [long, setLong] = useState(false);
+  return (
+    <View style={{ marginLeft: DETAIL_INDENT, marginTop: space.xs, marginBottom: space.xs }}>
+      <View style={{ backgroundColor: t.codeBg, borderRadius: radius.badge, padding: space.md }}>
+        <T
+          variant="mono"
+          color={failed ? "problem" : "textSecondary"}
+          selectable
+          numberOfLines={all ? undefined : DETAIL_MAX_LINES}
+          onTextLayout={(e) => {
+            if (!all && e.nativeEvent.lines.length >= DETAIL_MAX_LINES) setLong(true);
+          }}
+        >
+          {text}
+        </T>
+      </View>
+      {long && !all ? <Button label="Show all" variant="text" small onPress={() => setAll(true)} style={{ marginTop: space.xs }} /> : null}
+    </View>
+  );
+}
+
+/** A finished run of tool calls folds into one row ("Edited 2 files, ran 3 commands"). */
 function ToolGroup({ items }: { items: ChatItem[] }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
-  const active = items.find(toolActive);
-  const failed = items.filter((i) => i.tool?.status === "failed").length;
-  return (
-    <View>
-      <DisclosureHeader
-        icon={active ? (TOOL_ICONS[active.tool?.kind ?? ""] ?? Puzzle) : Wrench}
-        open={open}
-        onPress={() => setOpen(!open)}
-        dim={!active}
-        trailing={
-          failed ? (
-            <T mono style={{ fontSize: 12, color: t.subtleForeground, opacity: 0.75 }}>
-              {failed} failed
+  // While any of them is still going, show every row (the live frontier stays open).
+  if (items.some(toolActive) || open) {
+    return (
+      <View>
+        {open ? (
+          <LineRow onPress={() => setOpen(false)}>
+            <Glyph icon={ChevronDown} color={t.textTertiary} />
+            <T variant="row" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
+              {summarizeTools(items)}
             </T>
-          ) : null
-        }
-      >
-        {active ? <ToolTitle item={active} /> : <T size="sm" tone="muted" numberOfLines={1}>{summarizeTools(items)}</T>}
-      </DisclosureHeader>
-      {open ? (
-        <View style={{ marginLeft: space.lg, marginTop: space.xs, marginBottom: space.xs, borderLeftWidth: 1, borderLeftColor: t.seam, paddingLeft: space.xs }}>
-          {items.map((i) => (
-            <ToolRow key={i.id} item={i} nested />
-          ))}
-        </View>
-      ) : null}
-    </View>
+          </LineRow>
+        ) : null}
+        {items.map((i) => (
+          <ToolRow key={i.id} item={i} />
+        ))}
+      </View>
+    );
+  }
+  const failed = items.some((i) => i.tool?.status === "failed");
+  return (
+    <LineRow onPress={() => setOpen(true)}>
+      <Glyph icon={ChevronRight} color={t.textTertiary} />
+      <T variant="row" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
+        {summarizeTools(items)}
+      </T>
+      {failed ? <Glyph icon={X} color={t.problem} /> : <Glyph icon={Check} color={t.textTertiary} />}
+    </LineRow>
   );
 }
 
@@ -284,69 +295,49 @@ export function PlanEntries({ entries }: { entries: PlanEntry[] }) {
   const t = useTheme();
   return (
     <View style={{ gap: space.xs }}>
-      {entries.map((e, i) => {
-        const done = e.status === "completed";
-        const now = e.status === "in_progress";
-        return (
-          <View
-            key={i}
-            style={{
-              flexDirection: "row",
-              alignItems: "flex-start",
-              gap: space.sm,
-              paddingHorizontal: space.sm,
-              paddingVertical: now ? 5 : 3,
-              borderRadius: radius.md,
-              backgroundColor: now ? t.activeRow : "transparent",
-            }}
-          >
-            <View style={{ paddingTop: space.xs }}>
-              {done ? (
-                <Check size={15} color={t.subtleForeground} strokeWidth={2} />
-              ) : (
-                <Square size={15} color={now ? t.foreground : t.mutedForeground} strokeWidth={1.75} style={{ opacity: now ? 1 : 0.45 }} />
-              )}
+      {entries.map((e, i) => (
+        <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          {e.status === "completed" ? (
+            <Glyph icon={CircleCheck} color={t.textTertiary} />
+          ) : e.status === "in_progress" ? (
+            <View style={{ width: icon.size.sm, alignItems: "center" }}>
+              <Spinner color={t.working} />
             </View>
-            {now ? (
-              <Shine style={{ ...typeScale.sm, flex: 1, fontFamily: font.medium, color: t.foreground }}>{e.content}</Shine>
-            ) : (
-              <T
-                size="sm"
-                tone={done ? "subtle" : "muted"}
-                style={{ flex: 1, textDecorationLine: done ? "line-through" : "none" }}
-              >
-                {e.content}
-              </T>
-            )}
-          </View>
-        );
-      })}
+          ) : (
+            <Glyph icon={CircleDashed} color={t.textTertiary} />
+          )}
+          <T
+            variant="row"
+            color={e.status === "completed" ? "textSecondary" : e.status === "in_progress" ? "text" : "textTertiary"}
+            style={[{ flex: 1 }, e.status === "in_progress" ? { fontFamily: fonts.textMedium } : null]}
+          >
+            {e.content}
+          </T>
+        </View>
+      ))}
     </View>
   );
 }
 
-function PlanRow({ item }: { item: ChatItem }) {
-  const [open, setOpen] = useState(false);
+function PlanBox({ item }: { item: ChatItem }) {
+  const t = useTheme();
   const entries = item.plan ?? [];
   const done = entries.filter((e) => e.status === "completed").length;
   return (
-    <View>
-      <DisclosureHeader icon={ListChecks} open={open} onPress={() => setOpen(!open)} dim>
-        <T size="sm" tone="muted">
-          Updated plan
-          <T size="sm" tone="subtle">{`  ${done}/${entries.length}`}</T>
+    <View style={{ borderWidth: border.width, borderColor: t.border, borderRadius: radius.card, padding: space.md, gap: space.xs, marginHorizontal: space.xs }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs }}>
+        <Glyph icon={ListTodo} color={t.textSecondary} />
+        <T variant="label" color="textSecondary" style={{ flex: 1 }}>
+          Plan
         </T>
-      </DisclosureHeader>
-      {open ? (
-        <View style={{ marginTop: space.xs, marginLeft: space.sm }}>
-          <PlanEntries entries={entries} />
-        </View>
-      ) : null}
+        <T variant="row" color="textTertiary">{`${done} of ${entries.length} done`}</T>
+      </View>
+      <PlanEntries entries={entries} />
     </View>
   );
 }
 
-// ---------- permission (bb's approval card)
+// ---------- permission
 
 function PermissionCard({ item }: { item: ChatItem }) {
   const t = useTheme();
@@ -354,16 +345,17 @@ function PermissionCard({ item }: { item: ChatItem }) {
   const [sending, setSending] = useState<string | null>(null);
   const p = item.permission;
   if (!p) return null;
+  const title = p.title.replace(/`/g, "");
   const chosen = p.options.find((o) => o.optionId === p.selectedOptionId);
   if (chosen) {
     const allowed = chosen.kind.startsWith("allow");
     return (
-      <DisclosureHeader icon={Lock} open={false} expandable={false} dim>
-        <T size="sm" tone="muted" numberOfLines={2}>
-          {p.title}
-          <T size="sm" tone="subtle">{`  ·  ${allowed ? "Allowed" : "Not allowed"}`}</T>
+      <LineRow>
+        <Glyph icon={Lock} color={t.textTertiary} />
+        <T variant="row" color="textSecondary" numberOfLines={2} style={{ flex: 1 }}>
+          {`${allowed ? "You allowed" : "You didn't allow"}: ${title}`}
         </T>
-      </DisclosureHeader>
+      </LineRow>
     );
   }
   const answer = async (optionId: string) => {
@@ -375,168 +367,172 @@ function PermissionCard({ item }: { item: ChatItem }) {
       setSending(null);
     }
   };
-  // bb order: deny on the left (ghost); allow-always (outline) and allow-once (filled) on the right.
-  const rank = (kind: string) => (kind.startsWith("reject") ? 0 : kind === "allow_always" ? 1 : 2);
-  const options = [...p.options].sort((a, b) => rank(a.kind) - rank(b.kind));
+  const reject = p.options.find((o) => o.kind.startsWith("reject"));
+  const once = p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind.startsWith("allow") && o.kind !== "allow_always");
+  const always = p.options.find((o) => o.kind === "allow_always");
+  const others = [always, ...p.options.filter((o) => o !== reject && o !== once && o !== always)].filter((o): o is NonNullable<typeof o> => !!o);
+  const button = (o: NonNullable<typeof once>, variant: "primary" | "quiet", flex: boolean) => (
+    <Button
+      key={o.optionId}
+      testID={`permission-${o.optionId}`}
+      label={o.label}
+      variant={variant}
+      small
+      style={flex ? { flex: 1 } : undefined}
+      busy={sending === o.optionId}
+      disabled={!!sending && sending !== o.optionId}
+      onPress={() => void answer(o.optionId)}
+    />
+  );
   return (
-    <View style={{ borderRadius: radius.lg, borderWidth: 1, borderColor: t.border, backgroundColor: t.recessed, overflow: "hidden" }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 40, paddingHorizontal: space.md, borderBottomWidth: 1, borderBottomColor: t.border }}>
-        <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: t.attentionSurface, alignItems: "center", justifyContent: "center" }}>
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t.attention }} />
+    <View style={{ backgroundColor: t.surface, borderRadius: radius.card, borderWidth: border.width, borderColor: t.borderStrong, padding: space.lg, gap: space.md }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <View style={{ width: PERMISSION_BADGE, height: PERMISSION_BADGE, borderRadius: radius.badge, backgroundColor: t.surfaceSunken, alignItems: "center", justifyContent: "center" }}>
+          <Glyph icon={Lock} color={t.textSecondary} />
         </View>
-        <T size="xs" weight="medium">
-          Your OK is needed
-        </T>
-      </View>
-      <View style={{ paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.md }}>
-        <Markdown text={p.title} size={15} />
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md }}>
-          {options.map((o) => (
-            <Button
-              key={o.optionId}
-              testID={`permission-${o.optionId}`}
-              label={o.label}
-              size="md"
-              variant={o.kind.startsWith("reject") ? "ghost" : o.kind === "allow_always" ? "outline" : "primary"}
-              busy={sending === o.optionId}
-              disabled={!!sending && sending !== o.optionId}
-              onPress={() => void answer(o.optionId)}
-              style={{ flexGrow: o.kind.startsWith("reject") ? 0 : 1 }}
-            />
-          ))}
+        <View style={{ flex: 1 }}>
+          <T variant="heading">Allow this step?</T>
+          <T variant="mono" color="textSecondary" selectable>
+            {title}
+          </T>
         </View>
       </View>
+      <View style={{ flexDirection: "row", gap: space.sm }}>
+        {reject ? button(reject, "quiet", true) : null}
+        {once ? button(once, "primary", true) : null}
+      </View>
+      {others.map((o) => button(o, "quiet", false))}
     </View>
   );
 }
 
-// ---------- build (AnyAppAgent's own: progress, then "Your app is ready")
+// ---------- build
+
+function Badge({ icon: Icon, fill, color }: { icon: LucideIcon; fill: string; color: string }) {
+  return (
+    <View style={{ width: size.badge, height: size.badge, borderRadius: radius.badge, backgroundColor: fill, alignItems: "center", justifyContent: "center" }}>
+      <Icon size={icon.size.md} color={color} strokeWidth={icon.stroke} absoluteStrokeWidth />
+    </View>
+  );
+}
 
 function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
   const t = useTheme();
   const b = item.build;
-  const client = useStore((s) => s.client);
   const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
-  const [showError, setShowError] = useState(false);
   if (!b) return null;
 
-  const card = { borderRadius: radius.xl, borderWidth: 1, borderColor: t.border, backgroundColor: t.raised, padding: space.md } as const;
+  const card = {
+    backgroundColor: t.surface,
+    borderRadius: radius.card,
+    borderWidth: border.width,
+    borderColor: t.border,
+    padding: space.lg,
+    gap: space.lg,
+    ...elevation(t.mode, 1),
+  } as const;
+  const head = (badge: React.ReactNode, title: string, sub: string) => (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+      {badge}
+      <View style={{ flex: 1 }}>
+        <T variant="heading">{title}</T>
+        <T variant="row" color="textSecondary">
+          {sub}
+        </T>
+      </View>
+    </View>
+  );
 
   if (b.status === "running") {
     return (
-      <View style={card}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
-          <Hammer size={18} color={t.mutedForeground} strokeWidth={1.75} />
-          <Shine style={{ ...typeScale.sm, fontFamily: font.medium, color: t.foreground, flex: 1 }}>Building your app…</Shine>
-        </View>
-        <T size="xs" tone="subtle" style={{ marginTop: space.xs, marginLeft: space.xxl }}>
-          This takes a few minutes. You can leave, you’ll get a message.
-        </T>
-        <ProgressBar />
+      <View testID="build-running" style={card}>
+        {head(<Badge icon={Package} fill={t.surfaceSunken} color={t.textSecondary} />, `Building version ${b.number}`, item.text?.trim() || "Usually about two minutes")}
+        <ProgressSweep />
       </View>
     );
   }
 
   if (b.status === "failed") {
     return (
-      <View style={card}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
-          <X size={18} color={t.destructiveText} strokeWidth={2} />
-          <T size="sm" weight="medium" style={{ flex: 1 }}>
-            The app didn’t build
-          </T>
-        </View>
-        {b.error ? (
-          <Pressable onPress={() => setShowError(!showError)} style={{ marginTop: space.sm, marginLeft: space.xxl }}>
-            <T size="xs" tone="muted" numberOfLines={showError ? undefined : 2}>
-              {b.error}
-            </T>
-          </Pressable>
-        ) : null}
-        {app && client && app.status === "idle" ? (
-          <Button label="Try again" variant="outline" size="md" style={{ marginTop: space.md }} onPress={() => void client.rebuild(app.id).catch(() => undefined)} />
-        ) : null}
+      <View testID="build-failed" style={card}>
+        {head(<Badge icon={CircleAlert} fill={t.problemSoft} color={t.problem} />, `Version ${b.number} didn’t build`, b.error?.trim() || "Ask for a fix in a message below.")}
       </View>
     );
   }
 
-  // Succeeded. Only the newest build gets the big card; older ones are a quiet line.
+  // Succeeded. Only the newest build gets the card; older ones are a quiet line.
   const newest = app?.latestApk?.number === b.number;
   if (!app || !newest) {
     return (
-      <DisclosureHeader icon={Smartphone} open={false} expandable={false} dim>
-        <T size="sm" tone="muted">{`Version ${b.number} was ready`}</T>
-      </DisclosureHeader>
+      <LineRow>
+        <Glyph icon={Package} color={t.textTertiary} />
+        <T variant="row" color="textTertiary">{`Version ${b.number} was ready`}</T>
+      </LineRow>
     );
   }
   const action = appAction(app, pkg);
   const phase = install?.phase;
   const busy = phase === "waiting" || phase === "downloading" || phase === "checking" || phase === "installing" || phase === "confirm";
-  const label = busy
-    ? phase === "downloading"
-      ? `Downloading ${Math.round((install?.progress ?? 0) * 100)}%`
-      : "Installing…"
-    : phase === "done"
-      ? "Open"
-      : actionLabel(action);
+  const installed = action === "open" || phase === "done";
+  const sizeText = b.sizeBytes ? `, ${formatSize(b.sizeBytes)}` : "";
   return (
     <View testID="build-ready" style={card}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-        <AppIcon app={app} size={44} />
-        <View style={{ flex: 1 }}>
-          <T size="base" weight="semibold">
-            {action === "open" || phase === "done" ? `${app.name} is on your phone` : "Your app is ready"}
-          </T>
-          <T size="xs" tone="subtle">
-            {`Version ${b.number}${b.sizeBytes ? ` · ${formatSize(b.sizeBytes)}` : ""}`}
-          </T>
-        </View>
-      </View>
+      {head(<Badge icon={Package} fill={t.readySoft} color={t.ready} />, "Your app is ready", installed ? `Version ${b.number}. Installed` : `Version ${b.number}${sizeText}`)}
       {phase === "failed" ? (
-        <View style={{ marginTop: space.sm }}>
-          <T size="xs" tone="destructive">
+        <View style={{ gap: space.xs }}>
+          <T variant="row" color="problem">
             {install?.message}
           </T>
-          {install?.conflict ? (
-            <Pressable onPress={() => AnyAppNative?.requestUninstall(app.packageName)}>
-              <T size="xs" weight="semibold" tone="destructive" style={{ textDecorationLine: "underline", marginTop: space.xs }}>
-                Remove the old one
-              </T>
-            </Pressable>
-          ) : null}
+          {install?.conflict ? <Button label="Remove the old one" variant="text" small onPress={() => AnyAppNative?.requestUninstall(app.packageName)} /> : null}
         </View>
       ) : null}
-      <Button
-        testID="build-install"
-        label={label}
-        icon={Smartphone}
-        size="lg"
-        busy={busy}
-        style={{ marginTop: space.md }}
-        onPress={() => {
-          if (action === "open" || phase === "done") launchApp(app);
-          else void installApp(app);
-        }}
-      />
+      {installed && !busy ? (
+        <Button testID="build-install" label="Open" icon={Smartphone} variant="quiet" onPress={() => launchApp(app)} />
+      ) : (
+        <Button
+          testID="build-install"
+          label={busy ? (phase === "downloading" ? `Downloading ${Math.round((install?.progress ?? 0) * 100)}%` : "Installing") : "Install"}
+          icon={Download}
+          busy={busy}
+          onPress={() => void installApp(app)}
+        />
+      )}
     </View>
   );
 }
 
 function formatSize(bytes: number) {
-  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return bytes >= 1024 * 1024 ? `${Math.round(bytes / 1024 / 1024)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-function ProgressBar() {
+/** Indeterminate progress (COMPONENTS.md 8): a 32% segment sweeps across, looping. */
+function ProgressSweep() {
   const t = useTheme();
-  const [x, setX] = useState(0);
+  const [x] = useState(() => new Animated.Value(0));
+  const [width, setWidth] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setX((v) => (v + 1) % 100), 30);
-    return () => clearInterval(timer);
-  }, []);
+    const loop = Animated.loop(
+      Animated.timing(x, { toValue: 1, duration: motion.duration.progressSweep, easing: Easing.bezier(...easing("standard")), useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [x]);
+  const segment = width * 0.32;
   return (
-    <View style={{ height: 3, borderRadius: 2, backgroundColor: t.muted, overflow: "hidden", marginTop: space.md }}>
-      <View style={{ position: "absolute", top: 0, bottom: 0, width: "30%", left: `${x * 1.3 - 30}%`, backgroundColor: t.foreground, borderRadius: 2, opacity: 0.6 }} />
+    <View
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      style={{ height: size.progressHeight, borderRadius: radius.progress, backgroundColor: t.surfaceSunken, overflow: "hidden" }}
+    >
+      <Animated.View
+        style={{
+          width: segment,
+          height: size.progressHeight,
+          borderRadius: radius.progress,
+          backgroundColor: t.working,
+          transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [-segment, width] }) }],
+        }}
+      />
     </View>
   );
 }
@@ -546,24 +542,54 @@ function ProgressBar() {
 function ErrorRow({ item }: { item: ChatItem }) {
   const t = useTheme();
   return (
-    <View style={{ paddingHorizontal: space.sm }}>
-      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: space.sm }}>
-        <T size="sm" tone="muted" style={{ flex: 1 }} selectable>
-          {item.text}
-        </T>
-        <T mono style={{ fontSize: 12, color: t.destructiveText, marginTop: space.xxs }}>
-          error
-        </T>
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: space.sm, paddingHorizontal: space.xs }}>
+      <View style={{ paddingTop: (ROW_LINE - icon.size.sm) / 2 }}>
+        <Glyph icon={CircleAlert} color={t.problem} />
       </View>
+      <T variant="row" color="textSecondary" style={{ flex: 1 }} selectable>
+        {item.text}
+      </T>
     </View>
+  );
+}
+
+/** No new version came out of the last turn: say so, and offer to build again. */
+function RebuildRow({ app }: { app: App | undefined }) {
+  const t = useTheme();
+  const client = useStore((s) => s.client);
+  const [sent, setSent] = useState(false);
+  if (!app || !client) return null;
+  return (
+    <LineRow>
+      <Glyph icon={Package} color={t.textTertiary} />
+      <T variant="row" color="textSecondary" style={{ flex: 1 }}>
+        No new version this time.
+      </T>
+      <Button
+        testID="rebuild"
+        label={sent ? "Building" : "Build it again"}
+        variant="text"
+        small
+        disabled={sent}
+        onPress={() => {
+          setSent(true);
+          void client.rebuild(app.id).catch(() => setSent(false));
+        }}
+      />
+    </LineRow>
   );
 }
 
 function WorkingRow({ label }: { label: string }) {
   const t = useTheme();
   return (
-    <View style={{ minHeight: 28, paddingHorizontal: space.sm, justifyContent: "center", marginTop: space.sm }}>
-      <Shine style={{ ...ROW_TEXT, color: t.mutedForeground }}>{label}</Shine>
-    </View>
+    <LineRow>
+      <View style={{ width: icon.size.sm, alignItems: "center" }}>
+        <Spinner color={t.working} />
+      </View>
+      <T variant="row" color="textSecondary">
+        {label}
+      </T>
+    </LineRow>
   );
 }

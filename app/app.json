@@ -5,9 +5,9 @@
     "scheme": "anyappagent",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "../shared/theme/mark/android/expo/icon.png",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#0b0b0c",
+    "backgroundColor": "#F3EFE7",
     "platforms": [
       "android"
     ],
@@ -15,9 +15,9 @@
       "package": "com.anyappagent",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#141416",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "../shared/theme/mark/android/expo/adaptive-foreground.png",
+        "backgroundColor": "#1D6A4A",
+        "monochromeImage": "../shared/theme/mark/android/expo/adaptive-monochrome.png"
       },
       "permissions": [
         "android.permission.INTERNET",
@@ -58,10 +58,14 @@
         "expo-font",
         {
           "fonts": [
-            "node_modules/@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf",
-            "node_modules/@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf",
-            "node_modules/@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf",
-            "node_modules/@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf"
+            "../shared/theme/fonts/BricolageGrotesque-Display-Bold.ttf",
+            "../shared/theme/fonts/BricolageGrotesque-Display-ExtraBold.ttf",
+            "../shared/theme/fonts/BricolageGrotesque-Text-Regular.ttf",
+            "../shared/theme/fonts/BricolageGrotesque-Text-Medium.ttf",
+            "../shared/theme/fonts/BricolageGrotesque-Text-SemiBold.ttf",
+            "../shared/theme/fonts/BricolageGrotesque-Text-Bold.ttf",
+            "../shared/theme/fonts/IBMPlexMono-Regular.ttf",
+            "../shared/theme/fonts/IBMPlexMono-Medium.ttf"
           ]
         }
       ]

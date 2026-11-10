@@ -1,9 +1,13 @@
 import { AppState } from "react-native";
 import { Directory, File, Paths } from "expo-file-system";
 import { AnyAppNative, type InstallResult } from "anyapp-native";
+import { theme } from "@shared/theme/tokens";
 import type { App } from "./protocol";
 import { getState, setInstall, setState } from "./store";
 import { loadPrefs, savePrefs } from "./storage";
+
+/** The notification icon's tint: the accent from the shared theme (README: color.light.accent). */
+const notificationTint = theme.color.light.accent;
 
 // ---------- what is installed
 
@@ -61,6 +65,7 @@ export async function autoInstallIfNew(app: App, fresh = false) {
       installed == null ? `${app.name} is ready` : `${app.name} has an update`,
       "Tap to install.",
       `anyappagent://?install=${encodeURIComponent(app.id)}`,
+      notificationTint,
     );
     return;
   }
@@ -171,9 +176,18 @@ async function runInstall(appId: string) {
     }
     finish(app, build.number, result);
   } catch (e) {
-    setInstall(appId, { buildNumber: build.number, phase: "failed", message: e instanceof Error ? e.message : String(e) });
+    const raw = e instanceof Error ? e.message : String(e);
+    if (!PLAIN.has(raw)) console.warn(`install ${app.packageName}: ${raw}`);
+    setInstall(appId, {
+      buildNumber: build.number,
+      phase: "failed",
+      message: PLAIN.has(raw) ? raw : "The download stopped. Check the connection to your PC, then tap Install to try again.",
+    });
   }
 }
+
+/** Messages thrown above that are already written for people. */
+const PLAIN = new Set(["The download was damaged. Try again.", "Android wouldn't start the install."]);
 
 function finish(app: App, buildNumber: number, result: InstallResult) {
   installedVersion(app);
@@ -196,15 +210,25 @@ function finish(app: App, buildNumber: number, result: InstallResult) {
         message: "The version on your phone was made differently, so this one can't replace it. Remove it, then install again.",
       });
       return;
-    case "storage":
-      setInstall(app.id, { buildNumber, phase: "failed", message: "Your phone is out of space." });
-      return;
     default:
-      setInstall(app.id, {
-        buildNumber,
-        phase: "failed",
-        message: `Android couldn't install it.${result.message ? ` (${result.message})` : ""}`,
-      });
+      // Android's own message (INSTALL_PARSE_FAILED_..., file paths) is for logs, not for people.
+      if (result.message) console.warn(`install ${app.packageName}: ${result.status}: ${result.message}`);
+      setInstall(app.id, { buildNumber, phase: "failed", message: plainInstallError(result) });
+  }
+}
+
+function plainInstallError(result: InstallResult): string {
+  switch (result.status) {
+    case "storage":
+      return "Your phone is out of space. Free some space, then tap Install again.";
+    case "invalid":
+      return "This version isn't a file Android can install. Ask for a change, or tap Install to try again.";
+    case "incompatible":
+      return "This version doesn't work on this phone's Android.";
+    case "blocked":
+      return "Android blocked the install. Check that installing apps is allowed in Settings.";
+    default:
+      return "Android couldn't install it. Tap Install to try again.";
   }
 }
 

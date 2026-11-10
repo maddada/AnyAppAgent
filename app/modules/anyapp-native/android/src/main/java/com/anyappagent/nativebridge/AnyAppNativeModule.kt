@@ -24,8 +24,11 @@ import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 class InstallException(message: String) : CodedException("ERR_INSTALL", message, null)
+
+class EasyConnectException(message: String) : CodedException("ERR_EASY_CONNECT", message, null)
 
 /**
  * AnyAppAgent's own native bridge: everything about other apps on this phone.
@@ -40,16 +43,35 @@ class AnyAppNativeModule : Module() {
   /** PackageInstaller session id -> the JS promise waiting for its final result. */
   private val pending = ConcurrentHashMap<Int, Promise>()
 
+  /** Easy Connect's bridge calls, one at a time, off the JS and main threads. */
+  private val easyConnectExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "anyapp-easyconnect").apply { isDaemon = true } }
+
+  @Volatile private var easyConnectInitError: String? = null
+
+  private var networkObserver: NetworkObserver? = null
+
   override fun definition() = ModuleDefinition {
     Name("AnyAppNative")
 
-    Events("onInstallStatus")
+    Events("onInstallStatus", "onNetworkChanged")
 
     OnCreate {
       InstallEvents.listener = { sessionId, status, message, packageName, confirm -> onInstallEvent(sessionId, status, message, packageName, confirm) }
+      networkObserver = NetworkObserver(context) { sendEvent("onNetworkChanged", mapOf<String, Any>()) }.also { it.start() }
+      // Easy Connect: the interface lister and the client key, before JS can ask for a tunnel.
+      easyConnectExecutor.execute {
+        easyConnectInitError = try {
+          EasyConnect.init(context)
+          null
+        } catch (e: Throwable) {
+          e.message ?: e.toString()
+        }
+      }
     }
 
     OnDestroy {
+      networkObserver?.stop()
+      networkObserver = null
       InstallEvents.listener = null
     }
 
@@ -150,15 +172,16 @@ class AnyAppNativeModule : Module() {
     }
 
     /** Posts a "ready" notification; tapping it opens AnyAppAgent with [url]. */
-    Function("notify") { id: Int, title: String, body: String, url: String? ->
+    Function("notify") { id: Int, title: String, body: String, url: String?, color: String? ->
       val ctx = context
       if (!NotificationManagerCompat.from(ctx).areNotificationsEnabled()) return@Function false
       Notifications.ensureChannels(ctx)
       val notification = NotificationCompat.Builder(ctx, Notifications.CHANNEL_READY)
-        .setSmallIcon(R.drawable.ic_anyapp_notification)
+        .setSmallIcon(R.drawable.ic_stat_anyappagent)
         .setContentTitle(title)
         .setContentText(body)
         .setAutoCancel(true)
+        .apply { Notifications.tint(color)?.let { setColor(it) } }
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setCategory(NotificationCompat.CATEGORY_STATUS)
         .setContentIntent(Notifications.openAppIntent(ctx, id, url))
@@ -178,8 +201,10 @@ class AnyAppNativeModule : Module() {
 
     // ---------- keep the connection alive while the PC works
 
-    Function("startKeepAlive") { text: String ->
-      val intent = Intent(context, KeepAliveService::class.java).putExtra(KeepAliveService.EXTRA_TEXT, text)
+    Function("startKeepAlive") { text: String, color: String? ->
+      val intent = Intent(context, KeepAliveService::class.java)
+        .putExtra(KeepAliveService.EXTRA_TEXT, text)
+        .putExtra(KeepAliveService.EXTRA_COLOR, color)
       try {
         ContextCompat.startForegroundService(context, intent)
         true
@@ -191,6 +216,55 @@ class AnyAppNativeModule : Module() {
 
     Function("stopKeepAlive") {
       context.stopService(Intent(context, KeepAliveService::class.java))
+    }
+
+    // ---------- Easy Connect (docs/EASY-CONNECT.md 4.2). Every bridge call runs on one
+    // background thread: a cold StartForward blocks in Go for up to ~20 s.
+
+    AsyncFunction("easyConnectClientKey") { promise: Promise ->
+      easyConnectExecutor.execute {
+        try {
+          EasyConnect.init(context)
+          promise.resolve(EasyConnect.clientKey(context))
+        } catch (e: Throwable) {
+          promise.reject(EasyConnectException(e.message ?: "Easy Connect is not available."))
+        }
+      }
+    }
+
+    AsyncFunction("easyConnectStart") { address: String, port: Int, promise: Promise ->
+      easyConnectExecutor.execute {
+        try {
+          EasyConnect.init(context)
+          promise.resolve(mapOf("localPort" to EasyConnect.start(address, port)))
+        } catch (e: Throwable) {
+          val detail = (e.message ?: "").ifBlank { EasyConnect.lastError() }
+          promise.reject(EasyConnectException(detail.ifBlank { "tailcat: cannot reach paired machine" }))
+        }
+      }
+    }
+
+    AsyncFunction("easyConnectStop") { promise: Promise ->
+      easyConnectExecutor.execute {
+        try {
+          EasyConnect.stop()
+        } catch (_: Throwable) {
+        }
+        promise.resolve(null)
+      }
+    }
+
+    /** {"path":"relay"|"direct",...} or "" (never contains the address). */
+    Function("easyConnectPath") {
+      try {
+        EasyConnect.path()
+      } catch (_: Throwable) {
+        ""
+      }
+    }
+
+    Function("easyConnectAvailable") {
+      easyConnectInitError == null
     }
   }
 

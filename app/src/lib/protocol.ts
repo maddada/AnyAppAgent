@@ -7,6 +7,7 @@ export type {
   ChatItem,
   ChatItemKind,
   CreateAppRequest,
+  EasyConnectPairRequest,
   ErrorBody,
   HealthResponse,
   PairRequest,

@@ -11,9 +11,15 @@ android {
   defaultConfig {
     versionCode 1
     versionName '1.0.0'
+    // Release builds must keep the Go bridge's JNI classes (docs/EASY-CONNECT.md 4.2).
+    consumerProguardFiles 'proguard-rules.pro'
   }
 }
 
 dependencies {
   implementation 'androidx.core:core-ktx:1.13.1'
+  // The tailcat bridge for Easy Connect (Ghostex's bridge.go, gomobile bind). Staged by
+  // scripts/stage-bridge.mjs together with src/main/jniLibs/<abi>/libgojni.so; AGP refuses a
+  // local .aar inside a library module, so jar + jniLibs it is (as in Ghostex).
+  implementation files('libs/tailcatbridge.jar')
 }

@@ -3,7 +3,8 @@ import type { App, ChatItem } from "@/lib/protocol";
 export type Row =
   | { type: "item"; key: string; item: ChatItem }
   | { type: "tools"; key: string; items: ChatItem[] }
-  | { type: "working"; key: string; label: string };
+  | { type: "working"; key: string; label: string }
+  | { type: "rebuild"; key: string };
 
 const isTool = (i: ChatItem) => i.kind === "tool";
 export const toolActive = (i: ChatItem) => i.tool?.status === "pending" || i.tool?.status === "in_progress";
@@ -29,20 +30,39 @@ export function buildRows(items: ChatItem[], app: App | undefined): Row[] {
 
   const label = workingLabel(items, app);
   if (label) rows.push({ type: "working", key: "working", label });
+  else if (turnEndedWithoutBuild(items, app)) rows.push({ type: "rebuild", key: "rebuild" });
   return rows;
 }
 
-/** bb's "Working…" line, shown while the agent is busy but nothing on screen is moving. */
+/**
+ * The last turn answered but no build followed (the PC decided nothing changed, or skipped it):
+ * offer to build again, so a change never gets stuck on the PC.
+ */
+function turnEndedWithoutBuild(items: ChatItem[], app: App | undefined): boolean {
+  if (!app || app.status !== "idle") return false;
+  let lastUser = -1;
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i].kind === "user") {
+      lastUser = i;
+      break;
+    }
+  }
+  if (lastUser < 0) return false;
+  const after = items.slice(lastUser + 1);
+  return after.some((i) => i.kind === "assistant") && !after.some((i) => i.kind === "build");
+}
+
+/** bb's "Working" line, shown while the agent is busy but nothing on screen is moving. */
 function workingLabel(items: ChatItem[], app: App | undefined): string | null {
   if (!app) return null;
-  if (app.status === "creating") return items.length === 0 ? "Setting up your app…" : null;
+  if (app.status === "creating") return items.length === 0 ? "Setting up your app" : null;
   if (app.status !== "working") return null;
   const last = items[items.length - 1];
-  if (!last) return "Working…";
+  if (!last) return "Working";
   if (last.streaming) return null;
   if (last.kind === "tool" && toolActive(last)) return null;
   if (last.kind === "permission" && !last.permission?.selectedOptionId) return null;
-  return "Working…";
+  return "Working";
 }
 
 const NOUNS: Record<string, [string, string, string]> = {

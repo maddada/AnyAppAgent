@@ -2,18 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import { AppState, PermissionsAndroid, Platform, Pressable, ScrollView, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeft, Bell, Check, Download, Laptop } from "lucide-react-native";
+import { Bell, ChevronLeft, ChevronRight, Download, Globe, Laptop, Palette, Wifi } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import Constants from "expo-constants";
 import { AnyAppNative } from "anyapp-native";
 import { displayAddress } from "@/lib/address";
+import { usesEasyConnect } from "@/lib/route";
 import { unpair, updatePrefs } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import type { ThemePref } from "@/lib/storage";
 import { Button, IconButton } from "@/ui/Button";
 import { Sheet } from "@/ui/Sheet";
+import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
-import { radius, sizes, space, useTheme } from "@/ui/theme";
+import { border, icon, radius, size, space, useTheme } from "@/ui/theme";
 
 export default function Settings() {
   const t = useTheme();
@@ -32,54 +34,64 @@ export default function Settings() {
   }, [check]);
 
   if (!pairing) return <Redirect href="/connect" />;
+  const anywhere = usesEasyConnect(pairing);
+  const nextTheme: Record<ThemePref, ThemePref> = { system: "light", light: "dark", dark: "system" };
 
   return (
-    <View style={{ flex: 1, paddingTop: insets.top }}>
-      <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: space.sm, height: 56 }}>
-        <IconButton icon={ArrowLeft} label="Back" onPress={() => router.back()} />
-        <T size="lg" weight="semibold" style={{ marginLeft: space.xs }}>
-          Settings
-        </T>
+    <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: t.bg }}>
+      <View style={{ flexDirection: "row", alignItems: "center", height: size.chatHeaderHeight, paddingLeft: space.xs, gap: space.xs }}>
+        <IconButton testID="settings-back" icon={ChevronLeft} label="Back" onPress={() => router.back()} />
+        <T variant="heading">Settings</T>
       </View>
-      <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.xxl, paddingBottom: insets.bottom + 24 }}>
-        <Section title="Your PC">
-          <Row
-            icon={Laptop}
-            title={serverName ?? "Your PC"}
-            detail={`${pairing ? displayAddress(pairing.baseUrl) : ""} · ${connection === "online" ? "Connected" : connection === "connecting" ? "Connecting…" : "Can't reach it"}`}
-            right={<View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: connection === "online" ? t.success : t.attention }} />}
-          />
-          <View style={{ padding: space.md, paddingTop: space.none }}>
-            <Button testID="disconnect" label="Disconnect" variant="outline" size="md" onPress={() => setConfirm(true)} />
+      <ScrollView contentContainerStyle={{ paddingHorizontal: size.screenGutter, paddingTop: space.md, gap: space["2xl"], paddingBottom: insets.bottom + space["2xl"] }}>
+        <Group title="Your PC">
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: size.rowHeight, paddingHorizontal: space.lg, paddingVertical: space.md }}>
+            <RowIcon icon={Laptop} />
+            <View style={{ flex: 1, gap: space.xs }}>
+              <T variant="body">{serverName ?? "Your PC"}</T>
+              {connection === "online" ? (
+                <StateLine kind="ready" label="Connected" />
+              ) : connection === "connecting" ? (
+                <StateLine kind="working" label="Connecting" />
+              ) : (
+                <StateLine kind="problem" label="Can't reach your PC" />
+              )}
+            </View>
           </View>
-        </Section>
+          <Divider />
+          <Row
+            testID="connected-how"
+            icon={anywhere ? Globe : Wifi}
+            label={anywhere ? "From anywhere" : "Same Wi-Fi only"}
+            sub={
+              anywhere
+                ? "Works on any Wi-Fi or mobile data, through Easy Connect."
+                : `Works when this phone and your PC are on the same Wi-Fi (${displayAddress(pairing.baseUrl)}). To use it from anywhere, disconnect and scan the code again.`
+            }
+          />
+        </Group>
 
-        <Section title="Permissions">
+        <Group title="Permissions">
           <Row
             icon={Download}
-            title="Install apps"
-            detail="Needed to put your apps on this phone."
-            right={
-              perms.install ? (
-                <Granted />
-              ) : (
-                <Button testID="grant-install-settings" label="Allow" size="sm" onPress={() => AnyAppNative?.openInstallPermissionSettings()} />
-              )
-            }
+            label="Install apps"
+            sub="Needed to put your apps on this phone."
+            trailing={perms.install ? <StateLine kind="ready" label="Allowed" /> : <Button testID="grant-install-settings" label="Allow" small onPress={() => AnyAppNative?.openInstallPermissionSettings()} />}
           />
           <Divider />
           <Row
             icon={Bell}
-            title="Notifications"
-            detail="Tells you when an app is ready."
-            right={
+            label="Notifications"
+            sub="Tells you when an app is ready."
+            trailing={
               perms.notify ? (
-                <Granted />
+                <StateLine kind="ready" label="Allowed" />
               ) : (
                 <Button
                   testID="grant-notify"
                   label="Allow"
-                  size="sm"
+                  small
+                  variant={perms.install ? "primary" : "quiet"}
                   onPress={async () => {
                     if (Platform.OS === "android" && Platform.Version >= 33) {
                       const r = await PermissionsAndroid.request("android.permission.POST_NOTIFICATIONS" as never);
@@ -91,58 +103,41 @@ export default function Settings() {
               )
             }
           />
-        </Section>
+        </Group>
 
-        <Section title="Look">
-          <View style={{ flexDirection: "row", padding: space.sm, gap: space.sm }}>
-            {(["system", "light", "dark"] as ThemePref[]).map((v) => (
-              <Pressable
-                key={v}
-                testID={`theme-${v}`}
-                onPress={() => updatePrefs({ theme: v })}
-                style={{
-                  flex: 1,
-                  height: 40,
-                  borderRadius: radius.lg,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: theme === v ? t.background : "transparent",
-                  borderWidth: theme === v ? 1 : 0,
-                  borderColor: t.border,
-                }}
-              >
-                <T size="sm" weight={theme === v ? "semibold" : "regular"} tone={theme === v ? "foreground" : "muted"}>
-                  {v === "system" ? "Auto" : v === "light" ? "Light" : "Dark"}
-                </T>
-              </Pressable>
-            ))}
-          </View>
-        </Section>
+        <Group title="Look">
+          <Row
+            testID="theme-toggle"
+            icon={Palette}
+            label="Light or dark"
+            value={theme === "system" ? "Same as the phone" : theme === "light" ? "Light" : "Dark"}
+            onPress={() => updatePrefs({ theme: nextTheme[theme] })}
+          />
+        </Group>
 
-        <T size="xs" tone="subtle" style={{ textAlign: "center" }}>
+        <Button testID="disconnect" label="Disconnect from your PC" variant="quiet" onPress={() => setConfirm(true)} />
+
+        <T variant="caption" color="textTertiary" style={{ textAlign: "center" }}>
           AnyAppAgent {Constants.expoConfig?.version ?? ""}
         </T>
       </ScrollView>
 
       <Sheet visible={confirm} onClose={() => setConfirm(false)}>
-        <T size="lg" weight="semibold">
-          Disconnect from your PC?
-        </T>
-        <T size="sm" tone="muted" style={{ marginTop: space.sm }}>
+        <T variant="titleSmall">Disconnect from your PC?</T>
+        <T variant="callout" color="textSecondary" style={{ marginTop: space.sm }}>
           Your apps stay on your PC and on this phone. You can connect again any time with a new code.
         </T>
-        <View style={{ gap: space.sm, marginTop: space.lg }}>
+        <View style={{ gap: space.sm, marginTop: space["2xl"] }}>
           <Button
             testID="confirm-disconnect"
             label="Disconnect"
-            variant="danger"
-            size="lg"
+            variant="problem"
             onPress={async () => {
               setConfirm(false);
               await unpair(); // with no PC, this screen redirects to Connect by itself
             }}
           />
-          <Button label="Stay connected" variant="ghost" onPress={() => setConfirm(false)} />
+          <Button label="Stay connected" variant="quiet" onPress={() => setConfirm(false)} />
         </View>
       </Sheet>
     </View>
@@ -156,51 +151,78 @@ function readPermissions() {
   };
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
   const t = useTheme();
   return (
     <View style={{ gap: space.sm }}>
-      <T size="xs" weight="medium" tone="muted" style={{ paddingHorizontal: space.xs }}>
+      <T variant="eyebrow" color="textSecondary" style={{ paddingHorizontal: space.xs }}>
         {title}
       </T>
-      <View style={{ borderRadius: radius.xl, borderWidth: 1, borderColor: t.seam, backgroundColor: t.recessed, overflow: "hidden" }}>{children}</View>
+      <View style={{ borderRadius: radius.card, borderWidth: border.width, borderColor: t.border, backgroundColor: t.surface, overflow: "hidden" }}>{children}</View>
     </View>
   );
 }
 
-function Row({ icon: Icon, title, detail, right }: { icon: LucideIcon; title: string; detail?: string; right?: React.ReactNode }) {
+function RowIcon({ icon: Icon }: { icon: LucideIcon }) {
+  const t = useTheme();
+  return <Icon size={icon.size.md} color={t.textSecondary} strokeWidth={icon.stroke} absoluteStrokeWidth />;
+}
+
+/** Settings row (COMPONENTS.md 5): 56 high, icon, label, value, chevron when it opens something. */
+function Row({
+  icon: Icon,
+  label,
+  sub,
+  value,
+  trailing,
+  onPress,
+  testID,
+}: {
+  icon: LucideIcon;
+  label: string;
+  sub?: string;
+  value?: string;
+  trailing?: React.ReactNode;
+  onPress?: () => void;
+  testID?: string;
+}) {
   const t = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, padding: space.md }}>
-      <Icon size={20} color={t.mutedForeground} strokeWidth={1.75} />
-      <View style={{ flex: 1 }}>
-        <T size="sm" weight="medium">
-          {title}
-        </T>
-        {detail ? (
-          <T size="xs" tone="muted">
-            {detail}
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+        minHeight: size.rowHeight,
+        paddingHorizontal: space.lg,
+        paddingVertical: space.md,
+        backgroundColor: pressed ? t.selectedBg : "transparent",
+      })}
+    >
+      <RowIcon icon={Icon} />
+      <View style={{ flex: 1, gap: space.hair }}>
+        <T variant="body">{label}</T>
+        {sub ? (
+          <T variant="caption" color="textSecondary">
+            {sub}
           </T>
         ) : null}
       </View>
-      {right}
-    </View>
+      {value ? (
+        <T variant="label" color="textTertiary">
+          {value}
+        </T>
+      ) : null}
+      {trailing}
+      {onPress ? <ChevronRight size={icon.size.button} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth /> : null}
+    </Pressable>
   );
 }
 
 function Divider() {
   const t = useTheme();
-  return <View style={{ height: 1, backgroundColor: t.seam, marginLeft: sizes.rowDividerInset }} />;
-}
-
-function Granted() {
-  const t = useTheme();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}>
-      <Check size={16} color={t.successText} strokeWidth={2} />
-      <T size="xs" weight="medium" tone="success">
-        Allowed
-      </T>
-    </View>
-  );
+  return <View style={{ height: border.width, backgroundColor: t.border }} />;
 }

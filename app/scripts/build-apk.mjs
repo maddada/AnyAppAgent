@@ -38,6 +38,9 @@ function run(cmd, args, cwd) {
   }
 }
 
+// The Easy Connect bridge (jar + arm64-v8a/x86_64 libgojni.so) into the native module first.
+run(process.execPath, [join(root, "scripts", "stage-bridge.mjs")], root);
+
 if (clean || !existsSync(join(root, "android", "gradlew"))) {
   run("npx", ["expo", "prebuild", "--platform", "android", "--no-install", ...(clean ? ["--clean"] : [])], root);
 }
