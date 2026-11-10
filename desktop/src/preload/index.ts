@@ -1,0 +1,46 @@
+// The typed bridge between the renderer (no Node, context isolated) and the main process.
+import { contextBridge, ipcRenderer } from "electron";
+import type { AnyAppBridge, ChatItem, Snapshot } from "../shared/types.ts";
+
+const bridge: AnyAppBridge = {
+  getSnapshot: () => ipcRenderer.invoke("snapshot"),
+  onSnapshot: (listener) => {
+    const fn = (_e: unknown, s: Snapshot) => listener(s);
+    ipcRenderer.on("snapshot", fn);
+    return () => ipcRenderer.removeListener("snapshot", fn);
+  },
+  onChatItem: (listener) => {
+    const fn = (_e: unknown, item: ChatItem) => listener(item);
+    ipcRenderer.on("chat:item", fn);
+    return () => ipcRenderer.removeListener("chat:item", fn);
+  },
+  onNavigate: (listener) => {
+    const fn = (_e: unknown, where: "connect-phone" | "home") => listener(where);
+    ipcRenderer.on("navigate", fn);
+    return () => ipcRenderer.removeListener("navigate", fn);
+  },
+  recheck: () => ipcRenderer.invoke("recheck"),
+  claudeSignIn: () => ipcRenderer.invoke("claude:signin"),
+  claudeCancel: () => ipcRenderer.invoke("claude:cancel"),
+  claudeSubmitCode: (code) => ipcRenderer.invoke("claude:code", code),
+  githubStart: () => ipcRenderer.invoke("github:start"),
+  githubOpenPage: () => ipcRenderer.invoke("github:open"),
+  githubCancel: () => ipcRenderer.invoke("github:cancel"),
+  githubSkip: (skipped) => ipcRenderer.invoke("github:skip", skipped),
+  toolsInstall: () => ipcRenderer.invoke("tools:install"),
+  toolsCancel: () => ipcRenderer.invoke("tools:cancel"),
+  phoneDownload: () => ipcRenderer.invoke("phone:download"),
+  newPairingCode: () => ipcRenderer.invoke("pairing:new"),
+  setEasyConnect: (enabled) => ipcRenderer.invoke("pairing:easy", enabled),
+  easyConnectAuto: () => ipcRenderer.invoke("pairing:easy-auto"),
+  removeDevice: (id) => ipcRenderer.invoke("devices:remove", id),
+  getMessages: (appId) => ipcRenderer.invoke("apps:messages", appId),
+  sendMessage: (appId, text) => ipcRenderer.invoke("apps:send", appId, text),
+  setSetting: (key, value) => ipcRenderer.invoke("settings:set", key, value),
+  restartCompanion: () => ipcRenderer.invoke("companion:restart"),
+  copyText: (text) => ipcRenderer.invoke("copy", text),
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
+  openFolder: (which) => ipcRenderer.invoke("open-folder", which),
+};
+
+contextBridge.exposeInMainWorld("anyapp", bridge);

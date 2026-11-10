@@ -1,0 +1,119 @@
+{
+  "name": "anyappagent-desktop",
+  "productName": "AnyAppAgent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AnyAppAgent for Windows: runs the companion, onboarding, connect a phone.",
+  "main": "out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite build && electron .",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "fake-companion": "node dev/fake-companion.mjs",
+    "dist": "electron-vite build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4",
+    "ws": "8.22.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/qrcode": "1.5.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/ws": "8.18.2",
+    "@vitejs/plugin-react": "6.3.0",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
+    "electron-vite": "6.0.0",
+    "lucide-react": "1.70.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.7",
+    "vitest": "5.1.0"
+  },
+  "build": {
+    "appId": "com.anyappagent.desktop",
+    "productName": "AnyAppAgent",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../server",
+        "to": "companion/server",
+        "filter": [
+          "**/*",
+          "!test/**",
+          "!scripts/e2e.mjs",
+          "!**/*.test.ts"
+        ]
+      },
+      {
+        "from": "../shared",
+        "to": "companion/shared",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../builder",
+        "to": "companion/builder",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../template",
+        "to": "companion/template",
+        "filter": [
+          "**/*",
+          "!build/**",
+          "!android/**"
+        ]
+      },
+      {
+        "from": "../app/android/app/build/outputs/apk/release/app-release.apk",
+        "to": "phone/AnyAppAgent.apk"
+      },
+      {
+        "from": "../shared/theme/mark/windows",
+        "to": "mark",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../shared/theme/mark/windows/anyappagent.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "AnyAppAgent-Setup-${version}.exe",
+      "shortcutName": "AnyAppAgent",
+      "createDesktopShortcut": true,
+      "runAfterFinish": true,
+      "installerIcon": "../shared/theme/mark/windows/anyappagent.ico",
+      "uninstallerIcon": "../shared/theme/mark/windows/anyappagent.ico"
+    },
+    "afterPack": "./dev/after-pack.cjs"
+  }
+}
