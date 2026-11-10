@@ -67,9 +67,9 @@ export interface PermissionInfo {
 export interface ChatItem {
   id: string; // stable: an update to the same item reuses the id (upsert)
   appId: string;
-  seq: number; // strictly increasing per app, orders the timeline
+  seq: number; // strictly increasing per app, orders the timeline (assigned when the item is created; an update keeps it)
   kind: ChatItemKind;
-  text?: string; // user, assistant, thought, error
+  text?: string; // user, assistant, thought, error; on a build item: its latest progress line
   streaming?: boolean; // true while text is still growing
   tool?: ToolCallInfo;
   plan?: PlanEntry[];
@@ -85,6 +85,9 @@ export interface ChatItem {
 export interface ErrorBody {
   error: string; // plain sentence the app can show
 }
+
+// Pairing QR code (printed by the PC in the terminal), a URI:
+//   anyappagent://pair?url=<encodeURIComponent("http://<pc-address>:8787")>&code=<6 digits>
 
 // GET /api/health
 export interface HealthResponse {

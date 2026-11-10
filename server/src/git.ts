@@ -1,0 +1,124 @@
+// Git and GitHub for an app's project folder. GitHub repos are always PRIVATE and always named
+// anyapp-<slug>; nothing else is ever created.
+import spawn from "cross-spawn";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+export interface RunResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+export function run(command: string, args: string[], cwd: string, timeoutMs = 120_000): Promise<RunResult> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { cwd, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => child.kill(), timeoutMs);
+    child.stdout?.on("data", (d: Buffer) => (stdout += d.toString()));
+    child.stderr?.on("data", (d: Buffer) => (stderr += d.toString()));
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({ code: -1, stdout, stderr: stderr + error.message });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ code: code ?? -1, stdout, stderr });
+    });
+  });
+}
+
+async function git(dir: string, args: string[], timeoutMs?: number): Promise<RunResult> {
+  return run("git", args, dir, timeoutMs);
+}
+
+function lastLine(result: RunResult): string {
+  const text = (result.stderr || result.stdout).trim().split(/\r?\n/).filter(Boolean);
+  return text.at(-1) ?? `exit code ${result.code}`;
+}
+
+const BASE_IGNORES = [
+  "node_modules/",
+  ".expo/",
+  "dist/",
+  "build/",
+  "android/app/build/",
+  "android/build/",
+  "android/.gradle/",
+  ".gradle/",
+  "*.apk",
+  "*.aab",
+  "*.jks",
+  "*.keystore",
+  "local.properties",
+  ".env",
+  ".env.*",
+];
+
+export function ensureGitignore(dir: string): void {
+  const path = join(dir, ".gitignore");
+  const current = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const have = new Set(current.split(/\r?\n/).map((line) => line.trim()));
+  const missing = BASE_IGNORES.filter((line) => !have.has(line));
+  if (missing.length === 0) return;
+  const sep = current === "" || current.endsWith("\n") ? "" : "\n";
+  writeFileSync(path, `${current}${sep}${current === "" ? "" : "\n# Added by AnyAppAgent\n"}${missing.join("\n")}\n`);
+}
+
+async function identityArgs(dir: string): Promise<string[]> {
+  const name = (await git(dir, ["config", "user.name"])).stdout.trim();
+  const email = (await git(dir, ["config", "user.email"])).stdout.trim();
+  return [
+    ...(name ? [] : ["-c", "user.name=AnyAppAgent"]),
+    ...(email ? [] : ["-c", "user.email=anyappagent@localhost"]),
+  ];
+}
+
+export async function initRepo(dir: string, message: string): Promise<void> {
+  ensureGitignore(dir);
+  const init = await git(dir, ["init", "-b", "main"]);
+  if (init.code !== 0) throw new Error(`git init failed: ${lastLine(init)}`);
+  await commitAll(dir, message);
+}
+
+/** A hash of the whole working tree (tracked + untracked, minus ignored files). */
+export async function treeSnapshot(dir: string): Promise<string> {
+  await git(dir, ["add", "-A"]);
+  const tree = await git(dir, ["write-tree"]);
+  return tree.code === 0 ? tree.stdout.trim() : `unknown-${Date.now()}`;
+}
+
+export async function commitAll(dir: string, message: string): Promise<boolean> {
+  await git(dir, ["add", "-A"]);
+  const status = await git(dir, ["status", "--porcelain"]);
+  if (status.stdout.trim() === "") return false;
+  const commit = await git(dir, [...(await identityArgs(dir)), "commit", "-q", "-m", message]);
+  if (commit.code !== 0) throw new Error(`git commit failed: ${lastLine(commit)}`);
+  return true;
+}
+
+export async function push(dir: string): Promise<string | null> {
+  const remotes = await git(dir, ["remote"]);
+  if (!remotes.stdout.split(/\s+/).includes("origin")) return null;
+  const result = await git(dir, ["push", "-q", "-u", "origin", "HEAD"], 90_000);
+  return result.code === 0 ? null : lastLine(result);
+}
+
+export const REPO_NAME_PATTERN = /^anyapp-[a-z0-9-]+$/;
+
+/** Creates the PRIVATE GitHub repo `repoName` from `dir` and pushes. Returns its URL. */
+export async function createGithubRepo(dir: string, repoName: string): Promise<string> {
+  if (!REPO_NAME_PATTERN.test(repoName)) throw new Error(`Refusing to create a repository named ${repoName}`);
+  const created = await run(
+    "gh",
+    ["repo", "create", repoName, "--private", "--source", dir, "--remote", "origin", "--push"],
+    dir,
+    120_000,
+  );
+  if (created.code !== 0) throw new Error(lastLine(created));
+  const url = `${created.stdout}\n${created.stderr}`.match(/https:\/\/github\.com\/[^\s]+/);
+  if (url) return url[0].replace(/\.git$/, "");
+  const view = await run("gh", ["repo", "view", repoName, "--json", "url", "-q", ".url"], dir);
+  return view.stdout.trim();
+}

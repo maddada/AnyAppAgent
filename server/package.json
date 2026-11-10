@@ -1,0 +1,35 @@
+{
+  "name": "anyappagent-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AnyAppAgent PC companion: pairing, one Claude Code ACP session per app, Git/GitHub, APK builds.",
+  "type": "module",
+  "bin": {
+    "anyappagent": "./bin/anyappagent.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node bin/anyappagent.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "e2e": "node scripts/e2e.mjs"
+  },
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.102.0",
+    "@agentclientprotocol/sdk": "1.9.0",
+    "cross-spawn": "7.0.6",
+    "qrcode-terminal": "0.12.0",
+    "ws": "8.22.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "6.0.6",
+    "@types/node": "26.6.6",
+    "@types/qrcode-terminal": "0.12.2",
+    "@types/ws": "8.18.2",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}
