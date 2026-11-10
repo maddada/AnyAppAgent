@@ -64,6 +64,27 @@ pwsh -NoProfile -File C:\dev\AnyAppAgent\scripts\start-emulator.ps1   # optional
   from the emulator to a server listening on `0.0.0.0` on the PC) and the internet (verified).
 - Stop it (only if you really must, it is shared): `adb -s emulator-5560 emu kill`.
 
+## The second emulator: anyapp2
+
+- **AVD `anyapp2`**, **adb serial `emulator-5562`** (console port fixed at 5562). Same profile and
+  image as `anyapp` (Pixel 7, API 35 Google APIs x86_64, 4 GB RAM, 4 cores, 12 GB data, hardware
+  GPU). Files: `D:\tools\android\avd\anyapp2.avd` and `anyapp2.ini`.
+- **It is for the end-to-end run** (AnyAppAgent installed, paired with the companion, building the
+  prayer alarm app), so that run has a device no other thread is driving. Other work stays on
+  `anyapp` (`emulator-5560`).
+- Start it (idempotent, same detached launch as `anyapp`):
+
+  ```powershell
+  pwsh -NoProfile -File C:\dev\AnyAppAgent\scripts\start-emulator.ps1 -Name anyapp2
+  ```
+
+  `-Name` accepts `anyapp` (the default) or `anyapp2`. Logs:
+  `D:\tools\android\logs\anyapp2-emulator-stdout.log` / `-stderr.log`.
+- Verified on 2026-11-10: booted (`sys.boot_completed=1`, API 35), reaches this PC at `10.0.2.2`
+  (ping and HTTP to a server on `0.0.0.0`) and the internet. First cold boot took ~225 s.
+- `android-env.ps1` sets `ANYAPP_ADB_SERIAL=emulator-5560`; a thread using `anyapp2` must pass
+  `-s emulator-5562` itself.
+
 ## Building an Expo app (what was proven)
 
 ```powershell
@@ -125,7 +146,10 @@ stops the daemons other threads are building with.
    `C:\Program Files (x86)\Minimal ADB and Fastboot\adb.exe` (1.0.39). Running that old adb
    restarts the shared adb server with a version mismatch and drops every thread's connection.
    Always load `android-env.ps1` (it puts the right ones first) or call
-   `D:\tools\android\sdk\platform-tools\adb.exe` by full path.
+   `D:\tools\android\sdk\platform-tools\adb.exe` by full path. This really happens: at 09:05 the
+   running server was version 39 (someone had used the old adb), and the next SDK adb call
+   printed `adb server version (39) doesn't match this client (41); killing...` and restarted it.
+   Both emulators reconnected within seconds, but any adb command in flight at that moment fails.
 4. **The emulator dies when the shell that started it ends.** Agent tools (Claude Code's
    PowerShell/Bash tools) kill the process tree when a command finishes, so an emulator started
    with `Start-Process` or `&` from an agent shell is closed seconds later. `start-emulator.ps1`
