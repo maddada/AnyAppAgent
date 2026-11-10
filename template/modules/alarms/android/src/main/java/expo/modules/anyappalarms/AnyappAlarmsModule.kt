@@ -20,6 +20,7 @@ class AnyappAlarmsModule : Module() {
     AsyncFunction("schedule") { alarm: AlarmRecord ->
       val data = AlarmData.fromRecord(alarm)
       val exact = AlarmScheduler.schedule(context, data)
+      if (data.speak != null) TtsWarmer.warm(context, data.language)
       mapOf("id" to data.id, "exact" to exact)
     }
 
@@ -41,6 +42,20 @@ class AnyappAlarmsModule : Module() {
 
     Function("canScheduleExactAlarms") {
       AlarmScheduler.canScheduleExact(context)
+    }
+
+    Function("canUseFullScreenAlarms") {
+      AlarmNotifications.canUseFullScreen(context)
+    }
+
+    AsyncFunction("openFullScreenAlarmSettings") {
+      val intent = if (Build.VERSION.SDK_INT >= 34) {
+        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + context.packageName))
+      } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+      }
+      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      context.startActivity(intent)
     }
 
     AsyncFunction("openExactAlarmSettings") {

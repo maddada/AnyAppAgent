@@ -13,6 +13,8 @@ data class AlarmData(
   val language: String?,
   val sound: String?,
   val repeat: String?,
+  /** Show a full-screen alarm over the lock screen (and take audio focus there). */
+  val fullScreen: Boolean = true,
 ) {
   val notificationId: Int get() = ("anyapp-alarm:$id").hashCode()
 
@@ -35,6 +37,7 @@ data class AlarmData(
     putOpt("language", language)
     putOpt("sound", sound)
     putOpt("repeat", repeat)
+    put("fullScreen", fullScreen)
   }
 
   fun toMap(): Map<String, Any?> = mapOf(
@@ -46,6 +49,7 @@ data class AlarmData(
     "language" to language,
     "sound" to sound,
     "repeat" to repeat,
+    "fullScreen" to fullScreen,
   )
 
   companion object {
@@ -58,6 +62,7 @@ data class AlarmData(
       language = json.stringOrNull("language"),
       sound = json.stringOrNull("sound"),
       repeat = json.stringOrNull("repeat"),
+      fullScreen = json.optBoolean("fullScreen", true),
     )
 
     fun fromJsonString(s: String?): AlarmData? =
@@ -76,6 +81,7 @@ data class AlarmData(
         language = r.language?.takeIf { it.isNotBlank() },
         sound = r.sound?.takeIf { it.isNotBlank() },
         repeat = r.repeat,
+        fullScreen = r.fullScreen ?: true,
       )
     }
   }

@@ -24,6 +24,15 @@ node builder/cli.mjs icon   C:\aa\t\sample
 node builder/cli.mjs warm                                       # deps cache + a spare app folder
 ```
 
+## Tests
+
+`npm test` (in `builder/`) runs `test/isolation.test.mjs`: it creates an app, checks that none of
+its ~34,000 `node_modules` files is a hard link or shares a file with the dependency cache or
+`template/node_modules`, patches a file in the app's `node_modules`, runs `npm install left-pad`
+in the app, and checks that the shared copies are byte-for-byte unchanged. App folders are made
+with robocopy (independent copies) from the builder's own dependency cache; `makeAppTree` also
+refuses to produce a hard-linked tree.
+
 ## Where things live
 
 | What | Where |

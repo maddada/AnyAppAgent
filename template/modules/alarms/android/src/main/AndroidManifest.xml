@@ -6,6 +6,9 @@
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.VIBRATE" />
+  <!-- Full-screen alarm over the lock screen (AlarmActivity); also what lets a background alarm
+       take audio focus on Android 15+. -->
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
   <!-- The alarm plays its sound and speaks its text from a short foreground service. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -26,6 +29,16 @@
         <action android:name="android.intent.action.TIME_SET" />
       </intent-filter>
     </receiver>
+
+    <activity
+      android:name="expo.modules.anyappalarms.AlarmActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:launchMode="singleInstance"
+      android:taskAffinity=""
+      android:showWhenLocked="true"
+      android:turnScreenOn="true"
+      android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
 
     <service
       android:name="expo.modules.anyappalarms.AlarmService"

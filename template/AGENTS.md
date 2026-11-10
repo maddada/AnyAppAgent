@@ -153,6 +153,7 @@ await scheduleAlarm({
   language: 'en-US',                    // optional BCP-47; default = phone language
   sound: 'adhan',                       // optional: plays assets/sounds/adhan.mp3 first
   repeat: 'daily',                      // optional: same time every day
+  fullScreen: true,                     // optional, default true (see below)
 });
 await cancelAlarm('fajr-2026-11-11');
 const pending = await getScheduledAlarms();   // [{ id, at, title, … }] soonest first
@@ -166,6 +167,14 @@ await testAlarm({ id: 'test', title: 'Test', speak: 'This is a test' });  // fir
 - Sound files: put `name.mp3` (or .ogg/.wav) in `assets/sounds/`, lowercase letters, digits and
   underscores only, and pass `sound: 'name'`. A new sound file needs a rebuild (automatic).
 - Without `sound` and `speak` the notification uses the normal notification sound.
+- `fullScreen` (default true, only for alarms with `sound` or `speak`): when the phone is locked
+  or its screen is off, the alarm wakes the screen and shows a full-screen alarm with a Stop
+  button, like a clock app, and lowers other audio (music) while it plays. When the phone is in
+  use it shows as a heads-up notification and plays over other audio. Use `fullScreen: false` for
+  gentle announcements that should only speak (for example reminders before an event).
+  `canUseFullScreenAlarms()` is false if the user turned this off (Android 14+ setting);
+  `openFullScreenAlarmSettings()` opens that setting.
+- The speech voice is prepared when you schedule a spoken alarm, so the first one is not late.
 
 ### Notifications and simple reminders
 

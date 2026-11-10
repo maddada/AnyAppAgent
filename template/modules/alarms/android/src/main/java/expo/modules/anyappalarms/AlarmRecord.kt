@@ -13,4 +13,5 @@ class AlarmRecord : Record {
   @Field val language: String? = null
   @Field val sound: String? = null
   @Field val repeat: String? = null
+  @Field val fullScreen: Boolean? = null
 }

@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -24,6 +25,13 @@ import java.util.Locale
 /**
  * A short-lived foreground service that plays an alarm's sound and speaks its text, then stops.
  * Started by AlarmReceiver, so it works while the app is closed.
+ *
+ * Audio focus on Android 15+: an app may only take audio focus while it is the top app or runs a
+ * foreground service that was started while it was visible ("while-in-use"). A service started by
+ * an alarm in the background is not, whatever its type, so the request is refused. The alarm's
+ * full-screen intent shows AlarmActivity when the phone is locked or the screen is off; once it is
+ * on screen the app is the top app and [onAlarmScreenShown] takes focus. While the user is using
+ * the phone the alarm shows as a heads-up instead, and plays without lowering other audio.
  */
 class AlarmService : Service() {
   private val handler = Handler(Looper.getMainLooper())
@@ -31,10 +39,12 @@ class AlarmService : Service() {
   private var playing = false
   private var tts: TextToSpeech? = null
   private var ttsReady: Boolean? = null // null while the engine is starting
+  private var ttsStartedAt = 0L
   private var afterTtsInit: (() -> Unit)? = null
   private var player: MediaPlayer? = null
   private var wakeLock: PowerManager.WakeLock? = null
   private var focusRequest: AudioFocusRequest? = null
+  private var focusGranted = false
   private var foregroundId = 0
   private var foregroundNotification: Notification? = null
   private val timeout = Runnable {
@@ -44,10 +54,15 @@ class AlarmService : Service() {
 
   override fun onBind(intent: Intent?): IBinder? = null
 
+  override fun onCreate() {
+    super.onCreate()
+    instance = this
+  }
+
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     val alarm = AlarmData.fromJsonString(intent?.getStringExtra(EXTRA_ALARM))
     if (foregroundNotification == null) {
-      val first = alarm ?: AlarmData("playback", System.currentTimeMillis(), "Alarm", null, null, null, null, null)
+      val first = alarm ?: AlarmData("playback", System.currentTimeMillis(), "Alarm", null, null, null, null, null, false)
       foregroundId = first.notificationId
       foregroundNotification = AlarmNotifications.build(this, first, quiet = true)
     }
@@ -64,6 +79,8 @@ class AlarmService : Service() {
       return START_NOT_STICKY
     }
     acquireWakeLock()
+    // Start the speech engine right away, in parallel with the sound, so speech is not late.
+    if (!alarm.speak.isNullOrBlank()) startTts()
     handler.removeCallbacks(timeout)
     handler.postDelayed(timeout, MAX_PLAYBACK_MS)
     queue.addLast(alarm)
@@ -103,7 +120,10 @@ class AlarmService : Service() {
       resources.openRawResourceFd(resId).use { afd ->
         mp.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
       }
-      mp.setOnCompletionListener { releasePlayer(); done() }
+      mp.setOnCompletionListener {
+        Log.i(TAG, "Finished sound '$name' for alarm ${alarm.id}")
+        releasePlayer(); done()
+      }
       mp.setOnErrorListener { _, what, extra ->
         Log.w(TAG, "Sound '$name' failed ($what/$extra)")
         releasePlayer(); done(); true
@@ -116,6 +136,19 @@ class AlarmService : Service() {
       Log.e(TAG, "Could not play sound '$name'", e)
       releasePlayer()
       done()
+    }
+  }
+
+  private fun startTts() {
+    if (tts != null) return
+    ttsReady = null
+    ttsStartedAt = SystemClock.elapsedRealtime()
+    tts = TextToSpeech(applicationContext) { status ->
+      handler.post {
+        ttsReady = status == TextToSpeech.SUCCESS
+        Log.i(TAG, "Speech engine ready=${ttsReady} in ${SystemClock.elapsedRealtime() - ttsStartedAt} ms")
+        afterTtsInit?.let { afterTtsInit = null; it() }
+      }
     }
   }
 
@@ -137,7 +170,9 @@ class AlarmService : Service() {
       engine.setAudioAttributes(attributes(AudioAttributes.CONTENT_TYPE_SPEECH))
       val utteranceId = "anyapp-${alarm.id}-${System.nanoTime()}"
       engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-        override fun onStart(id: String?) {}
+        override fun onStart(id: String?) {
+          if (id == utteranceId) Log.i(TAG, "Speech audio started for alarm ${alarm.id}")
+        }
         override fun onDone(id: String?) {
           if (id == utteranceId) handler.post { Log.i(TAG, "Finished speaking alarm ${alarm.id}"); done() }
         }
@@ -156,20 +191,8 @@ class AlarmService : Service() {
         done()
       }
     }
-    when (ttsReady) {
-      null -> {
-        afterTtsInit = start
-        if (tts == null) {
-          tts = TextToSpeech(applicationContext) { status ->
-            handler.post {
-              ttsReady = status == TextToSpeech.SUCCESS
-              afterTtsInit?.let { afterTtsInit = null; it() }
-            }
-          }
-        }
-      }
-      else -> start()
-    }
+    startTts()
+    if (ttsReady == null) afterTtsInit = start else start()
   }
 
   private fun once(f: () -> Unit): () -> Unit {
@@ -177,14 +200,20 @@ class AlarmService : Service() {
     return { if (!called) { called = true; f() } }
   }
 
+  /** Asks to lower other audio while the alarm plays. See the class comment for Android 15+. */
   private fun requestFocus() {
-    if (focusRequest != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    if (focusGranted || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+    val req = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
       .setAudioAttributes(attributes(AudioAttributes.CONTENT_TYPE_SPEECH))
       .build()
-    am.requestAudioFocus(req)
     focusRequest = req
+    focusGranted = am.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    Log.i(
+      TAG,
+      if (focusGranted) "Audio focus granted"
+      else "Audio focus not granted yet (app in background); it is taken when the alarm screen shows"
+    )
   }
 
   private fun acquireWakeLock() {
@@ -214,8 +243,10 @@ class AlarmService : Service() {
       focusRequest?.let { (getSystemService(Context.AUDIO_SERVICE) as AudioManager).abandonAudioFocusRequest(it) }
     }
     focusRequest = null
+    focusGranted = false
     wakeLock?.let { if (it.isHeld) it.release() }
     wakeLock = null
+    AlarmActivity.closeIfShown()
     // Keep the alarm's notification on screen after the service stops.
     ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
     stopSelf()
@@ -223,6 +254,7 @@ class AlarmService : Service() {
 
   override fun onDestroy() {
     if (playing || tts != null || player != null) finish()
+    if (instance === this) instance = null
     super.onDestroy()
   }
 
@@ -231,7 +263,21 @@ class AlarmService : Service() {
     private const val EXTRA_ALARM = "alarm"
     private const val MAX_PLAYBACK_MS = 3 * 60_000L
 
+    @Volatile private var instance: AlarmService? = null
+
     fun intent(c: Context, alarm: AlarmData): Intent =
       Intent(c, AlarmService::class.java).putExtra(EXTRA_ALARM, alarm.toJson().toString())
+
+    /** Called by AlarmActivity when it is on screen: the app is now allowed to take audio focus. */
+    fun onAlarmScreenShown() {
+      val s = instance ?: return
+      s.handler.post { if (s.playing) s.requestFocus() }
+    }
+
+    /** The alarm screen's Stop button. */
+    fun stopPlayback() {
+      val s = instance ?: return
+      s.handler.post { Log.i(TAG, "Alarm stopped by the user"); s.finish() }
+    }
   }
 }

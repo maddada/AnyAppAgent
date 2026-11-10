@@ -8,6 +8,8 @@ export {
   testAlarm,
   canScheduleExactAlarms,
   openExactAlarmSettings,
+  canUseFullScreenAlarms,
+  openFullScreenAlarmSettings,
   type AlarmInput,
   type ScheduledAlarm,
 } from '../../modules/alarms';

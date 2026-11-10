@@ -15,6 +15,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "warm": "node cli.mjs warm"
+    "warm": "node cli.mjs warm",
+    "test": "node --test \"test/**/*.test.mjs\""
   }
 }

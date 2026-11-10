@@ -45,10 +45,19 @@ object AlarmNotifications {
     return if (custom != 0) custom else android.R.drawable.ic_lock_idle_alarm
   }
 
+  /** Android 14+ lets the user turn full-screen alarms off for an app. */
+  fun canUseFullScreen(c: Context): Boolean {
+    if (Build.VERSION.SDK_INT < 34) return true
+    return c.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: false
+  }
+
   fun build(c: Context, alarm: AlarmData, quiet: Boolean): Notification {
     ensureChannels(c)
     val text = alarm.body ?: alarm.speak
+    // Locked or screen off: the system shows AlarmActivity (wakes the screen). In use: a heads-up.
+    val fullScreen = quiet && alarm.fullScreen && alarm.needsPlayback && canUseFullScreen(c)
     return NotificationCompat.Builder(c, if (quiet) CHANNEL_QUIET else CHANNEL_SOUND)
+      .apply { if (fullScreen) setFullScreenIntent(AlarmActivity.pendingIntent(c, alarm), true) }
       .setSmallIcon(smallIcon(c))
       .setContentTitle(alarm.title)
       .apply { if (text != null) setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text)) }

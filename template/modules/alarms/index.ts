@@ -19,6 +19,13 @@ export type AlarmInput = {
   sound?: string;
   /** 'daily' fires again every day at the same local time until cancelled. */
   repeat?: 'daily';
+  /**
+   * For alarms with `sound` or `speak` (default true): when the phone is locked or its screen is
+   * off, show a full-screen alarm with a Stop button (it wakes the screen) and lower other audio
+   * while it plays. When the phone is in use it shows as a normal heads-up notification instead.
+   * Use false for gentle announcements that should only speak.
+   */
+  fullScreen?: boolean;
 };
 
 export type ScheduledAlarm = Omit<AlarmInput, 'at'> & { at: number };
@@ -33,6 +40,8 @@ type AnyappAlarmsNative = {
   fireNow(alarm: NativeAlarm): Promise<void>;
   canScheduleExactAlarms(): boolean;
   openExactAlarmSettings(): Promise<void>;
+  canUseFullScreenAlarms(): boolean;
+  openFullScreenAlarmSettings(): Promise<void>;
 };
 
 const Native = requireNativeModule<AnyappAlarmsNative>('AnyappAlarms');
@@ -71,4 +80,13 @@ export function canScheduleExactAlarms(): boolean {
 
 export function openExactAlarmSettings(): Promise<void> {
   return Native.openExactAlarmSettings();
+}
+
+/** False if the user turned off full-screen alarms for this app (Android 14+ setting). */
+export function canUseFullScreenAlarms(): boolean {
+  return Native.canUseFullScreenAlarms();
+}
+
+export function openFullScreenAlarmSettings(): Promise<void> {
+  return Native.openFullScreenAlarmSettings();
 }

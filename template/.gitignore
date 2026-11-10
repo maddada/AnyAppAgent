@@ -5,8 +5,15 @@ node_modules/
 /android
 /ios
 
-# Build output (APKs land in build/apk/)
-/build/
+# Build output anywhere: APKs and logs (build/apk/, build/logs/) and the native builds Gradle,
+# CMake and Kotlin leave next to local modules (modules/*/android/build/, .cxx/, .gradle/, .kotlin/).
+# After a build, `git status` must show only what was changed by hand.
+build/
+.cxx/
+.gradle/
+.kotlin/
+*.hprof
+local.properties
 dist/
 
 # Expo / Metro
@@ -29,5 +36,4 @@ expo-env.d.ts
 npm-debug.*
 .env*.local
 .DS_Store
-.kotlin/
 *.orig.*

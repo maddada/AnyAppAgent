@@ -111,5 +111,13 @@ export async function makeAppTree(dest, log = () => {}) {
     await fsp.copyFile(path.join(TEMPLATE_DIR, f), to);
   }
   await copyTree(path.join(deps.dir, 'node_modules'), path.join(dest, 'node_modules'));
+  // Apps must own their files: an agent patching node_modules or running npm install in one app
+  // must never reach the shared cache (test/isolation.test.mjs proves it end to end).
+  for (const probe of ['react/package.json', 'expo/package.json']) {
+    const p = path.join(dest, 'node_modules', probe);
+    if (fs.existsSync(p) && fs.statSync(p).nlink > 1) {
+      throw new Error(`${p} is a hard link; app folders must be independent copies`);
+    }
+  }
   await fsp.writeFile(path.join(dest, DEPS_STAMP), deps.hash);
 }
