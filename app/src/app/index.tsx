@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindow
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, Download, ListTodo, MessageCircle, Plus, Settings, Share2, Smartphone } from "lucide-react-native";
+import { ChevronDown, Download, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, tileState } from "@/lib/describe";
 import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/chat/index";
@@ -11,6 +11,8 @@ import { installApp, installFromLink, launchApp, updateFromLink } from "@/lib/in
 import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
+import { takeShare } from "@/lib/sharedIn";
+import { SendAppPanel } from "@/ui/SendApp";
 import { appAction, getState, removeApp, sortedApps, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
@@ -60,6 +62,11 @@ export default function Home() {
     router.setParams({ crash: undefined });
     router.push(`/chat/${app.id}`);
   }, [params.crash, apps]);
+
+  // Shared into AnyAppAgent from another app ("Like this, but mine"): opens its screen.
+  useEffect(() => {
+    void takeShare();
+  }, []);
 
   if (!pairing) return <Redirect href="/connect" />;
   if (authLost) return <AuthLost />;
@@ -326,6 +333,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
   const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [sending, setSending] = useState(false);
   const [removing, setRemoving] = useState(false);
   // Keep showing the app while the sheet slides away; reset the mode for each new selection.
   const [lastApp, setLastApp] = useState<App | undefined>(app);
@@ -334,6 +342,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
   if (selection !== lastSelection) {
     setLastSelection(selection);
     setConfirmRemove(!!selection?.manage);
+    setSending(false);
   }
   const shown = app ?? lastApp;
 
@@ -376,7 +385,9 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
               {state ? <StateLine kind={state.kind} label={state.label} /> : null}
             </View>
           </View>
-          {confirmRemove ? (
+          {sending && !confirmRemove ? (
+            <SendAppPanel app={shown} onDone={onClose} onCancel={() => setSending(false)} />
+          ) : confirmRemove ? (
             <View style={{ gap: space.sm }}>
               <T variant="callout" color="textSecondary" style={{ marginBottom: space.sm }}>
                 {`Remove ${shown.name} from this list? Your PC keeps its files${pkg ? ", and the app stays on your phone" : ""}.`}
@@ -435,6 +446,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                 <Button testID="app-change" label="Change it" icon={MessageCircle} onPress={doChange} />
               )}
               <Button testID="app-todo" label={todoLabel} icon={ListTodo} variant="quiet" onPress={doTodo} />
+              {pkg && AnyAppNative?.shareApk ? <Button testID="app-send" label="Send app" icon={Send} variant="quiet" onPress={() => setSending(true)} /> : null}
               {shown.latestApk ? <Button testID="app-share" label={shown.sharing?.shared ? "Shared" : "Share"} icon={Share2} variant="quiet" onPress={doShare} /> : null}
               {pkg && action === "update" ? (
                 <T variant="caption" color="textSecondary" style={{ textAlign: "center", marginTop: space.xs }}>

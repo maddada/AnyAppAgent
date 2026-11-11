@@ -23,7 +23,7 @@ import { placeholderIconPng } from "./icon.ts";
 import { realGithub, shareApp, testingFeedUrl, unshareApp, type GithubApi } from "./sharing.ts";
 import * as githubCli from "./github.ts";
 import { publishVersion, pullBack, StaleSignerError, parseUpdateJson, repoOf, type ApkFile, type ReleaseApi } from "./publish.ts";
-import { appPlaybook, buildFixPrompt, firstPrompt } from "./playbook.ts";
+import { appPlaybook, buildFixPrompt, firstPrompt, sharedInNote } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
 import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
 import { isWorkerToolCall, workerToolsMcpServer } from "./worker-http.ts";
@@ -484,11 +484,14 @@ export class AppManager {
 
   // ---------- commands
 
-  create(name: string, prompt: string, preset: unknown = "react-native", askMore = false): App {
+  /** uploads: pictures for the first message; sharedIn: "Like this, but mine" (the agent gets sharedInNote). */
+  create(name: string, prompt: string, preset: unknown = "react-native", askMore = false, uploads: ImageUpload[] = [], sharedIn = false): App {
     const cleanName = name.trim().replace(/\s+/g, " ");
     if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native, Kotlin or Expo Exact.");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
     if (prompt.trim() === "") throw new HttpError(400, "Say what the app should do.");
+    const problem = checkImages(uploads.map((u) => ({ mimeType: String(u?.mimeType ?? ""), data: String(u?.data ?? "") })));
+    if (problem) throw new HttpError(400, problem);
     const base = slugify(cleanName);
     const taken = (slug: string) =>
       this.store.allRecords().some((r) => r.app.slug === slug) || existsSync(join(this.config.appsDir, slug));
@@ -512,15 +515,18 @@ export class AppManager {
     this.runtime(app.id).held = true;
     this.broadcast({ type: "app.updated", app });
     const firstItemId = randomUUID();
-    this.emitItem(record, { id: firstItemId, kind: "user", text: prompt.trim() });
-    this.finishCreate(record, prompt.trim(), firstPrompt(prompt.trim(), { askMore: askMore === true, planFirst: this.config.planFirst }), firstItemId).catch((error: unknown) => {
+    const saved = uploads.map((u) => this.saveImage(app.id, u));
+    this.emitItem(record, { id: firstItemId, kind: "user", text: prompt.trim(), ...(saved.length ? { images: saved.map(({ chat }) => chat) } : {}) });
+    const agentPrompt = firstPrompt(prompt.trim(), { askMore: askMore === true, planFirst: this.config.planFirst });
+    const shared = sharedIn ? `\n\n${sharedInNote(/https?:\/\//i.test(prompt))}` : "";
+    this.finishCreate(record, prompt.trim(), `${agentPrompt}${shared}`, firstItemId, saved.map(({ prompt: image }) => image)).catch((error: unknown) => {
       if (!record.deleted) this.log(`[${app.slug}] creation stopped:`, (error as Error).message);
     });
     return app;
   }
 
   /** prompt: the person's words (the overview draft); agentPrompt: what the agent gets (with the PC's plan-first line). */
-  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt, itemId?: string): Promise<void> {
+  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt, itemId?: string, images: PromptImage[] = []): Promise<void> {
     const { app, dir } = record;
     try {
       mkdirSync(this.config.appsDir, { recursive: true });
@@ -556,7 +562,7 @@ export class AppManager {
     }
     // The first prompt goes in front of anything the user sent while the app was being set up.
     const rt = this.runtime(app.id);
-    rt.queue.unshift({ kind: "prompt", text: agentPrompt, ...(itemId ? { itemId } : {}) });
+    rt.queue.unshift({ kind: "prompt", text: agentPrompt, ...(itemId ? { itemId } : {}), ...(images.length ? { images } : {}) });
     rt.held = false;
     if (!rt.running) void this.drain(record);
   }
