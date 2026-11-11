@@ -6,7 +6,7 @@
 //      gets the whole file (200);
 //   3. a download dropped halfway closes its file on the PC (it used to stay open for good);
 //   4. with --easy-connect: while a download runs through the Easy Connect tunnel, codes expire and
-//      are renewed at once (as the desktop does) without the helper restarting or the download
+//      a new one is asked for at once (New code in the popup) without the helper restarting or the download
 //      dropping. Uses an existing tailcat (ANYAPP_TAILCAT_BIN, else %USERPROFILE%\.anyappagent\tools).
 //   5. with --helper: a helper (coordinator mode) that was building when the companion stopped
 //      lands and builds again by itself after the restart, with no agent turn first.
@@ -183,12 +183,16 @@ if (withEasyConnect) {
   if (!existsSync(tailcat)) throw new Error(`no tailcat at ${tailcat}`);
   const { decodeEasyConnectCode } = await import(new URL("../src/easy-connect/code.ts", import.meta.url).href);
   let st = await admin("/api/admin/easy-connect", "POST", { enabled: true });
-  for (let i = 0; i < 100 && !(st.easyConnect.state === "ready" && st.easyConnect.code); i++) {
+  for (let i = 0; i < 100 && st.easyConnect.state !== "ready"; i++) {
     await sleep(300);
     st = await admin("/api/admin/state");
   }
-  const ec = decodeEasyConnectCode(st.easyConnect.code);
-  check(!!ec, "Easy Connect ready with a code");
+  await sleep(1500);
+  st = await admin("/api/admin/state");
+  check(st.easyConnect.state === "ready" && !st.easyConnect.code, "turning Easy Connect on makes no code by itself");
+  st = await admin("/api/admin/pairing/new", "POST", {}); // the pairing popup opens
+  const ec = decodeEasyConnectCode(st.easyConnect.code ?? "");
+  check(!!ec, "the popup's POST /api/admin/pairing/new issues the code");
   const bin = join(homedir(), ".anyappagent", "tools", "ecclient", `ecclient${process.platform === "win32" ? ".exe" : ""}`);
   ecclient = spawn(bin, ["--key", join(ROOT, "client.key"), "--port", String(ec.port)], { stdio: ["pipe", "pipe", "pipe"] });
   const lines = [];
@@ -206,7 +210,7 @@ if (withEasyConnect) {
   const clientKey = lines.find((l) => l.startsWith("CLIENTKEY")).split(" ")[1];
   const ecPair = await fetch(`http://127.0.0.1:${tunnel}/api/pair/easy-connect`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ secret: ec.secret, deviceName: "Tunnel proof", clientKey }) }).then((r) => r.json());
   check(!!ecPair.token, "paired through the tunnel");
-  // The desktop's panel: whenever Easy Connect is ready without a code, ask for a new one at once.
+  // The pairing popup left open, its New code tapped as soon as a code runs out.
   let renewals = 0;
   let renewing = true;
   void (async () => {
@@ -215,7 +219,7 @@ if (withEasyConnect) {
       if (s?.easyConnect.state === "ready" && !s.easyConnect.code) {
         await admin("/api/admin/pairing/new", "POST", {});
         renewals++;
-        say(`  (desktop stand-in renewed the code, ${renewals})`);
+        say(`  (New code tapped in the popup, ${renewals})`);
       }
       await sleep(500);
     }

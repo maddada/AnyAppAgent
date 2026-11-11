@@ -3,16 +3,15 @@
 // same chat as on the phone) or today's activity with the phone panels. New app works from here
 // too, with the same fields and words as the phone's New app sheet.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, CircleAlert, Cloud, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, RefreshCw, Settings as Gear, Smartphone, Wrench, X } from "lucide-react";
+import { ChevronDown, CircleAlert, Cloud, Download, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
-import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
 import { ChatView } from "./Chat.tsx";
 import type { StepId } from "./Onboarding.tsx";
-import { PairingPanel, TypedCode, useFreshCode } from "./Pairing.tsx";
-import { GetPhoneApp } from "./PhoneApp.tsx";
-import { AppIcon, Icon, QrPlate, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
+import { PairingDialog } from "./Pairing.tsx";
+import { GetPhoneAppDialog } from "./PhoneApp.tsx";
+import { AppIcon, Dialog, Icon, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
 
 const api = window.anyapp;
 type Page = "apps" | "phones" | "setup" | "settings";
@@ -22,6 +21,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
   const [openApp, setOpenApp] = useState<string | null>(null);
   const [connect, setConnect] = useState(false);
   const [newApp, setNewApp] = useState(false);
+  const [getApp, setGetApp] = useState(false);
   useEffect(() => {
     if (connectRequest > 0) setConnect(true);
   }, [connectRequest]);
@@ -36,6 +36,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
         setOpenApp(id);
       },
       connect: (v: boolean) => setConnect(v),
+      getApp: (v: boolean) => setGetApp(v),
       newApp: (v: boolean) => setNewApp(v),
     };
   });
@@ -75,10 +76,10 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
       </aside>
       <main className="dm-main">
         {page === "apps" ? (
-          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} openSetup={openSetup} goSetup={() => setPage("setup")} />
+          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} onGetApp={() => setGetApp(true)} openSetup={openSetup} goSetup={() => setPage("setup")} />
         ) : (
           <div className="dm-scroll">
-            {page === "phones" && <PhonesPage s={s} />}
+            {page === "phones" && <PhonesPage s={s} onConnect={() => setConnect(true)} />}
             {page === "setup" && <SetupPage s={s} openSetup={openSetup} />}
             {page === "settings" && <SettingsPage s={s} openSetup={openSetup} />}
           </div>
@@ -95,22 +96,26 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
         />
       )}
       {connect && (
-        <Dialog title="Connect a phone" wide onClose={() => setConnect(false)}>
-          <p className="callout body">
-            No AnyAppAgent on the phone yet?{" "}
-            <button
-              className="btn btn-text"
-              onClick={() => {
-                setConnect(false);
-                openSetup("phone-get");
-              }}
-            >
-              Get the app first
-            </button>
-          </p>
-          <PairingPanel s={s} />
-        </Dialog>
+        <PairingDialog
+          s={s}
+          onClose={() => setConnect(false)}
+          intro={
+            <p className="callout body">
+              No AnyAppAgent on the phone yet?{" "}
+              <button
+                className="btn btn-text"
+                onClick={() => {
+                  setConnect(false);
+                  setGetApp(true);
+                }}
+              >
+                Get the app first
+              </button>
+            </p>
+          }
+        />
       )}
+      {getApp && <GetPhoneAppDialog onClose={() => setGetApp(false)} />}
     </div>
   );
 }
@@ -161,6 +166,7 @@ function AppsPage({
   onOpen,
   onNewApp,
   onConnect,
+  onGetApp,
   openSetup,
   goSetup,
 }: {
@@ -169,6 +175,7 @@ function AppsPage({
   onOpen: (id: string | null) => void;
   onNewApp: () => void;
   onConnect: () => void;
+  onGetApp: () => void;
   openSetup: (step: StepId) => void;
   goSetup: () => void;
 }) {
@@ -176,8 +183,10 @@ function AppsPage({
   const blocking = setupRows(s).find((r) => r.needsYou && r.blocks);
   const app = apps.find((a) => a.id === open);
   const online = s.companion.phase === "running";
+  // A helper's chat is open beside the main chat: in a narrow window the app list folds to icons.
+  const [helperOpen, setHelperOpen] = useState(false);
   return (
-    <div className="apps-split">
+    <div className={`apps-split${helperOpen ? " helper-open" : ""}`}>
       <section className="apps-pane" aria-label="Your apps">
         <header className="apps-pane-head">
           <h1 className="title-small">Your apps</h1>
@@ -209,7 +218,7 @@ function AppsPage({
               const st = appState(a);
               const v = a.latestApk ?? a.latestBuild;
               return (
-                <button key={a.id} className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined}>
+                <button key={a.id} className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined} title={a.name}>
                   <AppIcon icon={s.icons[a.id]} small />
                   <div className="arow-main">
                     <div className="arow-top">
@@ -225,14 +234,14 @@ function AppsPage({
         )}
       </section>
       <section className="apps-detail">
-        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} />}
+        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} onHelperOpen={setHelperOpen} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />}
       </section>
     </div>
   );
 }
 
 /** The right side of the Apps page when no app is open: today's activity and the phones. */
-function Overview({ s, hasApps, onConnect }: { s: Snapshot; hasApps: boolean; onConnect: () => void }) {
+function Overview({ s, hasApps, onConnect, onGetApp }: { s: Snapshot; hasApps: boolean; onConnect: () => void; onGetApp: () => void }) {
   const recent = activity(s);
   const hasPhone = (s.admin?.devices.length ?? 0) > 0;
   return (
@@ -249,9 +258,12 @@ function Overview({ s, hasApps, onConnect }: { s: Snapshot; hasApps: boolean; on
       <div className="ov-grid">
         <div className="panel">
           <div className="eyebrow">{hasPhone ? "AnyAppAgent for another phone" : "AnyAppAgent for your phone"}</div>
-          <GetPhoneApp />
+          <p className="label secondary">Show a code, scan it with the phone's camera, and the phone downloads AnyAppAgent.</p>
+          <button className="btn btn-quiet btn-sm btn-block" onClick={onGetApp} data-testid="show-download-code">
+            <Icon of={Download} size="sm" /> Show download code
+          </button>
         </div>
-        <AddPhonePanel s={s} onMore={onConnect} />
+        <AddPhonePanel hasPhone={hasPhone} onShow={onConnect} />
         {hasPhone && <PhonesPanel s={s} />}
       </div>
       <section className="recent ov-recent">
@@ -382,18 +394,14 @@ function PhonesPanel({ s }: { s: Snapshot }) {
   );
 }
 
-function AddPhonePanel({ s, onMore }: { s: Snapshot; onMore: () => void }) {
-  useFreshCode(s);
-  const p = s.pairing;
-  const hasPhone = (s.admin?.devices.length ?? 0) > 0;
+/** Only words and a button: the pairing code is a secret and shows only in its popup. */
+function AddPhonePanel({ hasPhone, onShow }: { hasPhone: boolean; onShow: () => void }) {
   return (
-    <div className="panel qr-card">
+    <div className="panel">
       <div className="eyebrow">{hasPhone ? "Add another phone" : "Connect your phone"}</div>
-      {/* The Easy Connect code is long (about 354 characters): give it more room than the standard QR. */}
-      {p.qrSvg ? <QrPlate svg={p.qrSvg} size={p.kind === "easy-connect" ? sizeTokens.qr * 1.6 : sizeTokens.qr} label="Code to connect a phone" /> : <Spinner />}
-      <p className="label secondary">Open AnyAppAgent on the phone and scan this code.</p>
-      <button className="btn btn-quiet btn-sm btn-block" onClick={onMore}>
-        {p.kind === "easy-connect" ? "Use a code instead" : "Bigger code and other ways"}
+      <p className="label secondary">Show a pairing code and scan it with AnyAppAgent on the phone. Keep the code private.</p>
+      <button className="btn btn-quiet btn-sm btn-block" onClick={onShow} data-testid="show-pairing-code">
+        <Icon of={QrCode} size="sm" /> Show pairing code
       </button>
     </div>
   );
@@ -406,7 +414,7 @@ function viaWords(via: string | undefined): string {
   return via === "easy-connect" ? "From anywhere" : "Same Wi-Fi only";
 }
 
-function PhonesPage({ s }: { s: Snapshot }) {
+function PhonesPage({ s, onConnect }: { s: Snapshot; onConnect: () => void }) {
   const devices = s.admin?.devices ?? [];
   const [forget, setForget] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -438,9 +446,14 @@ function PhonesPage({ s }: { s: Snapshot }) {
         </section>
       )}
       {error && <p className="label problem-text">{error}</p>}
-      <section>
-        <h2 className="heading">{devices.length ? "Connect another phone" : "Connect your phone"}</h2>
-        <PairingPanel s={s} />
+      <section className="connect-row">
+        <div className="grow">
+          <h2 className="heading">{devices.length ? "Connect another phone" : "Connect your phone"}</h2>
+          <p className="label secondary">Show a pairing code and scan it with AnyAppAgent on the phone. Keep the code private: anyone who scans it can use this PC.</p>
+        </div>
+        <button className="btn btn-quiet" onClick={onConnect} data-testid="show-pairing-code">
+          <Icon of={QrCode} size="button" /> Show pairing code
+        </button>
       </section>
       {forget && (
         <Dialog
@@ -675,29 +688,3 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
     </div>
   );
 }
-
-// ------------------------------------------------------------------ dialog (COMPONENTS.md 4)
-
-export function Dialog({ title, onClose, children, actions, wide }: { title: string; onClose: () => void; children: ReactNode; actions?: ReactNode; wide?: boolean }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`dialog${wide ? " wide" : ""}`} role="dialog" aria-label={title}>
-        <div className="dialog-head">
-          <h2 className="title-small">{title}</h2>
-          <button className="btn btn-icon" onClick={onClose} aria-label="Close">
-            <Icon of={X} size="md" />
-          </button>
-        </div>
-        <div className="body">{children}</div>
-        {actions && <div className="dialog-actions">{actions}</div>}
-      </div>
-    </div>
-  );
-}
-
-export { TypedCode };

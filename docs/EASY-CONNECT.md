@@ -116,11 +116,14 @@ minute, shared with the 6-digit code), and the desktop lists every paired device
   setting is remembered (`easy-connect\settings.json`) and comes back on at the next start, for
   the phones already paired (same key, so the same address), but without a code: the allow-list
   stays closed until the desktop asks for a code with `POST /api/admin/pairing/new`. Turning it on
-  with `POST /api/admin/easy-connect` makes the first code at once.
+  with `POST /api/admin/easy-connect` makes no code either: only the desktop's pairing popup asks
+  for one, when it opens, so a live code never exists without a popup showing it.
 - When ready, `AdminState.easyConnect.code` is the string the QR encodes and `expiresAt` its end.
   While that code is live, the helper runs without `--allow` (the pairing window). When the code is
-  used, 3 seconds later (so the phone's answer gets back), or when it expires, the helper restarts
-  with `--allow=<every paired phone's client key>` or `--allow=none`. A used or expired code
+  used, 3 seconds later (so the phone's answer gets back), or 10 seconds after it expires, the
+  helper restarts with `--allow=<every paired phone's client key>` or `--allow=none`. A new code
+  asked for within those 10 seconds keeps the helper running as it is (every restart cuts each
+  phone's tunnel, APK downloads included). A used or expired code
   disappears from the state; `POST /api/admin/pairing/new` makes a new 6-digit code and a new Easy
   Connect code together.
 - `DELETE /api/admin/devices/:id` removes the device's token and its client key; the helper

@@ -96,12 +96,22 @@ const admin = (method, path, body) =>
 
 let state = await admin("POST", "/api/admin/easy-connect", { enabled: true });
 say(`POST /api/admin/easy-connect {enabled:true} -> ${state.easyConnect.state}${state.easyConnect.detail ? ` (${state.easyConnect.detail})` : ""}`);
-for (let i = 0; i < 600 && !(state.easyConnect.state === "ready" && state.easyConnect.code); i++) {
+for (let i = 0; i < 600 && state.easyConnect.state !== "ready"; i++) {
   await new Promise((r) => setTimeout(r, 200));
   state = await admin("GET", "/api/admin/state");
   if (state.easyConnect.state === "error") break;
 }
-check(state.easyConnect.state === "ready" && !!state.easyConnect.code, `Easy Connect ready: ${state.easyConnect.error ?? "code issued"}`);
+await new Promise((r) => setTimeout(r, 1500));
+state = await admin("GET", "/api/admin/state");
+check(state.easyConnect.state === "ready" && !state.easyConnect.code, `turning Easy Connect on makes no code by itself (${state.easyConnect.error ?? state.easyConnect.state}, code ${state.easyConnect.code ? "live" : "none"})`);
+check(/Easy Connect helper starting \(turnedOn; no devices allowed yet\)/.test(serverLog) && !/allowListLiftedForPairing/.test(serverLog), "the helper starts with its allow-list closed; the pairing window stays shut");
+// The desktop's pairing popup asks for the code when it opens.
+state = await admin("POST", "/api/admin/pairing/new", {});
+for (let i = 0; i < 50 && !state.easyConnect.code; i++) {
+  await new Promise((r) => setTimeout(r, 200));
+  state = await admin("GET", "/api/admin/state");
+}
+check(state.easyConnect.state === "ready" && !!state.easyConnect.code, `the popup's POST /api/admin/pairing/new issues the code`);
 const codeText = state.easyConnect.code;
 const code = decodeEasyConnectCode(codeText);
 check(!!code && code.port === PORT, `code ${codeText.slice(0, 11)}… (${codeText.length} chars, expires ${state.easyConnect.expiresAt}) decodes: port ${code?.port}, name "${code?.name}", address ${code?.address.length} chars, secret ${code?.secret.length} chars`);

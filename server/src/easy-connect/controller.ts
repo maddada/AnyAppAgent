@@ -109,7 +109,9 @@ export class EasyConnect {
   async setEnabled(enabled: boolean): Promise<void> {
     writeJsonAtomic(this.settingsPath, { enabled });
     if (enabled) {
-      if (this.status === "off" || this.status === "error") void this.turnOn(true);
+      // No code yet: only the desktop's pairing popup asks for one (POST /api/admin/pairing/new),
+      // so a code (and an open allow-list) never exists without the popup showing it.
+      if (this.status === "off" || this.status === "error") void this.turnOn(false);
       return;
     }
     this.clearSecret();

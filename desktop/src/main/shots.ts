@@ -1,7 +1,9 @@
 // Dev only: ANYAPP_DESKTOP_SHOTS=<folder> walks the real window through every onboarding step and
 // the main window, in light and dark, and saves a PNG of each (webContents.capturePage).
 // ANYAPP_DESKTOP_SHOTS_SET picks which set: "flow" (default) or "states" (the "needs you" variants,
-// used together with ANYAPP_DESKTOP_SIMULATE).
+// used together with ANYAPP_DESKTOP_SIMULATE), "real" (against the real companion) or "qr" (the
+// screens with nothing secret on them, each QR popup, and a check that no pairing code is made or
+// renewed while no popup is open).
 import { nativeTheme, type BrowserWindow } from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -16,13 +18,19 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
   win.show();
   // Let checks and the companion settle.
   await wait(Number(process.env.ANYAPP_DESKTOP_SHOTS_SETTLE_MS ?? 9000));
+  win.webContents.setBackgroundThrottling(false);
   const shot = async (name: string) => {
     await wait(700);
+    // A window behind others can hand back its previous frame: repaint, drop one capture, take the next.
+    win.webContents.invalidate();
+    await win.webContents.capturePage();
+    await wait(250);
     const image = await win.webContents.capturePage();
     writeFileSync(join(dir, `${name}.png`), image.toPNG());
     log(`[shots] ${name}`);
   };
   const steps = ["welcome", "claude", "tools", "github", "phone-get", "phone-pair", "done"];
+  if (set === "qr") return qrSet(win, js, shot, log).catch((e) => log(`[shots] qr set failed: ${(e as Error).message}`));
   if (set === "real") {
     // Against the real companion: a phone pairs (an outside script plays the phone), then an app is
     // created through the companion and must show up in the main window.
@@ -131,4 +139,102 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
     }
   }
   nativeTheme.themeSource = "system";
+}
+
+type Js = (code: string) => Promise<unknown>;
+
+/** The "qr" set. Logs every pairing-code check as "[shots] code check: ...". */
+async function qrSet(win: BrowserWindow, js: Js, shot: (name: string) => Promise<void>, log: (l: string) => void): Promise<void> {
+  type Seen = { ec: string; ecCode: boolean; expiresAt?: string; sixDigit: string; logLines: number };
+  const seen = async (): Promise<Seen> =>
+    (await js(`window.anyapp.getSnapshot().then((s) => ({ ec: s.admin?.easyConnect.state ?? "none", ecCode: !!s.admin?.easyConnect.code, expiresAt: s.admin?.easyConnect.expiresAt, sixDigit: s.admin?.pairing.code ?? "", logLines: s.advanced.logTail.length }))`)) as Seen;
+  const logTail = async () => (await js(`window.anyapp.getSnapshot().then((s) => s.advanced.logTail)`)) as string[];
+  const secretVisible = () => js(`!!document.querySelector(".qr-plate, .typed") || document.body.innerText.includes("ANYAPP-EC1")`) as Promise<boolean>;
+  const report = async (where: string) => {
+    const s = await seen();
+    log(`[shots] code check (${where}): easyConnect=${s.ec}, live Easy Connect code: ${s.ecCode ? `yes, until ${s.expiresAt}` : "none"}, secret on screen: ${(await secretVisible()) ? "YES" : "no"}`);
+    return s;
+  };
+  const press = (testid: string) => js(`document.querySelector('[data-testid="${testid}"]')?.click()`);
+  const closeDialog = () => js(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))`);
+  const waitFor = async (what: string, code: string, ms: number) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (await js(code)) return true;
+      await wait(500);
+    }
+    log(`[shots] timed out waiting for ${what}`);
+    return false;
+  };
+  // Easy Connect comes back on at start without a code; wait for it, then watch with nothing open.
+  await waitFor("Easy Connect ready", `window.anyapp.getSnapshot().then((s) => s.admin?.easyConnect.state === "ready")`, 120_000);
+  await js(`window.__main.page("apps")`);
+  const startSix = (await report("start, Apps page, no popup")).sixDigit;
+  const quietMs = Number(process.env.ANYAPP_DESKTOP_SHOTS_QUIET_MS ?? 30_000);
+  await wait(quietMs / 2);
+  await report(`Apps page after ${quietMs / 2000}s, no popup`);
+  await js(`window.__main.page("phones")`);
+  await wait(quietMs / 2);
+  const before = await report(`Phones page after ${quietMs / 2000}s more, no popup`);
+  log(`[shots] 6-digit code unchanged with no popup open: ${before.sixDigit === startSix ? "yes" : "NO"}`);
+  for (const theme of ["light", "dark"] as const) {
+    nativeTheme.themeSource = theme;
+    await wait(400);
+    await js(`window.__main.page("apps")`);
+    await shot(`${theme}-1-apps-nothing-secret`);
+    await press("show-download-code");
+    await shot(`${theme}-2-apps-download-popup`);
+    await closeDialog();
+    await press("show-pairing-code");
+    await waitFor("the pairing QR", `!!document.querySelector(".dialog .qr-plate")`, 20_000);
+    await report(`${theme}: pairing popup open`);
+    await shot(`${theme}-3-apps-pairing-popup`);
+    await js(`[...document.querySelectorAll(".dialog button")].find((b) => b.textContent.includes("Use a code instead"))?.click()`);
+    await shot(`${theme}-4-apps-pairing-popup-code`);
+    await closeDialog();
+    await wait(300);
+    await report(`${theme}: pairing popup closed`);
+    await js(`window.__main.page("phones")`);
+    await shot(`${theme}-5-phones-nothing-secret`);
+    await press("show-pairing-code");
+    await waitFor("the pairing QR", `!!document.querySelector(".dialog .qr-plate")`, 20_000);
+    await shot(`${theme}-6-phones-pairing-popup`);
+    await closeDialog();
+    await js(`window.__app.setup("phone-get")`);
+    await wait(600);
+    await shot(`${theme}-7-setup-phone-get-nothing-secret`);
+    await js(`window.__onb.goto("phone-pair")`);
+    await shot(`${theme}-8-setup-phone-pair-nothing-secret`);
+    await press("show-pairing-code");
+    await waitFor("the pairing QR", `!!document.querySelector(".dialog .qr-plate")`, 20_000);
+    await shot(`${theme}-9-setup-phone-pair-popup`);
+    await closeDialog();
+    await js(`window.__app.setup(null)`);
+    await wait(400);
+  }
+  // The window's minimum size, with the pairing popup open.
+  nativeTheme.themeSource = "light";
+  const [w, h] = win.getSize();
+  win.setSize(960, 640);
+  await js(`window.__main.page("apps")`);
+  await shot("light-10-min-size-apps");
+  await press("show-pairing-code");
+  await waitFor("the pairing QR", `!!document.querySelector(".dialog .qr-plate")`, 20_000);
+  await shot("light-11-min-size-pairing-popup");
+  await closeDialog();
+  win.setSize(w, h);
+  nativeTheme.themeSource = "system";
+  // The last code runs out after 5 minutes with every popup closed: nothing may make a new one.
+  await js(`window.__main.page("apps")`);
+  if (process.env.ANYAPP_DESKTOP_SHOTS_EXPIRY === "0") return;
+  const asked = (await logTail()).filter((l) => l.includes("new pairing code asked for")).length;
+  log(`[shots] popups opened a code ${asked} time(s); now waiting for the last code to run out with no popup open`);
+  await waitFor("the code to run out", `window.anyapp.getSnapshot().then((s) => !s.admin?.easyConnect.code)`, 6 * 60_000);
+  await report("after the code ran out, Apps page, no popup");
+  await wait(Number(process.env.ANYAPP_DESKTOP_SHOTS_AFTER_MS ?? 60_000));
+  await report("a minute later, Apps page, no popup");
+  const tail = await logTail();
+  const since = tail.map((l) => l.includes("Easy Connect code expired")).lastIndexOf(true);
+  const renewed = tail.slice(since + 1).filter((l) => /new pairing code asked for|allowListLiftedForPairing/.test(l));
+  log(`[shots] last code ran out: ${since >= 0 ? "yes (logged)" : "not in the log tail"}; codes made or renewed since then with no popup open: ${renewed.length}${renewed.length ? ` (${renewed.join(" | ")})` : ""}`);
 }
