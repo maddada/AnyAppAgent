@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -94,6 +95,13 @@ class AnyAppNativeModule : Module() {
       val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return@Function false
       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       startActivity(intent)
+    }
+
+    /** A light tick under the finger (a long press on a tile). Needs no permission. */
+    Function("haptic") {
+      val view = appContext.currentActivity?.window?.decorView ?: return@Function false
+      view.post { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+      true
     }
 
     Function("openAppSettings") { packageName: String ->
