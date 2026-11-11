@@ -1,13 +1,27 @@
 // The playbook each app's Claude Code session receives as bb's <system_instructions> block on
 // the first prompt of a new session. Built on the Ghostex coordinator idea: one agent owns one
 // thing for one person, talks plainly, delegates big work, and keeps a goal-and-memory file.
-// The app's own AGENTS.md (from template/, loaded by Claude Code through the project's
-// CLAUDE.md) explains the stack, the built-in capabilities, the icon and what never to touch;
-// this playbook does not repeat it.
+// The app's own AGENTS.md (from template/ or template-kotlin/, loaded by Claude Code through the
+// project's CLAUDE.md) explains the stack, the built-in capabilities, the icon and what never to
+// touch; this playbook does not repeat it.
+import type { AppPreset } from "../../shared/protocol.ts";
+
 export const MEMORY_FILE = "APP_MEMORY.md";
 
-export function appPlaybook(app: { name: string; packageName: string; dir: string }): string {
+/** The command an app's agent runs to check its work before ending a turn (from its AGENTS.md). */
+export function checkCommand(preset: AppPreset | undefined): string {
+  return preset === "kotlin" ? "./gradlew --console=plain -q :app:compileReleaseKotlin" : "npm run check";
+}
+
+function stackLine(preset: AppPreset | undefined): string {
+  return preset === "kotlin"
+    ? "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native."
+    : "It is a React Native (Expo) app.";
+}
+
+export function appPlaybook(app: { name: string; packageName: string; dir: string; preset?: AppPreset }): string {
   return `You are the one and only agent for the Android app "${app.name}" (package ${app.packageName}).
+${stackLine(app.preset)}
 The project is this folder: ${app.dir}. Its AGENTS.md (loaded through CLAUDE.md) explains how the
 app is built, what is already installed and what you must never change: read it first and follow it.
 
@@ -21,7 +35,7 @@ the app should do; you make it so. They cannot see this PC, a terminal or any fi
 What happens after your turn (the server does it, not you):
 - The server builds the app, saves it with Git (do not commit or push yourself), and sends the new
   version to the phone, which installs it over the old one. So finish every turn with an app that
-  builds: run \`npm run check\` before you end.
+  builds: run \`${checkCommand(app.preset)}\` before you end.
 - If the build fails, the build error comes back to you as the next message. Fix the cause, never
   remove the feature to make the error go away.
 
@@ -42,9 +56,9 @@ start of a turn when you need context and update it when something important cha
 End every turn with one or two plain sentences that say what changed in the app.`;
 }
 
-export function buildFixPrompt(args: { buildNumber: number; attempt: number; maxAttempts: number; error: string }): string {
+export function buildFixPrompt(args: { buildNumber: number; attempt: number; maxAttempts: number; error: string; preset?: AppPreset }): string {
   const error = args.error.length > 6000 ? `…${args.error.slice(-6000)}` : args.error;
-  return `Building the app failed (build ${args.buildNumber}, fix attempt ${args.attempt} of ${args.maxAttempts}). Fix the cause in the code, then run \`npm run check\`. Do not run the Android build yourself: the server builds again when you finish this turn. The person only sees that you are fixing a small problem, so end with one plain sentence about what you fixed.
+  return `Building the app failed (build ${args.buildNumber}, fix attempt ${args.attempt} of ${args.maxAttempts}). Fix the cause in the code, then run \`${checkCommand(args.preset)}\`. Do not run the Android build yourself: the server builds again when you finish this turn. The person only sees that you are fixing a small problem, so end with one plain sentence about what you fixed.
 
 Build output:
 \`\`\`

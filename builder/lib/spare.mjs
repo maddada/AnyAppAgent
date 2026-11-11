@@ -2,7 +2,11 @@
 // createApp only has to rename it into place (instant on the same volume) and fill in the name.
 // After each claim a detached background process makes the next spare.
 //
-//   node spare.mjs refill <spareRoot>     (what createApp spawns)
+// One spare per preset: react-native spares in C:\aa\.spare, kotlin spares in C:\aa\.spare\kotlin.
+// A kotlin spare is only a few files, but its refill also warms the shared Gradle caches once per
+// template version (see warmKotlin), so the first build of a new Kotlin app is quick too.
+//
+//   node spare.mjs refill <spareRoot> [preset]     (what createApp spawns)
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -11,15 +15,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { makeAppTree, templateHash } from './template.mjs';
-import { tryLock } from './lock.mjs';
+import { renameWithRetry, tryLock } from './lock.mjs';
+import { checkPreset } from './presets.mjs';
 
 const MARKER = '.anyapp-spare.json';
 const SPARES_WANTED = 1;
 
 /** Spares must be on the same volume as the app folder; ANYAPP_SPARE_DIR overrides. */
-export function spareRootFor(dir) {
-  if (process.env.ANYAPP_SPARE_DIR) return path.resolve(process.env.ANYAPP_SPARE_DIR);
-  return path.join(path.parse(path.resolve(dir)).root, 'aa', '.spare');
+export function spareRootFor(dir, preset = 'react-native') {
+  const base = process.env.ANYAPP_SPARE_DIR
+    ? path.resolve(process.env.ANYAPP_SPARE_DIR)
+    : path.join(path.parse(path.resolve(dir)).root, 'aa', '.spare');
+  return checkPreset(preset) === 'react-native' ? base : path.join(base, preset);
 }
 
 function readMarker(spareDir) {
@@ -42,8 +49,8 @@ function readySpares(root, hash) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Moves a ready spare to dir. Returns true on success, false if none could be used. */
-export async function claimSpare(dir, hash) {
-  const root = spareRootFor(dir);
+export async function claimSpare(dir, hash, preset = 'react-native') {
+  const root = spareRootFor(dir, preset);
   for (const spare of readySpares(root, hash)) {
     // A just-written spare can briefly be held open by antivirus scanning: retry a little.
     for (let i = 0; i < 5; i++) {
@@ -63,13 +70,13 @@ export async function claimSpare(dir, hash) {
 }
 
 /** Starts a detached process that makes a new spare (returns at once). */
-export function refillSparesInBackground(dir) {
+export function refillSparesInBackground(dir, preset = 'react-native') {
   if (process.env.ANYAPP_NO_SPARE === '1') return;
-  const root = spareRootFor(dir);
+  const root = spareRootFor(dir, preset);
   try {
     fs.mkdirSync(root, { recursive: true });
     const out = fs.openSync(path.join(root, 'refill.log'), 'a');
-    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'refill', root], {
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'refill', root, preset], {
       detached: true,
       stdio: ['ignore', out, out],
       windowsHide: true,
@@ -82,7 +89,7 @@ export function refillSparesInBackground(dir) {
 }
 
 /** Removes outdated spares and makes new ones until SPARES_WANTED are ready. */
-export async function refillSpares(root, log = console.log) {
+export async function refillSpares(root, log = console.log, preset = 'react-native') {
   await fsp.mkdir(root, { recursive: true });
   const release = await tryLock(path.join(root, '.refill.lock'), { staleMs: 20 * 60_000 });
   if (!release) {
@@ -90,11 +97,11 @@ export async function refillSpares(root, log = console.log) {
     return;
   }
   try {
-    const hash = templateHash();
+    const hash = templateHash(preset);
     for (const e of fs.readdirSync(root, { withFileTypes: true })) {
       if (!e.isDirectory()) continue;
       const d = path.join(root, e.name);
-      const stale = e.name.startsWith('tmp-') || (e.name.startsWith('spare-') && readMarker(d)?.templateHash !== hash);
+      const stale = e.name.startsWith('tmp-') || e.name.startsWith('warm-') || (e.name.startsWith('spare-') && readMarker(d)?.templateHash !== hash);
       if (stale) {
         log(`Removing outdated ${e.name}`);
         await fsp.rm(d, { recursive: true, force: true, maxRetries: 3 });
@@ -104,10 +111,14 @@ export async function refillSpares(root, log = console.log) {
       const id = crypto.randomBytes(4).toString('hex');
       const tmp = path.join(root, `tmp-${id}`);
       const t0 = Date.now();
-      await makeAppTree(tmp, log);
-      await fsp.writeFile(path.join(tmp, MARKER), JSON.stringify({ templateHash: hash, at: new Date().toISOString() }));
-      await fsp.rename(tmp, path.join(root, `spare-${id}`));
+      await makeAppTree(tmp, log, preset);
+      await fsp.writeFile(path.join(tmp, MARKER), JSON.stringify({ preset, templateHash: hash, at: new Date().toISOString() }));
+      await renameWithRetry(tmp, path.join(root, `spare-${id}`));
       log(`Spare spare-${id} ready in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    }
+    if (preset === 'kotlin' && process.env.ANYAPP_NO_WARM !== '1') {
+      const { warmKotlin } = await import('./kotlin.mjs');
+      await warmKotlin(root, log);
     }
   } finally {
     await release();
@@ -116,8 +127,9 @@ export async function refillSpares(root, log = console.log) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url) && process.argv[2] === 'refill') {
   const root = process.argv[3];
+  const preset = process.argv[4] ?? 'react-native';
   const stamp = () => new Date().toISOString();
-  refillSpares(root, (m) => console.log(`${stamp()} ${m}`)).catch((e) => {
+  refillSpares(root, (m) => console.log(`${stamp()} ${m}`), preset).catch((e) => {
     console.error(`${stamp()} Refill failed: ${e.stack ?? e}`);
     process.exit(1);
   });

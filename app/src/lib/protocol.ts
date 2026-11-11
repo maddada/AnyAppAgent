@@ -2,6 +2,7 @@
 // app imports it from one place. Type-only: nothing from outside app/ reaches the bundle.
 export type {
   App,
+  AppPreset,
   AppStatus,
   BuildInfo,
   ChatItem,

@@ -23,6 +23,7 @@ and installs over the previous version. It must be dead simple for a regular, no
 | `shared/`   | `protocol.ts`: the wire contract between phone and PC. Types only.               |
 | `server/`   | The PC companion: pairing, one Claude Code session per app, Git/GitHub, builds.  |
 | `template/` | The React Native (Expo) starter every new app is copied from.                    |
+| `template-kotlin/` | The native Android starter (Kotlin, Compose) for the "Kotlin" preset.     |
 | `builder/`  | Creates an app from the template and builds its signed APK.                      |
 | `app/`      | The AnyAppAgent Android app itself (React Native, Expo).                         |
 | `docs/`     | This file and `ENVIRONMENT.md` (Android toolchain and emulator on this PC).       |
@@ -100,8 +101,10 @@ folder(s).
 `builder/index.mjs` (plain ESM, no build step) exports:
 
 ```
-createApp({ dir, name, slug, packageName, onLog? }) -> Promise<void>
+createApp({ dir, name, slug, packageName, preset?, onLog? }) -> Promise<void>
     Copies the template into dir, fills in name and package id, and leaves it ready to build.
+    preset: "react-native" (default, template/) or "kotlin" (template-kotlin/). buildApk and
+    getIconPath tell the two apart by the folder (app.json or anyapp.json).
 buildApk({ dir, buildNumber, onLog? }) -> Promise<{ apkPath, sizeBytes, sha256 }>
     Builds a signed, installable APK with versionCode = buildNumber. Rejects with an Error whose
     message is the useful part of the build output (the part an agent needs to fix it).

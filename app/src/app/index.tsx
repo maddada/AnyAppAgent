@@ -3,11 +3,11 @@ import { FlatList, Pressable, RefreshControl, TextInput, View, useWindowDimensio
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Download, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
+import { ChevronDown, Download, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp } from "@/lib/describe";
 import { installApp, installFromLink, launchApp } from "@/lib/installer";
-import type { App } from "@/lib/protocol";
+import type { App, AppPreset } from "@/lib/protocol";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
 import { appAction, removeApp, sortedApps, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
@@ -367,10 +367,27 @@ export function InstallFailure({ app, message, conflict }: { app: App; message?:
 
 // ---------- New app
 
+/** What an app can be made from (Advanced). The same wording goes on the PC's New app sheet. */
+const PRESETS: { id: AppPreset; title: string; tag?: string; line: string }[] = [
+  {
+    id: "react-native",
+    title: "React Native",
+    tag: "Default",
+    line: "Can come to iPhone later, and can get quick updates without a new install later on. Apps are bigger (about 55 MB).",
+  },
+  {
+    id: "kotlin",
+    title: "Kotlin",
+    line: "Fully native Android, smaller and faster apps (a few MB). Android only.",
+  },
+];
+
 function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const client = useStore((s) => s.client);
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [advanced, setAdvanced] = useState(false);
+  const [preset, setPreset] = useState<AppPreset>("react-native");
   const promptRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -381,10 +398,13 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
     setBusy(true);
     setError(null);
     try {
-      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim() });
+      // The default is left out of the request, so an older PC companion still accepts it.
+      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim(), ...(preset !== "react-native" ? { preset } : {}) });
       useStore.setState((s) => ({ apps: { ...s.apps, [app.id]: app } }));
       setName("");
       setPrompt("");
+      setAdvanced(false);
+      setPreset("react-native");
       onClose();
       void askForNotificationsOnce();
       router.push(`/chat/${app.id}`);
@@ -411,6 +431,7 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         multiline
         containerStyle={{ marginTop: space.lg }}
       />
+      <Advanced open={advanced} onToggle={() => setAdvanced(!advanced)} preset={preset} onPreset={setPreset} />
       {error ? (
         <T variant="caption" color="problem" style={{ marginTop: space.sm }}>
           {error}
@@ -423,6 +444,94 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         </T>
       ) : null}
     </Sheet>
+  );
+}
+
+/** "Advanced", closed by default: which kind of app to make. */
+function Advanced({ open, onToggle, preset, onPreset }: { open: boolean; onToggle: () => void; preset: AppPreset; onPreset: (p: AppPreset) => void }) {
+  const t = useTheme();
+  const chosen = PRESETS.find((p) => p.id === preset);
+  return (
+    <View style={{ marginTop: space.lg }}>
+      <Pressable
+        testID="new-app-advanced"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={onToggle}
+        style={{ flexDirection: "row", alignItems: "center", gap: space.xs, minHeight: size.touch }}
+      >
+        <T variant="label" style={{ flex: 1 }}>
+          Advanced
+        </T>
+        {!open && preset !== "react-native" ? (
+          <T variant="caption" color="textSecondary">
+            {chosen?.title}
+          </T>
+        ) : null}
+        <View style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}>
+          <ChevronDown size={icon.size.sm} color={t.textSecondary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+        </View>
+      </Pressable>
+      {open ? (
+        <View accessibilityRole="radiogroup" style={{ gap: space.sm, marginTop: space.xs }}>
+          {PRESETS.map((p) => (
+            <PresetChoice key={p.id} preset={p} selected={p.id === preset} onPress={() => onPreset(p.id)} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PresetChoice({ preset, selected, onPress }: { preset: (typeof PRESETS)[number]; selected: boolean; onPress: () => void }) {
+  const t = useTheme();
+  const dot = 20;
+  return (
+    <Pressable
+      testID={`new-app-preset-${preset.id}`}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${preset.title}. ${preset.line}`}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        gap: space.md,
+        // The thicker selected line eats into the padding, so the content never moves.
+        padding: space.md - (selected ? border.focusWidth - border.width : 0),
+        borderRadius: radius.card,
+        borderWidth: selected ? border.focusWidth : border.width,
+        borderColor: selected ? t.accent : t.border,
+        backgroundColor: pressed ? t.selectedBg : t.fieldBg,
+      })}
+    >
+      <View
+        style={{
+          width: dot,
+          height: dot,
+          marginTop: 2,
+          borderRadius: dot / 2,
+          borderWidth: border.focusWidth,
+          borderColor: selected ? t.accent : t.borderStrong,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {selected ? <View style={{ width: dot / 2, height: dot / 2, borderRadius: dot / 4, backgroundColor: t.accent }} /> : null}
+      </View>
+      <View style={{ flex: 1, gap: space.xs }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <T variant="row">{preset.title}</T>
+          {preset.tag ? (
+            <T variant="caption" color="textSecondary">
+              {preset.tag}
+            </T>
+          ) : null}
+        </View>
+        <T variant="caption" color="textSecondary">
+          {preset.line}
+        </T>
+      </View>
+    </Pressable>
   );
 }
 

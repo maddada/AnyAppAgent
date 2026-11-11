@@ -1,0 +1,12 @@
+# Build output anywhere: APKs and logs (build/apk/, build/logs/) and Gradle's own output
+# (app/build/, .gradle/, .kotlin/). After a build, `git status` must show only what was changed
+# by hand (and the launcher icon sizes when icon.png changed).
+build/
+.gradle/
+.kotlin/
+.cxx/
+*.hprof
+local.properties
+*.iml
+.idea/
+captures/
