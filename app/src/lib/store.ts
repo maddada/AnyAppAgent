@@ -3,7 +3,7 @@ import type { PackageInfo } from "anyapp-native";
 import { appAction as sharedAppAction, Drafts, mergeHelpers, mergeItems, replaceHistory } from "@shared/chat/index";
 import type { Attachment } from "@/chat/attachments";
 import { Client } from "./api";
-import type { App, ChatItem, TodoItem, WorkerInfo } from "./protocol";
+import type { App, CareState, ChatItem, TodoItem, WorkerInfo } from "./protocol";
 import { defaultPrefs, type Pairing, type Prefs } from "./storage";
 
 export type Connection = "offline" | "connecting" | "online";
@@ -43,6 +43,8 @@ export interface State {
   packages: Record<string, PackageInfo | null>; // packageName -> installed info
   installs: Record<string, InstallProgress>; // appId -> install in progress or last result
   needInstallPermission: string | null; // appId waiting for "install unknown apps"
+  /** The usage meter, the monthly health reminder and the backup (docs/TRUST.md); null on older PCs. */
+  care: CareState | null;
 }
 
 export const useStore = create<State>(() => ({
@@ -62,6 +64,7 @@ export const useStore = create<State>(() => ({
   helperChats: {},
   helperChatLoaded: {},
   todos: {},
+  care: null,
   packages: {},
   installs: {},
   needInstallPermission: null,

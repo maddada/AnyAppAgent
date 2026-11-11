@@ -45,6 +45,7 @@ import { easing, elevation, fonts, icon, motion, radius, size, space, typeStyle,
 import { buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, answerLines, pageCard, type HelperIcon, type PageAnswers, type PageCardView, type Row } from "@shared/chat/index";
 import { StateLine } from "@/ui/StateLine";
 import { Markdown } from "./Markdown";
+import { UsageNote } from "@/ui/Trust";
 
 /** COMPONENTS.md: tool detail blocks are indented 28 and show at most 12 lines; the permission badge is 36. */
 const DETAIL_INDENT = 28;
@@ -131,6 +132,7 @@ function UserMessage({ item }: { item: ChatItem }) {
       </View>
       ) : null}
       {long ? <Button label={open ? "Show less" : "Show more"} variant="text" small onPress={() => setOpen(!open)} style={{ marginTop: space.xs }} /> : null}
+      <UsageNote item={item} />
       {note ? (
         <View testID={`user-note-${note.kind}`} style={{ flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.xs, paddingHorizontal: space.xs }}>
           {note.kind === "queued" ? <Spinner color={t.textTertiary} /> : null}

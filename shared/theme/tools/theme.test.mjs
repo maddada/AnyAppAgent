@@ -66,7 +66,7 @@ for (const mode of ["light", "dark"]) {
     const checks = [];
     for (const fg of ["text", "textSecondary", "textTertiary", "ready", "problem"])
       for (const bg of ["bg", "surface", "surfaceSunken"]) checks.push([fg, bg, 4.5]);
-    checks.push(["onAccent", "accent", 4.5], ["onProblem", "problem", 4.5], ["bubbleText", "bubbleBg", 7], ["text", "surfaceOverlay", 7]);
+    checks.push(["onAccent", "accent", 4.5], ["onProblem", "problem", 4.5], ["onAttention", "attention", 4.5], ["attentionText", "bg", 4.5], ["attentionText", "surface", 4.5], ["attention", "surface", 1.8], ["bubbleText", "bubbleBg", 7], ["text", "surfaceOverlay", 7]);
     checks.push(["ready", "readySoft", 4.5], ["problem", "problemSoft", 4.5], ["qrFg", "qrBg", 10], ["markFg", "markBg", 4.5]);
     checks.push(["accent", "bg", 3], ["focus", "bg", 3], ["borderStrong", "bg", 1.5]);
     const failures = checks

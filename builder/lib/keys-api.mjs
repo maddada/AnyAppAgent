@@ -4,9 +4,13 @@
 //   moveAppToOwnKey({ packageName })          -> { kind: 'moved', certSha256 }
 //   backupSigningKeys({ file, password })     -> { file, count, ids, createdAt }
 //   restoreSigningKeys({ file, password })    -> { added, same, conflicts }
-// Nothing returned here ever holds a password or a private key.
+// Nothing returned above ever holds a password or a private key. For the whole-PC backup
+// (server/src/backup.ts), which encrypts them in its own file:
+//   exportSigningKeys()                       -> { entries }  (SECRET: keys and their passwords)
+//   importSigningKeys({ entries, createdAt }) -> { added, same, conflicts }
+//   markSigningKeysBackedUp({ ids, createdAt })
 import { androidEnv } from './env.mjs';
-import { backupKeys, lastBackup, restoreKeys } from './keybackup.mjs';
+import { backupKeys, exportKeyEntries, importKeyEntries, lastBackup, noteBackedUp, restoreKeys } from './keybackup.mjs';
 import { listKeys, moveAppToOwnKey as move, readAppKey } from './keystore.mjs';
 
 export async function listSigningKeys() {
@@ -32,4 +36,17 @@ export async function backupSigningKeys({ file, password }) {
 
 export async function restoreSigningKeys({ file, password }) {
   return restoreKeys(androidEnv().javaHome, { file, password });
+}
+
+export async function exportSigningKeys() {
+  return { entries: await exportKeyEntries(androidEnv().javaHome) };
+}
+
+export async function importSigningKeys({ entries, createdAt }) {
+  if (!Array.isArray(entries)) throw new Error('importSigningKeys: entries must be a list');
+  return importKeyEntries(androidEnv().javaHome, entries, createdAt);
+}
+
+export async function markSigningKeysBackedUp({ ids, createdAt }) {
+  await noteBackedUp(ids, createdAt);
 }

@@ -28,4 +28,9 @@ export type {
   WorkerInfo,
   PageInfo,
   PageOpenResponse,
+  CareState,
+  AppHealth,
+  AppUsage,
+  TokenUsage,
+  UsageState,
 } from "@shared/protocol";

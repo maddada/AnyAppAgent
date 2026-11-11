@@ -228,6 +228,9 @@
   --aa-problem: #A63A21;
   --aa-problem-soft: #F3DDD3;
   --aa-on-problem: #FBF5F0;
+  --aa-attention: #E3A72F;
+  --aa-on-attention: #2B2006;
+  --aa-attention-text: #7A5300;
   --aa-focus: #1D6A4A;
   --aa-tile-bg: #FBF9F4;
   --aa-tile-border: transparent;
@@ -276,6 +279,9 @@
     --aa-problem: #EE8466;
     --aa-problem-soft: #3A2219;
     --aa-on-problem: #1F0E08;
+    --aa-attention: #E6B24A;
+    --aa-on-attention: #241A05;
+    --aa-attention-text: #E6B85C;
     --aa-focus: #86CDA5;
     --aa-tile-bg: #211E1A;
     --aa-tile-border: #2B2722;
@@ -324,6 +330,9 @@
   --aa-problem: #EE8466;
   --aa-problem-soft: #3A2219;
   --aa-on-problem: #1F0E08;
+  --aa-attention: #E6B24A;
+  --aa-on-attention: #241A05;
+  --aa-attention-text: #E6B85C;
   --aa-focus: #86CDA5;
   --aa-tile-bg: #211E1A;
   --aa-tile-border: #2B2722;

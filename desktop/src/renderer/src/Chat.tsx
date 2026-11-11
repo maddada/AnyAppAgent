@@ -18,6 +18,9 @@ import { Markdown } from "./Markdown.tsx";
 import { imageFiles, prepare, sentPicture, type Attachment } from "./pictures.ts";
 import { AppIcon, Icon, Spinner, StateLine } from "./ui.tsx";
 import { TodoPanel } from "./Todo.tsx";
+import type { CareState } from "../../../../shared/protocol.ts";
+import { bigJob, HeadsUpCard, HealthNotice, UsageNote } from "./Trust.tsx";
+import type { HeadsUp } from "../../../../shared/chat/index.ts";
 
 const api = window.anyapp;
 /** COMPONENTS.md: tool detail blocks show at most 12 lines until "Show all". */
@@ -49,7 +52,7 @@ const ROOMY_WIDTH = 760;
 /** Opening a helper's chat from its row, and which one is open (its row shows as selected). */
 const HelperPanel = createContext<{ open: (workerId: string) => void; selected: string | null }>({ open: () => {}, selected: null });
 
-export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, onSetupHex }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; onHelperOpen?: (open: boolean) => void; hex?: HexCheck; onSetupHex?: () => void }) {
+export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, onSetupHex, care = null }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; onHelperOpen?: (open: boolean) => void; hex?: HexCheck; onSetupHex?: () => void; care?: CareState | null }) {
   const helpers = useHelpers(app.id, online);
   // The open helper chat, per app (moving between apps keeps each one's choice for this run).
   const [openHelpers, setOpenHelpers] = useState<Record<string, string | null>>({});
@@ -99,14 +102,14 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, on
   return (
     <HelperPanel.Provider value={panel}>
       <div ref={area} className={side ? `chat-split chat-split-${placement}${narrow ? " is-narrow" : ""}` : "chat-single"}>
-        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={<>{todoButton}{headerExtra}</>} hex={hex} onSetupHex={onSetupHex} />}
+        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={<>{todoButton}{headerExtra}</>} hex={hex} onSetupHex={onSetupHex} care={care} />}
         {side}
       </div>
     </HelperPanel.Provider>
   );
 }
 
-function MainChat({ app, icon, online, headerExtra, hex, onSetupHex }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; hex?: HexCheck; onSetupHex?: () => void }) {
+function MainChat({ app, icon, online, headerExtra, hex, onSetupHex, care }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; hex?: HexCheck; onSetupHex?: () => void; care: CareState | null }) {
   const chat = useChat(app.id, online);
   const rows = useMemo(() => buildRows(chat.items, app), [chat.items, app]);
   const st = describeApp(app);
@@ -165,6 +168,7 @@ function MainChat({ app, icon, online, headerExtra, hex, onSetupHex }: { app: Ap
         </div>
         {headerExtra}
       </header>
+      <HealthNotice app={app} care={care} online={online} />
       <div className="chat-scroll-wrap">
         <div
           className="chat"
@@ -196,14 +200,14 @@ function MainChat({ app, icon, online, headerExtra, hex, onSetupHex }: { app: Ap
           </button>
         )}
       </div>
-      <Composer key={app.id} app={app} online={online} onSent={jump} registerDrop={(add) => (dropInto.current = add)} hex={hex} onSetupHex={onSetupHex} />
+      <Composer key={app.id} app={app} online={online} onSent={jump} registerDrop={(add) => (dropInto.current = add)} hex={hex} onSetupHex={onSetupHex} care={care} />
     </div>
   );
 }
 
 // ------------------------------------------------------------------ composer
 
-function Composer({ app, online, onSent, registerDrop, hex, onSetupHex }: { app: App; online: boolean; onSent: () => void; registerDrop: (add: ((files: File[]) => void) | null) => void; hex?: HexCheck; onSetupHex?: () => void }) {
+function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: { app: App; online: boolean; onSent: () => void; registerDrop: (add: ((files: File[]) => void) | null) => void; hex?: HexCheck; onSetupHex?: () => void; care: CareState | null }) {
   const [text, setTextState] = useState(() => drafts.get(app.id));
   const setText = (v: string) => {
     setTextState(v);
@@ -266,9 +270,16 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex }: { app:
     return () => registerDrop(null);
   });
 
-  const send = async () => {
+  // The heads-up before a big job (docs/TRUST.md): shown once for this text, then Send goes.
+  const [headsUp, setHeadsUp] = useState<{ h: HeadsUp; text: string } | null>(null);
+  const send = async (confirmed = false) => {
     if (state.button === "stop" || !state.enabled || adding > 0) return;
     const message = text.trim();
+    if (!confirmed) {
+      const h = bigJob(message, app, care?.usage);
+      if (h) return setHeadsUp({ h, text: message });
+    }
+    setHeadsUp(null);
     const images = attached.map(({ mimeType, data, width, height }) => ({ mimeType, data, width, height }));
     setSending(true);
     setError(null);
@@ -360,6 +371,7 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex }: { app:
       }}
     >
       {error && <p className="label composer-note">{error}</p>}
+      {headsUp && headsUp.text === text.trim() && <HeadsUpCard h={headsUp.h} busy={sending} onSend={() => void send(true)} onCancel={() => setHeadsUp(null)} />}
       {dictation.error && (
         <div className="label composer-note dictate-note">
           <span>{dictation.error}</span>
@@ -526,6 +538,7 @@ function UserMessage({ item }: { item: ChatItem }) {
     <div className="msg-user">
       {item.images?.length ? <Pictures appId={item.appId} images={item.images} /> : null}
       {item.text ? <div className="bubble">{item.text}</div> : null}
+      <UsageNote item={item} />
       {note && (
         <div className={`user-note caption is-${note.kind}`} data-testid={`user-note-${note.kind}`}>
           {note.kind === "queued" && <Spinner />}

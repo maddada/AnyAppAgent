@@ -39,6 +39,9 @@ export const color = {
     problem: "#A63A21", // brick red: could not build, could not connect
     problemSoft: "#F3DDD3",
     onProblem: "#FBF5F0",
+    attention: "#E3A72F", // mustard yellow: the alert sign on an app that is behind ("Keep my apps healthy"). A filled badge, never text
+    onAttention: "#2B2006", // the "!" on the attention badge
+    attentionText: "#7A5300", // words next to the badge ("Needs an update"): readable ochre
 
     focus: "#1D6A4A", // keyboard focus ring (desktop), 2px outside the element
 
@@ -86,6 +89,9 @@ export const color = {
     problem: "#EE8466",
     problemSoft: "#3A2219",
     onProblem: "#1F0E08",
+    attention: "#E6B24A",
+    onAttention: "#241A05",
+    attentionText: "#E6B85C",
 
     focus: "#86CDA5",
 

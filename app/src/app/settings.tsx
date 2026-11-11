@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react-native";
 import Constants from "expo-constants";
 import { AnyAppNative } from "anyapp-native";
 import { AiSettingsGroup } from "@/ui/AiSettings";
+import { CareSettings } from "@/ui/Trust";
 import { displayAddress } from "@/lib/address";
 import { usesEasyConnect } from "@/lib/route";
 import { unpair, updatePrefs } from "@/lib/session";
@@ -78,6 +79,8 @@ export default function Settings() {
         </Group>
 
         <AiSettingsGroup Group={Group} Row={Row} Divider={Divider} />
+
+        <CareGroup />
 
         <Group title="Permissions">
           <Row
@@ -158,6 +161,19 @@ function readPermissions() {
     install: AnyAppNative?.canInstallPackages() ?? false,
     notify: AnyAppNative?.notificationsEnabled() ?? false,
   };
+}
+
+/** The usage meter and the backup (docs/TRUST.md); nothing on an older PC. */
+function CareGroup() {
+  const care = useStore((s) => s.care);
+  if (!care) return null;
+  return (
+    <Group title="Claude plan and backup">
+      <View style={{ padding: space.lg }}>
+        <CareSettings care={care} />
+      </View>
+    </Group>
+  );
 }
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {

@@ -8,6 +8,8 @@ import type {
   AddTodoRequest,
   AdminEvent,
   AdminState,
+  BackupRestoreRequest,
+  BackupSetupRequest,
   CreateAppRequest,
   EasyConnectPairRequest,
   EasyConnectToggleRequest,
@@ -210,6 +212,7 @@ export function startHttpServer(deps: {
       easyConnect: easyConnect.state(),
       devices,
       ...(deps.signing?.state() ? { signing: deps.signing.state() } : {}),
+      backup: apps.backups.state(),
     };
   }
 
@@ -247,6 +250,25 @@ export function startHttpServer(deps: {
       const body = await readBody<Partial<KeysBackupRequest>>(req);
       if (path === "/api/admin/keys/backup") return sendJson(res, 200, await deps.signing.backup(body.file, body.password));
       return sendJson(res, 200, await deps.signing.restore(body.file, body.password));
+    }
+    // "Never lose your apps" (backup.ts): the password passes straight through and is never logged.
+    if (method === "POST" && path === "/api/admin/backup") {
+      const body = await readBody<Partial<BackupSetupRequest>>(req);
+      const state = await apps.backups.setup(body);
+      adminChanged();
+      return sendJson(res, 200, state);
+    }
+    if (method === "POST" && path === "/api/admin/backup/run") {
+      const state = await apps.backups.run();
+      adminChanged();
+      return sendJson(res, 200, state);
+    }
+    if (method === "POST" && path === "/api/admin/backup/restore") {
+      const body = await readBody<Partial<BackupRestoreRequest>>(req);
+      const result = await apps.backups.restore(body);
+      deps.signing?.refreshSoon();
+      adminChanged();
+      return sendJson(res, 200, result);
     }
     const device = /^\/api\/admin\/devices\/([^/]+)$/.exec(path);
     if (method === "DELETE" && device) {
@@ -312,6 +334,15 @@ export function startHttpServer(deps: {
     if (!path.startsWith("/api/")) return sendError(res, 404, "Not found.");
     if (!auth.check(bearer(req))) return sendError(res, 401, "This phone is not paired with this PC. Pair it again.");
 
+    // The usage meter, the health reminder and the backup, for the phone (docs/TRUST.md).
+    if (path === "/api/care") {
+      if (method === "GET") return sendJson(res, 200, apps.care());
+      return sendError(res, 405, "Method not allowed.");
+    }
+    if (path === "/api/care/reminder") {
+      if (method === "POST") return sendJson(res, 200, apps.dismissReminder());
+      return sendError(res, 405, "Method not allowed.");
+    }
     if (path === "/api/apps") {
       if (method === "GET") return sendJson(res, 200, apps.list());
       if (method === "POST") {
@@ -366,6 +397,13 @@ export function startHttpServer(deps: {
       return sendError(res, 405, "Method not allowed.");
     }
     if (await workerApiRoute(req, res, path, url, { workers: apps.workers, checkApp: (appId) => void apps.get(appId) })) return;
+    // "Update it" on an app that is behind (health.ts): POST /api/apps/:id/keep-healthy
+    const healthy = /^\/api\/apps\/([^/]+)\/keep-healthy$/.exec(path);
+    if (healthy) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      apps.keepHealthy(decodeURIComponent(healthy[1]));
+      return sendJson(res, 202, {});
+    }
     const match = /^\/api\/apps\/([^/]+)(?:\/([a-z]+))?$/.exec(path);
     if (!match) return sendError(res, 404, "Not found.");
     const id = decodeURIComponent(match[1]);

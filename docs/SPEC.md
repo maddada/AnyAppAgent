@@ -245,3 +245,21 @@ updates and new APKs, so they never have to go back to AnyAppAgent to get a chan
 - The playbooks and the templates' AGENTS.md explain it, and the chat says "Sent as a quick update,
   no install needed" when that is what happened.
 - Design, security and the proof: `docs/FAST-LANE.md`.
+
+## Never lose your apps, the usage meter, keep my apps healthy (added 2026-11-11)
+
+The user picked "Never lose your apps", "Usage meter" and "Keep my apps healthy"
+(`C:\aa\ideas\ideas.html`, Q43, Q45, Q47). Details and the proof: `docs/TRUST.md`.
+
+- **Backup**: one switch in desktop Settings backs up every signing key, every app's code with its
+  history (a Git bundle), its chat and to-dos into a folder the person picks (OneDrive or USB),
+  after every new version and once a day. Encrypted to a recovery key whose private half only the
+  person's password opens, so the PC backs up without keeping the password. Keys never go to
+  GitHub. "Restore on a new PC" adds the keys and apps a PC lacks and builds each app once, so the
+  phone updates it in place.
+- **Usage meter**: each message shows what its work used (from each ACP turn's `usage`), each app
+  its month and total, and the plan's limits only as Claude reported them; a heads-up before a big
+  job. Phone and PC.
+- **Keep my apps healthy**: an app behind the newest template (older Expo SDK or Android target,
+  missing or older built-in parts) gets a yellow "!" on its icon and "Update it", which sends its
+  agent the update message; a reminder once a month while any app is behind.

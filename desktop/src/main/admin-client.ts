@@ -14,6 +14,10 @@ import type {
   AdminState,
   App,
   AppPreset,
+  BackupRestoreResult,
+  BackupSetupRequest,
+  BackupState,
+  CareState,
   ChatItem,
   ImageUpload,
   KeysBackupRequest,
@@ -147,6 +151,7 @@ export class AdminClient extends EventEmitter {
     this.closed = false;
     await this.refreshState();
     await this.refreshApps();
+    await this.refreshCare();
     this.openSocket();
     // The fallback has no admin.state events; poll the files instead.
     this.pollTimer = setInterval(() => {
@@ -182,6 +187,18 @@ export class AdminClient extends EventEmitter {
     if (JSON.stringify(state) === JSON.stringify(this.state)) return;
     this.state = state;
     this.emit("state", state);
+  }
+
+  /** The usage meter, the monthly health reminder and the backup (docs/TRUST.md); null on older companions. */
+  care: CareState | null = null;
+
+  async refreshCare(): Promise<void> {
+    try {
+      this.care = await this.request<CareState>("GET", "/api/care");
+      this.emit("care", this.care);
+    } catch {
+      // an older companion: no meter
+    }
   }
 
   async refreshApps(): Promise<void> {
@@ -246,6 +263,10 @@ export class AdminClient extends EventEmitter {
         break;
       case "todos.updated":
         this.emit("todos", event.appId, event.todos);
+        break;
+      case "care.updated":
+        this.care = event.care;
+        this.emit("care", event.care);
         break;
     }
   }
@@ -313,6 +334,36 @@ export class AdminClient extends EventEmitter {
 
   releases(appId: string): Promise<ReleaseStats[]> {
     return this.request<ReleaseStats[]>("GET", `/api/apps/${encodeURIComponent(appId)}/releases`, undefined, 60_000);
+  }
+
+  /** "Update it" on an app that is behind: the companion sends its agent the update message. */
+  keepHealthy(appId: string): Promise<void> {
+    return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/keep-healthy`, {});
+  }
+
+  async dismissReminder(): Promise<void> {
+    this.care = await this.request<CareState>("POST", "/api/care/reminder", {});
+    this.emit("care", this.care);
+  }
+
+  /** "Never lose your apps": the password goes only to the companion on 127.0.0.1. Backing up can take a minute. */
+  async backupSetup(body: BackupSetupRequest): Promise<BackupState> {
+    const result = await this.request<BackupState>("POST", "/api/admin/backup", body, 10 * 60_000);
+    await this.refreshState();
+    return result;
+  }
+
+  async backupRun(): Promise<BackupState> {
+    const result = await this.request<BackupState>("POST", "/api/admin/backup/run", {}, 10 * 60_000);
+    await this.refreshState();
+    return result;
+  }
+
+  async backupRestore(folder: string, password: string): Promise<BackupRestoreResult> {
+    const result = await this.request<BackupRestoreResult>("POST", "/api/admin/backup/restore", { folder, password }, 15 * 60_000);
+    await this.refreshState();
+    await this.refreshApps();
+    return result;
   }
 
   rebuild(appId: string): Promise<void> {

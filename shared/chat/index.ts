@@ -12,3 +12,4 @@ export * from "./markdown.ts";
 export * from "./images.ts";
 export * from "./helpers.ts";
 export * from "./pages.ts";
+export * from "./trust.ts";

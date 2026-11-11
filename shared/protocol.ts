@@ -75,6 +75,12 @@ export interface App {
   signing?: "shared" | "own" | "moved"; // which key signs its builds (docs/DISTRIBUTION.md); absent from older PCs
   sharing?: AppSharing; // absent until the app is shared once (docs/DISTRIBUTION.md)
   openTodos?: number; // to-do items not ticked off yet (see "To-do"); absent from older PCs and when there are none
+  // Added with the usage meter (see "Usage"): what this app's agents (main chat, helpers, build fixes)
+  // used, as Claude Code reported it. Absent until a turn reported usage, and from older PCs.
+  usage?: AppUsage;
+  // Added with "Keep my apps healthy" (see "Health"): set only when the app is behind the newest
+  // template (older Expo, older Android target, missing built-in parts). Absent when up to date.
+  health?: AppHealth;
   createdAt: string;
   updatedAt: string;
 }
@@ -178,6 +184,9 @@ export interface ChatItem {
   worker?: WorkerInfo; // on a "worker" row: the worker it stands for (tap opens its chat)
   workerId?: string; // set on the items of a worker's own chat; never on the main chat
   page?: PageInfo; // added: on a "page" item (its text is the page's title, for older apps); upserted when answered
+  // Added with the usage meter: on a user item, what its agent work used so far (the main chat's turn,
+  // the helpers it started, their build fixes and their reports). Grows while the work runs.
+  usage?: TokenUsage;
   createdAt: string;
   updatedAt: string;
 }
@@ -383,7 +392,8 @@ export type ServerEvent =
   | { type: "apk.ready"; app: App } // a new APK can be downloaded and installed now
   | { type: "worker.updated"; worker: WorkerInfo } // a worker started or changed (its main-chat row also arrives as chat.item)
   | { type: "worker.item"; item: ChatItem } // upsert into the chat of worker item.workerId (never the main chat)
-  | { type: "todos.updated"; appId: string; todos: TodoItem[] }; // added: the app's whole to-do list after a change
+  | { type: "todos.updated"; appId: string; todos: TodoItem[] } // added: the app's whole to-do list after a change
+  | { type: "care.updated"; care: CareState }; // added: the usage meter, the health reminder or the backup changed
 
 // ---------- Desktop app (desktop/, Electron) to companion. The desktop app starts the companion
 // as a child process with the env var ANYAPP_ADMIN_TOKEN=<random secret>. That token is accepted
@@ -422,6 +432,7 @@ export interface AdminState {
   easyConnect: EasyConnectState;
   devices: PairedDevice[];
   signing?: SigningKeysState; // absent with the fake builder (added for docs/DISTRIBUTION.md)
+  backup?: BackupState; // added with "Never lose your apps" (see "Backup"); absent from older PCs
 }
 
 // ---------- Signing keys (docs/DISTRIBUTION.md, "Signing"). Nothing here ever holds a password or
@@ -466,3 +477,93 @@ export interface EasyConnectToggleRequest {
 // DELETE /api/admin/devices/:id -> 204 (unpair: its token stops working at once)
 // GET /api/admin/events -> the same WebSocket events as /ws, plus:
 export type AdminEvent = ServerEvent | { type: "admin.state"; state: AdminState };
+
+// ---------- Usage (added: the usage meter, docs/TRUST.md). Numbers are what Claude Code reported for
+// each turn (ACP PromptResponse.usage); nothing is estimated. Cache reads are counted apart because
+// Claude reads them again on every step and they count far less toward a plan than new work.
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+}
+export interface AppUsage {
+  total: TokenUsage; // since this PC started counting
+  month: TokenUsage; // this calendar month (the PC's local time)
+  monthKey: string; // "2026-11": the month `month` is for
+  changes: number; // messages from the person whose work used something
+  since: string; // when counting started for this app
+}
+// One of the Claude plan's limits, only as Claude reported it (a rate limit event). Never estimated:
+// usedPercent is absent when Claude did not say, and then clients show use, not a percentage.
+export interface PlanLimit {
+  kind: string; // "five_hour", "seven_day", "seven_day_opus", ... (Claude's own names)
+  status: "allowed" | "allowed_warning" | "rejected";
+  usedPercent?: number; // 0 to 100
+  resetsAt?: string; // ISO
+  seenAt: string; // when Claude last reported it
+}
+export interface UsageState {
+  plan: PlanLimit[]; // empty when Claude has not reported a limit
+  month: TokenUsage; // every app together, this month
+  monthKey: string;
+}
+
+// ---------- Health (added: "Keep my apps healthy", docs/TRUST.md)
+export interface AppHealth {
+  behind: true;
+  reasons: string[]; // plain sentences, e.g. "Made with Expo SDK 57; the newest is 58."
+  checkedAt: string;
+}
+export interface HealthReminder {
+  due: boolean; // show the monthly reminder now
+  behind: number; // apps that are behind
+  lastAt: string | null; // when it was last shown and put away
+  nextAt: string | null; // when it is due next (null while no app is behind)
+}
+// POST /api/apps/:id/keep-healthy -> 202: sends the app's agent the update message as the person's own
+//   message (it shows in the chat as such); 409 when the app is not behind.
+
+// ---------- Backup (added: "Never lose your apps", docs/TRUST.md)
+export interface BackupSummary {
+  enabled: boolean;
+  lastBackupAt: string | null;
+  lastError?: string; // plain sentence, when the last automatic backup failed
+  apps: number; // apps in the last backup
+}
+export interface BackupState extends BackupSummary {
+  folder?: string; // the folder the person picked (absent while off)
+  keys: number; // signing keys in the last backup
+  sizeBytes?: number; // of the last backup file
+  onGithub: number; // apps whose code is also in their private GitHub repo
+  running: boolean;
+}
+
+// What a phone needs to show the three: GET /api/care -> CareState. Changes arrive as "care.updated".
+export interface CareState {
+  usage: UsageState;
+  health: HealthReminder;
+  backup: BackupSummary;
+}
+// POST /api/care/reminder -> CareState (the person put the monthly reminder away: due again in a month)
+
+// Desktop only:
+// POST /api/admin/backup BackupSetupRequest -> BackupState (turn on: picks the folder and makes the
+//   recovery key from the password, then backs up at once; turn off: stops backing up, keeps the files)
+// POST /api/admin/backup/run -> BackupState (back up now)
+// POST /api/admin/backup/restore BackupRestoreRequest -> BackupRestoreResult (on a new PC)
+export interface BackupSetupRequest {
+  enabled: boolean;
+  folder?: string; // absolute; required to turn on
+  password?: string; // at least 8 characters; required to turn on; never stored or logged
+}
+export interface BackupRestoreRequest {
+  folder: string; // the backup folder (the one holding "AnyAppAgent backup")
+  password: string;
+}
+export interface BackupRestoreResult {
+  backupCreatedAt: string;
+  apps: { id: string; name: string; outcome: "restored" | "here" | "failed"; reason?: string }[];
+  keys: KeysRestoreResult | null; // null with the fake builder
+  rebuilding: number; // apps building again now, so phones update them in place
+}

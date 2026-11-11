@@ -14,6 +14,8 @@ import { PairingDialog } from "./Pairing.tsx";
 import { ShareButton, ShareDialog } from "./Share.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
 import { AppIcon, Dialog, Icon, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
+import { BackupGroup, HealthBadge, ReminderCard, UsageGroup } from "./Trust.tsx";
+import { BEHIND_LABEL, headsUp } from "../../../../shared/chat/index.ts";
 
 const api = window.anyapp;
 type Page = "apps" | "phones" | "setup" | "settings";
@@ -91,6 +93,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
       </main>
       {newApp && (
         <NewAppDialog
+          s={s}
           onClose={() => setNewApp(false)}
           onMade={(id) => {
             setNewApp(false);
@@ -211,6 +214,7 @@ function AppsPage({
             </button>
           </div>
         )}
+        <ReminderCard care={s.care} />
         {apps.length === 0 ? (
           <div className="apps-empty">
             <strong className="heading">No apps yet</strong>
@@ -226,13 +230,17 @@ function AppsPage({
               const v = a.latestApk ?? a.latestBuild;
               return (
                 <button key={a.id} className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined} title={a.name}>
-                  <AppIcon icon={s.icons[a.id]} small />
+                  <span className="icon-wrap">
+                    <AppIcon icon={s.icons[a.id]} small />
+                    <HealthBadge app={a} />
+                  </span>
                   <div className="arow-main">
                     <div className="arow-top">
                       <span className="body arow-name">{a.name}</span>
                       <span className="arow-meta">{[v ? `v${v.number}` : "", timeAgo(a.updatedAt)].filter(Boolean).join(", ")}</span>
                     </div>
                     <StateLine state={st.state} text={st.text} />
+                    {a.health?.behind && st.state !== "working" && <span className="caption attention-text">{BEHIND_LABEL}</span>}
                   </div>
                 </button>
               );
@@ -250,6 +258,7 @@ function AppsPage({
             hex={s.checks.hex}
             onSetupHex={goSettings}
             headerExtra={<ShareButton app={app} online={online} onOpen={() => setSharing(app.id)} />}
+            care={s.care}
           />
         ) : (
           <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />
@@ -304,7 +313,7 @@ function Overview({ s, hasApps, onConnect, onGetApp }: { s: Snapshot; hasApps: b
 }
 
 /** New app from the PC: the same fields and words as the phone's New app sheet. */
-function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId: string) => void }) {
+function NewAppDialog({ s, onClose, onMade }: { s: Snapshot; onClose: () => void; onMade: (appId: string) => void }) {
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
   const [advanced, setAdvanced] = useState(false);
@@ -340,6 +349,7 @@ function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId
           void submit();
         }}
       >
+        {ready && <p className="label secondary heads-up-line" data-testid="new-app-heads-up">{headsUp({ text: prompt, newApp: true, usage: s.care?.usage })?.body}</p>}
         <label className="fld">
           <span className="label">Name</span>
           <input className="field" data-testid="new-app-name" value={name} maxLength={40} placeholder="For example, Prayer Times" autoFocus onChange={(e) => setName(e.target.value)} />
@@ -784,7 +794,9 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
           </button>
         </div>
       </section>
+      <BackupGroup s={s} />
       <SigningKeysGroup s={s} />
+      <UsageGroup s={s} />
       <section className="settings-group">
         <h2 className="heading">Dictation</h2>
         <p className="callout secondary">Speak your changes in a chat on this PC instead of typing them. It uses Hex, a free app that turns your voice into text on this PC, offline.</p>

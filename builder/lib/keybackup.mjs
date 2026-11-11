@@ -27,12 +27,13 @@ function deriveKey(password, salt) {
   return crypto.scryptSync(password.normalize('NFC'), salt, 32, SCRYPT);
 }
 
-/** Writes every key to `file`, encrypted with `password`. Returns { file, count, ids }. */
-export async function backupKeys(javaHome, { file, password }) {
-  checkPassword(password);
-  if (!file || !path.isAbsolute(file)) throw new Error('The backup file must be an absolute path.');
+/**
+ * Every key on this PC as plain entries ({ id, info, files }), for a backup to encrypt: the key
+ * backup below, and the whole-PC backup (server/src/backup.ts) that wraps them in its own file.
+ * The entries hold passwords and private keys: never log or store them unencrypted.
+ */
+export async function exportKeyEntries(javaHome) {
   const keys = await listKeys(javaHome);
-  if (keys.length === 0) throw new Error('This PC has no signing keys yet, so there is nothing to back up.');
   const entries = [];
   for (const k of keys) {
     if (k.id === SHARED_KEY_ID) {
@@ -50,6 +51,20 @@ export async function backupKeys(javaHome, { file, password }) {
       entries.push({ id: k.id, info, files });
     }
   }
+  return entries;
+}
+
+/** Notes that these keys are now in a backup made at `createdAt` (Settings, "Last backup"). */
+export async function noteBackedUp(ids, createdAt) {
+  await writeJson(path.join(KEYSTORE_DIR, RECORD), { lastBackupAt: createdAt, ids });
+}
+
+/** Writes every key to `file`, encrypted with `password`. Returns { file, count, ids }. */
+export async function backupKeys(javaHome, { file, password }) {
+  checkPassword(password);
+  if (!file || !path.isAbsolute(file)) throw new Error('The backup file must be an absolute path.');
+  const entries = await exportKeyEntries(javaHome);
+  if (entries.length === 0) throw new Error('This PC has no signing keys yet, so there is nothing to back up.');
   const plain = Buffer.from(JSON.stringify({ keys: entries }), 'utf8');
   const salt = crypto.randomBytes(16);
   const iv = crypto.randomBytes(12);
@@ -69,7 +84,7 @@ export async function backupKeys(javaHome, { file, password }) {
   await fsp.writeFile(tmp, JSON.stringify(out, null, 2), { mode: 0o600 });
   await fsp.rename(tmp, file);
   const ids = entries.map((e) => e.id);
-  await writeJson(path.join(KEYSTORE_DIR, RECORD), { lastBackupAt: createdAt, ids });
+  await noteBackedUp(ids, createdAt);
   return { file, count: entries.length, ids, createdAt };
 }
 
@@ -115,10 +130,19 @@ function readBackup(file, password) {
  */
 export async function restoreKeys(javaHome, { file, password }) {
   const { header, keys } = readBackup(file, password);
+  return importKeyEntries(javaHome, keys, header.createdAt);
+}
+
+/**
+ * Adds the keys in `entries` (from exportKeyEntries) that this PC does not have; keeps every key it
+ * has, and reports one with a different certificate as a conflict. `createdAt`: when the backup
+ * they came from was made.
+ */
+export async function importKeyEntries(javaHome, entries, createdAt) {
   const result = { added: [], same: [], conflicts: [] };
   await fsp.mkdir(KEYSTORE_DIR, { recursive: true });
   await withFileLock(path.join(KEYSTORE_DIR, '.restore.lock'), async () => {
-    for (const entry of keys) {
+    for (const entry of entries) {
       try {
         const outcome = entry.id === SHARED_KEY_ID ? await restoreShared(javaHome, entry) : await restoreApp(javaHome, entry);
         if (outcome === 'added') result.added.push(entry.id);
@@ -132,7 +156,7 @@ export async function restoreKeys(javaHome, { file, password }) {
     if (safe.length) {
       const last = lastBackup();
       const ids = [...new Set([...(last?.ids ?? []), ...safe])];
-      const lastBackupAt = [last?.lastBackupAt, header.createdAt].filter(Boolean).sort().at(-1);
+      const lastBackupAt = [last?.lastBackupAt, createdAt].filter(Boolean).sort().at(-1);
       await writeJson(path.join(KEYSTORE_DIR, RECORD), { lastBackupAt, ids });
     }
   });

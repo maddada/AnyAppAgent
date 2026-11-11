@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
-import type { Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
+import type { BackupAction, Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
 import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
@@ -138,6 +138,7 @@ async function connectAdmin(): Promise<void> {
       void loadIcons();
       broadcast();
     });
+    client.on("care", () => broadcast());
     client.on("chat", (item: ChatItem) => {
       win?.webContents.send("chat:item", item);
       if (item.kind === "page" && item.page?.answeredAt) pageAnswered(item.appId, item.page.id);
@@ -419,6 +420,7 @@ async function snapshot(): Promise<Snapshot> {
     admin: admin?.state ?? null,
     pairing: await pairingView(),
     apps: admin?.apps ?? [],
+    care: admin?.care ?? null,
     icons,
     checks,
     settings,
@@ -648,6 +650,50 @@ function ipc(): void {
       return { ok: false, error: (error as Error).message };
     }
   });
+  // "Never lose your apps" (docs/TRUST.md): a folder dialog here, the work in the companion. The
+  // password passes straight through and is never logged.
+  const pickFolder = async (title: string): Promise<string | null> => {
+    if (env.ANYAPP_DESKTOP_DIALOG_FOLDER) return env.ANYAPP_DESKTOP_DIALOG_FOLDER;
+    const pick = await dialog.showOpenDialog(win ?? BrowserWindow.getFocusedWindow()!, { title, defaultPath: app.getPath("home"), properties: ["openDirectory", "createDirectory"] });
+    return pick.canceled || !pick.filePaths[0] ? null : pick.filePaths[0];
+  };
+  ipcMain.handle("backup:on", async (_e, password: string): Promise<BackupAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const folder = await pickFolder("Where should AnyAppAgent keep your backup? A OneDrive or USB folder is best.");
+    if (!folder) return { cancelled: true };
+    try {
+      return { ok: true, state: await admin.backupSetup({ enabled: true, folder, password: String(password) }) };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("backup:off", async (): Promise<BackupAction> => {
+    try {
+      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      return { ok: true, state: await admin.backupSetup({ enabled: false }) };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("backup:run", async (): Promise<BackupAction> => {
+    try {
+      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      return { ok: true, state: await admin.backupRun() };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("backup:restore", async (_e, password: string): Promise<BackupAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const folder = await pickFolder("Pick the folder that holds your AnyAppAgent backup");
+    if (!folder) return { cancelled: true };
+    try {
+      return { ok: true, restored: await admin.backupRestore(folder, String(password)) };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("care:dismiss", () => chatAction((c) => c.dismissReminder())());
   ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
   ipcMain.handle("helpers:list", (_e, appId: string) => admin?.helpers(String(appId)) ?? []);
   ipcMain.handle("helpers:messages", (_e, appId: string, workerId: string) => admin?.helperMessages(String(appId), String(workerId)) ?? []);
@@ -669,6 +715,7 @@ function ipc(): void {
   ipcMain.handle("apps:cancel", (_e, appId: string) => chatAction((c) => c.cancel(String(appId)))());
   ipcMain.handle("helpers:stop", (_e, appId: string, workerId: string) => chatAction((c) => c.stopHelper(String(appId), String(workerId)))());
   ipcMain.handle("apps:rebuild", (_e, appId: string) => chatAction((c) => c.rebuild(String(appId)))());
+  ipcMain.handle("apps:keep-healthy", (_e, appId: string) => chatAction((c) => c.keepHealthy(String(appId)))());
   // Sharing and publishing (docs/DISTRIBUTION.md).
   ipcMain.handle("apps:share", (_e, appId: string, shared: boolean) => chatAction((c) => c.share(String(appId), Boolean(shared)))());
   ipcMain.handle("apps:publish", (_e, appId: string, notes: string, channel: string) =>

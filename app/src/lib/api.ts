@@ -1,5 +1,6 @@
 import type {
   App,
+  CareState,
   ChatItem,
   WorkerInfo,
   PageOpenResponse,
@@ -110,6 +111,10 @@ export class Client {
     request<void>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/messages`, { method: "POST", body, token: this.token, timeoutMs: body.images?.length ? 120000 : 20000 });
   cancel = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/cancel`, "POST", {});
   rebuild = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/build`, "POST", {});
+  // docs/TRUST.md: the usage meter, the monthly health reminder and the backup; "Update it".
+  care = () => this.call<CareState>("/api/care");
+  dismissReminder = () => this.call<CareState>("/api/care/reminder", "POST", {});
+  keepHealthy = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/keep-healthy`, "POST", {});
   answerPermission = (id: string, body: PermissionAnswerRequest) =>
     this.call<void>(`/api/apps/${encodeURIComponent(id)}/permission`, "POST", body);
 
