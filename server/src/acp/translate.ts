@@ -194,6 +194,11 @@ export class ChatTranslator {
     return [closed];
   }
 
+  /** Closes the open assistant and thought text, as a tool call does (for tool calls not shown). */
+  closeStreams(): ChatDraft[] {
+    return [...this.closeThought(), ...this.closeAssistant()];
+  }
+
   translate(update: unknown): ChatDraft[] {
     if (!isJsonObject(update)) return [];
     switch (update["sessionUpdate"]) {

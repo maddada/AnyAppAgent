@@ -18,6 +18,8 @@ export interface Config {
   github: boolean;
   acpLaunch: "local" | "npx";
   maxBuildFixes: number;
+  /** Each app's main chat is a coordinator that hands work to workers (docs/APP-COORDINATOR.md). */
+  coordinator: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -32,5 +34,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     github: !["off", "0", "false", "no"].includes((env.ANYAPP_GITHUB ?? "on").toLowerCase()),
     acpLaunch: env.ANYAPP_ACP_LAUNCH === "npx" ? "npx" : "local",
     maxBuildFixes: 3,
+    coordinator: !["off", "0", "false", "no"].includes((env.ANYAPP_COORDINATOR ?? "on").toLowerCase()),
   };
 }

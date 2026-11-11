@@ -43,6 +43,7 @@ function startServer(label) {
       ANYAPP_BUILDER: "fake",
       ANYAPP_GITHUB: "off",
       ANYAPP_FAKE_BUILD_MS: "1500",
+      ANYAPP_COORDINATOR: "off", // this script checks the one-session flow; scripts/coordinator-e2e.mjs checks workers
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

@@ -23,6 +23,7 @@ import { ADMIN_DEVICE_ID, cleanDeviceName, type Auth } from "./auth.ts";
 import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
+import { workerApiRoute, workerToolsRoute } from "./worker-http.ts";
 
 const MAX_BODY = 1024 * 1024;
 
@@ -253,6 +254,10 @@ export function startHttpServer(deps: {
       res.writeHead(204);
       return void res.end();
     }
+    if (path.startsWith("/mcp/")) {
+      const exists = (appId: string) => apps.list().some((app) => app.id === appId);
+      if (await workerToolsRoute(req, res, path, { workers: apps.workers, appExists: exists, log })) return;
+    }
     if (path.startsWith("/api/admin/")) return adminRoute(req, res, path, method);
     if (!path.startsWith("/api/")) return sendError(res, 404, "Not found.");
     if (!auth.check(bearer(req))) return sendError(res, 401, "This phone is not paired with this PC. Pair it again.");
@@ -265,6 +270,7 @@ export function startHttpServer(deps: {
       }
       return sendError(res, 405, "Method not allowed.");
     }
+    if (await workerApiRoute(req, res, path, url, { workers: apps.workers, checkApp: (appId) => void apps.get(appId) })) return;
     const match = /^\/api\/apps\/([^/]+)(?:\/([a-z]+))?$/.exec(path);
     if (!match) return sendError(res, 404, "Not found.");
     const id = decodeURIComponent(match[1]);
