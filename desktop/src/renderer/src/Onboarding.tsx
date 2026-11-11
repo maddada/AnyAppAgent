@@ -7,10 +7,11 @@ import type { Snapshot } from "../../shared/types.ts";
 import { PairingDialog } from "./Pairing.tsx";
 import { Icon, Spinner, Wordmark } from "./ui.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
+import { HEX_SETUP, HexCard } from "./Hex.tsx";
 
 const api = window.anyapp;
 
-export type StepId = "welcome" | "claude" | "tools" | "github" | "phone-get" | "phone-pair" | "done";
+export type StepId = "welcome" | "claude" | "tools" | "github" | "phone-get" | "phone-pair" | "dictation" | "done";
 const RAIL: { id: StepId; label: string; optional?: boolean }[] = [
   { id: "welcome", label: "Welcome" },
   { id: "claude", label: "Claude, the AI" },
@@ -18,6 +19,7 @@ const RAIL: { id: StepId; label: string; optional?: boolean }[] = [
   { id: "github", label: "A safe copy of your apps", optional: true },
   { id: "phone-get", label: "The app on your phone" },
   { id: "phone-pair", label: "Connect your phone" },
+  { id: "dictation", label: "Talk instead of typing", optional: true },
 ];
 const ORDER: StepId[] = [...RAIL.map((r) => r.id), "done"];
 
@@ -27,6 +29,7 @@ function isDone(id: StepId, s: Snapshot): boolean {
   if (id === "tools") return c.tools.state === "done";
   if (id === "github") return c.github.state === "done" || c.github.state === "skipped";
   if (id === "phone-get" || id === "phone-pair") return c.phone.state === "done";
+  if (id === "dictation") return c.hex.state === "ready" || s.settings.hexSkipped;
   return false;
 }
 
@@ -82,6 +85,7 @@ export function Onboarding({ snapshot: s, start, onFinish, onClose }: { snapshot
             {step === "github" && <GitHubStep s={s} />}
             {step === "phone-get" && <PhoneGetStep />}
             {step === "phone-pair" && <PhonePairStep s={s} onPaired={next} />}
+            {step === "dictation" && <DictationStep s={s} />}
             {step === "done" && <DoneStep />}
           </div>
         </div>
@@ -126,6 +130,12 @@ function Forward({ step, s, onNext, onFinish }: { step: StepId; s: Snapshot; onN
       });
     case "phone-pair":
       return isDone(step, s) ? primary("Continue", onNext) : quiet("Skip, I'll connect later", onNext);
+    case "dictation":
+      if (s.checks.hex.state === "ready") return primary("Continue", onNext);
+      return quiet("Skip this step", async () => {
+        await api.setSetting("hexSkipped", true);
+        onNext();
+      });
     default:
       return isDone(step, s) ? primary("Continue", onNext) : quiet("Do this later", onNext);
   }
@@ -515,6 +525,24 @@ function PhonePairStep({ s, onPaired }: { s: Snapshot; onPaired: () => void }) {
           {show && <PairingDialog s={s} title="Connect your phone" onClose={() => setShow(false)} />}
         </>
       )}
+    </>
+  );
+}
+
+function DictationStep({ s }: { s: Snapshot }) {
+  const ready = s.checks.hex.state === "ready";
+  return (
+    <>
+      <Head
+        eyebrow={`${stepOf("dictation")}, optional`}
+        title="Talk instead of typing"
+        lede="If you want to dictate while using this app, you can install Hex on this PC. Hex is a free app that turns your voice into text right here, offline. Then you can speak your changes in any chat on this PC instead of typing them."
+      />
+      {!ready && <How items={HEX_SETUP} />}
+      <HexCard hex={s.checks.hex} hexModel={s.settings.hexModel} />
+      <p className="label secondary" style={{ marginTop: "var(--aa-space-lg)", maxWidth: "var(--aa-size-reading-width)" }}>
+        Not now? Skip this step. You can set up Hex any time in Settings.
+      </p>
     </>
   );
 }

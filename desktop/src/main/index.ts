@@ -2,6 +2,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
@@ -18,6 +19,7 @@ import { detectTools } from "./detect/tools.ts";
 import { detectDeps } from "./detect/deps.ts";
 import { run } from "./exec.ts";
 import { ToolsInstaller } from "./install/tools-installer.ts";
+import { HEX_SITE, HexFailure, hexState, hexTranscribe, installHex, openHex } from "./hex.ts";
 import { firstExisting, resolvePaths } from "./paths.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
 import { ClaudeSignIn, GitHubSignIn } from "./signin.ts";
@@ -63,6 +65,7 @@ const checks: Checks = {
   github: { state: "checking", summary: "Checking…" },
   tools: { state: "checking", summary: "Checking…", pieces: [] },
   phone: { state: "checking", summary: "Checking…", pairedCount: 0, connectedCount: 0 },
+  hex: { state: "checking", summary: "Checking…", models: [] },
 };
 
 let ghLocation: GhLocation | undefined;
@@ -229,8 +232,67 @@ async function checkTools(): Promise<void> {
   broadcast();
 }
 
+// ---------------------------------------------------------------- Hex (dictation)
+
+let hexInstalling = false;
+let hexInstallError: string | undefined;
+async function checkHex(): Promise<void> {
+  const forced = simulate.get("hex");
+  const install = hexInstalling ? checks.hex.install : hexInstallError ? { running: false, error: hexInstallError } : undefined;
+  let next = await hexState({ env, home: homedir(), savedModel: settings.hexModel || undefined });
+  if (forced === "notInstalled" || forced === "installing") next = { state: "notInstalled", summary: "Hex isn't installed on this PC.", models: [] };
+  if (forced === "notRunning") next = { state: "notRunning", summary: "Hex is installed but not open.", installedVersion: "3.4.0", models: [] };
+  next.install = forced === "installing" ? { running: true, line: "Downloading Hex 3.4.0" } : install;
+  if (JSON.stringify(next) === JSON.stringify(checks.hex)) return;
+  checks.hex = next;
+  broadcast();
+}
+
+async function runHexInstall(): Promise<void> {
+  if (hexInstalling) return;
+  hexInstalling = true;
+  hexInstallError = undefined;
+  checks.hex = { ...checks.hex, install: { running: true, line: "Getting Hex's installer…" } };
+  broadcast();
+  log("[hex] running Hex's installer");
+  try {
+    await installHex({
+      onLine: (line) => {
+        log(`[hex] ${line}`);
+        checks.hex = { ...checks.hex, install: { running: true, line } };
+        broadcast();
+      },
+    });
+    log("[hex] installed");
+    // Hex's installer starts Hex; if it did not, open it so dictation can work right away.
+    hexInstalling = false;
+    checks.hex = { ...checks.hex, install: undefined };
+    await checkHex();
+    if (checks.hex.state === "notRunning") {
+      try {
+        openHex(env, homedir());
+      } catch (e) {
+        log(`[hex] open after install: ${(e as Error).message}`);
+      }
+    }
+  } catch (error) {
+    hexInstallError = (error as Error).message;
+    log(`[hex] install failed: ${hexInstallError}`);
+  } finally {
+    hexInstalling = false;
+    await checkHex();
+  }
+}
+
+// Hex opens and closes on its own: look every 4 s while the window shows, every 30 s otherwise.
+let hexTick = 0;
+setInterval(() => {
+  hexTick++;
+  if ((win?.isVisible() && !win.isMinimized()) || hexTick % 8 === 0) void checkHex();
+}, 4_000);
+
 async function recheckAll(): Promise<void> {
-  await Promise.all([checkClaude(), checkGitHub(), checkTools()]);
+  await Promise.all([checkClaude(), checkGitHub(), checkTools(), checkHex()]);
   updatePhoneCheck();
   broadcast();
 }
@@ -377,6 +439,7 @@ function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void 
     updateTray();
   }
   if (key === "githubSkipped") void checkGitHub();
+  if (key === "hexModel") void checkHex();
   // The companion reads ANYAPP_HOST_APK at start.
   if (key === "phoneApkPath") void companion.restart();
   broadcast();
@@ -515,6 +578,36 @@ function ipc(): void {
   });
   ipcMain.handle("pairing:easy", (_e, enabled: boolean) => admin?.easyConnect(Boolean(enabled)));
   ipcMain.handle("devices:remove", (_e, id: string) => admin?.removeDevice(String(id)));
+  ipcMain.handle("hex:install", () => void runHexInstall());
+  ipcMain.handle("hex:check", () => checkHex());
+  ipcMain.handle("hex:open", async () => {
+    try {
+      openHex(env, homedir());
+      // Hex takes a moment to write its local API file.
+      for (let i = 0; i < 10 && checks.hex.state !== "ready"; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        await checkHex();
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof HexFailure ? error.message : `Hex couldn't be opened. Open it from the Start menu, or get it from ${HEX_SITE}` };
+    }
+  });
+  ipcMain.handle("hex:transcribe", async (_e, wav: ArrayBuffer) => {
+    try {
+      const bytes = new Uint8Array(wav);
+      const started = Date.now();
+      const text = await hexTranscribe({ env, home: homedir(), savedModel: settings.hexModel || undefined, wav: bytes });
+      // Never the words themselves: only how long it took.
+      log(`[hex] transcribed ${Math.round(bytes.byteLength / 32_000)} s of audio in ${Date.now() - started} ms`);
+      return { ok: true, text };
+    } catch (error) {
+      const f = error instanceof HexFailure ? error : new HexFailure("failed", "Hex couldn't transcribe this. Try again.");
+      log(`[hex] transcribe failed: ${f.code}`);
+      void checkHex();
+      return { ok: false, error: f.message, code: f.code };
+    }
+  });
   // Signing keys (docs/DISTRIBUTION.md): a file dialog here, the work in the companion.
   const keysFilter = [{ name: "AnyAppAgent key backup", extensions: ["anyappkeys"] }];
   // Dev and proofs only: ANYAPP_DESKTOP_DIALOG_FILE answers both file dialogs, so a script can drive them.
@@ -627,10 +720,12 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
     companion.start();
     void checkClaude();
     void checkGitHub();
+    void checkHex();
 
     win?.on("focus", () => {
       void checkClaude();
       void checkGitHub();
+      void checkHex();
     });
     if (env.ANYAPP_DESKTOP_SHOTS && win) {
       const pairFakePhone = async () => {

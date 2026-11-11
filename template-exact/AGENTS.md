@@ -24,7 +24,22 @@ app.json            Exact's manifest: name, id and hosts (android is on)
 anyapp.json         written by AnyAppAgent: preset, slug, package id (read only)
 exact.mjs           generated launcher for `bun exact.mjs ...` (never edit)
 .exact/, target/    generated build folders (never edit)
+overview.md         what the person wants the app to do (see below)
 ```
+
+## overview.md and the person's other apps
+
+- `overview.md` (project root) holds the app's main requirements as the person gave them: what
+  the app is for, its main screens and features, the choices that matter. High level and short,
+  not a README and not a changelog. The agent the person talks to (the main chat) keeps it up to date after every
+  message that changes what the app should do; a helper reads it and leaves it alone. A first line
+  `<!-- anyapp: draft ... -->` marks a draft the PC wrote: replace the whole file.
+- The `anyapp` command shows the person's other apps on this PC: `anyapp apps` (name, kind,
+  version, folder; this app is marked `*`), `anyapp overview <app>` (its `overview.md`),
+  `anyapp path <app>` (its folder, to read its code). Before building a new app or feature, look
+  there for something that already works (a calculation, a screen, notifications, a look the
+  person liked) and copy it into this app, adapted to it.
+- Other apps are read only: never change, build, commit or run anything in another app's folder.
 
 ## Never
 

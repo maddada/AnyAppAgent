@@ -3,6 +3,7 @@
 import qrcode from "qrcode-terminal";
 import type { ServerEvent } from "../../shared/protocol.ts";
 import { AppManager } from "./apps.ts";
+import { installAppsCli } from "./apps-cli.ts";
 import { Auth } from "./auth.ts";
 import { loadBuilder } from "./builder.ts";
 import { loadConfig } from "./config.ts";
@@ -23,6 +24,13 @@ export async function main(): Promise<void> {
   const config = loadConfig();
   const adminToken = process.env.ANYAPP_ADMIN_TOKEN;
   const store = new Store(config.stateDir);
+  // The `anyapp` command for the apps' agents (their sessions get its folder on PATH).
+  let cliDir = "";
+  try {
+    cliDir = installAppsCli(config.stateDir);
+  } catch (error) {
+    log("could not install the anyapp command:", (error as Error).message);
+  }
   const auth = new Auth(config.stateDir, adminToken);
   const toolchain = loadToolchain(config.stateDir);
   const builder = await loadBuilder(config.builder);
@@ -88,6 +96,7 @@ export async function main(): Promise<void> {
       : "  Android tools: not needed (fake builder)",
     `  Builder: ${builder.kind}   GitHub: ${config.github ? "on" : "off"}   Desktop app: ${auth.hasAdmin ? "connected" : "not used"}   Apps: ${config.appsDir}`,
     `  State: ${config.stateDir}`,
+    ...(cliDir ? [`  Agents' anyapp command: ${cliDir}`] : []),
     "",
   ];
   console.log(lines.join("\n"));
