@@ -1,0 +1,22 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- "Point at it" feedback (shake the phone): built into every app, keep it.
+       Saving to the gallery needs no permission from Android 10 on; older phones ask once. -->
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+  <application>
+    <!-- Starts the shake watcher when the app starts, and serves saved pictures for pasting. -->
+    <provider
+      android:name="expo.modules.anyappfeedback.FeedbackProvider"
+      android:authorities="${applicationId}.anyappfeedback"
+      android:exported="false"
+      android:grantUriPermissions="true"
+      />
+    <activity
+      android:name="expo.modules.anyappfeedback.FeedbackActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
+      android:windowSoftInputMode="adjustResize|stateHidden"
+      android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+  </application>
+</manifest>
