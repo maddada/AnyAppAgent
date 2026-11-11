@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Link2, MessageCircle, Plus, Send, Sparkles, X } from "lucide-react-native";
 import { MAX_IMAGES } from "@shared/chat/index";
 import { prepare, toUploads } from "@/chat/attachments";
+import { useDictation } from "@/lib/dictation";
 import { askForNotificationsOnce } from "@/lib/session";
 import { dropShare, sharedLink, shareMessage, useSharedIn } from "@/lib/sharedIn";
 import { sortedApps, useStore } from "@/lib/store";
@@ -16,6 +17,7 @@ import type { App } from "@/lib/protocol";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
+import { DictationNote, MicButton } from "@/ui/MicButton";
 import { useKeyboardHeight } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
@@ -41,6 +43,9 @@ export default function LikeThis() {
   const [appId, setAppId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [words, setWords] = useState("");
+  // Dictation into "What to keep and what to change" (src/lib/dictation.ts); it never sends.
+  const dictation = useDictation({ value: words, onChange: setWords });
+  const listening = dictation.phase === "listening";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +62,7 @@ export default function LikeThis() {
 
   const send = async () => {
     if (!item || !client || !ready) return;
+    dictation.cancel();
     setBusy(true);
     setError(null);
     try {
@@ -155,9 +161,12 @@ export default function LikeThis() {
             label="What to keep and what to change"
             value={words}
             onChangeText={setWords}
-            placeholder="Keep the big timer and the calm colours. Change the sounds, and let me set two timers."
+            placeholder={listening ? "Listening..." : "Keep the big timer and the calm colours. Change the sounds, and let me set two timers."}
             multiline
+            inputStyle={listening ? { borderWidth: border.focusWidth, borderColor: t.problem } : undefined}
+            trailing={<MicButton dictation={dictation} testID="like-this-mic" />}
           />
+          <DictationNote dictation={dictation} style={{ marginTop: -space.sm }} />
 
           <View style={{ gap: space.sm }}>
             {error ? <StateLine kind="problem" label={error} role="caption" lines={0} /> : null}
