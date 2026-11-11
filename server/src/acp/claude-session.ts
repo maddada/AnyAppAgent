@@ -18,6 +18,8 @@ import {
   type AcpAgentRequestResponder,
 } from "./agent-connection.ts";
 import { decodeAcpPermissionRequest, isJsonObject, readString, type AcpPermissionRequest } from "./acp-client.ts";
+import type { PlanLimit, TokenUsage } from "../../../shared/protocol.ts";
+import { planLimitFrom, promptUsage } from "../usage.ts";
 
 export const CLAUDE_ACP_PACKAGE = "@agentclientprotocol/claude-agent-acp";
 export const CLAUDE_ACP_VERSION = "0.102.0";
@@ -69,6 +71,10 @@ export interface ClaudeSessionOptions {
   /** Dev and tests only (ANYAPP_ASK_PERMISSIONS=1): stay in the default mode, so permission requests reach the chat. */
   askPermissions?: boolean;
   onUpdate(update: unknown): void;
+  /** The usage meter (usage.ts): the tokens of each finished turn (session/prompt's usage). */
+  onUsage?(usage: TokenUsage): void;
+  /** The usage meter: a plan limit Claude Code reported (a usage_update's _claude/rateLimit). */
+  onPlanLimit?(limit: PlanLimit): void;
   onPermission(ask: PermissionAsk): void;
   onExit(info: AcpAgentExitInfo): void;
   log(message: string): void;
@@ -118,6 +124,9 @@ export class ClaudeSession {
       cwd,
       env: agentEnv(process.env, this.options.env),
       onSessionUpdate: (sessionId, update) => {
+        // The plan's limits are the account's, whichever session reports them (also while loading).
+        const limit = this.options.onPlanLimit ? planLimitFrom(update) : null;
+        if (limit) this.options.onPlanLimit!(limit);
         if (this.loading || (this.sessionId !== "" && sessionId !== this.sessionId)) return;
         this.options.onUpdate(update);
       },
@@ -221,6 +230,14 @@ export class ClaudeSession {
       prompt.push({ type: "text", text: `(The ${images.length === 1 ? "picture is" : "pictures are"} also saved on this PC: ${images.map((i) => i.path).join(", ")})` });
     }
     const result = await this.connection.request("session/prompt", { sessionId: this.sessionId, prompt }, null);
+    const usage = promptUsage(result);
+    if (usage) {
+      try {
+        this.options.onUsage?.(usage);
+      } catch (error) {
+        this.options.log(`usage could not be counted: ${(error as Error).message}`);
+      }
+    }
     return isJsonObject(result) ? (readString(result, "stopReason") ?? "end_turn") : "end_turn";
   }
 

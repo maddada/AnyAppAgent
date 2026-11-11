@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home screen widget (com.anyapp.abilities.Widgets): every part is filled in or hidden by code. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/anyapp_widget_root"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/anyapp_widget_bg"
+  android:orientation="vertical"
+  android:padding="16dp">
+
+  <TextView
+    android:id="@+id/anyapp_widget_title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:fontFamily="sans-serif-medium"
+    android:singleLine="true"
+    android:textColor="@color/anyapp_widget_accent"
+    android:textSize="13sp" />
+
+  <TextView
+    android:id="@+id/anyapp_widget_value"
+    style="@style/AnyappWidgetValue" />
+
+  <Chronometer
+    android:id="@+id/anyapp_widget_countdown"
+    style="@style/AnyappWidgetValue"
+    android:visibility="gone" />
+
+  <TextView
+    android:id="@+id/anyapp_widget_subtitle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:maxLines="2"
+    android:textColor="@color/anyapp_widget_muted"
+    android:textSize="13sp" />
+
+  <ProgressBar
+    android:id="@+id/anyapp_widget_progress"
+    style="?android:attr/progressBarStyleHorizontal"
+    android:layout_width="match_parent"
+    android:layout_height="6dp"
+    android:layout_marginTop="10dp"
+    android:max="1000"
+    android:progressDrawable="@drawable/anyapp_widget_progress"
+    android:visibility="gone" />
+
+  <LinearLayout
+    android:id="@+id/anyapp_widget_rows"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:orientation="vertical"
+    android:visibility="gone">
+    <LinearLayout
+      android:id="@+id/anyapp_widget_row0"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal"
+      android:paddingTop="3dp"
+      android:visibility="gone">
+      <TextView
+        android:id="@+id/anyapp_widget_row0_label"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="0dp"
+        android:layout_weight="1" />
+      <TextView
+        android:id="@+id/anyapp_widget_row0_value"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="wrap_content"
+        android:fontFeatureSettings="tnum" />
+    </LinearLayout>
+    <LinearLayout
+      android:id="@+id/anyapp_widget_row1"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal"
+      android:paddingTop="3dp"
+      android:visibility="gone">
+      <TextView
+        android:id="@+id/anyapp_widget_row1_label"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="0dp"
+        android:layout_weight="1" />
+      <TextView
+        android:id="@+id/anyapp_widget_row1_value"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="wrap_content"
+        android:fontFeatureSettings="tnum" />
+    </LinearLayout>
+    <LinearLayout
+      android:id="@+id/anyapp_widget_row2"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal"
+      android:paddingTop="3dp"
+      android:visibility="gone">
+      <TextView
+        android:id="@+id/anyapp_widget_row2_label"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="0dp"
+        android:layout_weight="1" />
+      <TextView
+        android:id="@+id/anyapp_widget_row2_value"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="wrap_content"
+        android:fontFeatureSettings="tnum" />
+    </LinearLayout>
+    <LinearLayout
+      android:id="@+id/anyapp_widget_row3"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal"
+      android:paddingTop="3dp"
+      android:visibility="gone">
+      <TextView
+        android:id="@+id/anyapp_widget_row3_label"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="0dp"
+        android:layout_weight="1" />
+      <TextView
+        android:id="@+id/anyapp_widget_row3_value"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="wrap_content"
+        android:fontFeatureSettings="tnum" />
+    </LinearLayout>
+    <LinearLayout
+      android:id="@+id/anyapp_widget_row4"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal"
+      android:paddingTop="3dp"
+      android:visibility="gone">
+      <TextView
+        android:id="@+id/anyapp_widget_row4_label"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="0dp"
+        android:layout_weight="1" />
+      <TextView
+        android:id="@+id/anyapp_widget_row4_value"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="wrap_content"
+        android:fontFeatureSettings="tnum" />
+    </LinearLayout>
+    <LinearLayout
+      android:id="@+id/anyapp_widget_row5"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal"
+      android:paddingTop="3dp"
+      android:visibility="gone">
+      <TextView
+        android:id="@+id/anyapp_widget_row5_label"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="0dp"
+        android:layout_weight="1" />
+      <TextView
+        android:id="@+id/anyapp_widget_row5_value"
+        style="@style/AnyappWidgetRow"
+        android:layout_width="wrap_content"
+        android:fontFeatureSettings="tnum" />
+    </LinearLayout>
+  </LinearLayout>
+
+  <FrameLayout
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:minHeight="6dp" />
+
+  <TextView
+    android:id="@+id/anyapp_widget_button"
+    android:layout_width="match_parent"
+    android:layout_height="40dp"
+    android:background="@drawable/anyapp_widget_button"
+    android:backgroundTint="@color/anyapp_widget_accent"
+    android:ellipsize="end"
+    android:fontFamily="sans-serif-medium"
+    android:gravity="center"
+    android:paddingLeft="12dp"
+    android:paddingRight="12dp"
+    android:singleLine="true"
+    android:textColor="@color/anyapp_widget_on_accent"
+    android:textSize="15sp"
+    android:visibility="gone" />
+</LinearLayout>

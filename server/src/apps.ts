@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppPreset, AppStatus, AppVersion, BuildInfo, ChangeNotes, ChatImage, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PublishRequest, ReleaseStats, ServerEvent, TodoItem, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
 import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, type VersionRecord } from "./history.ts";
 import { MEMORY_FILE } from "./playbook.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
@@ -17,7 +17,7 @@ import type { Builder, BuildResult } from "./builder.ts";
 import { runBuildCycle, type BuildAttempt } from "./build-cycle.ts";
 import { BuildProgress, isEnvironmentFailure, plainBuildError } from "./build-progress.ts";
 import type { Config } from "./config.ts";
-import { nowIso } from "./fs-util.ts";
+import { nowIso, writeJsonAtomic } from "./fs-util.ts";
 import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
 import { realGithub, shareApp, testingFeedUrl, unshareApp, type GithubApi } from "./sharing.ts";
@@ -32,6 +32,10 @@ import { cleanTodoText, TodoLists } from "./todos.ts";
 import { isJsonObject } from "./acp/acp-client.ts";
 import { appsCliEnv, firstOverview, OVERVIEW_FILE, overviewNeedsAgent } from "./apps-cli.ts";
 import { overviewNudge } from "./playbook.ts";
+import { addUsage, UsageMeter } from "./usage.ts";
+import { appHealth, HealthReminders, keepHealthyMessage, Templates } from "./health.ts";
+import { Backups } from "./backup.ts";
+import { REPO_DIR } from "./config.ts";
 
 export { HttpError } from "./http-error.ts";
 import { HttpError } from "./http-error.ts";
@@ -75,6 +79,8 @@ interface Runtime {
   hiddenTools: Set<string>;
   /** True while a prompt to the app's own session runs. */
   turnActive: boolean;
+  /** The usage meter: the person's message the current job works for (its chat item), if any. */
+  usageItem?: string;
 }
 
 interface ReadyRecord extends AppRecord {
@@ -164,6 +170,16 @@ export class AppManager {
   /** Versions, What changed notes, crash reports and the diary (docs/VERSIONS.md). */
   readonly history: History;
   private readonly phonesConnected: () => number;
+  /** The usage meter (usage.ts). */
+  readonly usage: UsageMeter;
+  /** "Keep my apps healthy" (health.ts): the newest templates and the monthly reminder. */
+  readonly templates: Templates;
+  private readonly reminders: HealthReminders;
+  /** "Never lose your apps" (backup.ts). */
+  readonly backups: Backups;
+  private careTimer: NodeJS.Timeout | undefined;
+  private healthTimer: NodeJS.Timeout | undefined;
+  private lastCare = "";
 
   constructor(deps: {
     store: Store;
@@ -175,6 +191,8 @@ export class AppManager {
     github?: GithubApi;
     /** How many phones have a live socket now (diary requests need one). */
     phonesConnected?: () => number;
+    /** Where template/ and template-kotlin/ are (health.ts); default: this repository. */
+    repoDir?: string;
   }) {
     this.phonesConnected = deps.phonesConnected ?? (() => 0);
     this.github = deps.github ?? realGithub;
@@ -214,6 +232,24 @@ export class AppManager {
         if (record) this.emitItem(record, { id: randomUUID(), kind: "diary", diary: info });
       },
     });
+    this.usage = new UsageMeter(this.store.stateDir);
+    this.usage.onChange = () => this.careChanged();
+    this.templates = new Templates(deps.repoDir ?? REPO_DIR);
+    this.reminders = new HealthReminders(this.store.stateDir);
+    this.backups = new Backups({
+      stateDir: this.store.stateDir,
+      appsDir: this.config.appsDir,
+      builder: this.builder,
+      log: this.log,
+      records: () => this.store.apps(),
+      hasApp: (id, packageName) => this.store.apps().some((r) => r.app.id === id || r.app.packageName === packageName),
+      addRestored: (record, chat, todos) => this.addRestored(record, chat, todos),
+      buildRestored: (appId) => {
+        const record = this.store.find(appId);
+        if (record) this.enqueue(record, { kind: "build" });
+      },
+    });
+    this.backups.onChange = () => this.careChanged();
     this.workers = this.config.coordinator
       ? new WorkerManager({
           config: this.config,
@@ -228,6 +264,12 @@ export class AppManager {
           pageTools: (appId, from) => this.pages.mcpServer(this.config.port, appId, from),
           appTools: (appId, workerId) => this.history.mcpServer(this.config.port, appId, workerId),
           hiddenTool: (update) => isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update),
+          usageItem: (appId) => this.runtimes.get(appId)?.usageItem,
+          countUsage: (appId, itemId, usage) => {
+            const record = this.store.find(appId);
+            if (record) this.countUsage(record, itemId, usage);
+          },
+          notePlan: (limit) => this.usage.notePlan(limit),
         })
       : undefined;
   }
@@ -245,6 +287,13 @@ export class AppManager {
       this.enqueue(record, { kind: "build" });
     }
     this.interruptedBuilds.clear();
+    // The monthly reminder comes due by itself; the apps are checked again now and then.
+    this.healthTimer = setInterval(() => {
+      for (const record of this.store.apps()) this.refreshHealth(record);
+      this.careChanged();
+    }, 6 * 3600_000);
+    this.healthTimer.unref?.();
+    this.backups.start();
   }
 
   // ---------- startup / shutdown
@@ -281,6 +330,9 @@ export class AppManager {
       if (waiting) app.waitingForAnswer = true;
       else delete app.waitingForAnswer;
       this.refreshSigning(record);
+      const usage = this.usage.app(app.id);
+      if (usage) app.usage = usage;
+      this.refreshHealth(record, false);
       if (app.latestBuild?.status === "running") {
         app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD };
         // Built again by itself once the server listens (startWork), not left for the person to notice.
@@ -297,6 +349,9 @@ export class AppManager {
   }
 
   async shutdown(): Promise<void> {
+    if (this.healthTimer) clearInterval(this.healthTimer);
+    this.backups.stop();
+    this.usage.flush();
     await Promise.all([...this.runtimes.values()].map((rt) => rt.session?.stop()));
     await this.workers?.shutdown();
     this.store.flush();
@@ -459,18 +514,19 @@ export class AppManager {
     this.store.add(record);
     this.runtime(app.id).held = true;
     this.broadcast({ type: "app.updated", app });
+    const firstItemId = randomUUID();
     const saved = uploads.map((u) => this.saveImage(app.id, u));
-    this.emitItem(record, { id: randomUUID(), kind: "user", text: prompt.trim(), ...(saved.length ? { images: saved.map(({ chat }) => chat) } : {}) });
+    this.emitItem(record, { id: firstItemId, kind: "user", text: prompt.trim(), ...(saved.length ? { images: saved.map(({ chat }) => chat) } : {}) });
     const agentPrompt = firstPrompt(prompt.trim(), { askMore: askMore === true, planFirst: this.config.planFirst });
     const shared = sharedIn ? `\n\n${sharedInNote(/https?:\/\//i.test(prompt))}` : "";
-    this.finishCreate(record, prompt.trim(), `${agentPrompt}${shared}`, saved.map(({ prompt: image }) => image)).catch((error: unknown) => {
+    this.finishCreate(record, prompt.trim(), `${agentPrompt}${shared}`, firstItemId, saved.map(({ prompt: image }) => image)).catch((error: unknown) => {
       if (!record.deleted) this.log(`[${app.slug}] creation stopped:`, (error as Error).message);
     });
     return app;
   }
 
   /** prompt: the person's words (the overview draft); agentPrompt: what the agent gets (with the PC's plan-first line). */
-  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt, images: PromptImage[] = []): Promise<void> {
+  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt, itemId?: string, images: PromptImage[] = []): Promise<void> {
     const { app, dir } = record;
     try {
       mkdirSync(this.config.appsDir, { recursive: true });
@@ -506,9 +562,93 @@ export class AppManager {
     }
     // The first prompt goes in front of anything the user sent while the app was being set up.
     const rt = this.runtime(app.id);
-    rt.queue.unshift({ kind: "prompt", text: agentPrompt, ...(images.length ? { images } : {}) });
+    rt.queue.unshift({ kind: "prompt", text: agentPrompt, ...(itemId ? { itemId } : {}), ...(images.length ? { images } : {}) });
     rt.held = false;
     if (!rt.running) void this.drain(record);
+  }
+
+  // ---------- the usage meter, health and backup (docs/TRUST.md)
+
+  /** Counts one turn's tokens for the app and, when the work is for a message of the person's, on it. */
+  private countUsage(record: AppRecord, itemId: string | undefined, usage: TokenUsage): void {
+    if (record.deleted) return;
+    const chat = this.store.chat(record.app.id);
+    const item = itemId ? chat.get(itemId) : undefined;
+    record.app.usage = this.usage.add(record.app.id, usage, Boolean(item && !item.usage));
+    if (item) this.emitItem(record, { id: item.id, kind: item.kind, usage: addUsage(item.usage, usage) });
+    this.touch(record);
+  }
+
+  /** Reads whether the app is behind the newest template (App.health). */
+  private refreshHealth(record: AppRecord, announce = true): void {
+    if (!(record as ReadyRecord).ready && record.app.status === "creating") return;
+    let health;
+    try {
+      health = appHealth(record.dir, record.app.preset, this.templates);
+    } catch (error) {
+      this.log(`[${record.app.slug}] health check failed: ${(error as Error).message}`);
+      return;
+    }
+    const before = JSON.stringify(record.app.health?.reasons ?? null);
+    if (health) record.app.health = health;
+    else delete record.app.health;
+    if (JSON.stringify(health?.reasons ?? null) === before) return;
+    if (announce) {
+      this.touch(record);
+      this.careChanged();
+    } else this.store.save();
+  }
+
+  /** What GET /api/care returns: the usage meter, the monthly reminder and the backup. */
+  care(): CareState {
+    const behind = this.store.apps().filter((r) => r.app.health?.behind).length;
+    return { usage: this.usage.state(), health: this.reminders.state(behind), backup: this.backups.summary() };
+  }
+
+  /** The person put the monthly reminder away: it comes back in a month while an app is behind. */
+  dismissReminder(): CareState {
+    this.reminders.dismiss();
+    this.careChanged();
+    return this.care();
+  }
+
+  private careChanged(): void {
+    this.careTimer ??= setTimeout(() => {
+      this.careTimer = undefined;
+      const care = this.care();
+      const text = JSON.stringify(care);
+      if (text === this.lastCare) return;
+      this.lastCare = text;
+      this.broadcast({ type: "care.updated", care });
+    }, 100);
+  }
+
+  /** "Update it" on an app that is behind: the update message goes to its agent as the person's own. */
+  keepHealthy(id: string): void {
+    const record = this.record(id);
+    this.refreshHealth(record);
+    const health = record.app.health;
+    if (!health) throw new HttpError(409, `${record.app.name} is already up to date.`);
+    this.sendMessage(id, keepHealthyMessage(health, record.app.preset, this.templates));
+  }
+
+  /** An app brought back by a backup restore (backup.ts): it joins the list with its chat and to-dos. */
+  private addRestored(record: AppRecord, chat: ChatItem[], todos: unknown): void {
+    const ready = record as ReadyRecord;
+    ready.ready = true;
+    writeJsonAtomic(join(this.store.stateDir, "chat", `${record.app.id}.json`), chat);
+    if (Array.isArray(todos)) writeJsonAtomic(join(this.store.stateDir, "todos", `${record.app.id}.json`), todos);
+    record.iconStamp = this.iconStamp(record);
+    if (record.app.usage) this.usage.seed(record.app.id, record.app.usage);
+    const usage = this.usage.app(record.app.id);
+    if (usage) record.app.usage = usage;
+    else delete record.app.usage;
+    this.store.add(record);
+    this.refreshSigning(record);
+    this.refreshHealth(record, false);
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
+    this.careChanged();
   }
 
   // ---------- the person's to-do list (never shown to the agent)
@@ -1009,6 +1149,9 @@ export class AppManager {
       while (rt.queue.length > 0 && !record.deleted) {
         const job = rt.queue.shift()!;
         rt.cancelRequested = false;
+        // What this job's tokens count toward: the person's message, or for helpers' reports the
+        // message that started the first of them.
+        rt.usageItem = job.kind === "prompt" ? job.itemId : job.kind === "report" ? this.workers?.usageItemOf(record.app.id, job.workerId) : undefined;
         if (job.kind === "prompt" && job.itemId && this.store.chat(record.app.id).get(job.itemId)?.queued) {
           this.emitItem(record, { id: job.itemId, kind: "user", queued: false });
         }
@@ -1132,6 +1275,8 @@ ${overviewNudge()}` : note;
         }
         for (const draft of rt.translator.translate(update)) this.emitItem(record, draft);
       },
+      onUsage: (usage) => this.countUsage(record, rt.usageItem, usage),
+      onPlanLimit: (limit: PlanLimit) => this.usage.notePlan(limit),
       onPermission: (ask) => this.handlePermission(record, ask),
       onExit: (info) => {
         this.log(`[${slug}] Claude Code exited (code ${info.code ?? "none"})`);
@@ -1280,6 +1425,8 @@ ${overviewNudge()}` : note;
       record.app.latestApk = build;
       this.refreshSigning(record);
       this.checkIcon(record);
+      this.refreshHealth(record, false);
+      this.backups.changed();
       this.setStatus(record, "idle");
       this.broadcast({ type: "apk.ready", app: record.app });
       this.log(`[${record.app.slug}] APK ${build.number} ready (${build.sizeBytes} bytes)`);

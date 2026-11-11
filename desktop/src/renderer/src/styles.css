@@ -594,3 +594,26 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 
 .diary-row { display: flex; flex-direction: column; }
 .diary-privacy { padding-left: calc(var(--aa-space-xs) + 16px + var(--aa-space-sm)); } /* under the line's text: icon width, no token */
+
+/* ---- docs/TRUST.md: keep my apps healthy, the usage meter, never lose your apps */
+.icon-wrap { position: relative; display: inline-flex; flex: none; }
+.health-badge { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--aa-attention); color: var(--aa-on-attention); font: 700 12px/1 var(--aa-font-text); box-shadow: 0 0 0 2px var(--aa-surface); flex: none; }
+.icon-wrap .health-badge { position: absolute; right: -5px; top: -5px; }
+.health-badge.big { width: 26px; height: 26px; font-size: 15px; box-shadow: none; }
+.attention-text { color: var(--aa-attention-text); }
+.health-notice { display: flex; align-items: flex-start; gap: var(--aa-space-md); margin: 0 var(--aa-space-lg) var(--aa-space-sm); padding: var(--aa-space-md) var(--aa-space-lg); border-radius: var(--aa-radius-card); background: var(--aa-surface); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border), inset 3px 0 0 var(--aa-attention); }
+.health-notice .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-hair); }
+.health-notice .row { flex: none; }
+.heads-up-body { color: var(--aa-text); margin: var(--aa-space-xs) 0 0; }
+.apps-notice.reminder { align-items: flex-start; }
+.heads-up { display: flex; align-items: flex-start; gap: var(--aa-space-md); padding: var(--aa-space-md) var(--aa-space-lg); margin-bottom: var(--aa-space-sm); }
+.heads-up > .ic, .heads-up > svg { color: var(--aa-attention-text); margin-top: 2px; }
+.heads-up .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-hair); }
+.heads-up-line { margin: 0; }
+.usage-note { display: inline-flex; align-items: center; gap: var(--aa-space-xs); align-self: flex-end; color: var(--aa-text-tertiary); margin-top: var(--aa-space-xs); font-variant-numeric: tabular-nums; }
+.usage-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--aa-space-md); }
+.usage-row .bar, .meter { display: block; height: 6px; border-radius: 3px; background: var(--aa-surface-sunken); overflow: hidden; margin: var(--aa-space-xs) 0; }
+.usage-row .bar > span, .meter > span { display: block; height: 100%; border-radius: inherit; background: var(--aa-text-secondary); }
+.meter > span { background: var(--aa-ready); }
+.meter.near > span { background: var(--aa-attention); }
+.body.problem-text { color: var(--aa-problem); }

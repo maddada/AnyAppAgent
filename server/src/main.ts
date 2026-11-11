@@ -67,6 +67,13 @@ export async function main(): Promise<void> {
     http.broadcast(event);
   };
   signing.onChange = () => http.adminChanged();
+  // A backup (automatic or not) holds every key: the desktop's backup and key rows change with it.
+  const backupChanged = apps.backups.onChange;
+  apps.backups.onChange = () => {
+    backupChanged();
+    signing.refreshSoon();
+    http.adminChanged();
+  };
   void signing.refresh();
   auth.onChange = () => http.adminChanged();
   easyConnect.onChange = () => http.adminChanged();

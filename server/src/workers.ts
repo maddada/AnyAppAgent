@@ -7,7 +7,7 @@
 // See docs/APP-COORDINATOR.md.
 import { randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
-import type { ChatItem, ServerEvent, WorkerInfo, WorkerState } from "../../shared/protocol.ts";
+import type { ChatItem, PlanLimit, ServerEvent, TokenUsage, WorkerInfo, WorkerState } from "../../shared/protocol.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption } from "./acp/claude-session.ts";
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { Config } from "./config.ts";
@@ -57,6 +57,12 @@ export interface WorkerHost {
   appTools?(appId: string, workerId: string): unknown;
   /** Tool calls that are plumbing and never shown (the page tools: a page card stands for them). */
   hiddenTool?(update: Record<string, unknown>): boolean;
+  /** The usage meter: the person's message the main chat works for now (a new helper's work counts toward it). */
+  usageItem?(appId: string): string | undefined;
+  /** The usage meter: one of a helper's turns used this (itemId: the message it works for). */
+  countUsage?(appId: string, itemId: string | undefined, usage: TokenUsage): void;
+  /** The usage meter: a plan limit Claude reported. */
+  notePlan?(limit: PlanLimit): void;
 }
 
 interface WorkerRecord {
@@ -70,6 +76,7 @@ interface WorkerRecord {
   reportPending?: string; // a report the coordinator has not received yet
   lastText?: string; // the worker's last message (its report)
   conflictsResolved?: number; // times it combined its change with one that landed first
+  usageItem?: string; // the person's message whose work it does (the usage meter)
 }
 
 type Ended = { state: WorkerState; build?: string };
@@ -311,12 +318,19 @@ export class WorkerManager {
       inbox: [args.brief.trim()],
       ...(args.forceBuild ? { forceBuild: true } : {}),
     };
+    const usageItem = this.host.usageItem?.(appId);
+    if (usageItem) w.usageItem = usageItem;
     entry.records.push(w);
     this.changed(record, w);
     this.host.activityChanged(record);
     this.host.log(`[${record.app.slug}] worker ${id} "${w.info.title}" (${args.changesApp ? "changes the app, in its own copy" : "looks only"})`);
     void this.run(appId, id);
     return { ...w.info };
+  }
+
+  /** The person's message a worker's work counts toward (the usage meter), if known. */
+  usageItemOf(appId: string, workerId: string): string | undefined {
+    return this.workers(appId).records.find((w) => w.info.id === workerId)?.usageItem;
   }
 
   /** A follow-up for a worker, from the coordinator (a worker's own chat is read only). */
@@ -386,6 +400,8 @@ export class WorkerManager {
         ...(this.host.appTools ? [this.host.appTools(appId, w.info.id)] : []),
       ],
       launch: claudeLaunchSpec(this.host.config.acpLaunch),
+      onUsage: (usage) => this.host.countUsage?.(appId, w.usageItem, usage),
+      onPlanLimit: (limit) => this.host.notePlan?.(limit),
       onUpdate: (update) => {
         if (this.host.hiddenTool && isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
           const toolCallId = String(update["toolCallId"] ?? "");

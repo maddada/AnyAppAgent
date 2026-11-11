@@ -34,7 +34,18 @@ export interface Builder {
     restore(args: { file: string; password: string }): Promise<{ added: string[]; same: string[]; conflicts: { id: string; reason: string }[] }>;
     kind(packageName: string): "shared" | "own" | "moved";
     move(packageName: string): Promise<unknown>;
+    // For the whole-PC backup (backup.ts). The entries are SECRET (keys and their passwords): they are
+    // only ever written inside the backup's encryption, never logged.
+    exportEntries?(): Promise<KeyEntry[]>;
+    importEntries?(entries: KeyEntry[], createdAt: string): Promise<{ added: string[]; same: string[]; conflicts: { id: string; reason: string }[] }>;
+    markBackedUp?(ids: string[], createdAt: string): Promise<void>;
   };
+}
+
+/** One signing key as builder/lib/keybackup.mjs exports it (opaque here). */
+export interface KeyEntry {
+  id: string;
+  [field: string]: unknown;
 }
 
 interface KeysModule {
@@ -43,6 +54,9 @@ interface KeysModule {
   restoreSigningKeys?: NonNullable<Builder["keys"]>["restore"];
   appSigningKind?: (args: { packageName: string }) => "shared" | "own" | "moved";
   moveAppToOwnKey?: (args: { packageName: string }) => Promise<unknown>;
+  exportSigningKeys?: () => Promise<{ entries: KeyEntry[] }>;
+  importSigningKeys?: (args: { entries: KeyEntry[]; createdAt: string }) => Promise<{ added: string[]; same: string[]; conflicts: { id: string; reason: string }[] }>;
+  markSigningKeysBackedUp?: (args: { ids: string[]; createdAt: string }) => Promise<void>;
 }
 
 export const REAL_BUILDER_PATH = join(REPO_DIR, "builder", "index.mjs");
@@ -67,6 +81,13 @@ export async function loadBuilder(choice: "auto" | "real" | "fake"): Promise<Bui
             restore: mod.restoreSigningKeys,
             kind: (packageName: string) => mod.appSigningKind!({ packageName }),
             move: (packageName: string) => mod.moveAppToOwnKey!({ packageName }),
+            ...(mod.exportSigningKeys && mod.importSigningKeys && mod.markSigningKeysBackedUp
+              ? {
+                  exportEntries: async () => (await mod.exportSigningKeys!()).entries,
+                  importEntries: (entries: KeyEntry[], createdAt: string) => mod.importSigningKeys!({ entries, createdAt }),
+                  markBackedUp: (ids: string[], createdAt: string) => mod.markSigningKeysBackedUp!({ ids, createdAt }),
+                }
+              : {}),
           },
         }
       : {}),

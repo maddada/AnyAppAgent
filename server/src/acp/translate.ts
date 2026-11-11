@@ -8,7 +8,7 @@ import type { ChatItem, PlanEntry, ToolCallInfo } from "../../../shared/protocol
 import { isJsonObject, readString, type JsonObject } from "./acp-client.ts";
 
 export type ChatDraft = Pick<ChatItem, "id" | "kind"> &
-  Partial<Pick<ChatItem, "text" | "streaming" | "tool" | "plan" | "permission" | "queued" | "dropped" | "images">>;
+  Partial<Pick<ChatItem, "text" | "streaming" | "tool" | "plan" | "permission" | "queued" | "dropped" | "images" | "usage">>;
 
 const TOOL_KINDS = new Set(["read", "edit", "delete", "move", "search", "execute", "think", "fetch", "switch_mode", "other"]);
 const DETAIL_MAX = 400;

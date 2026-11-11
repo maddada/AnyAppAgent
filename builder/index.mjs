@@ -25,7 +25,7 @@ import { DEPS_STAMP, depsHash, makeAppTree, templateHash } from './lib/template.
 import { GRADLE_JS_RES, assetsHash, exportBundle, fastLaneOn, makeOtaPackage, nativeFingerprint, readLast, swapBundle, writeLast } from './lib/fastlane.mjs';
 
 export { PRESETS, DEFAULT_PRESET, presetOf } from './lib/presets.mjs';
-export { listSigningKeys, moveAppToOwnKey, backupSigningKeys, restoreSigningKeys, appSigningKind } from './lib/keys-api.mjs';
+export { listSigningKeys, moveAppToOwnKey, backupSigningKeys, restoreSigningKeys, appSigningKind, exportSigningKeys, importSigningKeys, markSigningKeysBackedUp } from './lib/keys-api.mjs';
 
 const PACKAGE_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, Download, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, tileState } from "@/lib/describe";
-import { installLabel } from "@shared/chat/index";
+import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/chat/index";
 import { installApp, installFromLink, launchApp, updateFromLink } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
@@ -20,6 +20,7 @@ import { Field } from "@/ui/Field";
 import { Sheet } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
+import { HealthBadge, HealthCard, ReminderBanner } from "@/ui/Trust";
 import { border, elevation, icon, look, radius, size, space, useTheme } from "@/ui/theme";
 
 const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
@@ -112,7 +113,12 @@ function AppGrid() {
         columnWrapperStyle={{ gap: size.gridGap }}
         contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: hasApps ? space["2xl"] : insets.bottom + space["2xl"] }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={reconnectNow} colors={[t.text]} progressBackgroundColor={t.surface} />}
-        ListHeaderComponent={<Header />}
+        ListHeaderComponent={
+          <>
+            <Header />
+            <ReminderBanner />
+          </>
+        }
         renderItem={({ item }) =>
           item.kind === "new" ? (
             <NewTile width={tileWidth} onPress={() => setCreating(true)} />
@@ -240,7 +246,8 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
   const t = useTheme();
   const pkg = useStore((s) => s.packages[app.packageName]);
   const line = tileState(app, pkg, useStore((s) => s.installs[app.id]));
-  const label = pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
+  const base = pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
+  const label = app.health?.behind ? `${base}. ${BEHIND_LABEL}` : base;
   return (
     <PressScale
       testID={`app-tile-${app.slug}`}
@@ -260,7 +267,14 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
         ...elevation(t.mode, look.tileElevation as 1),
       }}
     >
-      <AppIcon app={app} size={size.appIcon} />
+      <View>
+        <AppIcon app={app} size={size.appIcon} />
+        {app.health?.behind ? (
+          <View style={{ position: "absolute", top: -6, right: -6 }}>
+            <HealthBadge app={app} onPress={onLongPress} />
+          </View>
+        ) : null}
+      </View>
       <T
         variant="name"
         numberOfLines={2}
@@ -401,6 +415,13 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
             </View>
           ) : (
             <View style={{ gap: space.sm }}>
+              <HealthCard
+                app={shown}
+                onSent={() => {
+                  onClose();
+                  router.push(`/chat/${shown.id}`);
+                }}
+              />
               {install?.phase === "failed" ? <InstallFailure app={shown} message={install.message} conflict={install.conflict} /> : null}
               {action === "install" || action === "update" || installing ? (
                 <>
@@ -465,6 +486,7 @@ export function InstallFailure({ app, message, conflict }: { app: App; message?:
 function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const client = useStore((s) => s.client);
   const [name, setName] = useState("");
+  const care = useStore((s) => s.care);
   const [prompt, setPrompt] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [preset, setPreset] = useState<AppPreset>("react-native");
@@ -520,7 +542,12 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
           {error}
         </T>
       ) : null}
-      <Button testID="new-app-submit" label="Make it" style={{ marginTop: space.xl }} disabled={!ready} busy={busy} onPress={submit} />
+      {ready ? (
+        <T testID="new-app-heads-up" variant="caption" color="textSecondary" style={{ marginTop: space.lg }}>
+          {bigJobHeadsUp({ text: prompt, newApp: true, usage: care?.usage })?.body}
+        </T>
+      ) : null}
+      <Button testID="new-app-submit" label="Make it" style={{ marginTop: space.md }} disabled={!ready} busy={busy} onPress={submit} />
       {!ready ? (
         <T variant="caption" color="textSecondary" style={{ marginTop: space.sm, textAlign: "center" }}>
           Give it a name and say what it should do.

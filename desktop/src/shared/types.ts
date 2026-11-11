@@ -1,6 +1,6 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, AppVersion, BackupRestoreResult, BackupState, CareState, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
 export type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, PageInfo, TodoItem, WorkerInfo };
 
@@ -160,6 +160,7 @@ export interface Snapshot {
   admin: AdminState | null;
   pairing: PairingView;
   apps: App[];
+  care: CareState | null; // the usage meter, the monthly reminder and the backup (docs/TRUST.md); null on older companions
   icons: Record<string, string>; // appId -> data URL
   checks: Checks;
   settings: Settings;
@@ -182,6 +183,12 @@ export interface ActionResult {
 export type KeysAction =
   | { cancelled: true }
   | { ok: true; file: string; count?: number; restored?: KeysRestoreResult }
+  | { ok: false; error: string };
+
+/** "Never lose your apps" (docs/TRUST.md): cancelled when the folder dialog was closed. */
+export type BackupAction =
+  | { cancelled: true }
+  | { ok: true; state?: BackupState; restored?: BackupRestoreResult }
   | { ok: false; error: string };
 
 /** What the preload bridge exposes as window.anyapp. */
@@ -219,6 +226,16 @@ export interface AnyAppBridge {
   removeDevice(id: string): Promise<void>;
   /** Asks where to save, then writes every signing key there, encrypted with `password`. */
   backupKeys(password: string): Promise<KeysAction>;
+  /** Turns backups on: asks for the folder, then the companion makes the recovery key from the password and backs up. */
+  backupOn(password: string): Promise<BackupAction>;
+  backupOff(): Promise<BackupAction>;
+  backupRun(): Promise<BackupAction>;
+  /** On a new PC: asks for the backup folder, then restores everything in it. */
+  backupRestore(password: string): Promise<BackupAction>;
+  /** Puts the monthly health reminder away for a month. */
+  dismissReminder(): Promise<ActionResult>;
+  /** "Update it" on an app that is behind the newest template. */
+  keepHealthy(appId: string): Promise<ActionResult>;
   /** Asks for a backup file, then adds the keys in it that this PC does not have. */
   restoreKeys(password: string): Promise<KeysAction>;
 

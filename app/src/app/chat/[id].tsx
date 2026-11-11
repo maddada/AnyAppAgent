@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, EllipsisVertical, Globe, History, Image as ImageIcon, ImagePlus, ListTodo, Send, Square, X } from "lucide-react-native";
-import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, mainChatReplying, MAX_IMAGES, type Row } from "@shared/chat/index";
+import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, headsUp as bigJobHeadsUp, mainChatReplying, MAX_IMAGES, type HeadsUp, type Row } from "@shared/chat/index";
 import { clipboardHasImage, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
 import { ChatRow } from "@/chat/ChatRows";
 import { describeApp } from "@/lib/describe";
@@ -19,6 +19,7 @@ import { canSendApp, SendAppPanel } from "@/ui/SendApp";
 import { Spinner } from "@/ui/Spinner";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
+import { HeadsUpCard } from "@/ui/Trust";
 import { border, elevation, icon, radius, size, space, typeStyle, useTheme } from "@/ui/theme";
 
 const EMPTY: ChatItem[] = [];
@@ -342,9 +343,20 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
     }
   };
 
-  const send = async () => {
+  // The heads-up before a big job (docs/TRUST.md): shown once for this text, then Send goes.
+  const care = useStore((s) => s.care);
+  const [heads, setHeads] = useState<{ h: HeadsUp; text: string } | null>(null);
+  const send = async (confirmed = false) => {
     if (!state.enabled || !client || !app) return;
     const message = text.trim();
+    if (!confirmed) {
+      const h = bigJobHeadsUp({ text: message, usage: care?.usage, appUsage: app.usage });
+      if (h) {
+        Keyboard.dismiss();
+        return setHeads({ h, text: message });
+      }
+    }
+    setHeads(null);
     setSending(true);
     setError(null);
     try {
@@ -379,6 +391,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
   const sidePad = (inner - size.sendButton) / 2;
   return (
     <View style={{ paddingTop: space.sm, paddingHorizontal: space.md, paddingBottom: bottomInset, backgroundColor: t.bg }}>
+      {heads && heads.text === text.trim() ? <HeadsUpCard h={heads.h} busy={sending} onSend={() => void send(true)} onCancel={() => setHeads(null)} /> : null}
       {error ? (
         <View style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }}>
           <StateLine kind="problem" label={error} role="caption" lines={0} />

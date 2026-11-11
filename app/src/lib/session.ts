@@ -610,6 +610,9 @@ function handleEvent(event: ServerEvent) {
     case "todos.updated":
       setTodos(event.appId, event.todos);
       break;
+    case "care.updated":
+      setState({ care: event.care });
+      break;
     case "diary.request":
       void answerDiaryRequest(event);
       break;
@@ -623,6 +626,8 @@ async function resync() {
   try {
     const apps = await client.listApps();
     setApps(apps);
+    // An older PC has no usage meter: care stays null and nothing shows.
+    void client.care().then((care) => setState({ care }), () => {});
     refreshPackages();
     updateKeepAlive();
     resumeUnfinishedInstalls();

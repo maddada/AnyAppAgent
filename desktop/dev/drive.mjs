@@ -6,6 +6,7 @@
 //   node dev/drive.mjs [--port 9333] eval "<js>"              runs JS in the page, prints the result (JSON)
 //   node dev/drive.mjs [--port 9333] text                     prints the visible text of the window
 //   node dev/drive.mjs [--port 9333] wait "<text>" [sec]      waits until the text is on screen
+//   --theme light|dark: shot in that colour scheme (CSS prefers-color-scheme, this call only)
 import { writeFileSync } from "node:fs";
 import WebSocket from "ws";
 
@@ -15,6 +16,8 @@ const port = pi >= 0 ? argv.splice(pi, 2)[1] : "9333";
 // --target <text>: the window whose address or title contains it (a page window: --target /page/). Default: the app's window.
 const ti = argv.indexOf("--target");
 const want = ti >= 0 ? argv.splice(ti, 2)[1] : undefined;
+const thi = argv.indexOf("--theme");
+const theme = thi >= 0 ? argv.splice(thi, 2)[1] : undefined;
 const [cmd, a1, a2] = argv;
 
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
@@ -58,6 +61,10 @@ const CLICK = (text) => `(() => {
 
 try {
   if (cmd === "shot") {
+    if (theme) {
+      await call("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: theme }] });
+      await new Promise((r) => setTimeout(r, 400));
+    }
     const r = await call("Page.captureScreenshot", { format: "png" });
     writeFileSync(a1, Buffer.from(r.data, "base64"));
     console.log(`saved ${a1}`);
