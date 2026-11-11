@@ -21,4 +21,5 @@ export type {
   SendMessageRequest,
   ServerEvent,
   ToolCallInfo,
+  WorkerInfo,
 } from "@shared/protocol";

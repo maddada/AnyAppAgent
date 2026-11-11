@@ -5,7 +5,7 @@ import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
-import type { ChatItem } from "../../../shared/protocol.ts";
+import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
 import type { Checks, ImageUpload, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
 import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
@@ -135,6 +135,8 @@ async function connectAdmin(): Promise<void> {
       broadcast();
     });
     client.on("chat", (item: ChatItem) => win?.webContents.send("chat:item", item));
+    client.on("helper", (worker: WorkerInfo) => win?.webContents.send("helper:updated", worker));
+    client.on("helper-item", (item: ChatItem) => win?.webContents.send("helper:item", item));
     await client.connect();
     companion.markRunning(client.adminRoutes);
     log(`[desktop] companion answering; admin routes: ${client.adminRoutes ? "yes" : "no (fallback)"}`);
@@ -509,6 +511,8 @@ function ipc(): void {
   ipcMain.handle("pairing:easy", (_e, enabled: boolean) => admin?.easyConnect(Boolean(enabled)));
   ipcMain.handle("devices:remove", (_e, id: string) => admin?.removeDevice(String(id)));
   ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
+  ipcMain.handle("helpers:list", (_e, appId: string) => admin?.helpers(String(appId)) ?? []);
+  ipcMain.handle("helpers:messages", (_e, appId: string, workerId: string) => admin?.helperMessages(String(appId), String(workerId)) ?? []);
   // Chat actions answer { ok, error } with a plain sentence instead of throwing across IPC.
   const chatAction = (run: (client: AdminClient) => Promise<unknown>) => async () => {
     try {
@@ -525,6 +529,7 @@ function ipc(): void {
   );
   ipcMain.handle("apps:image", (_e, appId: string, imageId: string) => admin?.image(String(appId), String(imageId)));
   ipcMain.handle("apps:cancel", (_e, appId: string) => chatAction((c) => c.cancel(String(appId)))());
+  ipcMain.handle("helpers:stop", (_e, appId: string, workerId: string) => chatAction((c) => c.stopHelper(String(appId), String(workerId)))());
   ipcMain.handle("apps:rebuild", (_e, appId: string) => chatAction((c) => c.rebuild(String(appId)))());
   ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
     chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),

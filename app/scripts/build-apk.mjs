@@ -15,8 +15,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const isWin = process.platform === "win32";
 const clean = process.argv.includes("--clean");
 
-const JAVA_HOME = process.env.JAVA_HOME && existsSync(process.env.JAVA_HOME) ? process.env.JAVA_HOME : "D:\tools\android\jdk";
-const ANDROID_HOME = process.env.ANDROID_HOME && existsSync(process.env.ANDROID_HOME) ? process.env.ANDROID_HOME : "D:\tools\android\sdk";
+const JAVA_HOME = process.env.JAVA_HOME && existsSync(process.env.JAVA_HOME) ? process.env.JAVA_HOME : String.raw`D:\tools\android\jdk`;
+const ANDROID_HOME = process.env.ANDROID_HOME && existsSync(process.env.ANDROID_HOME) ? process.env.ANDROID_HOME : String.raw`D:\tools\android\sdk`;
 const env = {
   ...process.env,
   JAVA_HOME,

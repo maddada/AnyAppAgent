@@ -45,8 +45,13 @@ export function describeApp(app: App, device?: OnDevice, now = Date.now()): Stat
   switch (app.status) {
     case "creating":
       return { kind: "working", label: "Setting up" };
-    case "working":
+    case "working": {
+      // With helpers: say how many are at work (the main chat alone answering is "Answering").
+      const n = app.activeHelpers ?? 0;
+      if (n > 0) return { kind: "working", label: n === 1 ? "1 helper at work" : `${n} helpers at work` };
+      if (typeof app.activeHelpers === "number" && app.replying) return { kind: "working", label: "Answering" };
       return { kind: "working", label: "Making changes" };
+    }
     case "building":
       // After the build itself the companion still commits and pushes before it announces the APK.
       return app.latestBuild?.status === "succeeded"

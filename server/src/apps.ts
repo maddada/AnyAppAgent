@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent } from "../../shared/protocol.ts";
+import type { App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import type { PromptImage } from "./acp/claude-session.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
@@ -18,6 +18,10 @@ import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
 import { appPlaybook, buildFixPrompt } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
+import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
+import { isWorkerToolCall, workerToolsMcpServer } from "./worker-http.ts";
+import { WorkerManager, type BuildChangeOutcome } from "./workers.ts";
+import { isJsonObject } from "./acp/acp-client.ts";
 
 export class HttpError extends Error {
   readonly status: number;
@@ -28,7 +32,19 @@ export class HttpError extends Error {
 }
 
 // itemId: the user's chat item for a prompt the user sent, marked `queued` while it waits.
-type Job = { kind: "prompt"; text: string; itemId?: string; images?: PromptImage[] } | { kind: "build" };
+// A report carries finished helpers' reports to the coordinator (never dropped by Stop).
+type Job =
+  | { kind: "prompt"; text: string; itemId?: string; images?: PromptImage[] }
+  | { kind: "build" }
+  | { kind: "report"; workerId: string; text: string };
+
+interface BuildCycleOptions {
+  /** Sends a build failure to an agent; resolves with the stop reason. Default: the app's main session. */
+  fix?(prompt: string): Promise<string>;
+  cancelled?(): boolean;
+  /** The commit message summary. Default: the main chat's last message. */
+  summary?: string;
+}
 
 interface PendingPermission {
   responder: AcpAgentRequestResponder;
@@ -45,10 +61,16 @@ interface Runtime {
   held: boolean;
   cancelRequested: boolean;
   permissions: Map<string, PendingPermission>;
+  /** ACP tool call ids of the coordinator's own worker tools: their worker rows stand for them. */
+  hiddenTools: Set<string>;
+  /** True while a prompt to the app's own session runs. */
+  turnActive: boolean;
 }
 
 interface ReadyRecord extends AppRecord {
   ready?: boolean;
+  /** The coordinator playbook version this app's session was given (docs/APP-COORDINATOR.md). */
+  coordinatorPlaybook?: number;
 }
 
 /** The presets the phone may ask for (shared/protocol.ts AppPreset). */
@@ -97,6 +119,8 @@ export class AppManager {
   private readonly runtimes = new Map<string, Runtime>();
   /** A plain sentence when the builder cannot run on this PC (no Android toolchain), else null. */
   private readonly checkToolchain: () => string | null;
+  /** Each app's workers, when its main chat is a coordinator (config.coordinator). */
+  readonly workers: WorkerManager | undefined;
 
   constructor(deps: {
     store: Store;
@@ -112,6 +136,26 @@ export class AppManager {
     this.broadcast = deps.broadcast;
     this.log = deps.log;
     this.checkToolchain = deps.checkToolchain ?? (() => null);
+    this.workers = this.config.coordinator
+      ? new WorkerManager({
+          config: this.config,
+          stateDir: this.store.stateDir,
+          log: this.log,
+          broadcast: this.broadcast,
+          record: (appId) => this.store.find(appId),
+          emitMain: (record, draft) => this.emitItem(record, draft),
+          buildChange: (record, opts) => this.buildCycle(record, opts),
+          report: (record, workerId, text) => this.enqueue(record, { kind: "report", workerId, text }),
+          activityChanged: (record) => this.activityChanged(record),
+        })
+      : undefined;
+  }
+
+  /** After the server listens: workers that were running when it stopped carry on. */
+  startWork(): void {
+    const ready = this.store.apps().filter((r) => (r as ReadyRecord).ready);
+    this.workers?.resume(ready.map((r) => r.app.id));
+    for (const record of ready) this.activityChanged(record);
   }
 
   // ---------- startup / shutdown
@@ -139,6 +183,7 @@ export class AppManager {
           chat.upsert({ id: item.id, kind: "permission", permission: { ...item.permission, selectedOptionId: "cancelled" } });
         }
       }
+      delete app.replying;
       if (app.latestBuild?.status === "running") {
         app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: "The PC companion restarted during this build." };
       }
@@ -154,6 +199,7 @@ export class AppManager {
 
   async shutdown(): Promise<void> {
     await Promise.all([...this.runtimes.values()].map((rt) => rt.session?.stop()));
+    await this.workers?.shutdown();
     this.store.flush();
   }
 
@@ -208,6 +254,8 @@ export class AppManager {
         held: false,
         cancelRequested: false,
         permissions: new Map(),
+        hiddenTools: new Set(),
+        turnActive: false,
       };
       this.runtimes.set(id, rt);
     }
@@ -216,7 +264,7 @@ export class AppManager {
 
   // ---------- events
 
-  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo }): void {
+  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo }): void {
     const item = this.store.chat(record.app.id).upsert(draft);
     this.broadcast({ type: "chat.item", item });
   }
@@ -226,16 +274,39 @@ export class AppManager {
   }
 
   private touch(record: AppRecord): void {
+    // Set (0 or more) only when the app's chat hands work to helpers: clients read it as "helpers mode".
+    if (this.workers && record.app.activeHelpers === undefined) record.app.activeHelpers = this.workers.activeCount(record.app.id);
     record.app.updatedAt = nowIso();
     this.store.save();
     this.broadcast({ type: "app.updated", app: record.app });
   }
 
   private setStatus(record: AppRecord, status: AppStatus, error?: string): void {
+    // With workers, the app is idle only when the main chat and every worker are.
+    if (status === "idle" && this.busy(record)) status = "working";
     record.app.status = status;
     if (error === undefined) delete record.app.error;
     else record.app.error = error;
     this.touch(record);
+  }
+
+  private busy(record: AppRecord): boolean {
+    return this.runtime(record.app.id).turnActive || (this.workers?.busy(record.app.id) ?? false);
+  }
+
+  /** A worker started or settled: "working" while anything runs, "idle" after (an error stays shown). */
+  private activityChanged(record: AppRecord): void {
+    const status = record.app.status;
+    if (record.deleted) return;
+    const helpers = this.workers?.activeCount(record.app.id);
+    if (helpers !== undefined && helpers !== record.app.activeHelpers) {
+      record.app.activeHelpers = helpers;
+      this.touch(record);
+    }
+    if (status === "creating" || status === "building") return;
+    const busy = this.busy(record);
+    if (busy && status !== "working") this.setStatus(record, "working");
+    else if (!busy && status === "working") this.setStatus(record, "idle");
   }
 
   // ---------- commands
@@ -359,6 +430,10 @@ export class AppManager {
   rebuild(id: string): void {
     const record = this.record(id);
     if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
+    if (this.workers) {
+      this.workers.rebuild(id, record.app.latestBuild?.error);
+      return;
+    }
     this.enqueue(record, { kind: "build" });
   }
 
@@ -366,6 +441,8 @@ export class AppManager {
   cancel(id: string): void {
     const record = this.record(id);
     const rt = this.runtime(record.app.id);
+    // Only the main chat's own turn stops, and the person's queued messages are dropped; helpers keep
+    // working (each has its own Stop) and their reports still reach the main chat.
     this.dropQueue(record);
     if (!rt.running) return;
     rt.cancelRequested = true;
@@ -397,6 +474,7 @@ export class AppManager {
       await rt.session?.stop();
       this.runtimes.delete(id);
     }
+    await this.workers?.forget(id);
     record.deleted = true;
     this.store.save();
     this.broadcast({ type: "app.deleted", appId: id });
@@ -414,7 +492,9 @@ export class AppManager {
   /** Empties the queue; the user's waiting messages are marked as not sent. */
   private dropQueue(record: AppRecord): void {
     const rt = this.runtime(record.app.id);
-    const dropped = rt.queue.splice(0);
+    // Helpers' reports stay queued: Stop is about the person's own messages.
+    const dropped = rt.queue.filter((job) => job.kind !== "report");
+    rt.queue = rt.queue.filter((job) => job.kind === "report");
     for (const job of dropped) {
       if (job.kind === "prompt" && job.itemId) this.emitItem(record, { id: job.itemId, kind: "user", queued: false, dropped: true });
     }
@@ -423,6 +503,7 @@ export class AppManager {
   private async drain(record: AppRecord): Promise<void> {
     const rt = this.runtime(record.app.id);
     rt.running = true;
+    this.setReplying(record, true);
     try {
       while (rt.queue.length > 0 && !record.deleted) {
         const job = rt.queue.shift()!;
@@ -432,6 +513,7 @@ export class AppManager {
         }
         try {
           if (job.kind === "prompt") await this.userTurn(record, job.text, job.images ?? []);
+          else if (job.kind === "report") await this.reportTurn(record, job);
           else await this.buildCycle(record);
         } catch (error) {
           if (record.deleted) break;
@@ -442,10 +524,36 @@ export class AppManager {
       }
     } finally {
       rt.running = false;
+      this.setReplying(record, false);
     }
   }
 
+  /** The main chat itself is answering (its Stop applies), as opposed to helpers working. */
+  private setReplying(record: AppRecord, replying: boolean): void {
+    if (record.deleted || (record.app.replying ?? false) === replying) return;
+    record.app.replying = replying;
+    this.touch(record);
+  }
+
+  /** Worker reports go to the coordinator as one message (every report waiting in the queue). */
+  private async reportTurn(record: AppRecord, first: Job & { kind: "report" }): Promise<void> {
+    const rt = this.runtime(record.app.id);
+    const jobs = [first, ...rt.queue.filter((job): job is Job & { kind: "report" } => job.kind === "report")];
+    rt.queue = rt.queue.filter((job) => job.kind !== "report");
+    const stop = await this.agentTurn(record, reportPrompt(jobs.map((job) => job.text)));
+    this.workers?.reported(record.app.id, jobs.map((job) => job.workerId));
+    if (stop !== "cancelled") this.setStatus(record, "idle");
+  }
+
   private async userTurn(record: AppRecord, text: string, images: PromptImage[] = []): Promise<void> {
+    if (this.workers) {
+      // The coordinator only talks and starts workers; builds follow workers' changes. Pictures go to
+      // it as image blocks, and their paths on this PC too, so it can hand them to a helper's brief.
+      const paths = images.length > 0 ? `\n\n(The pictures are saved on this PC at: ${images.map((i) => i.path).join(", ")}. A helper can open them by path.)` : "";
+      await this.agentTurn(record, `${text}${paths}`, images);
+      this.setStatus(record, "idle");
+      return;
+    }
     const before = await git.treeSnapshot(record.dir, (m) => this.log(`[${record.app.slug}] ${m}`));
     const stopReason = await this.agentTurn(record, text, images);
     if (stopReason === "cancelled" || this.runtime(record.app.id).cancelRequested) {
@@ -466,13 +574,34 @@ export class AppManager {
     if (rt.session?.alive) return rt.session;
     if (rt.starting) return rt.starting;
     const slug = record.app.slug;
+    const ready = record as ReadyRecord;
+    const appInfo = { name: record.app.name, packageName: record.app.packageName, dir: record.dir, preset: record.app.preset };
+    const coordinated = this.workers
+      ? {
+          instructions: coordinatorPlaybook(appInfo),
+          // An app made before workers resumes its session and gets the new playbook once.
+          instructionsOnResume: (ready.coordinatorPlaybook ?? 0) < COORDINATOR_PLAYBOOK_VERSION,
+          mcpServers: [workerToolsMcpServer(this.config.port, record.app.id, this.workers.toolsToken)],
+        }
+      : undefined;
     const session = new ClaudeSession({
       cwd: record.dir,
       ...(record.sessionId ? { resumeSessionId: record.sessionId } : {}),
-      instructions: appPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: record.dir, preset: record.app.preset }),
+      instructions: appPlaybook(appInfo),
+      ...coordinated,
       launch: claudeLaunchSpec(this.config.acpLaunch),
       askPermissions: this.config.askPermissions,
       onUpdate: (update) => {
+        if (coordinated && isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
+          const toolCallId = String(update["toolCallId"] ?? "");
+          if (rt.hiddenTools.has(toolCallId)) return;
+          if (isWorkerToolCall(update)) {
+            // Not shown (the worker row stands for it), but it ends the text before it, like any tool call.
+            rt.hiddenTools.add(toolCallId);
+            for (const draft of rt.translator.closeStreams()) this.emitItem(record, draft);
+            return;
+          }
+        }
         for (const draft of rt.translator.translate(update)) this.emitItem(record, draft);
       },
       onPermission: (ask) => this.handlePermission(record, ask),
@@ -487,6 +616,7 @@ export class AppManager {
         rt.session = session;
         rt.starting = undefined;
         record.sessionId = session.sessionId;
+        if (coordinated) ready.coordinatorPlaybook = COORDINATOR_PLAYBOOK_VERSION;
         this.store.save();
         this.log(`[${slug}] Claude Code session ${session.sessionId} ${session.resumed ? "resumed" : "started"} (mode ${session.modeId ?? "?"})`);
         return session;
@@ -528,13 +658,16 @@ export class AppManager {
     rt.translator.startTurn();
     let stopReason = "error";
     try {
+      rt.turnActive = true;
       stopReason = await session.prompt(text, images);
     } catch (error) {
       this.log(`[${record.app.slug}] prompt failed:`, (error as Error).message);
       this.errorItem(record, `The agent stopped unexpectedly: ${firstLine((error as Error).message, 200)}`);
     } finally {
+      rt.turnActive = false;
       for (const draft of rt.translator.finishTurn(stopReason)) this.emitItem(record, draft);
     }
+    if (stopReason === "cancelled") this.emitItem(record, { id: randomUUID(), kind: "stopped", text: "Stopped" });
     if (rt.translator.lastTurnText.trim() !== "") record.app.lastMessagePreview = shorten(rt.translator.lastTurnText, 140);
     this.checkIcon(record);
     this.touch(record);
@@ -549,8 +682,10 @@ export class AppManager {
    * happening in plain words, says "Found a small problem, fixing it" while the agent repairs a
    * failed build, and only turns into "The app didn't build" when every try failed.
    */
-  private async buildCycle(record: AppRecord): Promise<void> {
+  private async buildCycle(record: AppRecord, opts: BuildCycleOptions = {}): Promise<BuildChangeOutcome> {
     const rt = this.runtime(record.app.id);
+    const isCancelled = opts.cancelled ?? (() => rt.cancelRequested);
+    const fixTurn = opts.fix ?? ((prompt: string) => this.agentTurn(record, prompt));
     const max = this.config.maxBuildFixes;
     const rowId = randomUUID();
     const toolchainProblem = this.checkToolchain();
@@ -558,13 +693,13 @@ export class AppManager {
       const build: BuildInfo = { number: (record.app.latestBuild?.number ?? 0) + 1, status: "failed", startedAt: nowIso(), finishedAt: nowIso(), error: toolchainProblem };
       this.emitItem(record, { id: rowId, kind: "build", build, text: "" });
       this.setStatus(record, "error", toolchainProblem);
-      return;
+      return { ok: false, error: toolchainProblem };
     }
     let environmentProblem: string | undefined;
     const outcome = await runBuildCycle<{ build: BuildInfo }>({
       maxFixes: max,
       build: () => this.buildOnce(record, rowId),
-      cancelled: () => rt.cancelRequested || environmentProblem !== undefined,
+      cancelled: () => isCancelled() || environmentProblem !== undefined,
       fix: async (error, attempt) => {
         if (isEnvironmentFailure(error)) {
           environmentProblem = error;
@@ -578,14 +713,14 @@ export class AppManager {
           text: `Found a small problem. Fixing it, then building again (${attempt} of ${max})`,
         });
         this.log(`[${record.app.slug}] build ${failed.number} failed; fix attempt ${attempt} of ${max}`);
-        const stop = await this.agentTurn(record, buildFixPrompt({ buildNumber: failed.number, attempt, maxAttempts: max, error, preset: record.app.preset }));
+        const stop = await fixTurn(buildFixPrompt({ buildNumber: failed.number, attempt, maxAttempts: max, error, preset: record.app.preset }));
         return stop !== "cancelled";
       },
     });
     if (outcome.outcome === "succeeded") {
       const { build } = outcome.result;
       try {
-        const summary = (record.app.lastMessagePreview ?? "update").split(/(?<=[.!?])\s/)[0];
+        const summary = opts.summary ?? (record.app.lastMessagePreview ?? "update").split(/(?<=[.!?])\s/)[0];
         await git.commitAll(record.dir, `Build ${build.number}: ${shorten(summary, 72)}`);
       } catch (error) {
         this.log(`[${record.app.slug}] commit failed:`, (error as Error).message);
@@ -600,7 +735,7 @@ export class AppManager {
       this.setStatus(record, "idle");
       this.broadcast({ type: "apk.ready", app: record.app });
       this.log(`[${record.app.slug}] APK ${build.number} ready (${build.sizeBytes} bytes)`);
-      return;
+      return { ok: true, number: build.number };
     }
     const failed = record.app.latestBuild!;
     let plain: string;
@@ -615,6 +750,7 @@ export class AppManager {
     record.app.latestBuild = { ...failed, status: "failed", error: plain };
     this.emitItem(record, { id: rowId, kind: "build", build: record.app.latestBuild, text: "" });
     this.setStatus(record, "error", plain);
+    return { ok: false, error: plain, ...(outcome.outcome === "cancelled" ? { cancelled: true } : {}) };
   }
 
   private async buildOnce(record: AppRecord, rowId: string): Promise<BuildAttempt<{ build: BuildInfo }>> {

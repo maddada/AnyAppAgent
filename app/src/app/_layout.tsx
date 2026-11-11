@@ -35,6 +35,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="connect" options={{ animation: "fade" }} />
             <Stack.Screen name="chat/[id]" />
+            <Stack.Screen name="helper/[appId]/[workerId]" />
             <Stack.Screen name="settings" />
             <Stack.Screen name="pair" options={{ animation: "none" }} />
           </Stack>

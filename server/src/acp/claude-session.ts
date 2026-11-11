@@ -58,6 +58,10 @@ export interface ClaudeSessionOptions {
   cwd: string;
   resumeSessionId?: string;
   instructions: string;
+  /** Send the instructions on the first prompt even when an old session resumes (its playbook changed). */
+  instructionsOnResume?: boolean;
+  /** ACP McpServer entries for session/new and session/resume (e.g. the coordinator's worker tools). */
+  mcpServers?: unknown[];
   launch: LaunchSpec;
   /** Dev and tests only (ANYAPP_ASK_PERMISSIONS=1): stay in the default mode, so permission requests reach the chat. */
   askPermissions?: boolean;
@@ -140,10 +144,10 @@ export class ClaudeSession {
         const method = supportsResume ? "session/resume" : "session/load";
         this.loading = true;
         try {
-          configState = await connection.request(method, { sessionId: resumeId, cwd, mcpServers: [] }, ACP_SESSION_SETUP_TIMEOUT_MS);
+          configState = await connection.request(method, { sessionId: resumeId, cwd, mcpServers: this.options.mcpServers ?? [] }, ACP_SESSION_SETUP_TIMEOUT_MS);
           this.sessionId = resumeId;
           this.resumed = true;
-          this.pendingInstructions = undefined;
+          if (!this.options.instructionsOnResume) this.pendingInstructions = undefined;
           this.options.log(`${method} restored Claude Code session ${resumeId}`);
         } catch (error) {
           this.options.log(`could not restore session ${resumeId} (${(error as Error).message}); starting a new one`);
@@ -152,7 +156,7 @@ export class ClaudeSession {
         }
       }
       if (this.sessionId === "") {
-        configState = await connection.request("session/new", { cwd, mcpServers: [] }, ACP_SESSION_SETUP_TIMEOUT_MS);
+        configState = await connection.request("session/new", { cwd, mcpServers: this.options.mcpServers ?? [] }, ACP_SESSION_SETUP_TIMEOUT_MS);
         const sessionId = isJsonObject(configState) ? readString(configState, "sessionId") : undefined;
         if (!sessionId) throw new Error("Claude Code did not return a session id");
         this.sessionId = sessionId;

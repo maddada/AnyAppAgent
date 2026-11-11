@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { networkInterfaces, hostname } from "node:os";
 import { join } from "node:path";
 import WebSocket from "ws";
-import type { AdminEvent, AdminState, App, AppPreset, ChatItem, ImageUpload, PairedDevice } from "../../../shared/protocol.ts";
+import type { AdminEvent, AdminState, App, AppPreset, ChatItem, ImageUpload, PairedDevice, WorkerInfo } from "../../../shared/protocol.ts";
 
 const VIRTUAL_ADAPTER = /vethernet|wsl|hyper-v|virtualbox|vmware|tailscale|zerotier|docker|loopback|vpn/i;
 
@@ -221,11 +221,35 @@ export class AdminClient extends EventEmitter {
       case "chat.item":
         this.emit("chat", event.item);
         break;
+      case "worker.updated":
+        this.emit("helper", event.worker);
+        break;
+      case "worker.item":
+        this.emit("helper-item", event.item);
+        break;
     }
   }
 
   messages(appId: string): Promise<ChatItem[]> {
     return this.request<ChatItem[]>("GET", `/api/apps/${encodeURIComponent(appId)}/messages`);
+  }
+
+  /** Helpers of an app (an older companion has no such route: no helpers). */
+  async helpers(appId: string): Promise<WorkerInfo[]> {
+    try {
+      return await this.request<WorkerInfo[]>("GET", `/api/apps/${encodeURIComponent(appId)}/workers`);
+    } catch {
+      return [];
+    }
+  }
+
+  helperMessages(appId: string, workerId: string): Promise<ChatItem[]> {
+    return this.request<ChatItem[]>("GET", `/api/apps/${encodeURIComponent(appId)}/workers/${encodeURIComponent(workerId)}/messages`);
+  }
+
+  /** A helper's own Stop (the main chat's Stop never stops helpers). */
+  stopHelper(appId: string, workerId: string): Promise<void> {
+    return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/workers/${encodeURIComponent(workerId)}/cancel`, {});
   }
 
   send(appId: string, text: string, images: ImageUpload[] = []): Promise<void> {

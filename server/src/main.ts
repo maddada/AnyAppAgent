@@ -58,6 +58,7 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
   easyConnect.init();
+  apps.startWork();
   if (builder.kind === "real") warmBuilder(config.appsDir, log);
 
   const addresses = lanAddresses();

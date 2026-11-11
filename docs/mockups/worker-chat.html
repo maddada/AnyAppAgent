@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="ghostex-page" content="v2">
+<title>App chat: helper rows and a helper's chat</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Only the mockups' own drawing. The app's Workbench palette (shared/theme/theme.css): the dark
+     set on .aa, the light set under the reader's light theme, so the page's switch flips both. */
+  .aa {
+    --bg: #181613; --surface: #211E1A; --sunken: #2C2824; --rail: #1D1A17; --selected: #2C2824;
+    --text: #EEE8DD; --text2: #BDB3A5; --text3: #9B9184; --border: #332F29; --border-strong: #4B443B;
+    --accent: #6DBB8F; --on-accent: #0E2117; --working: #BDB3A5; --ready: #86CDA5; --problem: #EE8466;
+    --bubble: #2E2A25; --field: #211E1A; --field-border: #4B443B; --edge: rgba(238, 232, 221, .08);
+    --shadow: 0 1px 1px rgb(0 0 0 / .25), 0 2px 6px -2px rgb(0 0 0 / .35);
+    --win-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 18px 40px -18px rgb(0 0 0 / .55);
+    background: var(--bg); color: var(--text);
+    font: 400 16px/24px "Bricolage Grotesque", system-ui, sans-serif;
+    border: 1px solid var(--border); box-shadow: var(--win-shadow); overflow: hidden;
+  }
+  [data-gx-theme=light] .aa {
+    --bg: #F3EFE7; --surface: #FBF9F4; --sunken: #E9E3D7; --rail: #ECE7DD; --selected: #E2DBCE;
+    --text: #1F1B16; --text2: #575046; --text3: #696155; --border: #DED6C8; --border-strong: #C2B7A5;
+    --accent: #1D6A4A; --on-accent: #F7F4EC; --working: #575046; --ready: #1D6A4A; --problem: #A63A21;
+    --bubble: #E9E3D7; --field: #FBF9F4; --field-border: #DED6C8; --edge: rgba(31, 27, 22, .08);
+    --shadow: 0 1px 1px rgb(70 50 20 / .06), 0 2px 6px -2px rgb(70 50 20 / .10);
+    --win-shadow: 0 1px 2px rgb(70 50 20 / .08), 0 18px 40px -18px rgb(70 50 20 / .30);
+  }
+  .aa, .aa * { box-sizing: border-box; }
+  .aa svg { flex: none; }
+
+  /* ---------- phone */
+  .phone { width: 100%; max-width: 380px; margin: 0 auto; border-radius: 28px; display: flex; flex-direction: column; }
+  .phones { width: 100%; max-width: 840px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 28px; align-items: start; }
+
+  /* ---------- chat pieces (COMPONENTS.md 10 to 12) */
+  .head { min-height: 60px; display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 4px; border-bottom: 1px solid var(--border); }
+  .head .back { width: 44px; height: 44px; display: grid; place-items: center; color: var(--text); flex: none; }
+  .head .icon { width: 36px; height: 36px; border-radius: 9px; box-shadow: inset 0 0 0 1px var(--edge); flex: none; display: block; }
+  .head .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .head .name { font: 600 17px/22px "Bricolage Grotesque", sans-serif; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .btn { height: 36px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border-strong); color: var(--text); font: 600 14px/1 "Bricolage Grotesque", sans-serif; display: inline-flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; }
+  .timeline { padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .user { align-self: flex-end; max-width: 85%; background: var(--bubble); border-radius: 18px 18px 6px 18px; padding: 10px 14px; font-size: 15px; line-height: 21px; }
+  .said { padding: 0 4px; }
+  .tool { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 4px; font-size: 14px; line-height: 20px; color: var(--text2); }
+  .tool > svg:first-child { color: var(--text3); }
+  .tool .end { margin-left: auto; color: var(--text3); display: grid; flex: none; }
+  .tool.now { color: var(--text); }
+  .composer { margin: 4px 12px 12px; min-height: 52px; border-radius: 26px; background: var(--field); border: 1px solid var(--field-border); display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 18px; }
+  .composer > span:first-child { flex: 1; min-width: 0; color: var(--text3); }
+  .readonly { margin: 4px 12px 12px; padding: 12px 14px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 20px; color: var(--text3); }
+  .send.halt { background: var(--text); color: var(--bg); }
+  .fit { display: grid; grid-template-columns: minmax(0, 1fr); }
+  @media (max-width: 600px) { .fit { padding: 0 12px; } }
+  .fit > figure { box-sizing: border-box; min-width: 0; width: 100%; max-width: 100%; margin-left: 0; margin-right: 0; }
+  .send { width: 40px; height: 40px; border-radius: 20px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; flex: none; }
+
+  /* state line (COMPONENTS.md 8): a mark and a word, never wrapping */
+  .state { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 17px; font-weight: 500; white-space: nowrap; flex: none; color: var(--text3); }
+  .state.working { color: var(--working); }
+  .state.ready { color: var(--ready); }
+  .state.problem { color: var(--problem); }
+  .dot { width: 8px; height: 8px; border-radius: 99px; background: currentColor; flex: none; }
+  .spin { width: 12px; height: 12px; border-radius: 99px; border: 2px solid currentColor; border-right-color: transparent; animation: spin .9s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(1turn); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; opacity: .6; } }
+
+  /* ---------- the helper row (ChatItem kind "worker") */
+  .helper { display: flex; align-items: center; gap: 12px; padding: 12px 6px 12px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .helper .badge { width: 36px; height: 36px; border-radius: 10px; background: var(--sunken); color: var(--text2); display: grid; place-items: center; flex: none; }
+  .helper .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .helper .title { font-size: 15px; line-height: 20px; font-weight: 600; }
+  .helper .latest { font-size: 14px; line-height: 20px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .helper .chev { width: 28px; display: grid; place-items: center; color: var(--text3); flex: none; }
+  .helper.open { background: var(--selected); border-color: var(--border-strong); box-shadow: none; }
+
+  /* build row, short form */
+  .build { display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .build .badge { width: 40px; height: 40px; border-radius: 12px; background: var(--sunken); color: var(--ready); display: grid; place-items: center; flex: none; }
+  .build .h { font-size: 17px; line-height: 22px; font-weight: 600; }
+  .build .s { font-size: 14px; line-height: 20px; color: var(--text2); }
+
+  /* ---------- the helper's own chat */
+  .task { border: 1px dashed var(--border-strong); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .task .k { font: 500 12px/16px "IBM Plex Mono", monospace; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .task .v { font-size: 15px; line-height: 21px; color: var(--text2); }
+
+  /* ---------- desktop window: rail, main chat, helper panel; stacks on a narrow window */
+  .desk { border-radius: 12px; display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(0, 380px); }
+  .desk .rail { background: var(--rail); border-right: 1px solid var(--border); padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .desk .rail .label { font: 500 12px/16px "IBM Plex Mono", monospace; letter-spacing: .4px; text-transform: uppercase; color: var(--text3); padding: 4px 8px 8px; }
+  .desk .rail .app { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  .desk .rail .app.on { background: var(--selected); }
+  .desk .rail .app img, .desk .rail .app .plus { width: 28px; height: 28px; border-radius: 7px; flex: none; }
+  .desk .rail .app .plus { background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+  .desk .main { min-width: 0; display: flex; flex-direction: column; }
+  .desk .main .inner { width: 100%; max-width: 640px; margin: 0 auto; }
+  .desk .head { padding-left: 16px; }
+  .desk .side { min-width: 0; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; }
+  .grow { flex: 1; }
+  @media (max-width: 980px) {
+    .desk { grid-template-columns: minmax(0, 1fr); }
+    .desk .rail { display: none; }
+    .desk .side { border-left: 0; border-top: 1px solid var(--border); }
+  }
+
+  /* ---------- every state */
+  .states { border-radius: 20px; padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+</style>
+</head>
+<body>
+<gx-page>
+  <header>
+    <span class="gx-eyebrow">AnyAppAgent · helpers mockup</span>
+    <h1>App chat: helper rows and a helper's chat</h1>
+    <p class="gx-lede">The main chat stays your conversation with the app. Each piece of work shows as one helper row, and tapping it opens that helper's own chat.</p>
+    <div class="gx-chips">
+      <span class="gx-chip">Mockup, nothing built yet</span>
+      <span class="gx-chip"><b>8</b> row states</span>
+      <span class="gx-chip">Helpers work side by side</span>
+      <span class="gx-chip">Workbench colours</span>
+      <span class="gx-chip">Light and dark: the theme switch flips it</span>
+    </div>
+  </header>
+
+  <h2>Phone</h2>
+  <p>Left: the main chat answering while two helpers work side by side, each in its own copy of the app. The Stop under the reply stops only that reply; the helpers keep going. Right: the helper's chat that opens from its row. It is read only: its own Stop, and anything you want to tell it goes through the main chat.</p>
+</gx-page>
+
+<gx-wide>
+  <div class="phones">
+    <figure class="gx-figure">
+      <div class="aa phone">
+        <div class="head">
+          <span class="back"><svg width="24" height="24"><use href="#i-chev-l"/></svg></span>
+          <img class="icon" src="img/tipsplitter-icon.png" alt="">
+          <div class="t"><span class="name">Tip Splitter</span><span class="state working"><span class="spin"></span>2 helpers at work</span></div>
+          <span class="btn">Open</span>
+        </div>
+        <div class="timeline">
+          <div class="user">Make the tip buttons bigger. And can it round up to whole dirhams?</div>
+          <div class="said">Two helpers on it, working side by side: one makes the buttons bigger, the other adds rounding. You get a new version after each.</div>
+          <div class="helper open">
+            <span class="badge"><svg width="18" height="18"><use href="#i-pen"/></svg></span>
+            <div class="body"><span class="title">Bigger tip buttons</span><span class="state working"><span class="spin"></span>Working</span><span class="latest">Changed TipButtons.tsx</span></div>
+            <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+          </div>
+          <div class="helper">
+            <span class="badge"><svg width="18" height="18"><use href="#i-pen"/></svg></span>
+            <div class="body"><span class="title">Round up to whole dirhams</span><span class="state working"><span class="spin"></span>Working</span><span class="latest">Changed Total.tsx</span></div>
+            <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+          </div>
+          <div class="user">Is the 20 percent button still green?</div>
+          <div class="said">Yes, 20 percent stays green. The helper is only making</div>
+        </div>
+        <div class="composer"><span>Message Tip Splitter</span><span class="send halt" aria-label="Stop this reply"><svg width="14" height="14"><use href="#i-square-fill"/></svg></span></div>
+      </div>
+      <figcaption>Main chat</figcaption>
+    </figure>
+
+    <figure class="gx-figure">
+      <div class="aa phone">
+        <div class="head">
+          <span class="back"><svg width="24" height="24"><use href="#i-chev-l"/></svg></span>
+          <div class="t"><span class="name">Bigger tip buttons</span><span class="state working"><span class="spin"></span>Working</span></div>
+          <span class="btn"><svg width="14" height="14"><use href="#i-square"/></svg>Stop</span>
+        </div>
+        <div class="timeline">
+          <div class="task">
+            <span class="k"><svg width="14" height="14"><use href="#i-hand"/></svg>Task from the main chat</span>
+            <span class="v">Make the three tip buttons (10, 15, 20 percent) bigger and easier to tap. Keep 20 percent green. Done when they are at least 56 high.</span>
+          </div>
+          <div class="tool"><svg width="16" height="16"><use href="#i-chev-r"/></svg><span>Read 3 files, searched the app</span></div>
+          <div class="said">The buttons are 40 high now. I'll make them 60 and give the labels more room.</div>
+          <div class="tool"><svg width="16" height="16"><use href="#i-pen"/></svg><span>Changed TipButtons.tsx</span><span class="end"><svg width="16" height="16"><use href="#i-check"/></svg></span></div>
+          <div class="tool now"><svg width="16" height="16"><use href="#i-term"/></svg><span>Checked the app</span><span class="end"><span class="spin"></span></span></div>
+        </div>
+        <div class="readonly"><svg width="16" height="16"><use href="#i-msg"/></svg><span>To change what this helper does, tell the main chat.</span></div>
+      </div>
+      <figcaption>The helper's chat</figcaption>
+    </figure>
+  </div>
+</gx-wide>
+
+<gx-page>
+  <h2>Desktop</h2>
+  <p>The helper's chat opens beside the main chat, so the main chat stays in front of you and you can keep talking. In a narrow window it drops below.</p>
+</gx-page>
+
+<gx-wide>
+  <div class="fit"><figure class="gx-figure">
+    <div class="aa desk">
+      <div class="rail">
+        <span class="label">Apps</span>
+        <span class="app on"><img src="img/tipsplitter-icon.png" alt="">Tip Splitter</span>
+        <span class="app"><span class="plus"><svg width="16" height="16"><use href="#i-plus"/></svg></span>New app</span>
+      </div>
+      <div class="main">
+        <div class="head"><img class="icon" src="img/tipsplitter-icon.png" alt="">
+          <div class="t"><span class="name">Tip Splitter</span><span class="state working"><span class="spin"></span>2 helpers at work</span></div>
+          <span class="btn">Open</span></div>
+        <div class="inner timeline">
+          <div class="user">A tip splitter: I type the bill, pick 10, 15 or 20 percent and the number of people, and it shows what each person pays.</div>
+          <div class="said">On it. A helper is building the first version now. I'll tell you when it's on your phone.</div>
+          <div class="helper">
+            <span class="badge"><svg width="18" height="18"><use href="#i-check"/></svg></span>
+            <div class="body"><span class="title">Build the tip splitter</span><span class="state ready"><span class="dot"></span>Done, in version 1</span><span class="latest">Made the screen with bill, tip and people, and its own icon.</span></div>
+            <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+          </div>
+          <div class="build"><span class="badge"><svg width="20" height="20"><use href="#i-check"/></svg></span><div><div class="h">Version 1 is ready</div><div class="s">Installing on your phone</div></div></div>
+          <div class="said">Your tip splitter is ready and on its way to your phone.</div>
+          <div class="user">Make the tip buttons bigger. And can it round up to whole dirhams?</div>
+          <div class="said">Two helpers on it, working side by side: one makes the buttons bigger, the other adds rounding. You get a new version after each.</div>
+          <div class="helper open">
+            <span class="badge"><svg width="18" height="18"><use href="#i-pen"/></svg></span>
+            <div class="body"><span class="title">Bigger tip buttons</span><span class="state working"><span class="spin"></span>Working</span><span class="latest">Changed TipButtons.tsx</span></div>
+            <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+          </div>
+          <div class="helper">
+            <span class="badge"><svg width="18" height="18"><use href="#i-pen"/></svg></span>
+            <div class="body"><span class="title">Round up to whole dirhams</span><span class="state working"><span class="spin"></span>Working</span><span class="latest">Changed Total.tsx</span></div>
+            <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+          </div>
+        </div>
+        <div class="grow"></div>
+        <div class="inner"><div class="composer"><span>Message Tip Splitter</span><span class="send"><svg width="18" height="18"><use href="#i-send"/></svg></span></div></div>
+      </div>
+      <div class="side">
+        <div class="head">
+          <div class="t"><span class="name">Bigger tip buttons</span><span class="state working"><span class="spin"></span>Working</span></div>
+          <span class="btn"><svg width="14" height="14"><use href="#i-square"/></svg>Stop</span>
+          <span class="back"><svg width="20" height="20"><use href="#i-x"/></svg></span>
+        </div>
+        <div class="timeline">
+          <div class="task">
+            <span class="k"><svg width="14" height="14"><use href="#i-hand"/></svg>Task from the main chat</span>
+            <span class="v">Make the three tip buttons (10, 15, 20 percent) bigger and easier to tap. Keep 20 percent green. Done when they are at least 56 high.</span>
+          </div>
+          <div class="tool"><svg width="16" height="16"><use href="#i-chev-r"/></svg><span>Read 3 files, searched the app</span></div>
+          <div class="said">The buttons are 40 high now. I'll make them 60 and give the labels more room.</div>
+          <div class="tool"><svg width="16" height="16"><use href="#i-pen"/></svg><span>Changed TipButtons.tsx</span><span class="end"><svg width="16" height="16"><use href="#i-check"/></svg></span></div>
+          <div class="tool now"><svg width="16" height="16"><use href="#i-term"/></svg><span>Checked the app</span><span class="end"><span class="spin"></span></span></div>
+        </div>
+        <div class="grow"></div>
+        <div class="readonly"><svg width="16" height="16"><use href="#i-msg"/></svg><span>To change what this helper does, tell the main chat.</span></div>
+      </div>
+    </div>
+    <figcaption>Desktop app, Tip Splitter with "Bigger tip buttons" open</figcaption>
+  </figure></div>
+</gx-wide>
+
+<gx-page>
+  <h2>Every state of a helper row</h2>
+  <p>A mark and a word from the app's state line, then the helper's latest line: its current step while it works, its result once it is done. Changes are added to the app one at a time, so a finished helper can wait a moment to add its change.</p>
+
+  <div class="fit"><figure class="gx-figure">
+    <div class="aa states">
+      <div class="helper">
+        <span class="badge"><svg width="18" height="18"><use href="#i-clock"/></svg></span>
+        <div class="body"><span class="title">Round up to whole dirhams</span><span class="state">Waiting to add its change</span><span class="latest">Adds its change after "Bigger tip buttons"</span></div>
+        <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+      </div>
+      <div class="helper">
+        <span class="badge"><svg width="18" height="18"><use href="#i-pen"/></svg></span>
+        <div class="body"><span class="title">Bigger tip buttons</span><span class="state working"><span class="spin"></span>Working</span><span class="latest">Changed TipButtons.tsx</span></div>
+        <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+      </div>
+      <div class="helper">
+        <span class="badge"><svg width="18" height="18"><use href="#i-merge"/></svg></span>
+        <div class="body"><span class="title">Five percent tip</span><span class="state working"><span class="spin"></span>Combining changes</span><span class="latest">Fitting its change together with another one</span></div>
+        <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+      </div>
+      <div class="helper">
+        <span class="badge"><svg width="18" height="18"><use href="#i-package"/></svg></span>
+        <div class="body"><span class="title">Bigger tip buttons</span><span class="state working"><span class="spin"></span>Building version 3</span><span class="latest">Building the new version</span></div>
+        <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+      </div>
+      <div class="helper">
+        <span class="badge"><svg width="18" height="18"><use href="#i-check"/></svg></span>
+        <div class="body"><span class="title">Bigger tip buttons</span><span class="state ready"><span class="dot"></span>Done, in version 3</span><span class="latest">Made all three buttons 60 high; 20 percent stays green.</span></div>
+        <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+      </div>
+      <div class="helper">
+        <span class="badge"><svg width="18" height="18"><use href="#i-search"/></svg></span>
+        <div class="body"><span class="title">Why the total is off</span><span class="state ready"><span class="dot"></span>Done</span><span class="latest">The bill was rounded twice. Nothing changed yet.</span></div>
+        <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+      </div>
+      <div class="helper">
+        <span class="badge"><svg width="18" height="18"><use href="#i-alert"/></svg></span>
+        <div class="body"><span class="title">History of bills</span><span class="state problem"><svg width="15" height="15"><use href="#i-alert"/></svg>Ran into a problem</span><span class="latest">Its change did not build after 3 tries</span></div>
+        <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+      </div>
+      <div class="helper">
+        <span class="badge"><svg width="16" height="16"><use href="#i-square"/></svg></span>
+        <div class="body"><span class="title">Dark mode colours</span><span class="state">Stopped</span><span class="latest">You stopped it before it changed anything</span></div>
+        <span class="chev"><svg width="18" height="18"><use href="#i-chev-r"/></svg></span>
+      </div>
+    </div>
+    <figcaption>Waiting to add its change, working, combining with a change that landed first, building, done (a change and a look into something), a problem, stopped</figcaption>
+  </figure></div>
+</gx-page>
+
+<!-- Lucide icons, stroke 1.75 (the app's icon set) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></symbol>
+    <symbol id="i-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6M12 19h8"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.3 9 5.1M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-square-fill" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="3"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></symbol>
+    <symbol id="i-merge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V5a1.5 1.5 0 0 1 3 0v5M12 10V4a1.5 1.5 0 0 1 3 0v6M15 10V6a1.5 1.5 0 0 1 3 0v8a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2.5-4.5a1.5 1.5 0 0 1 2.5-1.6L9 14"/></symbol>
+  </defs>
+</svg>
+</body>
+</html>

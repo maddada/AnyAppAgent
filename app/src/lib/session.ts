@@ -14,6 +14,9 @@ import {
   setState,
   upsertApp,
   upsertChatItems,
+  upsertHelperItems,
+  upsertHelpers,
+  replaceHelperChat,
 } from "./store";
 import { loadPairing, loadPrefs, savePairing, savePrefs, type Pairing, type Prefs } from "./storage";
 import { autoInstallIfNew, onApkReady, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
@@ -591,6 +594,12 @@ function handleEvent(event: ServerEvent) {
       updateKeepAlive();
       void onApkReady(event.app);
       break;
+    case "worker.updated":
+      upsertHelpers(event.worker.appId, [event.worker]);
+      break;
+    case "worker.item":
+      if (event.item.workerId) upsertHelperItems(event.item.workerId, [event.item]);
+      break;
   }
 }
 
@@ -630,4 +639,20 @@ export async function loadChat(appId: string): Promise<void> {
   }
   replaceChat(appId, items);
   setState((s) => ({ chatLoaded: { ...s.chatLoaded, [appId]: true } }));
+  // Helpers come with the chat (an older PC has none: an empty list).
+  void client.helpers(appId).then((list) => upsertHelpers(appId, list), () => {});
+}
+
+/** A helper's own chat (read only): its history, then the socket keeps it current. */
+export async function loadHelperChat(appId: string, workerId: string): Promise<void> {
+  const client = getState().client;
+  if (!client) return;
+  let items: ChatItem[];
+  try {
+    items = await client.helperMessages(appId, workerId);
+  } catch (e) {
+    if (e instanceof ApiError && e.unauthorized) onAuthLost();
+    throw e;
+  }
+  replaceHelperChat(workerId, items);
 }

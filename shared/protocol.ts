@@ -37,6 +37,9 @@ export interface App {
   latestApk?: BuildInfo; // newest succeeded build: what GET /apk serves
   repoUrl?: string; // GitHub repository, when one was created
   lastMessagePreview?: string;
+  // With helpers (docs/APP-COORDINATOR.md): status is "working" while the main chat OR any helper works.
+  replying?: boolean; // the main chat itself is answering now (its Stop applies); absent from older PCs
+  activeHelpers?: number; // helpers waiting, working or building now; set (0 or more) only when the chat uses helpers
   createdAt: string;
   updatedAt: string;
 }
@@ -49,7 +52,9 @@ export type ChatItemKind =
   | "plan" // the agent's todo list
   | "permission" // the agent asks to be allowed something
   | "build" // an APK build started by the server
-  | "error"; // something failed outside the agent's own text
+  | "error" // something failed outside the agent's own text
+  | "worker" // one row per worker in the app's main chat (ChatItem.worker); upserted as it moves
+  | "stopped"; // a plain "Stopped" line where the person stopped a turn (main chat or a helper's chat)
 
 export interface ToolCallInfo {
   title: string; // "Edit App.tsx", "Run npm install"
@@ -88,8 +93,37 @@ export interface ChatItem {
   dropped?: boolean;
   // On a user item: the pictures sent with it (GET /api/apps/:id/images/:imageId serves each one).
   images?: ChatImage[];
+  worker?: WorkerInfo; // on a "worker" row: the worker it stands for (tap opens its chat)
+  workerId?: string; // set on the items of a worker's own chat; never on the main chat
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------- Workers ("helpers" in everything the person sees). Each app's main chat is a coordinator: it
+// answers at once and hands every real piece of work (a change, a fix, a look into something) to a worker,
+// another Claude Code session for the same app. Each worker shows as one "worker" row in the main chat and
+// has its own chat, read only.
+// See docs/APP-COORDINATOR.md.
+
+export type WorkerState =
+  | "waiting" // its change waits for another change to land in the app first
+  | "working" // in a turn
+  | "building" // its change is being built into a new version
+  | "done" // finished; its report went to the coordinator
+  | "failed" // stopped by an error, or its change did not build
+  | "stopped"; // the person (or the coordinator) stopped it
+
+export interface WorkerInfo {
+  id: string;
+  appId: string;
+  title: string; // its task in a few words, e.g. "Make the button green"
+  state: WorkerState;
+  latest?: string; // its latest line: what it is doing now, or its result once finished
+  changesApp: boolean; // false: it only looks into something and changes no files
+  buildNumber?: number; // the build its change produced, when it built
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string; // when it last went done, failed or stopped
 }
 
 // ---------- HTTP (JSON). Everything except /api/health and /api/pair needs
@@ -182,6 +216,13 @@ export interface PermissionAnswerRequest {
   optionId: string;
 }
 
+// Workers (see "Workers" above):
+// GET /api/apps/:id/workers -> WorkerInfo[] (newest last)
+// GET /api/apps/:id/workers/:workerId/messages?afterSeq=<n> -> ChatItem[] of that worker's chat, ordered by seq
+//   (seq counts per worker chat; every item has workerId set). A worker's chat is read only: the person
+//   talks to it through the main chat.
+// POST /api/apps/:id/workers/:workerId/cancel -> 202 (stops that worker; the main chat's cancel never does)
+
 // ---------- WebSocket: GET /ws?token=<token>. Server to app only; JSON text frames.
 // The app may send the text frame "ping" every few seconds: writing is how a phone notices a dead
 // connection whose close never reached it. The companion ignores frames from the app.
@@ -191,7 +232,9 @@ export type ServerEvent =
   | { type: "app.updated"; app: App } // also sent for a new app
   | { type: "app.deleted"; appId: string }
   | { type: "chat.item"; item: ChatItem } // upsert by item.id
-  | { type: "apk.ready"; app: App }; // a new APK can be downloaded and installed now
+  | { type: "apk.ready"; app: App } // a new APK can be downloaded and installed now
+  | { type: "worker.updated"; worker: WorkerInfo } // a worker started or changed (its main-chat row also arrives as chat.item)
+  | { type: "worker.item"; item: ChatItem }; // upsert into the chat of worker item.workerId (never the main chat)
 
 // ---------- Desktop app (desktop/, Electron) to companion. The desktop app starts the companion
 // as a child process with the env var ANYAPP_ADMIN_TOKEN=<random secret>. That token is accepted

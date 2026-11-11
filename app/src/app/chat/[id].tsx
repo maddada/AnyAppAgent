@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, Image as ImageIcon, ImagePlus, Square, X } from "lucide-react-native";
-import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, MAX_IMAGES, type Row } from "@shared/chat/index";
+import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, mainChatReplying, MAX_IMAGES, type Row } from "@shared/chat/index";
 import { clipboardHasImage, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
 import { ChatRow } from "@/chat/ChatRows";
 import { describeApp } from "@/lib/describe";
@@ -221,11 +221,13 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
   const showStop = state.button === "stop";
   const hasContent = text.trim().length > 0 || attached.length > 0;
   const body = typeStyle("body");
-  // A stop lasts until the turn really ends.
-  const [stoppedTurn, setStoppedTurn] = useState(app?.status);
-  if (app?.status !== stoppedTurn) {
-    setStoppedTurn(app?.status);
-    if (app?.status !== "working") setStopping(false);
+  // A stop lasts until the main chat's turn really ends (with helpers the app can stay "working"
+  // while only helpers work: they keep going, and the main chat's Stop is done).
+  const replying = mainChatReplying(app);
+  const [stoppedTurn, setStoppedTurn] = useState(replying);
+  if (replying !== stoppedTurn) {
+    setStoppedTurn(replying);
+    if (!replying) setStopping(false);
   }
 
   const openTray = () => {

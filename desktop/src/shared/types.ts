@@ -1,8 +1,8 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, WorkerInfo } from "../../../shared/protocol.ts";
 
-export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload };
+export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, WorkerInfo };
 
 /** One self-check in the setup checklist. */
 export type CheckState = "checking" | "done" | "needed" | "working" | "skipped" | "problem";
@@ -156,6 +156,10 @@ export interface AnyAppBridge {
   getSnapshot(): Promise<Snapshot>;
   onSnapshot(listener: (snapshot: Snapshot) => void): () => void;
   onChatItem(listener: (item: ChatItem) => void): () => void;
+  /** Helpers (docs/APP-COORDINATOR.md; the wire calls them workers): a helper started or changed. */
+  onHelper(listener: (worker: WorkerInfo) => void): () => void;
+  /** An item of a helper's own chat (item.workerId says whose). */
+  onHelperItem(listener: (item: ChatItem) => void): () => void;
   onNavigate(listener: (where: "connect-phone" | "home") => void): () => void;
 
   recheck(): Promise<void>;
@@ -180,6 +184,9 @@ export interface AnyAppBridge {
   removeDevice(id: string): Promise<void>;
 
   getMessages(appId: string): Promise<ChatItem[]>;
+  getHelpers(appId: string): Promise<WorkerInfo[]>;
+  getHelperMessages(appId: string, workerId: string): Promise<ChatItem[]>;
+  stopHelper(appId: string, workerId: string): Promise<ActionResult>;
   sendMessage(appId: string, text: string, images?: ImageUpload[]): Promise<ActionResult>;
   /** A picture sent in a chat, as a data URL (undefined when it is gone). */
   getImage(appId: string, imageId: string): Promise<string | undefined>;
