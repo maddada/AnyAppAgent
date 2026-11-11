@@ -74,7 +74,11 @@ instead. Spares are full copies, not links, so apps never share files.
    warm between builds and apps; the shared local build cache lets a new app reuse the compiled
    library modules of earlier apps.
 7. Verifies package and versionCode with `aapt2 dump badging`, copies the APK to
-   `build/apk/<slug>-<n>.apk`, returns its path, size and SHA-256.
+   `build/apk/<slug>-<n>.apk`, returns its path, size and SHA-256. React Native apps also get one
+   APK per ABI (`<slug>-<n>-arm64-v8a.apk`, `<slug>-<n>-x86_64.apk`, returned as `variants`), and
+   their native libraries are stored compressed (`anyapp.init.gradle`). Prayer Alarm build 6 went
+   from 89.4 MB (both ABIs, libraries uncompressed) to 50.0 MB for the full APK and 38.9 MB for
+   the arm64-v8a one a phone downloads. `ANYAPP_ABI_SPLITS=0` builds only the full APK.
 
 Two Windows/Expo specifics:
 

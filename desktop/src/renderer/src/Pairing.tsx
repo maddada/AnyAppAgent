@@ -6,6 +6,7 @@ import { Check, Copy, Globe, RefreshCw, Wifi } from "lucide-react";
 import type { Snapshot } from "../../shared/types.ts";
 import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
 import { Icon, QrPlate, Spinner } from "./ui.tsx";
+import { someoneIsHere } from "./renewal.ts";
 
 const api = window.anyapp;
 
@@ -47,16 +48,38 @@ export function TypedCode({ s }: { s: Snapshot }) {
   );
 }
 
-/** Asks for a fresh code when Easy Connect is on but its one-time code was used or expired. */
+let lastActivity = Date.now();
+if (typeof window !== "undefined") {
+  for (const event of ["pointerdown", "pointermove", "keydown", "wheel", "focus"]) {
+    window.addEventListener(event, () => (lastActivity = Date.now()), { capture: true, passive: true });
+  }
+}
+
+/**
+ * Asks for a fresh code when Easy Connect is on but its one-time code was used or expired, while
+ * someone is at the PC; otherwise as soon as someone comes back (mouse, keyboard, focus).
+ */
 export function useFreshCode(s: Snapshot): void {
   const asked = useRef(false);
-  const needs = s.pairing.needsNewCode;
+  const needs = s.pairing.needsNewCode === true;
   useEffect(() => {
-    if (needs && !asked.current) {
+    if (!needs) {
+      asked.current = false;
+      return;
+    }
+    const renew = () => {
+      if (asked.current || !someoneIsHere(Date.now(), lastActivity, document.visibilityState === "visible", document.hasFocus())) return;
       asked.current = true;
       void api.newPairingCode();
-    }
-    if (!needs) asked.current = false;
+    };
+    renew();
+    const events = ["pointerdown", "pointermove", "keydown", "focus"] as const;
+    for (const event of events) window.addEventListener(event, renew, { passive: true });
+    document.addEventListener("visibilitychange", renew);
+    return () => {
+      for (const event of events) window.removeEventListener(event, renew);
+      document.removeEventListener("visibilitychange", renew);
+    };
   }, [needs]);
 }
 

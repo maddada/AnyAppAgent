@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, Download, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp } from "@/lib/describe";
+import { installLabel } from "@shared/chat/index";
 import { installApp, installFromLink, launchApp } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
@@ -132,7 +133,7 @@ function TileStateLine({ app }: { app: App }) {
   const state = describeApp(app, pkg, install);
   if (!state) return null;
   // On a tile the idle line is short; the sheet says the full sentence.
-  const label = state.kind === "idle" && pkg ? `Version ${pkg.versionCode}` : state.label;
+  const label = installLabel(install, true) ?? (state.kind === "idle" && pkg ? `Version ${pkg.versionCode}` : state.label);
   return <StateLine kind={state.kind} label={label} />;
 }
 
@@ -312,11 +313,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                   <Button
                     testID="app-primary"
                     label={
-                      installing
-                        ? install?.phase === "downloading"
-                          ? `Downloading ${Math.round((install.progress ?? 0) * 100)}%`
-                          : "Installing"
-                        : actionLabel(action, shown.latestApk?.number)
+                      installing ? (installLabel(install) ?? "Installing") : actionLabel(action, shown.latestApk?.number)
                     }
                     icon={Download}
                     busy={installing}

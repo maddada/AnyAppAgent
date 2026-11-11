@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import type { PromptImage } from "./acp/claude-session.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
@@ -100,6 +100,17 @@ export function withoutEmDashes(text: string): string {
   return text.replace(/\s*\u{2014}\s*/gu, ", ");
 }
 
+/** What a build cut off by a restart of the companion says (it is built again by itself). */
+const INTERRUPTED_BUILD = "The PC restarted during this build, so it is building again.";
+
+/** An ABI name as Android spells it (arm64-v8a, x86_64): safe inside a file name. */
+const SAFE_ABI = /^[a-z0-9_-]{1,20}$/;
+
+/** build-6.apk (every ABI) or build-6-arm64-v8a.apk (one ABI). */
+export function apkFileName(number: number, abi?: string): string {
+  return abi ? `build-${number}-${abi}.apk` : `build-${number}.apk`;
+}
+
 function shorten(text: string, max: number): string {
   const flat = withoutEmDashes(text).replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
@@ -117,6 +128,8 @@ export class AppManager {
   private readonly broadcast: (event: ServerEvent) => void;
   private readonly log: (...parts: unknown[]) => void;
   private readonly runtimes = new Map<string, Runtime>();
+  /** Apps whose build was cut off by the last stop of the companion (recover -> startWork). */
+  private readonly interruptedBuilds = new Set<string>();
   /** A plain sentence when the builder cannot run on this PC (no Android toolchain), else null. */
   private readonly checkToolchain: () => string | null;
   /** Each app's workers, when its main chat is a coordinator (config.coordinator). */
@@ -154,8 +167,16 @@ export class AppManager {
   /** After the server listens: workers that were running when it stopped carry on. */
   startWork(): void {
     const ready = this.store.apps().filter((r) => (r as ReadyRecord).ready);
-    this.workers?.resume(ready.map((r) => r.app.id));
-    for (const record of ready) this.activityChanged(record);
+    // A helper that was building builds again by itself (workers.resume); a build of the main
+    // chat (or one no helper owns any more) is queued here.
+    const helperBuilds = this.workers?.resume(ready.map((r) => r.app.id)) ?? new Set<string>();
+    for (const record of ready) {
+      this.activityChanged(record);
+      if (!this.interruptedBuilds.delete(record.app.id) || helperBuilds.has(record.app.id)) continue;
+      this.log(`[${record.app.slug}] the PC restarted during build ${record.app.latestBuild?.number}; building again`);
+      this.enqueue(record, { kind: "build" });
+    }
+    this.interruptedBuilds.clear();
   }
 
   // ---------- startup / shutdown
@@ -176,7 +197,7 @@ export class AppManager {
           chat.upsert({
             id: item.id,
             kind: "build",
-            build: { ...item.build, status: "failed", finishedAt: nowIso(), error: "The PC companion restarted during this build." },
+            build: { ...item.build, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD },
           });
         }
         if (item.permission && item.permission.selectedOptionId === undefined) {
@@ -185,7 +206,9 @@ export class AppManager {
       }
       delete app.replying;
       if (app.latestBuild?.status === "running") {
-        app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: "The PC companion restarted during this build." };
+        app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD };
+        // Built again by itself once the server listens (startWork), not left for the person to notice.
+        if ((record as ReadyRecord).ready) this.interruptedBuilds.add(app.id);
       }
       if (app.status === "creating" && !(record as ReadyRecord).ready) {
         app.status = "error";
@@ -218,12 +241,22 @@ export class AppManager {
     return this.store.chat(id).list(afterSeq);
   }
 
-  apkFile(id: string): { path: string; app: App } | null {
+  /**
+   * The APK GET /apk serves: the variant for `abi` when the build has one (smaller), else the full
+   * APK. `missing` when the variant is listed but its file is gone, so the phone never gets a file
+   * whose checksum differs from the one it was told.
+   */
+  apkFile(id: string, abi?: string): { path: string; app: App; build: BuildInfo; abi?: string; sha256?: string } | { missing: true } | null {
     const record = this.record(id);
     const apk = record.app.latestApk;
     if (!apk) return null;
-    const path = join(this.store.apkDir(id), `build-${apk.number}.apk`);
-    return existsSync(path) ? { path, app: record.app } : null;
+    const variant = abi ? apk.variants?.find((v) => v.abi === abi) : undefined;
+    if (variant) {
+      const path = join(this.store.apkDir(id), apkFileName(apk.number, variant.abi));
+      return existsSync(path) ? { path, app: record.app, build: apk, abi: variant.abi, sha256: variant.sha256 } : { missing: true };
+    }
+    const path = join(this.store.apkDir(id), apkFileName(apk.number));
+    return existsSync(path) ? { path, app: record.app, build: apk, ...(apk.sha256 ? { sha256: apk.sha256 } : {}) } : null;
   }
 
   icon(id: string): { path: string } | { png: Buffer } {
@@ -778,8 +811,14 @@ export class AppManager {
       const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog });
       const apkDir = this.store.apkDir(app.id);
       mkdirSync(apkDir, { recursive: true });
-      const target = join(apkDir, `build-${number}.apk`);
+      const target = join(apkDir, apkFileName(number));
       copyFileSync(result.apkPath, target);
+      const variants: ApkVariant[] = [];
+      for (const v of result.variants ?? []) {
+        if (!SAFE_ABI.test(v.abi)) continue;
+        copyFileSync(v.apkPath, join(apkDir, apkFileName(number, v.abi)));
+        variants.push({ abi: v.abi, sizeBytes: v.sizeBytes, sha256: v.sha256 });
+      }
       this.pruneApks(apkDir, number);
       build = {
         ...build,
@@ -787,6 +826,7 @@ export class AppManager {
         finishedAt: nowIso(),
         sizeBytes: statSync(target).size,
         sha256: result.sha256,
+        ...(variants.length > 0 ? { variants } : {}),
       };
       app.latestBuild = build;
       this.log(`[${app.slug}] build ${number} took ${Math.round((Date.now() - started) / 1000)} s`);
@@ -807,7 +847,7 @@ export class AppManager {
 
   private pruneApks(apkDir: string, keepFrom: number): void {
     for (const file of readdirSync(apkDir)) {
-      const match = file.match(/^build-(\d+)\.apk$/);
+      const match = file.match(/^build-(\d+)(?:-[a-z0-9_-]+)?\.apk$/);
       if (match && Number(match[1]) < keepFrom - 2) rmSync(join(apkDir, file), { force: true });
     }
   }

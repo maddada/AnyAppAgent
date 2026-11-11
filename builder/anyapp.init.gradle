@@ -3,7 +3,11 @@
 //   - signs release builds with the shared AnyAppAgent key (properties passed as
 //     ORG_GRADLE_PROJECT_anyapp* environment variables, never written to disk in the app),
 //   - sets versionCode to the build number (-PanyappVersionCode=<n>),
-//   - skips the release lint check (slow, and not useful for side-loaded apps).
+//   - skips the release lint check (slow, and not useful for side-loaded apps),
+//   - with -PanyappAbiSplits=<abi,abi>: also one APK per ABI next to the full one, so a phone
+//     downloads only its own native code (about a third of the full APK),
+//   - with -PanyappCompressNativeLibs=true: stores native libraries compressed in the APK
+//     (they were stored uncompressed: 28.5 MB instead of 10.3 MB for arm64 alone).
 gradle.allprojects { p ->
   p.tasks.configureEach { t ->
     if (t.name.startsWith('lintVital')) t.enabled = false
@@ -22,6 +26,21 @@ gradle.allprojects { p ->
         android.buildTypes.getByName('release').signingConfig = cfg
       }
       if (code) android.defaultConfig.versionCode = Integer.parseInt(code.toString())
+      def splits = p.findProperty('anyappAbiSplits')?.toString()?.trim()
+      if (splits) {
+        def abis = splits.split(',').collect { it.trim() }.findAll { it }
+        android.splits.abi.enable = true
+        android.splits.abi.reset()
+        android.splits.abi.include(*abis)
+        android.splits.abi.universalApk = true
+        // With splits on, React Native no longer sets ndk.abiFilters, so the prebuilt libraries of
+        // other ABIs (React Native's own, ML Kit's) would land in the full APK: filter them out.
+        android.defaultConfig.ndk.abiFilters.clear()
+        android.defaultConfig.ndk.abiFilters.addAll(abis)
+      }
+      if (p.findProperty('anyappCompressNativeLibs')?.toString() == 'true') {
+        android.packaging.jniLibs.useLegacyPackaging = true
+      }
     }
   }
 }

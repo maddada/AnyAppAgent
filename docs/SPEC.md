@@ -106,9 +106,12 @@ createApp({ dir, name, slug, packageName, preset?, onLog? }) -> Promise<void>
     Copies the template into dir, fills in name and package id, and leaves it ready to build.
     preset: "react-native" (default, template/) or "kotlin" (template-kotlin/). buildApk and
     getIconPath tell the two apart by the folder (app.json or anyapp.json).
-buildApk({ dir, buildNumber, onLog? }) -> Promise<{ apkPath, sizeBytes, sha256 }>
+buildApk({ dir, buildNumber, onLog? }) -> Promise<{ apkPath, sizeBytes, sha256, variants? }>
     Builds a signed, installable APK with versionCode = buildNumber. Rejects with an Error whose
     message is the useful part of the build output (the part an agent needs to fix it).
+    variants (React Native apps): [{ abi, apkPath, sizeBytes, sha256 }], one smaller APK per ABI
+    (arm64-v8a for phones, x86_64 for the emulator) next to the full one; the phone downloads
+    its own with GET /api/apps/:id/apk?abi=<abi> (shared/protocol.ts BuildInfo.variants).
 getIconPath({ dir }) -> string | null
     Absolute path of the app's launcher icon PNG, or null.
 ```

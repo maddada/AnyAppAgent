@@ -9,10 +9,52 @@ export interface StateText {
   label: string;
 }
 
+/** An install on the phone, as far as its words go. */
+export interface InstallOnDevice {
+  phase: "waiting" | "downloading" | "checking" | "installing" | "confirm" | "done" | "failed";
+  progress?: number; // 0..1 while downloading
+  bytesWritten?: number; // while downloading: what is on the phone already
+  totalBytes?: number; // while downloading: the whole download
+  waitingFor?: string; // while waiting: the name of the app installing before this one
+  retrying?: boolean; // while downloading: the link stalled or dropped, it reconnects and carries on
+}
+
 /** What the phone knows locally. */
 export interface OnDevice {
   installedVersion: number | null; // versionCode installed on this phone, null when not installed
-  install?: { phase: "waiting" | "downloading" | "checking" | "installing" | "confirm" | "done" | "failed"; progress?: number };
+  install?: InstallOnDevice;
+}
+
+/** "34 of 85 MB", one decimal under 10 MB. */
+export function bytesOf(done: number, total: number): string {
+  const mb = (n: number) => (total < 10 * 1048576 ? (n / 1048576).toFixed(1) : String(Math.floor(n / 1048576)));
+  return `${mb(Math.min(done, total))} of ${total < 10 * 1048576 ? (total / 1048576).toFixed(1) : Math.round(total / 1048576)} MB`;
+}
+
+/**
+ * The words for an install that is under way (button and state line), or null when none is.
+ * `compact`: for a half-width tile ("34 of 85 MB" beside the spinner, "Waiting").
+ */
+export function installLabel(install: InstallOnDevice | undefined, compact = false): string | null {
+  switch (install?.phase) {
+    case "waiting":
+      if (compact) return "Waiting";
+      return install.waitingFor ? `Waiting for ${install.waitingFor}` : "Getting ready";
+    case "downloading":
+      if (install.retrying && (compact || !install.totalBytes)) return "Reconnecting";
+      if (install.totalBytes) {
+        const amount = bytesOf(install.bytesWritten ?? 0, install.totalBytes);
+        return compact ? amount : `${install.retrying ? "Reconnecting at" : "Downloading"} ${amount}`;
+      }
+      return install.progress ? `Downloading ${Math.round(install.progress * 100)}%` : "Downloading";
+    case "checking":
+      return compact ? "Checking" : "Checking the download";
+    case "installing":
+    case "confirm":
+      return "Installing";
+    default:
+      return null;
+  }
 }
 
 /** What the big button for an app should do on the phone right now. */
@@ -28,14 +70,9 @@ export function appAction(app: App, installedVersion: number | null | undefined)
 export function describeApp(app: App, device?: OnDevice, now = Date.now()): StateText {
   const install = device?.install;
   if (install) {
+    const busy = installLabel(install);
+    if (busy) return { kind: "working", label: busy };
     switch (install.phase) {
-      case "waiting":
-      case "downloading":
-        return { kind: "working", label: install.progress ? `Downloading ${Math.round(install.progress * 100)}%` : "Downloading" };
-      case "checking":
-      case "installing":
-      case "confirm":
-        return { kind: "working", label: "Installing" };
       case "done":
         return { kind: "ready", label: "Installed" };
       case "failed":
@@ -68,7 +105,8 @@ export function describeApp(app: App, device?: OnDevice, now = Date.now()): Stat
   if (device) {
     const action = appAction(app, device.installedVersion);
     if (action === "update") return { kind: "ready", label: "Update ready" };
-    if (action === "install") return { kind: "ready", label: "Ready to install" };
+    // Not on this phone yet: it never installs by itself, so the line asks for the tap.
+    if (action === "install") return { kind: "ready", label: "Tap to install" };
     return { kind: "idle", label: `Version ${device.installedVersion} is on this phone` };
   }
   const fresh = apk.finishedAt && now - Date.parse(apk.finishedAt) < 60 * 60_000;

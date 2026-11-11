@@ -1,5 +1,6 @@
 // HTTP routes and the WebSockets of shared/protocol.ts, including the desktop app's admin surface.
 import { createReadStream, existsSync, statSync } from "node:fs";
+import { pipeline } from "node:stream";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { hostname } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -69,9 +70,33 @@ function bearer(req: IncomingMessage): string | undefined {
   return header?.startsWith("Bearer ") ? header.slice(7).trim() : undefined;
 }
 
-function sendFileWithRange(req: IncomingMessage, res: ServerResponse, path: string, headers: Record<string, string>): void {
+/**
+ * Streams a file into a response and always closes the file: stream.pipeline destroys the read
+ * stream when the phone drops the connection (a plain .pipe() kept the file open for good).
+ */
+function streamFile(res: ServerResponse, path: string, range?: { start: number; end: number }, done?: (sent: number, error?: Error) => void): void {
+  const file = createReadStream(path, range);
+  let sent = 0;
+  file.on("data", (chunk: string | Buffer) => {
+    sent += chunk.length;
+  });
+  pipeline(file, res, (error) => done?.(sent, error ?? undefined));
+}
+
+/**
+ * Serves a file with Range support. If-Range (an ETag) is honoured: when it does not match the
+ * file's ETag, the whole file is sent with 200, so a resumed download never mixes two builds.
+ */
+function sendFileWithRange(
+  req: IncomingMessage,
+  res: ServerResponse,
+  path: string,
+  headers: Record<string, string>,
+  done?: (info: { start: number; length: number; size: number; sent: number; error?: Error }) => void,
+): void {
   const size = statSync(path).size;
-  const range = req.headers.range;
+  const ifRange = req.headers["if-range"];
+  const range = ifRange !== undefined && ifRange !== headers.ETag ? undefined : req.headers.range;
   const base = { ...headers, "Accept-Ranges": "bytes" };
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
@@ -89,13 +114,15 @@ function sendFileWithRange(req: IncomingMessage, res: ServerResponse, path: stri
     }
     res.writeHead(206, { ...base, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": end - start + 1 });
     if (req.method === "HEAD") return void res.end();
-    createReadStream(path, { start, end }).pipe(res);
+    streamFile(res, path, { start, end }, (sent, error) => done?.({ start, length: end - start + 1, size, sent, ...(error ? { error } : {}) }));
     return;
   }
   res.writeHead(200, { ...base, "Content-Length": size });
   if (req.method === "HEAD") return void res.end();
-  createReadStream(path).pipe(res);
+  streamFile(res, path, undefined, (sent, error) => done?.({ start: 0, length: size, size, sent, ...(error ? { error } : {}) }));
 }
+
+const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
 
 export function startHttpServer(deps: {
   host: string;
@@ -279,7 +306,7 @@ export function startHttpServer(deps: {
       if (!found) return sendError(res, 404, "That picture is not on this PC any more.");
       res.writeHead(200, { "content-type": found.mimeType, "content-length": statSync(found.path).size, "cache-control": "private, max-age=31536000, immutable" });
       if (method === "HEAD") return void res.end();
-      createReadStream(found.path).pipe(res);
+      streamFile(res, found.path);
       return;
     }
     if (await workerApiRoute(req, res, path, url, { workers: apps.workers, checkApp: (appId) => void apps.get(appId) })) return;
@@ -309,13 +336,29 @@ export function startHttpServer(deps: {
       }
       return sendFileWithRange(req, res, icon.path, headers);
     } else if (action === "apk" && (method === "GET" || method === "HEAD")) {
-      const apk = apps.apkFile(id);
+      const abi = url.searchParams.get("abi") ?? undefined;
+      const apk = apps.apkFile(id, abi);
       if (!apk) return sendError(res, 404, "This app has no APK yet.");
-      return sendFileWithRange(req, res, apk.path, {
-        "Content-Type": "application/vnd.android.package-archive",
-        "Content-Disposition": `attachment; filename="${apk.app.slug}-${apk.app.latestApk!.number}.apk"`,
-        ETag: `"${apk.app.latestApk!.sha256 ?? apk.app.latestApk!.number}"`,
-      });
+      if ("missing" in apk) return sendError(res, 404, "This version for your phone is not on the PC any more. Ask for a change to make a new one.");
+      const name = `${apk.app.slug}-${apk.build.number}${apk.abi ? `-${apk.abi}` : ""}`;
+      const who = auth.list().find((device) => device.id === auth.identify(bearer(req)))?.deviceName ?? "a phone";
+      return sendFileWithRange(
+        req,
+        res,
+        apk.path,
+        {
+          "Content-Type": "application/vnd.android.package-archive",
+          "Content-Disposition": `attachment; filename="${name}.apk"`,
+          ETag: `"${apk.sha256 ?? apk.build.number}"`,
+        },
+        ({ start, length, size, sent, error }) => {
+          if (method === "HEAD") return;
+          const from = start > 0 ? ` from ${mb(start)} MB` : "";
+          const what = `[${apk.app.slug}] ${who.slice(0, 60)} downloading ${name}.apk${from}`;
+          if (error || sent < length) log(`${what}: stopped at ${mb(start + sent)} of ${mb(size)} MB (the connection closed)`);
+          else log(`${what}: done, ${mb(sent)} MB sent`);
+        },
+      );
     } else if (action === "messages") {
       if (method === "GET") {
         const afterSeq = Number(url.searchParams.get("afterSeq") ?? 0);

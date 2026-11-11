@@ -239,7 +239,8 @@ Everything in `shared/protocol.ts` works unchanged; only the base URL differs:
 
 - HTTP: `http://127.0.0.1:<localPort>/api/...` with `Authorization: Bearer <token>`.
 - WebSocket: `ws://127.0.0.1:<localPort>/ws?token=<token>`.
-- APK download: `GET http://127.0.0.1:<localPort>/api/apps/:id/apk` (Range works).
+- APK download: `GET http://127.0.0.1:<localPort>/api/apps/:id/apk?abi=<abi>` (Range and If-Range
+  work; the phone resumes a cut download where it stopped).
 - `localPort` changes whenever `easyConnectStart` is called again; never cache it across app
   starts.
 

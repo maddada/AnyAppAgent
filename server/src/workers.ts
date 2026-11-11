@@ -56,6 +56,7 @@ interface WorkerRecord {
   sessionId?: string;
   inbox: string[]; // prompts for its next turn
   forceBuild?: boolean; // build after its first turn even when no file changed (Try again)
+  buildAgain?: boolean; // the PC restarted while it was building: land and build again, no turn first
   reportPending?: string; // a report the coordinator has not received yet
   lastText?: string; // the worker's last message (its report)
   conflictsResolved?: number; // times it combined its change with one that landed first
@@ -400,7 +401,14 @@ export class WorkerManager {
         this.setState(record, w, "working", "Getting its own copy of the app");
         await ensureHelperCopy(record.dir, copyDir, workerId, (m) => this.host.log(`[${record.app.slug}] worker ${workerId}: ${m}`));
       }
-      while (w.inbox.length > 0 && !rt.stopRequested && this.host.record(appId)) {
+      if (w.buildAgain) {
+        delete w.buildAgain;
+        this.save(appId);
+        this.host.log(`[${record.app.slug}] worker ${workerId}: the PC restarted during its build; building again`);
+        await saveHelperWork(record.dir, copyDir, w.info.title);
+        ended = await this.landAndBuild(record, w, rt, copyDir);
+      }
+      while (ended.state === "done" && w.inbox.length > 0 && !rt.stopRequested && this.host.record(appId)) {
         const text = w.inbox.splice(0).join("\n\n");
         this.save(appId);
         this.setState(record, w, "working", "Working on it");
@@ -555,7 +563,8 @@ export class WorkerManager {
    * turn gets a "carry on" prompt (same Claude Code session, resumed); a waiting one starts in turn;
    * a report the coordinator never got is handed over again.
    */
-  resume(appIds: string[]): void {
+  resume(appIds: string[]): Set<string> {
+    const building = new Set<string>();
     for (const appId of appIds) {
       const record = this.host.record(appId);
       if (!record) continue;
@@ -568,7 +577,12 @@ export class WorkerManager {
             chat.upsert({ id: item.id, kind: "tool", tool: { ...item.tool, status: "failed" } });
           }
         }
-        if (w.info.state === "working" || w.info.state === "building") {
+        if ((w.info.state === "building" || w.info.state === "waiting") && w.info.changesApp) {
+          // Its turn had ended and its change was waiting to land, being added or built: land and
+          // build again straight away, without another turn of the agent.
+          w.buildAgain = true;
+          building.add(appId);
+        } else if (w.info.state === "working" || w.info.state === "building") {
           w.inbox.unshift(
             "The PC restarted while you were working, so your last step was cut off. Check where you stopped, carry on with your task, and end with your report.",
           );
@@ -582,6 +596,7 @@ export class WorkerManager {
         }
       }
     }
+    return building;
   }
 
   async forget(appId: string): Promise<void> {

@@ -252,6 +252,11 @@ async function runBuild(dir, n, onLog, preset) {
         ? [] // no native libraries of its own; it shrinks itself with R8 (app/build.gradle.kts)
         : [
             `-PreactNativeArchitectures=${ABIS}`,
+            // Smaller downloads (anyapp.init.gradle): native libraries compressed, and one APK per
+            // ABI besides the full one (the phone takes arm64-v8a, the emulator x86_64).
+            '-Pexpo.useLegacyPackaging=true',
+            '-PanyappCompressNativeLibs=true',
+            ...(abiSplits() ? [`-PanyappAbiSplits=${ABIS}`] : []),
             // Expo SDK 58 turns R8 shrinking on for release; it costs ~90 s per build and can break
             // reflection-based libraries. Side-loaded apps do not need it (ANYAPP_MINIFY=1 turns it on).
             `-Pandroid.enableMinifyInReleaseBuilds=${process.env.ANYAPP_MINIFY === '1'}`,
@@ -287,7 +292,10 @@ async function runBuild(dir, n, onLog, preset) {
     if (tscErr) throw new BuildError(tscErr);
 
     // 5. Check, copy and fingerprint the APK.
-    const built = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+    const releaseDir = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release');
+    // With ABI splits the full APK is app-universal-release.apk and each ABI has its own.
+    const universal = path.join(releaseDir, 'app-universal-release.apk');
+    const built = fs.existsSync(universal) ? universal : path.join(releaseDir, 'app-release.apk');
     if (!fs.existsSync(built)) throw new BuildError(`Gradle succeeded but ${built} is missing`);
     const badging = await readBadging(sdk, built);
     if (badging && badging.versionCode !== n) {
@@ -302,15 +310,28 @@ async function runBuild(dir, n, onLog, preset) {
     await fsp.mkdir(outDir, { recursive: true });
     const apkPath = path.join(outDir, `${slug}-${n}.apk`);
     await fsp.copyFile(built, apkPath);
+    const variants = [];
+    if (built === universal) {
+      for (const abi of ABIS.split(',')) {
+        const one = path.join(releaseDir, `app-${abi}-release.apk`);
+        if (!fs.existsSync(one) || fs.statSync(one).mtimeMs < fs.statSync(built).mtimeMs - 60_000) continue;
+        const out = path.join(outDir, `${slug}-${n}-${abi}.apk`);
+        await fsp.copyFile(one, out);
+        const data = await fsp.readFile(out);
+        variants.push({ abi, apkPath: out, sizeBytes: data.length, sha256: crypto.createHash('sha256').update(data).digest('hex') });
+      }
+    }
     await pruneApks(outDir, KEEP_APKS);
     const buf = await fsp.readFile(apkPath);
     const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
     const durationMs = Date.now() - t0;
-    say(`APK ready: ${apkPath} (${(buf.length / 1048576).toFixed(1)} MB) in ${(durationMs / 1000).toFixed(1)}s`);
+    const sizes = variants.map((v) => `${v.abi} ${(v.sizeBytes / 1048576).toFixed(1)} MB`).join(', ');
+    say(`APK ready: ${apkPath} (${(buf.length / 1048576).toFixed(1)} MB${sizes ? `; ${sizes}` : ''}) in ${(durationMs / 1000).toFixed(1)}s`);
     return {
       apkPath,
       sizeBytes: buf.length,
       sha256,
+      ...(variants.length > 0 ? { variants } : {}),
       versionCode: n,
       packageName: badging?.packageName ?? packageName,
       preset,
@@ -439,10 +460,21 @@ async function readBadging(sdk, apk) {
   }
 }
 
+/** Keeps the APKs of the newest `keep` build numbers (<slug>-<n>.apk and <slug>-<n>-<abi>.apk). */
 async function pruneApks(outDir, keep) {
+  const buildNumber = (f) => {
+    const abi = ABIS.split(',').find((a) => f.endsWith(`-${a}.apk`));
+    const full = abi ? `${f.slice(0, -(abi.length + 5))}.apk` : f;
+    return Number(/-(\d+)\.apk$/.exec(full)?.[1] ?? 0);
+  };
   const apks = (await fsp.readdir(outDir))
     .filter((f) => f.endsWith('.apk'))
-    .map((f) => ({ f, n: Number(/-(\d+)\.apk$/.exec(f)?.[1] ?? 0) }))
-    .sort((a, b) => b.n - a.n);
-  for (const { f } of apks.slice(keep)) await fsp.rm(path.join(outDir, f), { force: true });
+    .map((f) => ({ f, n: buildNumber(f) }));
+  const newest = [...new Set(apks.map((a) => a.n))].sort((a, b) => b - a).slice(0, keep);
+  for (const { f, n } of apks) if (!newest.includes(n)) await fsp.rm(path.join(outDir, f), { force: true });
+}
+
+/** ABI splits are on unless ANYAPP_ABI_SPLITS=0 (then only the full APK is built). */
+function abiSplits() {
+  return process.env.ANYAPP_ABI_SPLITS !== '0';
 }

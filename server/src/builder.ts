@@ -8,9 +8,11 @@ import { REPO_DIR } from "./config.ts";
 import * as fake from "./fake-builder.ts";
 
 export interface BuildResult {
-  apkPath: string;
+  apkPath: string; // the full APK (every ABI)
   sizeBytes: number;
   sha256: string;
+  // One smaller APK per ABI (builder/ with ABI splits); absent when the app has no native code.
+  variants?: { abi: string; apkPath: string; sizeBytes: number; sha256: string }[];
 }
 
 export interface Builder {

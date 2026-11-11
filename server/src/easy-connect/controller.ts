@@ -14,8 +14,17 @@ import { encodeEasyConnectCode } from "./code.ts";
 import { allowArgument, ensureServerKey, ensureTailcat, TailcatServer, type TailcatPaths } from "./tailcat.ts";
 
 export const EASY_CONNECT_CODE_TTL_MS = 5 * 60_000;
+/** Tests and proof scripts only: a shorter life for codes (ANYAPP_EC_CODE_TTL_MS). */
+const codeTtlMs = () => Number(process.env.ANYAPP_EC_CODE_TTL_MS) || EASY_CONNECT_CODE_TTL_MS;
 /** After a phone paired, the window stays open this long so its answer gets back before the restart. */
 const RESTORE_AFTER_PAIRING_MS = 3_000;
+/**
+ * After a code expired, the allow-list is restored this much later. The desktop usually asks for
+ * the next code at once: then the helper keeps running as it is, instead of restarting twice
+ * (restore, then lift again), which cut every phone's tunnel, APK downloads included. Nobody can
+ * pair meanwhile: no secret is live.
+ */
+export const RESTORE_AFTER_EXPIRY_MS = 10_000;
 const CLIENT_KEY_PATTERN = /^nodekey:[0-9a-f]{64}$/;
 
 export class PairingRefused extends Error {
@@ -162,13 +171,18 @@ export class EasyConnect {
 
   private makeSecret(): void {
     this.clearSecret();
-    this.secret = { value: randomBytes(24).toString("base64url"), expiresAt: Date.now() + EASY_CONNECT_CODE_TTL_MS, used: false };
+    this.secret = { value: randomBytes(24).toString("base64url"), expiresAt: Date.now() + codeTtlMs(), used: false };
     this.expiryTimer = setTimeout(() => {
+      this.expiryTimer = undefined;
       this.secret = undefined;
       this.log("Easy Connect code expired");
-      this.apply("allowListRestored");
+      this.restoreTimer = setTimeout(() => {
+        this.restoreTimer = undefined;
+        this.apply("allowListRestored");
+        this.onChange();
+      }, RESTORE_AFTER_EXPIRY_MS);
       this.onChange();
-    }, EASY_CONNECT_CODE_TTL_MS);
+    }, codeTtlMs());
   }
 
   private clearSecret(): void {
