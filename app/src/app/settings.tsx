@@ -6,13 +6,14 @@ import { Bell, ChevronLeft, ChevronRight, Download, Globe, Laptop, Palette, Wifi
 import type { LucideIcon } from "lucide-react-native";
 import Constants from "expo-constants";
 import { AnyAppNative } from "anyapp-native";
+import { AiSettingsGroup } from "@/ui/AiSettings";
 import { displayAddress } from "@/lib/address";
 import { usesEasyConnect } from "@/lib/route";
 import { unpair, updatePrefs } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import type { ThemePref } from "@/lib/storage";
 import { Button, IconButton } from "@/ui/Button";
-import { Sheet } from "@/ui/Sheet";
+import { Sheet, useKeyboardHeight } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
 import { border, icon, radius, size, space, useTheme } from "@/ui/theme";
@@ -27,6 +28,7 @@ export default function Settings() {
   const [confirm, setConfirm] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [perms, setPerms] = useState(readPermissions);
+  const keyboard = useKeyboardHeight();
 
   const check = useCallback(() => setPerms(readPermissions()), []);
   useEffect(() => {
@@ -44,7 +46,10 @@ export default function Settings() {
         <IconButton testID="settings-back" icon={ChevronLeft} label="Back" onPress={() => router.back()} />
         <T variant="heading">Settings</T>
       </View>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: size.screenGutter, paddingTop: space.md, gap: space["2xl"], paddingBottom: insets.bottom + space["2xl"] }}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingHorizontal: size.screenGutter, paddingTop: space.md, gap: space["2xl"], paddingBottom: Math.max(insets.bottom, keyboard) + space["2xl"] }}
+      >
         <Group title="Your PC">
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: size.rowHeight, paddingHorizontal: space.lg, paddingVertical: space.md }}>
             <RowIcon icon={Laptop} />
@@ -71,6 +76,8 @@ export default function Settings() {
             }
           />
         </Group>
+
+        <AiSettingsGroup Group={Group} Row={Row} Divider={Divider} />
 
         <Group title="Permissions">
           <Row

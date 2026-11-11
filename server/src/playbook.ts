@@ -34,6 +34,9 @@ Taste (the person's rules for every app you make):
 - No purple gradients, no sparkle icons, nothing that looks like a generic "AI" app.
 - On your first turn give the app an icon of its own that matches what it does (see "The app
   icon" in AGENTS.md), never the starter icon.
+- When they ask for anything AI (a chat, an assistant, smart suggestions, an agent that does things
+  in the app), use the built-in AI through AnyAppAgent ("AI" in AGENTS.md, src/lib/ai.ts). Never ask
+  them for an API key and never call an AI service directly.
 
 Memory: keep a short file ${MEMORY_FILE} in the project root with the app's goal (what the person
 wants it to do), the decisions and preferences they gave you, and what is still open. Read it at the

@@ -130,3 +130,40 @@ second prompt produces an update that installs over it.
 Several threads work at once. Edit only your own folder. Use only your own Android package on the
 emulator; never wipe the emulator, uninstall another thread's app, or kill the adb server. The
 existing AVD named `ghostex` belongs to another project: do not use or change it.
+
+## AI for your apps (added 2026-11-11)
+
+The user: "I wanna add a ai token (Claude or open router) in AnyAppAgent and then all my sub apps
+can use it to call ai, because I want my sub apps to support ai agents". And: the key is a
+regular field in AnyAppAgent's Settings, not a separate screen.
+
+- **The key lives only in AnyAppAgent** (`app/modules/anyapp-ai`): one field in Settings, "AI for
+  your apps". Claude (`sk-ant-`) or OpenRouter (`sk-or-`) is detected from the key, or picked.
+  Stored encrypted (AES-256-GCM, key in the Android Keystore), never read back into JavaScript
+  (Settings shows only the last 4 characters). Default models: `claude-opus-5-5` (Claude),
+  `anthropic/claude-opus-5.5` (OpenRouter); changeable. "Save and test" makes one tiny real call.
+- **Apps use it through a local proxy, never the key.** AnyAppAgent exports a bound service
+  (`AiProxyService`, action `com.anyappagent.action.AI`, Messenger). An app sends a neutral chat
+  request (text, images, tools); AnyAppAgent adds the key, calls the provider, streams the answer
+  back (text pieces, tool calls, done/error) and counts tokens. Wire format:
+  `template/modules/ai/README.md`. The app-side API is `template/src/lib/ai.ts` (`chat`, `ask`,
+  `runAgent`, `useAiStatus`, `AiSetupNotice`), documented in `template/AGENTS.md`, "AI".
+- **Why a proxy and not handing the key over:** the key never leaves one process, so a buggy or
+  chatty app cannot leak it (logs, crash reports, a WebView, its own backups), removing the key or
+  switching an app off takes effect at once for every app, and usage per app and limits can be
+  enforced in one place. Streaming and tool use work through it, so apps can run agent loops.
+- **Who may call it: a certificate check, not an Android signature permission.** AnyAppAgent is
+  signed with the React Native debug key (public, the same in every RN project), while generated
+  apps are signed with the PC's own key (`builder/lib/keystore.mjs`, `CN=AnyAppAgent`). So a
+  `signature` permission would refuse every generated app, and signing AnyAppAgent with the PC key
+  is impossible because each user's PC makes its own key. Instead the service identifies the caller
+  by the Binder UID Android attaches to every message and allows only apps whose signing
+  certificate equals that of an app AnyAppAgent installed itself (learned from Android's install
+  source record). Any other app, including one with a `com.anyapp.*` name signed with another key,
+  is refused (`not_allowed`).
+- **Limits and cost:** per app an on/off switch and a usage line (calls, tokens) in the same
+  Settings group; per app at most 3 requests at once and 30 a minute; `maxTokens` default 8192,
+  capped at 32000; requests up to 12 MB.
+- **Testing without a key:** `app/dev/fake-ai-provider.mjs` speaks both provider APIs (SSE, tool
+  calls). `adb shell setprop debug.anyapp.ai.url http://10.0.2.2:<port>` points AnyAppAgent at it;
+  only adb can set it, and while it is set the stored key is never sent (a placeholder is).

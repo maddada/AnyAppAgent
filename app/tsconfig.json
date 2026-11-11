@@ -6,7 +6,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["../shared/*"],
-      "anyapp-native": ["./modules/anyapp-native/src"]
+      "anyapp-native": ["./modules/anyapp-native/src"],
+      "anyapp-ai": ["./modules/anyapp-ai/src"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "../shared/protocol.ts"],
