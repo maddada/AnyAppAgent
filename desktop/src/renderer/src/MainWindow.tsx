@@ -176,8 +176,10 @@ function AppsPage({
   const blocking = setupRows(s).find((r) => r.needsYou && r.blocks);
   const app = apps.find((a) => a.id === open);
   const online = s.companion.phase === "running";
+  // A helper's chat is open beside the main chat: in a narrow window the app list folds to icons.
+  const [helperOpen, setHelperOpen] = useState(false);
   return (
-    <div className="apps-split">
+    <div className={`apps-split${helperOpen ? " helper-open" : ""}`}>
       <section className="apps-pane" aria-label="Your apps">
         <header className="apps-pane-head">
           <h1 className="title-small">Your apps</h1>
@@ -209,7 +211,7 @@ function AppsPage({
               const st = appState(a);
               const v = a.latestApk ?? a.latestBuild;
               return (
-                <button key={a.id} className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined}>
+                <button key={a.id} className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined} title={a.name}>
                   <AppIcon icon={s.icons[a.id]} small />
                   <div className="arow-main">
                     <div className="arow-top">
@@ -225,7 +227,7 @@ function AppsPage({
         )}
       </section>
       <section className="apps-detail">
-        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} />}
+        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} onHelperOpen={setHelperOpen} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} />}
       </section>
     </div>
   );

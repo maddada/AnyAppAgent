@@ -127,10 +127,11 @@ this helper does, tell the main chat."
 
 - Phone (`app/`): the row in the chat (`src/chat/ChatRows.tsx`), the helper's chat as its own
   screen `helper/[appId]/[workerId]` (also a deep link, `anyappagent://helper/<appId>/<workerId>`).
-- PC (`desktop/`): the helper's chat opens beside the main chat when the chat area is at least
-  760 px wide, and in the main chat's place (with a back arrow) when it is narrower. Q8 (beside or
-  replace) is still open with the user: `HELPER_CHAT_PLACEMENT` in `src/renderer/src/Chat.tsx`
-  switches it to always replace.
+- PC (`desktop/`): the helper's chat always opens beside the main chat (the user's answer to
+  Q8; `HELPER_CHAT_PLACEMENT` in `src/renderer/src/Chat.tsx` still switches it to "replace"). When
+  the chat area is under 760 px the two chats share it half and half with tighter spacing, and in a
+  window under 1500 px the app list folds to its icons while a helper's chat is open, so even the
+  smallest window (960 px) gives each chat about 315 px.
 - Everything that is not drawing is in the shared core, `shared/chat/helpers.ts` (row wording and
   icons, the helper chat's rows, which Stop applies, the header count), with tests.
 

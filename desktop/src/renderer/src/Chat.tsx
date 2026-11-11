@@ -36,24 +36,24 @@ const TOOL_GLYPHS: Record<string, LucideIcon> = {
 };
 
 /**
- * Where a helper's chat opens on the PC: "beside" the main chat (the main chat stays in front of you)
- * or "replace" it (as on the phone, with a way back). The user has not decided yet (Q8 in
- * docs/APP-COORDINATOR.md); switching is this one constant.
+ * Where a helper's chat opens on the PC: beside the main chat, so the main chat stays in front of
+ * you (the user's choice, Q8 in docs/APP-COORDINATOR.md). "replace" (as on the phone, with a way
+ * back) is kept working behind this one constant.
  */
 export const HELPER_CHAT_PLACEMENT: "beside" | "replace" = "beside";
-/** Below this width of the chat area there is no room for two chats: the helper's takes the main chat's place. */
-const BESIDE_MIN_WIDTH = 760;
+/** Below this width of the chat area the two chats share it half and half, with tighter spacing. */
+const ROOMY_WIDTH = 760;
 
 /** Opening a helper's chat from its row, and which one is open (its row shows as selected). */
 const HelperPanel = createContext<{ open: (workerId: string) => void; selected: string | null }>({ open: () => {}, selected: null });
 
-export function ChatView({ app, icon, online, headerExtra }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode }) {
+export function ChatView({ app, icon, online, headerExtra, onHelperOpen }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; onHelperOpen?: (open: boolean) => void }) {
   const helpers = useHelpers(app.id, online);
   // The open helper chat, per app (moving between apps keeps each one's choice for this run).
   const [openHelpers, setOpenHelpers] = useState<Record<string, string | null>>({});
   const openId = openHelpers[app.id] ?? null;
   const helper = openId ? helpers.find((w) => w.id === openId) : undefined;
-  // How wide the chat area is decides whether two chats fit side by side.
+  // How wide the chat area is decides how the two chats share it.
   const area = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
@@ -64,7 +64,14 @@ export function ChatView({ app, icon, online, headerExtra }: { app: App; icon?: 
     setWidth(el.getBoundingClientRect().width);
     return () => observer.disconnect();
   }, []);
-  const placement = HELPER_CHAT_PLACEMENT === "beside" && (width === 0 || width >= BESIDE_MIN_WIDTH) ? "beside" : "replace";
+  const placement = HELPER_CHAT_PLACEMENT;
+  const narrow = width > 0 && width < ROOMY_WIDTH;
+  // The window makes room for two chats while one is open beside the main chat (the app list folds).
+  const open = !!helper && placement === "beside";
+  useEffect(() => {
+    onHelperOpen?.(open);
+  }, [open, onHelperOpen]);
+  useEffect(() => () => onHelperOpen?.(false), [onHelperOpen]);
   const panel = useMemo(() => {
     const set = (workerId: string | null) => setOpenHelpers((m) => ({ ...m, [app.id]: workerId }));
     return { open: (id: string) => set(openId === id && placement === "beside" ? null : id), close: () => set(null), selected: openId };
@@ -72,7 +79,7 @@ export function ChatView({ app, icon, online, headerExtra }: { app: App; icon?: 
   const side = helper ? <HelperChatView app={app} worker={helper} online={online} placement={placement} onClose={panel.close} /> : null;
   return (
     <HelperPanel.Provider value={panel}>
-      <div ref={area} className={side ? `chat-split chat-split-${placement}` : "chat-single"}>
+      <div ref={area} className={side ? `chat-split chat-split-${placement}${narrow ? " is-narrow" : ""}` : "chat-single"}>
         {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={headerExtra} />}
         {side}
       </div>
