@@ -120,6 +120,8 @@ describe("publishVersion", () => {
     const done = [{ version: "1.0", build: 5, channel: "stable" as const, tag: "v1.0-b5", url: "u", notes: "n", publishedAt: "p" }];
     await expect(publishVersion(app({ sharing: { ...shared, releases: done } }), build(5), {}, deps(g.api, [clean]))).rejects.toThrow(/already published/);
     await expect(publishVersion(app({ sharing: { ...shared, releases: done } }), build(4), {}, deps(g.api, [clean]))).rejects.toThrow(/newer version/);
+    const pulled = [{ ...done[0], pulledBack: true }];
+    await expect(publishVersion(app({ sharing: { ...shared, releases: pulled } }), build(5), {}, deps(g.api, [clean]))).rejects.toThrow(/was pulled back/);
     const leak = apk("l.apk", { "assets/index.android.bundle": `k="ghp_${"a1".repeat(18)}"` });
     await expect(publishVersion(app(), build(6), {}, deps(g.api, [leak]))).rejects.toThrow(/GitHub token in assets\/index.android.bundle/);
     await expect(publishVersion(app(), build(6), { notes: `my key AKIA${"B2".repeat(8)}` }, deps(g.api, [clean]))).rejects.toThrow(/AWS access key in the release notes/);

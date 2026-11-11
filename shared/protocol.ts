@@ -27,6 +27,14 @@ export interface BuildInfo {
   // Set when succeeded; absent from older PCs and on builds made before.
   changes?: ChangeNotes;
   restoredFrom?: number; // this build went back to the code of that earlier version (Versions, Undo)
+  // Added for the fast lane (docs/FAST-LANE.md). "quick": only JavaScript changed, so the PC made
+  // this build in seconds without Gradle (the APK above is the last one with the new bundle) and
+  // also a quick update (`ota`) that a phone whose app has the same native part (`runtime`) applies
+  // without an install. "full": a normal build. Absent from older PCs (treat as "full").
+  delivery?: "quick" | "full";
+  // The build's native fingerprint (the app's string resource anyapp_runtime). React Native only.
+  runtime?: string;
+  ota?: OtaInfo;
 }
 
 // "What changed" (docs/VERSIONS.md): up to three short plain lines, never code words.
@@ -34,6 +42,14 @@ export interface ChangeNotes {
   changed: string; // what is different now: "The timer now rings three times"
   tryIt?: string; // what to try: "Start a 1 minute timer and wait for it"
   goodToKnow?: string; // anything to know: "Your saved timers are kept"
+}
+
+// A quick update: GET /api/apps/:id/ota serves the zip of the app's latest build (a signed
+// manifest, the Hermes bundle and its pictures; the app checks the signature with its own key).
+export interface OtaInfo {
+  sizeBytes: number;
+  sha256: string; // of the zip
+  runtime: string; // the native fingerprint it needs; the app refuses it on other native code
 }
 
 // One APK of a build for one processor type: what GET /api/apps/:id/apk?abi=<abi> serves.

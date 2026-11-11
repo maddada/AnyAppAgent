@@ -64,6 +64,11 @@ More you get:
 - **AI for your apps**: put one Claude or OpenRouter key in AnyAppAgent's Settings, and every app
   it made can use AI (chat, pictures, tools) through it. The key never leaves AnyAppAgent; you
   can switch each app off and see how much each one used.
+- **Share an app with friends**: turn on "Share with others" and publish a version. Friends
+  install it from a link or a QR code, and the app tells them when you publish a new one (one tap
+  to update). The code stays in its private repository; only the app's name, icon and versions
+  go public. Each app is signed with its own key: back the keys up in Settings. Details:
+  [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 - **Pictures in the chat**: send a screenshot or a photo to show what you mean.
 - **Follow along on the PC**: the same chats are in the desktop app, with every step the agent
   took.

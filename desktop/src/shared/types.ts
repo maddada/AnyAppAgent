@@ -1,6 +1,6 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
 export type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, PageInfo, TodoItem, WorkerInfo };
 
@@ -239,6 +239,16 @@ export interface AnyAppBridge {
   cancelTurn(appId: string): Promise<ActionResult>;
   /** Builds the app again (Try again on a failed build). */
   rebuild(appId: string): Promise<ActionResult>;
+  /** "Share with others" on or off (docs/DISTRIBUTION.md): a public releases-only repo. */
+  shareApp(appId: string, shared: boolean): Promise<ActionResult & { app?: App }>;
+  /** Publishes the newest build as a version for the people the app is shared with. */
+  publishApp(appId: string, notes: string, channel: "stable" | "testing"): Promise<ActionResult & { app?: App }>;
+  /** Stops offering a published version. */
+  pullBack(appId: string, build: number): Promise<ActionResult & { app?: App }>;
+  /** Downloads per published version, from GitHub. */
+  releaseStats(appId: string): Promise<ActionResult & { stats: ReleaseStats[] }>;
+  /** A QR code (SVG) for a link. */
+  qr(text: string): Promise<string>;
   answerPermission(appId: string, requestId: string, optionId: string): Promise<ActionResult>;
   /** Versions of an app, newest first (docs/VERSIONS.md). */
   getVersions(appId: string): Promise<AppVersion[]>;

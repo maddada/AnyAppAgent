@@ -10,6 +10,8 @@ import type {
   PairRequest,
   PairResponse,
   PermissionAnswerRequest,
+  PublishRequest,
+  ReleaseStats,
   SendMessageRequest,
   TodoItem,
   AppVersion,
@@ -142,10 +144,21 @@ export class Client {
   reportCrash = (id: string, report: CrashReport) => this.call<CrashInfo>(`/api/apps/${encodeURIComponent(id)}/crashes`, "POST", report);
   fixCrash = (id: string, crashId: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/crashes/${encodeURIComponent(crashId)}/fix`, "POST", {});
   diaryAnswer = (id: string, answer: DiaryAnswer) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/diary`, "POST", answer);
+  // Sharing an app with other people and publishing versions (docs/DISTRIBUTION.md). GitHub
+  // calls on the PC: they can take minutes (a publish uploads the APKs).
+  share = (id: string, shared: boolean) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/share`, { method: "POST", body: { shared }, token: this.token, timeoutMs: 300000 });
+  publish = (id: string, body: PublishRequest) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/publish`, { method: "POST", body, token: this.token, timeoutMs: 1800000 });
+  pullBack = (id: string, build: number) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/pullback`, { method: "POST", body: { build }, token: this.token, timeoutMs: 300000 });
+  releases = (id: string) => request<ReleaseStats[]>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/releases`, { token: this.token, timeoutMs: 60000 });
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;
   /** With `abi`, the smaller APK made for that processor type (when the build has one). */
+  /** The latest build's quick update (docs/FAST-LANE.md). */
+  otaUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/ota`;
   apkUrl = (id: string, abi?: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/apk${abi ? `?abi=${encodeURIComponent(abi)}` : ""}`;
   socketUrl = () => `${this.baseUrl.replace(/^http/i, "ws")}/ws?token=${encodeURIComponent(this.token)}`;
   authHeaders = () => ({ Authorization: `Bearer ${this.token}` });

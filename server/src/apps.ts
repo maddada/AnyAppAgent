@@ -20,7 +20,7 @@ import type { Config } from "./config.ts";
 import { nowIso } from "./fs-util.ts";
 import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
-import { realGithub, shareApp, unshareApp, type GithubApi } from "./sharing.ts";
+import { realGithub, shareApp, testingFeedUrl, unshareApp, type GithubApi } from "./sharing.ts";
 import * as githubCli from "./github.ts";
 import { publishVersion, pullBack, StaleSignerError, parseUpdateJson, repoOf, type ApkFile, type ReleaseApi } from "./publish.ts";
 import { appPlaybook, buildFixPrompt, firstPrompt } from "./playbook.ts";
@@ -117,6 +117,14 @@ const INTERRUPTED_BUILD = "The PC restarted during this build, so it is building
 
 /** An ABI name as Android spells it (arm64-v8a, x86_64): safe inside a file name. */
 const SAFE_ABI = /^[a-z0-9_-]{1,20}$/;
+
+/** What the build row says when a build went out as a quick update (docs/FAST-LANE.md). */
+export const QUICK_UPDATE_TEXT = "Sent as a quick update, no install needed";
+
+/** build-6-ota.zip: the quick update of build 6 (docs/FAST-LANE.md). */
+export function otaFileName(number: number): string {
+  return `build-${number}-ota.zip`;
+}
 
 /** build-6.apk (every ABI) or build-6-arm64-v8a.apk (one ABI). */
 export function apkFileName(number: number, abi?: string): string {
@@ -307,6 +315,15 @@ export class AppManager {
   messages(id: string, afterSeq: number) {
     this.record(id);
     return this.store.chat(id).list(afterSeq);
+  }
+
+  /** The quick update GET /ota serves: the latest build's, when it is a quick build. */
+  otaFile(id: string): { path: string; app: App; build: BuildInfo; sha256: string } | null {
+    const record = this.record(id);
+    const build = record.app.latestApk;
+    if (!build?.ota) return null;
+    const path = join(this.store.apkDir(id), otaFileName(build.number));
+    return existsSync(path) ? { path, app: record.app, build, sha256: build.ota.sha256 } : null;
   }
 
   /**
@@ -1260,7 +1277,7 @@ ${overviewNudge()}` : note;
       this.setStatus(record, "idle");
       this.broadcast({ type: "apk.ready", app: record.app });
       this.log(`[${record.app.slug}] APK ${build.number} ready (${build.sizeBytes} bytes)`);
-      return { ok: true, number: build.number };
+      return { ok: true, number: build.number, ...(build.delivery ? { delivery: build.delivery } : {}) };
     }
     const failed = record.app.latestBuild!;
     let plain: string;
@@ -1303,7 +1320,9 @@ ${overviewNudge()}` : note;
     this.log(`[${app.slug}] build ${number} started`);
     const started = Date.now();
     try {
-      const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog });
+      // A shared app's builds carry its update feeds, so its own updater can find new versions.
+      const feeds = app.sharing ? { updateFeed: app.sharing.feedUrl, updateTestingFeed: testingFeedUrl(app.sharing.releasesRepoUrl) } : {};
+      const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog, ...feeds });
       const apkDir = this.store.apkDir(app.id);
       mkdirSync(apkDir, { recursive: true });
       const target = join(apkDir, apkFileName(number));
@@ -1314,6 +1333,8 @@ ${overviewNudge()}` : note;
         copyFileSync(v.apkPath, join(apkDir, apkFileName(number, v.abi)));
         variants.push({ abi: v.abi, sizeBytes: v.sizeBytes, sha256: v.sha256 });
       }
+      const ota = result.ota && result.delivery === "quick" ? result.ota : undefined;
+      if (ota) copyFileSync(ota.path, join(apkDir, otaFileName(number)));
       this.pruneApks(apkDir, number);
       build = {
         ...build,
@@ -1323,10 +1344,13 @@ ${overviewNudge()}` : note;
         sha256: result.sha256,
         ...(result.signing?.certSha256 ? { signerSha256: result.signing.certSha256 } : {}),
         ...(variants.length > 0 ? { variants } : {}),
+        ...(result.delivery ? { delivery: result.delivery } : {}),
+        ...(result.runtime ? { runtime: result.runtime } : {}),
+        ...(ota ? { ota: { sizeBytes: ota.sizeBytes, sha256: ota.sha256, runtime: ota.runtime } } : {}),
       };
       app.latestBuild = build;
-      this.log(`[${app.slug}] build ${number} took ${Math.round((Date.now() - started) / 1000)} s`);
-      this.emitItem(record, { id: rowId, kind: "build", build, text: "The new version is ready" });
+      this.log(`[${app.slug}] build ${number} (${build.delivery ?? "full"}) took ${Math.round((Date.now() - started) / 1000)} s`);
+      this.emitItem(record, { id: rowId, kind: "build", build, text: ota ? QUICK_UPDATE_TEXT : "The new version is ready" });
       return { ok: true, result: { build } };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1343,7 +1367,7 @@ ${overviewNudge()}` : note;
 
   private pruneApks(apkDir: string, keepFrom: number): void {
     for (const file of readdirSync(apkDir)) {
-      const match = file.match(/^build-(\d+)(?:-[a-z0-9_-]+)?\.apk$/);
+      const match = file.match(/^build-(\d+)(?:-[a-z0-9_-]+)?\.(?:apk|zip)$/);
       if (match && Number(match[1]) < keepFrom - 2) rmSync(join(apkDir, file), { force: true });
     }
   }

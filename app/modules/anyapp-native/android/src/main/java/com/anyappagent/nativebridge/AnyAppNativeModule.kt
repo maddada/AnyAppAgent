@@ -72,12 +72,13 @@ class AnyAppNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("AnyAppNative")
 
-    Events("onInstallStatus", "onNetworkChanged", "onAppCrash", "onAppDiary")
+    Events("onInstallStatus", "onNetworkChanged", "onAppReport", "onAppCrash", "onAppDiary")
 
     OnCreate {
       AppReports.onCrash = { pkg -> sendEvent("onAppCrash", mapOf("packageName" to pkg)) }
       AppReports.onDiary = { pkg, requestId, diary -> sendEvent("onAppDiary", mapOf("packageName" to pkg, "requestId" to requestId, "diary" to diary)) }
       InstallEvents.listener = { sessionId, status, message, packageName, confirm -> onInstallEvent(sessionId, status, message, packageName, confirm) }
+      UpdatesProvider.reportListener = { pkg -> sendEvent("onAppReport", mapOf("packageName" to pkg)) }
       networkObserver = NetworkObserver(context) { sendEvent("onNetworkChanged", mapOf<String, Any>()) }.also { it.start() }
       // Easy Connect: the interface lister and the client key, before JS can ask for a tunnel.
       easyConnectExecutor.execute {
@@ -96,6 +97,7 @@ class AnyAppNativeModule : Module() {
       InstallEvents.listener = null
       AppReports.onCrash = null
       AppReports.onDiary = null
+      UpdatesProvider.reportListener = null
     }
 
     // ---------- other apps
@@ -157,6 +159,53 @@ class AnyAppNativeModule : Module() {
     }
 
     /** The ABIs this phone runs, best first (Build.SUPPORTED_ABIS), to pick the smallest APK. */
+    // AnyAppAgent first (docs/DISTRIBUTION.md stage 5): apps followed from a share link.
+    Function("setFollowedApps") { packageNames: List<String> ->
+      UpdatesProvider.setFollowed(context, packageNames)
+    }
+
+    Function("handlesUpdatesOf") { packageName: String ->
+      UpdatesProvider.handles(context, packageName)
+    }
+
+    // ---------- the fast lane (docs/FAST-LANE.md): quick updates and the apps' Reload popup
+
+    /**
+     * Hands an app what is ready for it: kind "ota" (the quick update file at [path], checked by the
+     * app itself before it runs) or "apk" (its Reload popup then asks AnyAppAgent to install it).
+     */
+    AsyncFunction("setAppReady") { packageName: String, kind: String, build: Double, path: String? ->
+      UpdatesProvider.setReady(context, packageName, kind, build.toLong(), path?.let { toFile(it) })
+      true
+    }
+
+    /** Open this app again the moment its next install succeeds (its Reload popup asked). */
+    Function("reopenAfterInstall") { packageName: String ->
+      UpdatesProvider.reopenAfterInstall.add(packageName)
+    }
+
+    Function("clearAppReady") { packageName: String ->
+      UpdatesProvider.clearReady(context, packageName)
+    }
+
+    /** True while the app says it is on screen (only apps with the Reload popup say so). */
+    Function("appInFront") { packageName: String ->
+      UpdatesProvider.inFront(packageName)
+    }
+
+    /** The app's native fingerprint ("" when it cannot take quick updates). */
+    Function("appRuntime") { packageName: String ->
+      UpdatesProvider.runtimeOf(context, packageName)
+    }
+
+    /** What the app reported: the build it runs, and quick updates it refused or rolled back. */
+    Function("appUpdateReport") { packageName: String ->
+      mapOf(
+        "running" to UpdatesProvider.reportedRunning(context, packageName).toDouble(),
+        "bad" to UpdatesProvider.badBuilds(context, packageName).map { it.toDouble() },
+      )
+    }
+
     Function("supportedAbis") {
       Build.SUPPORTED_ABIS.toList()
     }
@@ -489,9 +538,12 @@ class AnyAppNativeModule : Module() {
       } catch (_: Exception) {
         null
       }
+      val apkVersion = PackageInfoCompat.getLongVersionCode(info)
       mapOf(
         "packageName" to packageName,
-        "versionCode" to PackageInfoCompat.getLongVersionCode(info).toDouble(),
+        // The version the app shows: a quick update it runs or was handed counts (docs/FAST-LANE.md).
+        "versionCode" to (UpdatesProvider.effectiveVersion(context, packageName) ?: apkVersion).toDouble(),
+        "apkVersionCode" to apkVersion.toDouble(),
         "versionName" to info.versionName,
         "installer" to installer,
         "launchable" to (pm.getLaunchIntentForPackage(packageName) != null),

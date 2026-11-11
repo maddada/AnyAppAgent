@@ -2,7 +2,9 @@
 // Two presets: 'react-native' (template/, the default) and 'kotlin' (template-kotlin/).
 // Contract (docs/SPEC.md):
 //   createApp({ dir, name, slug, packageName, preset?, onLog? }) -> Promise<void>
-//   buildApk({ dir, buildNumber, onLog? }) -> Promise<{ apkPath, sizeBytes, sha256, ... }>
+//   buildApk({ dir, buildNumber, onLog?, fast? }) -> Promise<{ apkPath, sizeBytes, sha256, delivery, ota?, ... }>
+//   (fast lane, docs/FAST-LANE.md: a JavaScript-only change of a React Native app skips Gradle and
+//   also gives a signed quick update, `ota`; fast: false or ANYAPP_FAST_LANE=0 always runs Gradle)
 //   getIconPath({ dir }) -> string | null
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -20,6 +22,7 @@ import { createExactApp, ensureExact, exactDirFor, exactEnv, extractExactError, 
 import { checkPreset, presetOf, readAppMeta, readKotlinMeta } from './lib/presets.mjs';
 import { claimSpare, refillSparesInBackground } from './lib/spare.mjs';
 import { DEPS_STAMP, depsHash, makeAppTree, templateHash } from './lib/template.mjs';
+import { GRADLE_JS_RES, assetsHash, exportBundle, fastLaneOn, makeOtaPackage, nativeFingerprint, readLast, swapBundle, writeLast } from './lib/fastlane.mjs';
 
 export { PRESETS, DEFAULT_PRESET, presetOf } from './lib/presets.mjs';
 export { listSigningKeys, moveAppToOwnKey, backupSigningKeys, restoreSigningKeys, appSigningKind } from './lib/keys-api.mjs';
@@ -128,20 +131,29 @@ class BuildError extends Error {}
 
 const building = new Map();
 
-export async function buildApk({ dir, buildNumber, onLog = noop }) {
+export async function buildApk({ dir, buildNumber, onLog = noop, updateFeed, updateTestingFeed, fast = true }) {
   if (!dir || !path.isAbsolute(dir)) throw new Error('buildApk: dir must be an absolute path');
   dir = path.resolve(dir);
   const n = Number(buildNumber);
   if (!Number.isInteger(n) || n < 1 || n > 2_100_000_000) throw new Error('buildApk: buildNumber must be a positive integer');
   const preset = presetOf(dir);
   if (!preset) throw new Error(`buildApk: ${dir} has neither app.json (React Native) nor anyapp.json (Kotlin)`);
+  // A shared app's update feeds (docs/DISTRIBUTION.md): written into the build for its updater.
+  const feeds = {};
+  for (const [name, url] of [['anyappUpdateFeed', updateFeed], ['anyappUpdateTestingFeed', updateTestingFeed]]) {
+    if (url === undefined || url === null || url === '') continue;
+    if (!/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/releases\/[A-Za-z0-9._/-]+\.json$/.test(url)) {
+      throw new Error(`buildApk: ${name} must be the GitHub release address of a .json file`);
+    }
+    feeds[`ORG_GRADLE_PROJECT_${name}`] = url;
+  }
 
   const key = dir.toLowerCase();
   if (building.has(key)) throw new Error(`buildApk: a build of ${dir} is already running`);
   await fsp.mkdir(path.join(dir, 'build', 'logs'), { recursive: true });
   const release = await tryLock(path.join(dir, 'build', '.build.lock'), { staleMs: 30 * 60_000 });
   if (!release) throw new Error(`buildApk: a build of ${dir} is already running (build/.build.lock)`);
-  const job = runBuild(dir, n, onLog, preset);
+  const job = runBuild(dir, n, onLog, preset, feeds, fast !== false && fastLaneOn());
   building.set(key, job);
   try {
     return await job;
@@ -151,7 +163,7 @@ export async function buildApk({ dir, buildNumber, onLog = noop }) {
   }
 }
 
-async function runBuild(dir, n, onLog, preset) {
+async function runBuild(dir, n, onLog, preset, feeds = {}, fast = false) {
   const t0 = Date.now();
   const logFile = path.join(dir, 'build', 'logs', `build-${n}.log`);
   const logStream = fs.createWriteStream(logFile);
@@ -198,6 +210,7 @@ async function runBuild(dir, n, onLog, preset) {
       const { env: xenv, bun } = exactEnv(env, { javaHome, sdk, exactDir });
       const gradleProps = {
         ORG_GRADLE_PROJECT_anyappVersionCode: String(n),
+      ...feeds,
         ORG_GRADLE_PROJECT_anyappStoreFile: keystore.storeFile,
         ORG_GRADLE_PROJECT_anyappStorePassword: keystore.storePassword,
         ORG_GRADLE_PROJECT_anyappKeyAlias: keystore.keyAlias,
@@ -275,14 +288,34 @@ async function runBuild(dir, n, onLog, preset) {
         }
       });
 
+      // 3a. The fast lane: only JavaScript changed since the last build, so no prebuild and no
+      // Gradle: the new bundle goes into the last APK, and into a signed quick update.
+      if (fast) {
+        const fingerprint = await nativeFingerprint(dir, feeds);
+        const quick = await phase('quick', () => quickBuild({ dir, n, slug, packageName, signing, sdk, javaHome, env, fingerprint, say, stream }));
+        if (quick) {
+          const tscErr = await tsc;
+          if (tscErr) throw new BuildError(tscErr);
+          const result = await finish(quick.built, quick.parts);
+          await writeLast(dir, { build: n, fingerprint, assets: quick.assets, apkPath: result.apkPath, variants: result.variants });
+          await pruneFastLane(dir, n);
+          say(`Quick update ready: ${quick.ota.path} (${(quick.ota.sizeBytes / 1048576).toFixed(1)} MB)`);
+          return { ...result, delivery: 'quick', runtime: fingerprint, ota: quick.ota };
+        }
+      }
+
       await phase('prebuild', () => prebuildIfNeeded(dir, env, say, stream));
       if (tscError) throw new BuildError(tscError);
     }
+    // The native fingerprint after prebuild (it may touch package.json), baked into the APK.
+    const runtime = kotlin ? null : await nativeFingerprint(dir, feeds);
 
     // 4. Gradle release build with the shared key and versionCode = build number.
     const gradleEnv = {
       ...env,
       ORG_GRADLE_PROJECT_anyappVersionCode: String(n),
+      ...feeds,
+      ...(runtime ? { ORG_GRADLE_PROJECT_anyappRuntime: runtime } : {}),
       ORG_GRADLE_PROJECT_anyappStoreFile: keystore.storeFile,
       ORG_GRADLE_PROJECT_anyappStorePassword: keystore.storePassword,
       ORG_GRADLE_PROJECT_anyappKeyAlias: keystore.keyAlias,
@@ -351,7 +384,11 @@ async function runBuild(dir, n, onLog, preset) {
             .map((abi) => ({ abi, path: path.join(releaseDir, `app-${abi}-release.apk`) }))
             .filter((p) => fs.existsSync(p.path) && fs.statSync(p.path).mtimeMs >= fs.statSync(built).mtimeMs - 60_000)
         : [];
-    return await finish(built, parts);
+    const result = await finish(built, parts);
+    if (kotlin) return { ...result, delivery: 'full' };
+    // The base for the next quick build: this build's fingerprint, bundle assets and APKs.
+    await writeLast(dir, { build: n, fingerprint: runtime, assets: await assetsHash(path.join(dir, GRADLE_JS_RES)), apkPath: result.apkPath, variants: result.variants });
+    return { ...result, delivery: 'full', runtime };
   } catch (e) {
     const msg = e instanceof BuildError ? e.message : e instanceof CommandError ? `${e.message}\n${tail(e.lines)}` : e.message;
     logStream.write(`[builder] FAILED: ${msg}\n`);
@@ -390,15 +427,17 @@ async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, sl
   }
   // A moved app is signed again with its key rotation lineage; then every APK must carry exactly
   // the expected certificates (docs/DISTRIBUTION.md, "Signing").
-  for (const apk of [apkPath, ...copies.map((c) => c.out)]) {
-    try {
-      if (signing.resign) await signWithLineage(javaHome, sdk, apk, signing.resign);
-      await checkSigning(javaHome, sdk, apk, signing.expect);
-    } catch (e) {
-      await fsp.rm(apk, { force: true });
-      throw new BuildError(`Signing check failed: ${e.message}`);
-    }
-  }
+  await Promise.all(
+    [apkPath, ...copies.map((c) => c.out)].map(async (apk) => {
+      try {
+        if (signing.resign) await signWithLineage(javaHome, sdk, apk, signing.resign);
+        await checkSigning(javaHome, sdk, apk, signing.expect);
+      } catch (e) {
+        await fsp.rm(apk, { force: true });
+        throw new BuildError(`Signing check failed: ${e.message}`);
+      }
+    }),
+  );
   const variants = [];
   for (const { abi, out } of copies) {
     const data = await fsp.readFile(out);
@@ -423,6 +462,80 @@ async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, sl
     timings,
     logPath: logFile,
   };
+}
+
+/**
+ * The fast lane's quick build (lib/fastlane.mjs). Null when this change needs Gradle: the native
+ * fingerprint differs from the last build's, its APK is gone, or the bundle's pictures and sounds
+ * changed (the APK holds them as compiled resources). A bundling error is the app's own error.
+ */
+async function quickBuild({ dir, n, slug, packageName, signing, sdk, javaHome, env, fingerprint, say, stream }) {
+  const last = readLast(dir);
+  if (!last || last.fingerprint !== fingerprint) {
+    say(last ? 'Native parts changed since the last build: full build.' : 'No earlier build to start from: full build.');
+    return null;
+  }
+  const bases = (last.apks ?? []).filter((a) => a.path && fs.existsSync(a.path));
+  const universal = bases.find((a) => a.abi === 'universal');
+  if (!universal) {
+    say('The last APK is gone: full build.');
+    return null;
+  }
+  say('Only the JavaScript changed: making a quick update (no Gradle)…');
+  const q0 = Date.now();
+  const took = () => `${((Date.now() - q0) / 1000).toFixed(1)}s`;
+  const out = path.join(dir, 'build', 'fastlane', `b${n}`);
+  let exported;
+  try {
+    exported = await exportBundle(dir, out, { env, stream });
+  } catch (e) {
+    const lines = e.lines ?? [];
+    throw new BuildError(extractMetro(lines) ?? `Bundling the JavaScript failed:\n${tail(lines)}`);
+  }
+  say(`Bundle exported and compiled (${took()})`);
+  const assets = await assetsHash(exported.resDir);
+  if (assets !== last.assets) {
+    say('Pictures or sounds used by the app changed: full build.');
+    return null;
+  }
+  // The quick update is signed with the key the app is signed with now (a moved app: its own key),
+  // while the bundle goes into the last APKs.
+  const otaJob = makeOtaPackage({
+    file: path.join(out, `${slug}-${n}-ota.zip`),
+    bundle: exported.bundle,
+    resDir: exported.resDir,
+    packageName,
+    build: n,
+    runtime: fingerprint,
+    javaHome,
+    key: signing.resign?.next ?? signing.gradle,
+    expectCert: signing.certSha256,
+  });
+  const swapJob = Promise.all(
+    bases.map((b) =>
+      swapBundle({ baseApk: b.path, outApk: path.join(out, `app-${b.abi}.apk`), bundle: exported.bundle, build: n, javaHome, sdk, key: signing.gradle }).then((p) => ({
+        abi: b.abi,
+        path: p,
+      })),
+    ),
+  );
+  const [ota, swapped] = await Promise.all([otaJob, swapJob]);
+  say(`Quick update signed, bundle swapped into ${swapped.length} APKs and signed (${took()})`);
+  return {
+    built: swapped.find((s) => s.abi === 'universal').path,
+    parts: swapped.filter((s) => s.abi !== 'universal'),
+    ota,
+    assets,
+  };
+}
+
+/** Keeps the fast lane's work folders of the last 3 builds. */
+async function pruneFastLane(dir, n) {
+  const root = path.join(dir, 'build', 'fastlane');
+  for (const e of await fsp.readdir(root).catch(() => [])) {
+    const m = /^b(\d+)$/.exec(e);
+    if (m && Number(m[1]) <= n - 3) await fsp.rm(path.join(root, e), { recursive: true, force: true });
+  }
 }
 
 /** Files whose change requires `expo prebuild` to run again. */

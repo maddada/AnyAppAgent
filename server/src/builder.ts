@@ -15,12 +15,17 @@ export interface BuildResult {
   variants?: { abi: string; apkPath: string; sizeBytes: number; sha256: string }[];
   // Which key signed it (builder/ since per-app keys, docs/DISTRIBUTION.md).
   signing?: { kind: "shared" | "own" | "moved"; certSha256: string };
+  // The fast lane (docs/FAST-LANE.md): "quick" when only JavaScript changed (no Gradle), with the
+  // signed quick update package; the native fingerprint of every React Native build.
+  delivery?: "quick" | "full";
+  runtime?: string;
+  ota?: { path: string; sizeBytes: number; sha256: string; runtime: string };
 }
 
 export interface Builder {
   kind: "real" | "fake";
   createApp(args: { dir: string; name: string; slug: string; packageName: string; preset?: AppPreset; onLog?: (line: string) => void }): Promise<void>;
-  buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void }): Promise<BuildResult>;
+  buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void; updateFeed?: string; updateTestingFeed?: string; fast?: boolean }): Promise<BuildResult>;
   getIconPath(args: { dir: string }): string | null;
   // Signing keys (docs/DISTRIBUTION.md): only the real builder has them.
   keys?: {

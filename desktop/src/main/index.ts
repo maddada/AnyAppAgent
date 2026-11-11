@@ -669,6 +669,20 @@ function ipc(): void {
   ipcMain.handle("apps:cancel", (_e, appId: string) => chatAction((c) => c.cancel(String(appId)))());
   ipcMain.handle("helpers:stop", (_e, appId: string, workerId: string) => chatAction((c) => c.stopHelper(String(appId), String(workerId)))());
   ipcMain.handle("apps:rebuild", (_e, appId: string) => chatAction((c) => c.rebuild(String(appId)))());
+  // Sharing and publishing (docs/DISTRIBUTION.md).
+  ipcMain.handle("apps:share", (_e, appId: string, shared: boolean) => chatAction((c) => c.share(String(appId), Boolean(shared)))());
+  ipcMain.handle("apps:publish", (_e, appId: string, notes: string, channel: string) =>
+    chatAction((c) => c.publish(String(appId), { ...(String(notes ?? "").trim() ? { notes: String(notes).trim() } : {}), channel: channel === "testing" ? "testing" : "stable" }))(),
+  );
+  ipcMain.handle("apps:pullback", (_e, appId: string, build: number) => chatAction((c) => c.pullBack(String(appId), Number(build)))());
+  ipcMain.handle("apps:releases", async (_e, appId: string) => {
+    try {
+      return { ok: true, stats: (await admin?.releases(String(appId))) ?? [] };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message, stats: [] };
+    }
+  });
+  ipcMain.handle("qr", (_e, text: string) => qrSvg(String(text)));
   ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
     chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
   );

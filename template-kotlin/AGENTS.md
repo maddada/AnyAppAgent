@@ -31,7 +31,9 @@ app/src/main/java/com/anyapp/app/
   diary/CrashCatcher.kt    sends crashes to AnyAppAgent (see "Crashes"; leave it)
   diary/DiaryRequestReceiver.kt  answers AnyAppAgent's request for the diary (leave it)
   AnyApp.kt                the Application class: installs the crash catcher at start (keep it)
-app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service
+app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service, feedback, the diary
+app/src/main/java/com/anyapp/feedback/  "Point at it": shake to send feedback (built in: keep it, leave it as is)
+app/src/main/assets/anyapp-feedback/   the feedback screen's fonts (leave them)
 app/src/main/res/values/strings.xml   app_name: the name under the icon
 app/src/main/res/raw/      sound files for alarms (adhan.mp3, beep.ogg, ...)
 app/build.gradle.kts       dependencies and Android settings
@@ -73,6 +75,8 @@ The Kotlin package of the code is `com.anyapp.app` in every app; only the instal
   keep Compose libraries under the BOM (no version).
 - Never put secrets or keys in the app. For AI, use `Ai` (below): never ask the person for an
   API key and never call an AI provider over the internet yourself.
+- Never remove or change the feedback feature (`com/anyapp/feedback/`, its provider and activity in
+  `AndroidManifest.xml`, `assets/anyapp-feedback/`). See "Feedback: shake and point at it".
 
 You may change `app_name` in `strings.xml` when the user asks to rename the app.
 
@@ -314,6 +318,21 @@ try { load() } catch (e: Exception) { CrashCatcher.reportError(context, e, scree
 
 Keep `AnyApp.kt`, its `android:name` in the manifest and the `DiaryRequestReceiver` entry.
 
+### Updates for people the app is shared with (built in, nothing to do)
+
+When the person shares the app from AnyAppAgent, the PC builds it with its update feed and the
+app updates itself on other people's phones: it checks when it opens and once a day, shows a
+notification when a new version is published, and a tap downloads, checks and installs it. On the
+person's own phone AnyAppAgent installs every build, so the app stays quiet. This is
+`com.anyapp.updates` (the same code in every AnyAppAgent app), started by the
+`AppUpdater.onAppStart(this)` line in `MainActivity` and the entries marked in
+`AndroidManifest.xml`, with `res/raw/anyapp_keep.xml`: never edit or remove any of these, and
+never add another updater. Only if the person asks for an update line or a "Check for updates"
+button: `AppUpdater.check(context)` (off the main thread) returns `State.Available(update)`,
+`UpToDate`, `HandledByAnyAppAgent`, `Off` or `Problem(message)`, and
+`startActivity(Intent(context, UpdateActivity::class.java).putExtra(UpdateActivity.EXTRA_START, true))`
+opens the update box.
+
 ### Also at hand (Android itself, no library)
 
 - Text to speech while the app is open: `android.speech.tts.TextToSpeech`.
@@ -332,6 +351,33 @@ Keep `AnyApp.kt`, its `android:name` in the manifest and the `DiaryRequestReceiv
 
 Adding a permission: one `<uses-permission>` line in `AndroidManifest.xml`; ask for dangerous
 ones at run time as above.
+
+### Feedback: shake and point at it (built in, keep it)
+
+Every app made with AnyAppAgent has this, including copies the person shares with other people,
+so anyone can tell them what to change. It needs no code and works on its own:
+
+- Shaking the phone (a firm shake, back and forth a few times; walking or a bump never does it)
+  opens a feedback screen over a screenshot of the current screen.
+- Dragging draws an arrow with a number at its start (`#1`, `#2`, ...). Undo takes back the last
+  one. Below is a notes box; each new arrow adds its `#n ` line there to fill in.
+- Save makes one picture (the screenshot, the arrows and the notes), copies it to the clipboard
+  and keeps it in the gallery's "Feedback" album, says "Copied and saved" and closes. The person
+  pastes it into AnyAppAgent's chat, WhatsApp or anywhere.
+
+Never remove it, never add options to it, and never draw your own feedback screen. When a
+feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbered arrows on the
+screenshot. To also open it from a button (for example "Send feedback" in a settings screen):
+`com.anyapp.feedback.Feedback.open(activity)` (`LocalActivity.current` in Compose, or
+`LocalContext.current as Activity`). It does not open while a full-screen alarm shows.
+
+## New versions on the phone
+
+After your turn the PC builds a new APK (a few minutes) and AnyAppAgent installs it. If the person is
+inside the app when it arrives, the app shows a small "Version N is ready" card with **Reload**,
+which installs it and opens the app again (`com.anyapp.updates.ReadyPopup`, started in
+`MainActivity.onCreate`: keep that line). Kotlin apps have no quick (over-the-air) updates: every
+change is a new install.
 
 ## The app icon
 

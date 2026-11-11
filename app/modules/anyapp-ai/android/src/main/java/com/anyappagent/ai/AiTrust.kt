@@ -38,6 +38,15 @@ object AiTrust {
       val signer = signer(ctx, pkg) ?: continue
       if (signer in trusted) return Result.Allowed(pkg)
     }
+    // An app moved to its own key (docs/DISTRIBUTION.md) and updated by its own updater: its key
+    // history still holds the trusted key it was signed with before (Android proved the rotation).
+    for (pkg in packages) {
+      val signer = signer(ctx, pkg) ?: continue
+      if (history(ctx, pkg).any { it in trusted }) {
+        AiStore.addTrustedSigner(ctx, signer)
+        return Result.Allowed(pkg)
+      }
+    }
     for (pkg in packages) {
       val signer = signer(ctx, pkg) ?: continue
       if (installedByUs(ctx, pkg)) {
@@ -65,6 +74,18 @@ object AiTrust {
       MessageDigest.getInstance("SHA-256").digest(certs[0].toByteArray()).joinToString("") { "%02x".format(it) }
     } catch (_: Exception) {
       null
+    }
+  }
+
+  /** SHA-256s of every certificate in the app's signing history (Android 9+: key rotation), oldest first. */
+  private fun history(ctx: Context, pkg: String): List<String> {
+    if (Build.VERSION.SDK_INT < 28) return emptyList()
+    return try {
+      val si = ctx.packageManager.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo ?: return emptyList()
+      if (si.hasMultipleSigners()) return emptyList()
+      si.signingCertificateHistory.orEmpty().map { c -> MessageDigest.getInstance("SHA-256").digest(c.toByteArray()).joinToString("") { "%02x".format(it) } }
+    } catch (_: Exception) {
+      emptyList()
     }
   }
 

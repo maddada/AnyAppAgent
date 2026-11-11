@@ -33,6 +33,7 @@ scripts/make-icon.mjs    makes assets/icon.png from a colour and a glyph or lett
 modules/alarms/          native (Kotlin) code behind src/lib/alarms.ts
 modules/ai/              native (Kotlin) code behind src/lib/ai.ts (leave it)
 modules/diary/           native (Kotlin) code behind src/lib/diary.ts and src/lib/crash.ts (leave it)
+modules/feedback/        "Point at it": shake to send feedback (built in: keep it, leave it as is)
 app.json                 app config (name, permissions, plugins)
 overview.md              what the person wants the app to do (see below)
 ```
@@ -69,6 +70,7 @@ overview.md              what the person wants the app to do (see below)
   slower and riskier.
 - Never put secrets or keys in the app. For AI, use `src/lib/ai.ts` (below): never ask the person
   for an API key and never call an AI provider with `fetch`.
+- Never remove or change `modules/feedback/` (see "Feedback: shake and point at it").
 
 You may change `expo.name` (the name under the icon) when the user asks to rename the app.
 
@@ -329,6 +331,49 @@ try { await ask('Hi'); } catch (e) {
   and pass `asset.base64`. Keep images small (quality 0.6 or a resize), a few MB at most.
 - Save conversations with `usePersistentState` if the person should find them again.
 
+### Feedback: shake and point at it (built in, keep it)
+
+Every app made with AnyAppAgent has this, including copies the person shares with other people,
+so anyone can tell them what to change. It needs no code and works on its own:
+
+- Shaking the phone (a firm shake, back and forth a few times; walking or a bump never does it)
+  opens a feedback screen over a screenshot of the current screen.
+- Dragging draws an arrow with a number at its start (`#1`, `#2`, ...). Undo takes back the last
+  one. Below is a notes box; each new arrow adds its `#n ` line there to fill in.
+- Save makes one picture (the screenshot, the arrows and the notes), copies it to the clipboard
+  and keeps it in the gallery's "Feedback" album, says "Copied and saved" and closes. The person
+  pastes it into AnyAppAgent's chat, WhatsApp or anywhere.
+
+Never remove it, never add options to it, and never draw your own feedback screen. When a
+feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbered arrows on the
+screenshot. To also open it from a button (for example "Send feedback" in a settings screen):
+
+```tsx
+import { openFeedback } from '../../modules/feedback';
+<Button title="Send feedback" onPress={() => openFeedback()} />
+```
+
+It does not open while a full-screen alarm shows.
+
+### Updates for people the app is shared with (built in, nothing to do)
+
+When the person shares the app from AnyAppAgent, the PC builds it with its update feed and the
+app updates itself on other people's phones: it checks when it opens and once a day, shows a
+notification when a new version is published, and a tap downloads, checks and installs it. On the
+person's own phone AnyAppAgent installs every build, so the app stays quiet. This lives in
+`modules/updates` (Kotlin, the same code as every AnyAppAgent app): never edit or remove it, and
+never add another updater. Only if the person asks for an update line or a "Check for updates"
+button, use `modules/updates/index.ts`:
+
+```ts
+import { checkForUpdate, openUpdate, updatesOn } from '../../modules/updates'; // from a file in src/app/ or src/lib/
+
+if (updatesOn()) {
+  const s = await checkForUpdate(); // { state: 'available', version, notes } | 'up-to-date' | 'anyappagent' | 'off' | 'problem'
+  if (s.state === 'available') openUpdate(); // the update box: download, check, install
+}
+```
+
 ### The diary (what the app did, for fixing things later)
 
 The app keeps a small private diary on the phone. When the person says something did not work
@@ -371,7 +416,31 @@ back to any version with Versions in their chat, so never rewrite Git history.
 
 `expo-constants` (app name/version: `Constants.expoConfig?.name`),
 `@expo/vector-icons`, `react-native-safe-area-context`, `expo-status-bar`. `fetch` works for the
-internet (HTTPS). `expo-updates` is installed for later over-the-air updates but **off**; leave it.
+internet (HTTPS). `expo-updates` is installed but **off**: over-the-air updates are done by
+`modules/updates` (see "Quick updates and new installs"); leave both as they are.
+
+## Quick updates and new installs (the PC decides, you choose wisely)
+
+After your turn the PC looks at what changed and picks how the new version reaches the phone:
+
+- **Quick update (seconds, no install):** only the JavaScript changed: anything in `src/`, the
+  TypeScript in `modules/*/index.ts`, texts, colours, layout, logic, new screens. The PC bundles it
+  without Gradle and sends it over the air through AnyAppAgent. The app shows a small "Version N is
+  ready" card with **Reload**, which starts the new code in place in about a second. If the app is
+  closed, it simply opens with the new version next time.
+- **New install (a few minutes):** anything native changed: `app.json` (name, permissions,
+  plugins), `package.json` or the lockfile (a new library), anything in `assets/` (the icon,
+  pictures, sounds, fonts), native files in `modules/` (Kotlin, manifests, `app.plugin.js`). The PC
+  runs the full build; the same card appears and Reload installs the new APK and opens the app again.
+- A quick update that crashes when it starts is rolled back on the phone by itself (to the last
+  version that worked) and AnyAppAgent is told.
+
+So: prefer a solution in code when it is as good (an icon from `@expo/vector-icons` instead of a
+new picture, a library already installed instead of a new one), and say in your last sentence which
+it will be: "Sent as a quick update, no install needed." or "This one needs a new install, it takes
+a few minutes." The quick update code lives in `modules/updates` (`Ota.kt`, `ReadyPopup.kt`, the
+loader in `AnyappUpdatesPackage.kt`): never edit or remove it, never add another updater, and never
+turn on `expo-updates`.
 
 ## The app icon
 

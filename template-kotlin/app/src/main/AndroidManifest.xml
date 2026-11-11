@@ -15,6 +15,12 @@
   <!-- Alarms play their sound and speak their text from a short foreground service. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <!-- Updates for people the app is shared with (com.anyapp.updates): the app installs its own new version. -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <!-- The daily update check runs only when the phone is online. -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- "Point at it" feedback saves to the gallery: no permission from Android 10 on, older phones ask once. -->
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
   <!-- AI goes through AnyAppAgent on this phone (it holds the key): the app must be able to see it
        (Android 11+ package visibility) to bind to its AI service and to open its settings. -->
@@ -22,6 +28,10 @@
     <package android:name="com.anyappagent" />
     <intent>
       <action android:name="com.anyappagent.action.AI" />
+    </intent>
+    <!-- AnyAppAgent says whether it handles this app's updates (then the app stays silent). -->
+    <intent>
+      <action android:name="com.anyappagent.action.UPDATES" />
     </intent>
   </queries>
 
@@ -53,6 +63,27 @@
         <action android:name="com.anyapp.action.DIARY_REQUEST" />
       </intent-filter>
     </receiver>
+    <!-- Updates for people the app is shared with (com.anyapp.updates): keep these. -->
+    <activity
+      android:name="com.anyapp.updates.UpdateActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:theme="@android:style/Theme.DeviceDefault.Light.Dialog.NoActionBar" />
+    <service
+      android:name="com.anyapp.updates.UpdateJob"
+      android:exported="false"
+      android:permission="android.permission.BIND_JOB_SERVICE" />
+    <receiver
+      android:name="com.anyapp.updates.InstallReceiver"
+      android:exported="false" />
+    <!-- AnyAppAgent says a new version of this app is ready: the Reload popup (com.anyapp.updates.ReadyPopup). -->
+    <receiver
+      android:name="com.anyapp.updates.ReadyReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="com.anyapp.updates.READY" />
+      </intent-filter>
+    </receiver>
 
     <!-- Alarms (com.anyapp.app.alarms): keep these. -->
     <receiver
@@ -82,5 +113,21 @@
       android:name=".alarms.AlarmService"
       android:exported="false"
       android:foregroundServiceType="mediaPlayback" />
+
+    <!-- "Point at it" feedback (com.anyapp.feedback): shake the phone, point with numbered
+         arrows, write notes, Save. Built into every app: keep these. The provider starts the
+         shake watcher when the app starts and serves the saved pictures for pasting. -->
+    <provider
+      android:name="com.anyapp.feedback.FeedbackProvider"
+      android:authorities="${applicationId}.anyappfeedback"
+      android:exported="false"
+      android:grantUriPermissions="true" />
+    <activity
+      android:name="com.anyapp.feedback.FeedbackActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
+      android:windowSoftInputMode="adjustResize|stateHidden"
+      android:theme="@android:style/Theme.Material.Light.NoActionBar" />
   </application>
 </manifest>

@@ -16,6 +16,8 @@ Decided on the page `C:\aa\ideas\distribution.html` (2026-11-11):
 
 This file is the plan and, stage by stage, the record of what was built and proven.
 
+Quick updates (over the air) and the Reload popup inside every app build on this: `docs/FAST-LANE.md`.
+
 ## The flow in one picture
 
 ```
@@ -34,10 +36,10 @@ Other people's phones (only what you publish)
 | - | ----- | ------- | ------ |
 | 1 | Per-app signing keys, moving existing apps by key rotation, an encrypted backup the user can restore | `builder/`, `server/`, `desktop/`, `shared/protocol.ts`, `template-kotlin/.gitignore` | Built, proven, in main |
 | 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `shared/protocol.ts` | Built, proven, in main |
-| 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Built and proven ("Stage 3 proof") |
-| 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `template-exact/` (if its native modules allow it), `builder/` | Planned |
-| 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/`, `shared/protocol.ts` | Planned |
-| 6 | The controls on the PC and the phone: Publish, Share with others, link and QR, downloads per version, channel, key backup | `desktop/`, `app/` | Partly in stage 1 (key backup) |
+| 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Built, proven, in main |
+| 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `builder/`, `server/` | Built, proven, in main; not in Expo Exact yet |
+| 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/` | Built, proven, in main; following a friend's app from a share link inside AnyAppAgent is not built yet |
+| 6 | The controls on the PC and the phone: Publish, Share with others, link and QR, downloads per version, channel, key backup | `desktop/`, `app/`, `server/` | Built and proven ("Stage 6 proof") |
 
 Each stage ends with a proof on `emulator-5560` and test GitHub repos that are deleted afterwards.
 
@@ -299,6 +301,120 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
   `releases/latest` can still point at the version before, and a replaced file (the `update.json`
   of a pull back) can still be served as it was for several minutes. With checks at most every 6
   hours that only delays an update; the API (`gh release download`) shows the change at once.
+
+### As built (stage 4)
+
+- `com.anyapp.updates` (`AppUpdater`, `UpdateJob`, `UpdateActivity`, `InstallReceiver`), plain
+  Android APIs only, the same four files in `template-kotlin/app/src/main/java/com/anyapp/updates/`
+  and in the React Native module `template/modules/updates` (an Expo module that starts it and
+  gives JavaScript `checkForUpdate`, `openUpdate`, `updatesOn`, `get/setUpdateChannel`).
+  `builder/test/updater-copies.test.mjs` keeps the copies byte for byte the same.
+- The feed: the companion passes a shared app's `feedUrl` and Testing feed to `buildApk`
+  (`updateFeed`, `updateTestingFeed`, only GitHub release addresses of a `.json` file); the
+  builder's init script writes them as the string resources `anyapp_update_feed` and
+  `anyapp_update_testing_feed` (`buildFeatures.resValues`). `res/raw/anyapp_keep.xml` keeps them
+  through R8 resource shrinking, which removed them in the first try. A build of an app that is
+  not shared has no feed, and the updater does nothing at all.
+- When: on open, at most every 6 hours (the slot is claimed before the check, so two starts check
+  once), and a daily JobScheduler job when online (it needs `ACCESS_NETWORK_STATE`, which the first
+  try lacked: `SecurityException`). Note: force-stopping an app cancels its jobs until it opens again.
+- Before notifying, it asks AnyAppAgent (stage 5); then: compare `build` with `versionCode`, skip a
+  `blocked` build, refuse a feed whose `signer` is not this app's key, pick the APK for the phone's
+  first ABI, else the full one.
+- One notification per build ("<App> <version> is ready", the notes), channel "App updates". A tap
+  opens the update box, which starts at once: the first time, Android's "Install unknown apps"
+  page for this app (once per app), then the download with MB progress, then size and SHA-256
+  (one retry), then the file's package, build number and signing key against the installed copy,
+  then a PackageInstaller session. Android shows its own "Do you want to update this app?" for a
+  copy that came from a browser (the app is not its installer of record).
+- Plain words for every state; a download from another key or of another app offers Close, not
+  Try again.
+- Expo Exact apps do not have the updater yet (their native module support was not looked at);
+  they still get updates on the owner's phone through AnyAppAgent.
+
+### As built (stage 5)
+
+- `app/modules/anyapp-native`: an exported `UpdatesProvider` (authority `<AnyAppAgent's package>.updates`)
+  and an exported `UpdatesHostService` with the action `com.anyappagent.action.UPDATES`, which only
+  lets apps find AnyAppAgent (Android 11+ package visibility: the templates query that action).
+- An app asks `content://<host>.updates/handles/<its package>`; the answer is 1 when AnyAppAgent
+  installed it (it is the installer of record: the owner's phone, where every build comes from the
+  PC) or the package is in AnyAppAgent's "followed" list (`setFollowedApps`, for a later "Add a
+  shared app"). The provider answers only the app that asks about itself (the caller's package
+  must be the package asked about), so no app learns anything about another.
+- Because hosts are found by the action, a copy of AnyAppAgent under another package (as in the
+  proof) works the same.
+- AI proxy (`AiTrust`): an app whose signing history (Android's key rotation record) holds a
+  trusted certificate is trusted too, so a moved app keeps AI after its own updater installed the
+  rotated build.
+- Not built: "Add a shared app" in AnyAppAgent for a friend who has AnyAppAgent (it would add the
+  package to the followed list and watch its feed). Without it, a friend's AnyAppAgent does not
+  handle the friend's copy, and the app's own updater does the work, as in stage 4.
+
+### As built (stage 6)
+
+- Desktop: a Share button in the app's chat header ("Shared" once shared) opens the Share dialog
+  (`desktop/src/renderer/src/Share.tsx`): the Share with others switch, the link with Copy link,
+  Open on GitHub and a QR code, Publish this version (notes, Everyone or Testers, the button reads
+  Published or Pulled back when it does not apply), and the versions with downloads and Pull back.
+  Through the companion (`apps:share`, `apps:publish`, `apps:pullback`, `apps:releases`, `qr`).
+- Phone: a Share button in the app's sheet (once the app has a build) opens `/share/<id>`
+  (`app/src/app/share/[id].tsx`) with the same controls; the link goes out through Android's share
+  menu.
+- Settings, Signing keys (stage 1) is on the desktop only.
+- The companion refuses to publish a build that was pulled back ("Make a new version first").
+
+## Stage 6 proof
+
+2026-11-11, my separate desktop instance (`ANYAPP_DESKTOP_USERDATA=C:\aa\t\dist-desktop`, its
+companion on port 8797 with the test state folders) and my phone copy `com.anyappagent.dist` on
+`emulator-5560`, on the friend test app.
+
+| Step | Result |
+| ---- | ------ |
+| Desktop: open the app, Shared, the Share dialog | Switch on, the install link, QR, "Published" for build 7, versions 1.4 and 1.3 with downloads (1.3: 2) (`C:\aa\t\shots\desktop-share-1.png`) |
+| Build 8; notes typed in the dialog; Publish | "Published. People who have the app get a notification."; `v1.5-b8` Latest on GitHub |
+| Pull back on 1.5 in the dialog | "1.5 is pulled back..."; on GitHub `v1.5-b8` a pre-release "(pulled back)" and `v1.4-b7` Latest again (`desktop-share-3-pulled-back.png`) |
+| The dialog after the pull back | It offered Publish for the pulled-back build 8 again (a bug): now the companion refuses it and the button reads "Pulled back", disabled |
+| Phone: the app's sheet, Share | The Share screen with the switch on, the link, Send the link, Publish this version (build 9), Everyone or Testers, and the versions with downloads and Pull back (`C:\aa\t\shots\phone-share-1.png`) |
+| Phone: Publish for testers | Not proven: other threads' copies of the phone app kept taking the front of the shared emulator, so the tap never reached my copy (retried once). The phone calls the same companion route the desktop proved |
+
+## Stage 5 proof
+
+2026-11-11, `emulator-5560`. My own copy of the phone app (`com.anyappagent.dist`, built from this
+branch with `app.json` changed only for that build) paired with my test companion on port 8797
+(same-network code). "Dist Friend Test" build 5 was on the phone from the stage 4 proof, installed
+from the public link (no installer of record).
+
+| Step | Result |
+| ---- | ------ |
+| After pairing | AnyAppAgent offered build 6 by itself; Android asked once ("Do you want to update this app?", AnyAppAgent did not install the copy there); after it `installerPackageName=com.anyappagent.dist` |
+| The provider asked by the shell for that app | `handles=0` (only the app itself gets an answer) |
+| The app's own daily check | `check: AnyAppAgent handles this app's updates`; no notification |
+| Build 7 on the PC, also published to GitHub as 1.4 | AnyAppAgent installed it by itself (no prompt now that it is the installer) with its own notification "Getting Dist Friend Test onto your phone"; `versionCode=7` |
+| The app's own check after that | Still "AnyAppAgent handles this app's updates", 0 notifications from the app: one update, one notification, through AnyAppAgent |
+
+## Stage 4 proof
+
+2026-11-11, `emulator-5560` (Android 15) as the friend's phone, the companion setup of stage 2,
+a new Kotlin app "Dist Friend Test" (`com.anyapp.disttestfriend`, own key, a launch counter) made
+from the updated template and shared: repos `anyapp-disttest-friend` (private) and
+`anyapp-disttest-friend-releases` (public).
+
+| Step | Result |
+| ---- | ------ |
+| Publish 1.0; on the "friend's phone" download `disttest-friend.apk` from the public install link and install it (no installer of record, as from a browser) | Installed, `launches=1` |
+| First try of the daily job | Not scheduled: `SecurityException: ACCESS_NETWORK_STATE required` (fixed, then 1.2 published and installed from the link the same way) |
+| Publish 1.3 (build 5); the app's daily job (`cmd jobscheduler run -f`) | `check: build 5 (1.3) is available`; one notification "Dist Friend Test 1.3 is ready" with the notes (`C:\aa\t\shots\friend-1-notification.png`) |
+| Tap | Android's "Install unknown apps" page for the app (first time only); allowed, back |
+| The update box | Downloaded, checked, handed to Android: "Do you want to update this app?"; Update |
+| After | `versionCode=5`, `launches=6` (data kept), the notification gone |
+| A release whose `update.json` has a wrong SHA-256 | "The download was damaged twice, so it was not installed. Try again later."; still build 5 |
+| A release whose APK is signed with another key (its SHA-256 honest) | "This update can't replace your copy (it is signed differently). Ask whoever shared the app for a new link."; still build 5 (`C:\aa\t\shots\tamper-B.png`) |
+| React Native: a new app from the updated template, built with a feed | The module compiles; the APK has the feed string, the activity, job and receiver; on the emulator `daily check scheduled: true`, `check: up to date` (the feed belongs to another package, so nothing is offered) |
+
+The two tampered releases (`tampered-sha-test`, `tampered-key-test`) are left on the test releases
+repo as pre-releases titled "Tampered test ... (not a real version)".
 
 ## Stage 3 proof
 
