@@ -18,6 +18,8 @@ export interface Config {
   github: boolean;
   acpLaunch: "local" | "npx";
   maxBuildFixes: number;
+  /** Dev and tests only: ANYAPP_ASK_PERMISSIONS=1 shows every permission request in the chat instead of allowing it. */
+  askPermissions: boolean;
   /** Each app's main chat is a coordinator that hands work to workers (docs/APP-COORDINATOR.md). */
   coordinator: boolean;
 }
@@ -34,6 +36,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     github: !["off", "0", "false", "no"].includes((env.ANYAPP_GITHUB ?? "on").toLowerCase()),
     acpLaunch: env.ANYAPP_ACP_LAUNCH === "npx" ? "npx" : "local",
     maxBuildFixes: 3,
+    askPermissions: env.ANYAPP_ASK_PERMISSIONS === "1",
     coordinator: !["off", "0", "false", "no"].includes((env.ANYAPP_COORDINATOR ?? "on").toLowerCase()),
   };
 }

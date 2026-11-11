@@ -1,9 +1,11 @@
 // The app manager: creating apps, one Claude Code session per app, a build after every turn,
 // Git/GitHub, and the chat timeline. Every change goes out as a ServerEvent.
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { App, AppStatus, BuildInfo, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
+import type { App, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
+import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
+import type { PromptImage } from "./acp/claude-session.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { AcpAgentRequestResponder } from "./acp/agent-connection.ts";
@@ -29,7 +31,12 @@ export class HttpError extends Error {
   }
 }
 
-type Job = { kind: "prompt"; text: string } | { kind: "build" } | { kind: "report"; workerId: string; text: string };
+// itemId: the user's chat item for a prompt the user sent, marked `queued` while it waits.
+// A report carries finished helpers' reports to the coordinator (never dropped by Stop).
+type Job =
+  | { kind: "prompt"; text: string; itemId?: string; images?: PromptImage[] }
+  | { kind: "build" }
+  | { kind: "report"; workerId: string; text: string };
 
 interface BuildCycleOptions {
   /** Sends a build failure to an agent; resolves with the stop reason. Default: the app's main session. */
@@ -50,6 +57,8 @@ interface Runtime {
   starting?: Promise<ClaudeSession>;
   queue: Job[];
   running: boolean;
+  /** While the app is being created: jobs wait until the first prompt is in front of them. */
+  held: boolean;
   cancelRequested: boolean;
   permissions: Map<string, PendingPermission>;
   /** ACP tool call ids of the coordinator's own worker tools: their worker rows stand for them. */
@@ -153,6 +162,8 @@ export class AppManager {
       const chat = this.store.chat(app.id);
       for (const item of chat.all()) {
         if (item.streaming) chat.upsert({ id: item.id, kind: item.kind, streaming: false });
+        // A message that waited in the queue when the companion stopped never reached the agent.
+        if (item.queued) chat.upsert({ id: item.id, kind: item.kind, queued: false, dropped: true });
         if (item.tool && (item.tool.status === "pending" || item.tool.status === "in_progress")) {
           chat.upsert({ id: item.id, kind: "tool", tool: { ...item.tool, status: "failed" } });
         }
@@ -234,6 +245,7 @@ export class AppManager {
         translator: new ChatTranslator({ cwd: record.dir, newId: () => randomUUID() }),
         queue: [],
         running: false,
+        held: false,
         cancelRequested: false,
         permissions: new Map(),
         hiddenTools: new Set(),
@@ -308,6 +320,7 @@ export class AppManager {
     };
     const record: ReadyRecord = { app, dir: join(this.config.appsDir, slug) };
     this.store.add(record);
+    this.runtime(app.id).held = true;
     this.broadcast({ type: "app.updated", app });
     this.emitItem(record, { id: randomUUID(), kind: "user", text: prompt.trim() });
     this.finishCreate(record, prompt.trim()).catch((error: unknown) => {
@@ -330,6 +343,8 @@ export class AppManager {
       this.log(`[${app.slug}] creation failed:`, (error as Error).message);
       this.errorItem(record, `The app could not be created: ${firstLine((error as Error).message)}`);
       this.setStatus(record, "error", "The app could not be created on the PC.");
+      this.dropQueue(record);
+      this.runtime(app.id).held = false;
       return;
     }
     if (record.deleted) return;
@@ -345,17 +360,55 @@ export class AppManager {
     } else {
       this.log(`[${app.slug}] GitHub is turned off (ANYAPP_GITHUB=off)`);
     }
-    this.enqueue(record, { kind: "prompt", text: prompt });
+    // The first prompt goes in front of anything the user sent while the app was being set up.
+    const rt = this.runtime(app.id);
+    rt.queue.unshift({ kind: "prompt", text: prompt });
+    rt.held = false;
+    if (!rt.running) void this.drain(record);
   }
 
-  sendMessage(id: string, text: string): void {
+  sendMessage(id: string, text: string, uploads: ImageUpload[] = []): void {
     const record = this.record(id);
-    if (text.trim() === "") throw new HttpError(400, "The message is empty.");
+    if (text.trim() === "" && uploads.length === 0) throw new HttpError(400, "The message is empty.");
+    const problem = checkImages(uploads.map((u) => ({ mimeType: String(u?.mimeType ?? ""), data: String(u?.data ?? "") })));
+    if (problem) throw new HttpError(400, problem);
     if (!record.ready && record.app.status !== "creating") throw new HttpError(409, "This app could not be created. Make a new one.");
-    this.emitItem(record, { id: randomUUID(), kind: "user", text: text.trim() });
-    record.app.lastMessagePreview = shorten(text, 140);
+    const rt = this.runtime(record.app.id);
+    // Sent while the agent (or the build after it) is busy: it waits its turn, and says so.
+    const queued = rt.running || rt.held || rt.queue.length > 0;
+    const itemId = randomUUID();
+    // Pictures are saved on the PC (as bb saves attachments) and go to the agent as ACP image blocks.
+    const saved = uploads.map((u) => this.saveImage(record.app.id, u));
+    const images: ChatImage[] = saved.map(({ chat }) => chat);
+    this.emitItem(record, { id: itemId, kind: "user", text: text.trim(), ...(images.length ? { images } : {}), ...(queued ? { queued: true } : {}) });
+    record.app.lastMessagePreview = text.trim() ? shorten(text, 140) : picturesLabel(images.length);
     this.touch(record);
-    this.enqueue(record, { kind: "prompt", text: text.trim() });
+    this.enqueue(record, { kind: "prompt", text: text.trim(), itemId, images: saved.map(({ prompt }) => prompt) });
+  }
+
+  private imagesDir(appId: string): string {
+    return join(this.store.stateDir, "images", appId);
+  }
+
+  private saveImage(appId: string, upload: ImageUpload): { chat: ChatImage; prompt: PromptImage } {
+    const id = randomUUID();
+    const dir = this.imagesDir(appId);
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, `${id}.${imageExtension(upload.mimeType)}`);
+    writeFileSync(path, Buffer.from(upload.data, "base64"));
+    const size = typeof upload.width === "number" && typeof upload.height === "number" ? { width: Math.round(upload.width), height: Math.round(upload.height) } : {};
+    return { chat: { id, mimeType: upload.mimeType, ...size }, prompt: { path, mimeType: upload.mimeType } };
+  }
+
+  /** A picture sent in this app's chat, for GET /api/apps/:id/images/:imageId. */
+  imageFile(appId: string, imageId: string): { path: string; mimeType: string } | null {
+    this.record(appId);
+    if (!/^[a-zA-Z0-9-]+$/.test(imageId)) return null;
+    for (const mimeType of IMAGE_TYPES) {
+      const path = join(this.imagesDir(appId), `${imageId}.${imageExtension(mimeType)}`);
+      if (existsSync(path)) return { path, mimeType };
+    }
+    return null;
   }
 
   rebuild(id: string): void {
@@ -368,11 +421,13 @@ export class AppManager {
     this.enqueue(record, { kind: "build" });
   }
 
+  /** Stop (ACP session/cancel, as bb does): ends the current turn and drops what waits behind it. */
   cancel(id: string): void {
     const record = this.record(id);
     const rt = this.runtime(record.app.id);
-    // Only the main chat's own turn stops; helpers keep working (each has its own Stop).
-    rt.queue = rt.queue.filter((job) => job.kind === "report");
+    // Only the main chat's own turn stops, and the person's queued messages are dropped; helpers keep
+    // working (each has its own Stop) and their reports still reach the main chat.
+    this.dropQueue(record);
     if (!rt.running) return;
     rt.cancelRequested = true;
     for (const [requestId, pending] of rt.permissions) {
@@ -415,7 +470,18 @@ export class AppManager {
     if (record.deleted) return;
     const rt = this.runtime(record.app.id);
     rt.queue.push(job);
-    if (!rt.running) void this.drain(record);
+    if (!rt.running && !rt.held) void this.drain(record);
+  }
+
+  /** Empties the queue; the user's waiting messages are marked as not sent. */
+  private dropQueue(record: AppRecord): void {
+    const rt = this.runtime(record.app.id);
+    // Helpers' reports stay queued: Stop is about the person's own messages.
+    const dropped = rt.queue.filter((job) => job.kind !== "report");
+    rt.queue = rt.queue.filter((job) => job.kind === "report");
+    for (const job of dropped) {
+      if (job.kind === "prompt" && job.itemId) this.emitItem(record, { id: job.itemId, kind: "user", queued: false, dropped: true });
+    }
   }
 
   private async drain(record: AppRecord): Promise<void> {
@@ -425,8 +491,11 @@ export class AppManager {
       while (rt.queue.length > 0 && !record.deleted) {
         const job = rt.queue.shift()!;
         rt.cancelRequested = false;
+        if (job.kind === "prompt" && job.itemId && this.store.chat(record.app.id).get(job.itemId)?.queued) {
+          this.emitItem(record, { id: job.itemId, kind: "user", queued: false });
+        }
         try {
-          if (job.kind === "prompt") await this.userTurn(record, job.text);
+          if (job.kind === "prompt") await this.userTurn(record, job.text, job.images ?? []);
           else if (job.kind === "report") await this.reportTurn(record, job);
           else await this.buildCycle(record);
         } catch (error) {
@@ -451,15 +520,17 @@ export class AppManager {
     if (stop !== "cancelled") this.setStatus(record, "idle");
   }
 
-  private async userTurn(record: AppRecord, text: string): Promise<void> {
+  private async userTurn(record: AppRecord, text: string, images: PromptImage[] = []): Promise<void> {
     if (this.workers) {
-      // The coordinator only talks and starts workers; builds follow workers' changes.
-      await this.agentTurn(record, text);
+      // The coordinator only talks and starts workers; builds follow workers' changes. Pictures go to
+      // it as image blocks, and their paths on this PC too, so it can hand them to a helper's brief.
+      const paths = images.length > 0 ? `\n\n(The pictures are saved on this PC at: ${images.map((i) => i.path).join(", ")}. A helper can open them by path.)` : "";
+      await this.agentTurn(record, `${text}${paths}`, images);
       this.setStatus(record, "idle");
       return;
     }
     const before = await git.treeSnapshot(record.dir, (m) => this.log(`[${record.app.slug}] ${m}`));
-    const stopReason = await this.agentTurn(record, text);
+    const stopReason = await this.agentTurn(record, text, images);
     if (stopReason === "cancelled" || this.runtime(record.app.id).cancelRequested) {
       this.setStatus(record, "idle");
       return;
@@ -494,6 +565,7 @@ export class AppManager {
       instructions: appPlaybook(appInfo),
       ...coordinated,
       launch: claudeLaunchSpec(this.config.acpLaunch),
+      askPermissions: this.config.askPermissions,
       onUpdate: (update) => {
         if (coordinated && isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
           const toolCallId = String(update["toolCallId"] ?? "");
@@ -543,7 +615,7 @@ export class AppManager {
       title: request.title ?? toolTitle ?? "The agent asks for permission",
       options: request.options.map((o) => ({ optionId: o.optionId, label: o.name, kind: o.kind })),
     };
-    const allow = pickAllowOption(request.options);
+    const allow = this.config.askPermissions ? undefined : pickAllowOption(request.options);
     if (allow) {
       responder.result({ outcome: { outcome: "selected", optionId: allow } });
       this.emitItem(record, { id: itemId, kind: "permission", permission: { ...permission, selectedOptionId: allow } });
@@ -554,7 +626,7 @@ export class AppManager {
   }
 
   /** One prompt to the agent; resolves with the ACP stop reason ("error" when it broke). */
-  private async agentTurn(record: AppRecord, text: string): Promise<string> {
+  private async agentTurn(record: AppRecord, text: string, images: PromptImage[] = []): Promise<string> {
     this.setStatus(record, "working");
     const rt = this.runtime(record.app.id);
     const session = await this.ensureSession(record);
@@ -562,7 +634,7 @@ export class AppManager {
     let stopReason = "error";
     try {
       rt.turnActive = true;
-      stopReason = await session.prompt(text);
+      stopReason = await session.prompt(text, images);
     } catch (error) {
       this.log(`[${record.app.slug}] prompt failed:`, (error as Error).message);
       this.errorItem(record, `The agent stopped unexpectedly: ${firstLine((error as Error).message, 200)}`);

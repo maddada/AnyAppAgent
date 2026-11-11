@@ -76,6 +76,13 @@ export interface ChatItem {
   plan?: PlanEntry[];
   permission?: PermissionInfo;
   build?: BuildInfo;
+  // On a user item (added for the chat on the PC): true while the message waits for the agent's
+  // current turn (and its build) to end; set back to false when the agent gets it.
+  queued?: boolean;
+  // On a user item: true when Stop removed it from the queue, so it never reached the agent.
+  dropped?: boolean;
+  // On a user item: the pictures sent with it (GET /api/apps/:id/images/:imageId serves each one).
+  images?: ChatImage[];
   worker?: WorkerInfo; // on a "worker" row: the worker it stands for (tap opens its chat)
   workerId?: string; // set on the items of a worker's own chat; never on the main chat
   createdAt: string;
@@ -168,8 +175,27 @@ export interface CreateAppRequest {
 // GET /api/apps/:id/messages?afterSeq=<n> -> ChatItem[] ordered by seq
 // POST /api/apps/:id/messages -> 202 (the user's ChatItem arrives over the socket)
 export interface SendMessageRequest {
-  text: string;
+  text: string; // may be "" when images are sent
+  images?: ImageUpload[]; // pictures sent with the message (limits: shared/chat/images.ts)
 }
+
+// A picture as it is sent: already downscaled on the device to at most 1568 px on the long edge.
+export interface ImageUpload {
+  mimeType: string; // image/png, image/jpeg, image/webp or image/gif
+  data: string; // base64, without a data: prefix
+  width?: number;
+  height?: number;
+}
+
+// A picture as the chat shows it.
+export interface ChatImage {
+  id: string;
+  mimeType: string;
+  width?: number;
+  height?: number;
+}
+
+// GET /api/apps/:id/images/:imageId -> the picture's bytes (image/*), for a ChatItem's images
 
 // POST /api/apps/:id/cancel -> 202 (stops the agent's current turn)
 // POST /api/apps/:id/build -> 202 (builds again without a new prompt)

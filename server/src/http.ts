@@ -26,6 +26,8 @@ import { lanAddresses, pairingUri } from "./net.ts";
 import { workerApiRoute, workerToolsRoute } from "./worker-http.ts";
 
 const MAX_BODY = 1024 * 1024;
+/** A message can carry pictures (up to 6, each at most about 5 MB as base64) and long pasted text. */
+const MAX_MESSAGE_BODY = 40 * 1024 * 1024;
 
 export function serverName(): string {
   return hostname();
@@ -41,12 +43,12 @@ function sendError(res: ServerResponse, status: number, error: string): void {
   sendJson(res, status, { error } satisfies ErrorBody);
 }
 
-async function readBody<T>(req: IncomingMessage): Promise<T> {
+async function readBody<T>(req: IncomingMessage, limit = MAX_BODY): Promise<T> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY) throw new HttpError(413, "The request is too large.");
+    if (size > limit) throw new HttpError(413, limit === MAX_BODY ? "The request is too large." : "That message is too big to send. Send fewer or smaller pictures.");
     chunks.push(chunk as Buffer);
   }
   if (size === 0) return {} as T;
@@ -270,6 +272,16 @@ export function startHttpServer(deps: {
       }
       return sendError(res, 405, "Method not allowed.");
     }
+    // A picture sent in the chat: GET /api/apps/:id/images/:imageId
+    const image = /^\/api\/apps\/([^/]+)\/images\/([a-zA-Z0-9-]+)$/.exec(path);
+    if (image && (method === "GET" || method === "HEAD")) {
+      const found = apps.imageFile(decodeURIComponent(image[1]), image[2]);
+      if (!found) return sendError(res, 404, "That picture is not on this PC any more.");
+      res.writeHead(200, { "content-type": found.mimeType, "content-length": statSync(found.path).size, "cache-control": "private, max-age=31536000, immutable" });
+      if (method === "HEAD") return void res.end();
+      createReadStream(found.path).pipe(res);
+      return;
+    }
     if (await workerApiRoute(req, res, path, url, { workers: apps.workers, checkApp: (appId) => void apps.get(appId) })) return;
     const match = /^\/api\/apps\/([^/]+)(?:\/([a-z]+))?$/.exec(path);
     if (!match) return sendError(res, 404, "Not found.");
@@ -310,8 +322,8 @@ export function startHttpServer(deps: {
         return sendJson(res, 200, apps.messages(id, Number.isFinite(afterSeq) ? afterSeq : 0));
       }
       if (method === "POST") {
-        const body = await readBody<SendMessageRequest>(req);
-        apps.sendMessage(id, str(body.text, "text"));
+        const body = await readBody<SendMessageRequest>(req, MAX_MESSAGE_BODY);
+        apps.sendMessage(id, body.text === undefined && body.images?.length ? "" : str(body.text, "text"), Array.isArray(body.images) ? body.images : []);
         return sendJson(res, 202, {});
       }
     } else if (method === "POST" && action === "cancel") {

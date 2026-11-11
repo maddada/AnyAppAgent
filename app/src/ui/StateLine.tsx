@@ -1,11 +1,12 @@
 import { View } from "react-native";
+import type { StateKind } from "@shared/chat/index";
 import { CircleAlert } from "lucide-react-native";
 import { T } from "./Text";
 import { Spinner } from "./Spinner";
 import { icon, size, space, useTheme, type TypeRole } from "./theme";
 
-/** The four states and nothing else (COMPONENTS.md 8; README rule 2). */
-export type StateKind = "working" | "ready" | "problem" | "idle";
+/** The four states and nothing else (COMPONENTS.md 8; README rule 2). Defined in shared/chat/state.ts. */
+export type { StateKind };
 
 export function StateLine({
   kind,
