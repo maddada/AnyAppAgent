@@ -17,6 +17,7 @@ import { useHelperChat, useHelpers } from "./helperStore.ts";
 import { Markdown } from "./Markdown.tsx";
 import { imageFiles, prepare, sentPicture, type Attachment } from "./pictures.ts";
 import { AppIcon, Icon, Spinner, StateLine } from "./ui.tsx";
+import { TodoPanel } from "./Todo.tsx";
 
 const api = window.anyapp;
 /** COMPONENTS.md: tool detail blocks show at most 12 lines until "Show all". */
@@ -52,7 +53,10 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, on
   const helpers = useHelpers(app.id, online);
   // The open helper chat, per app (moving between apps keeps each one's choice for this run).
   const [openHelpers, setOpenHelpers] = useState<Record<string, string | null>>({});
-  const openId = openHelpers[app.id] ?? null;
+  // The to-do list open beside the chat, per app (it and a helper's chat take turns on the side).
+  const [todoOpen, setTodoOpen] = useState<Record<string, boolean>>({});
+  const showTodo = !!todoOpen[app.id];
+  const openId = showTodo ? null : (openHelpers[app.id] ?? null);
   const helper = openId ? helpers.find((w) => w.id === openId) : undefined;
   // How wide the chat area is decides how the two chats share it.
   const area = useRef<HTMLDivElement>(null);
@@ -68,20 +72,34 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, on
   const placement = HELPER_CHAT_PLACEMENT;
   const narrow = width > 0 && width < ROOMY_WIDTH;
   // The window makes room for two chats while one is open beside the main chat (the app list folds).
-  const open = !!helper && placement === "beside";
+  const open = (!!helper && placement === "beside") || showTodo;
   useEffect(() => {
     onHelperOpen?.(open);
   }, [open, onHelperOpen]);
   useEffect(() => () => onHelperOpen?.(false), [onHelperOpen]);
   const panel = useMemo(() => {
-    const set = (workerId: string | null) => setOpenHelpers((m) => ({ ...m, [app.id]: workerId }));
+    const set = (workerId: string | null) => {
+      setOpenHelpers((m) => ({ ...m, [app.id]: workerId }));
+      if (workerId) setTodoOpen((m) => ({ ...m, [app.id]: false }));
+    };
     return { open: (id: string) => set(openId === id && placement === "beside" ? null : id), close: () => set(null), selected: openId };
   }, [openId, app.id, placement]);
-  const side = helper ? <HelperChatView app={app} worker={helper} online={online} placement={placement} onClose={panel.close} /> : null;
+  const toggleTodo = () => setTodoOpen((m) => ({ ...m, [app.id]: !m[app.id] }));
+  const todoButton = (
+    <button className={`btn btn-quiet btn-sm todo-toggle${showTodo ? " is-on" : ""}`} data-testid="todo-toggle" aria-pressed={showTodo} onClick={toggleTodo}>
+      <Icon of={ListTodo} px={14} /> To-do
+      {app.openTodos ? <span className="todo-count" data-testid="todo-count">{app.openTodos}</span> : null}
+    </button>
+  );
+  const side = showTodo ? (
+    <TodoPanel app={app} online={online} onClose={toggleTodo} />
+  ) : helper ? (
+    <HelperChatView app={app} worker={helper} online={online} placement={placement} onClose={panel.close} />
+  ) : null;
   return (
     <HelperPanel.Provider value={panel}>
       <div ref={area} className={side ? `chat-split chat-split-${placement}${narrow ? " is-narrow" : ""}` : "chat-single"}>
-        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={headerExtra} hex={hex} onSetupHex={onSetupHex} />}
+        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={<>{todoButton}{headerExtra}</>} hex={hex} onSetupHex={onSetupHex} />}
         {side}
       </div>
     </HelperPanel.Provider>

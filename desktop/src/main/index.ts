@@ -140,6 +140,7 @@ async function connectAdmin(): Promise<void> {
     client.on("chat", (item: ChatItem) => win?.webContents.send("chat:item", item));
     client.on("helper", (worker: WorkerInfo) => win?.webContents.send("helper:updated", worker));
     client.on("helper-item", (item: ChatItem) => win?.webContents.send("helper:item", item));
+    client.on("todos", (appId: string, todos: unknown) => win?.webContents.send("todos:updated", appId, todos));
     await client.connect();
     companion.markRunning(client.adminRoutes);
     log(`[desktop] companion answering; admin routes: ${client.adminRoutes ? "yes" : "no (fallback)"}`);
@@ -667,6 +668,14 @@ function ipc(): void {
   ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
     chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
   );
+  // The to-do list (an older companion has no such route: an empty list).
+  ipcMain.handle("todos:list", (_e, appId: string) => admin?.todos(String(appId)).catch(() => []) ?? []);
+  ipcMain.handle("todos:add", (_e, appId: string, text: string) => chatAction((c) => c.addTodo(String(appId), String(text)))());
+  ipcMain.handle("todos:done", (_e, appId: string, todoId: string, done: boolean) =>
+    chatAction((c) => c.updateTodo(String(appId), String(todoId), { done: Boolean(done) }))(),
+  );
+  ipcMain.handle("todos:remove", (_e, appId: string, todoId: string) => chatAction((c) => c.removeTodo(String(appId), String(todoId)))());
+  ipcMain.handle("todos:send", (_e, appId: string, todoId: string) => chatAction((c) => c.sendTodo(String(appId), String(todoId)))());
   ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string) =>
     // Only a known preset passes; anything else is the default (React Native).
     chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" || preset === "expo-exact" ? preset : undefined))(),

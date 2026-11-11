@@ -32,8 +32,8 @@ Other people's phones (only what you publish)
 
 | # | Stage | Folders | Status |
 | - | ----- | ------- | ------ |
-| 1 | Per-app signing keys, moving existing apps by key rotation, an encrypted backup the user can restore | `builder/`, `server/`, `desktop/`, `shared/protocol.ts`, `template-kotlin/.gitignore` | Built and proven (below) |
-| 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `builder/` (README writer) | Planned |
+| 1 | Per-app signing keys, moving existing apps by key rotation, an encrypted backup the user can restore | `builder/`, `server/`, `desktop/`, `shared/protocol.ts`, `template-kotlin/.gitignore` | Built, proven, in main |
+| 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `shared/protocol.ts` | Built and proven ("Stage 2 proof") |
 | 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Planned |
 | 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `template-exact/` (if its native modules allow it), `builder/` | Planned |
 | 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/`, `shared/protocol.ts` | Planned |
@@ -146,8 +146,29 @@ So sharing makes a second repo:
   the whole history), not part of the first release.
 - Turning sharing off makes the releases repo private: friends then stop getting updates (their
   copy keeps working), and the chat says so.
-- The repo name pattern stays strict (`REPO_NAME_PATTERN` gains `-releases`), and the server never
-  deletes a repo.
+- The repo name pattern stays strict: `server/src/github.ts` only ever creates, changes the
+  visibility of, or writes to repos named `anyapp-<slug>-releases`, and the server never deletes a
+  repo.
+
+### As built (stage 2)
+
+- `POST /api/apps/:id/share {"shared": true|false}` (admin token or a paired phone) -> the `App`,
+  with `sharing` (`releasesRepoUrl`, `installUrl`, `feedUrl`, `since`) and `signing`.
+- Order on the first share: secrets scan of the README text (refused with 400 before any GitHub
+  call), the `gh` account, the private code repo (made now if GitHub failed when the app was
+  created), the key move if the app still uses the shared key (then a plain build, no agent turn,
+  so the owner's phone gets the build with the app's own key), the public releases repo, then its
+  `README.md` and `icon.png` through the contents API. GitHub errors come back as 502 with one
+  plain line.
+- The README holds only the app's name, its icon and the install steps (`server/src/sharing.ts`
+  `releasesReadme`); stage 3 rewrites it with the latest version.
+- Off: the releases repo becomes private (`gh repo edit --visibility private`); the links are kept,
+  so turning it on again makes the same repo public and touches nothing else.
+- The secrets scanner (`server/src/secrets.ts`) knows Anthropic, OpenRouter, OpenAI, GitHub, AWS,
+  Google, Slack and Stripe keys and private key blocks, and reports kind and place, never the key.
+  Stage 3 also runs it over everything inside an APK and the release notes before upload.
+- Publishing (stage 3) will refuse an APK whose signer is not the app's current key (a build made
+  before the key move), and build again instead.
 
 ## 3. The release format (stage 3)
 
@@ -250,6 +271,30 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
 | Play Protect, Google's developer verification (four countries since 2026-09-30, global in 2027) | Out of scope for these stages; needs its own look before 2027 (advanced flow, or a free limited-distribution account). |
 | A bad update reaches everyone | Testing channel, publishing only builds the owner already ran, Pull back. |
 | Rate limits | `releases/latest/download/update.json`, not the API; at most every 6 hours plus once a day. |
+
+## Stage 2 proof
+
+2026-11-11, my own companion (port 8797, state `C:\aa\t\dist-state2`, key folder
+`C:\aa\t\dist-home`, helpers off so a build never starts an agent), the `gh` account signed in on
+this PC, a throwaway Kotlin app "Dist Share Test" (`com.anyapp.disttestshare`, its key folder
+removed so it looks like an app made before per-app keys) and a second record whose name holds a
+fake Anthropic key. Repos created: `anyapp-disttest-share` (private) and
+`anyapp-disttest-share-releases` (public). Nothing else was created or changed on GitHub.
+
+| Step | Result |
+| ---- | ------ |
+| Build 1 | Shared key, as every app made before per-app keys |
+| Share | `signing: moved`, private code repo made and pushed, releases repo public, build 2 started by itself |
+| The code repo | `PRIVATE`, all the app's files; an anonymous request gets 404 |
+| The releases repo | `PUBLIC`, only `README.md` and `icon.png`; the README has the name, icon and install link |
+| Build 2 | Signed with the app's own key (moved); on the emulator it installed over build 1 with past signatures = shared, own |
+| Share the app whose name holds an API key | 400 "Not shared: found what looks like a secret (Anthropic API key in README.md)...", and no `anyapp-disttest-leak*` repo exists |
+| Share off | Releases repo `PRIVATE`, anonymous 404 |
+| Share on again | Same repo `PUBLIC` again, same `since`, README not rewritten (still 2 commits) |
+
+Tests: `server` 58 (7 new in `test/sharing.test.ts`: call order, no key move for an own-key app,
+reuse of a private releases repo, refusal before any GitHub call, GitHub errors as one plain 502
+line, unshare, the scanner) and `tsc` pass.
 
 ## Stage 1 proof
 

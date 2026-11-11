@@ -186,3 +186,28 @@ private repos with a "Share with others" switch that makes a public releases-onl
 signing key per app. The plan, the stages and their proofs: `docs/DISTRIBUTION.md`. Since stage 1,
 new apps are signed with their own key (`%USERPROFILE%\.anyappagent\keystore\apps\<package id>`);
 apps made before keep the shared key until they are moved by key rotation.
+
+## Apps that know each other (added 2026-11-11)
+
+The user: "We need an AnyAppAgent CLI that we install on the machine ... list all of the apps, and
+then, for each app, ... list the specifications of that app ... an MD file in the root of the
+directory, not a GitHub README. We call it, for example, overview.md ... It needs to be updated
+after each prompt the user gives ... Just giving them access to the code is enough for most cases."
+
+- **`overview.md`** in the root of every app folder: the app's main requirements from the person,
+  high level and short. The PC writes a draft from the first message when the app is made (its
+  first line marks it as a draft); the app's main chat replaces it on its first turn and updates
+  it after every message that changes what the app should do. Helpers read it and leave it alone.
+  It is committed with the app (the main chat's notes are saved after each of its turns, in the
+  landing slot). While an app has no overview of the agent's own, each prompt carries a hidden note
+  asking for one, so older apps get theirs on their next turn; `server/scripts/backfill-overviews.mjs`
+  can write drafts from the chat history for all of them at once.
+- **The `anyapp` command** (`server/src/apps-cli.ts`): `anyapp apps`, `anyapp overview <app>`,
+  `anyapp path <app>`. The companion installs it in `<state>/bin` at start (so the desktop app
+  installs it by running the companion) and every Claude Code session it starts has it on PATH. It
+  reads the state folder and the app folders directly instead of calling the companion: the only
+  HTTP token that could list apps is the admin token, which must never be in an agent's
+  environment, and files need no running companion. A dev companion's launchers read its own state
+  folder. Other apps are read only (playbook rule; the command itself never writes).
+- **Reuse**: the playbooks tell the main chat to check the person's other apps before a new app or
+  feature and point the helper at what to reuse, and tell helpers to read and copy that code.

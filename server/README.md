@@ -43,6 +43,8 @@ npm run typecheck
 npm run e2e          # real Claude Code session + fake builder, GitHub off, temp dirs, port 8797
 node scripts/admin-check.mjs          # the desktop app's admin contract (port 8796)
 node scripts/easy-connect-check.mjs   # Easy Connect through the public relay (port 8795)
+node scripts/apps-cli-e2e.mjs         # overview.md and `anyapp`: two apps, real Claude Code (port 8811)
+node scripts/backfill-overviews.mjs   # one-time draft overview.md for older apps (--state-dir, --write)
 ```
 
 ## Layout
@@ -55,5 +57,10 @@ node scripts/easy-connect-check.mjs   # Easy Connect through the public relay (p
   allow-list). `easy-connect/`: the phone bridge copied from Ghostex, the Android build script, the
   Kotlin files for the phone app. Design and phone contract: `../docs/EASY-CONNECT.md`.
 - `src/playbook.ts` – the instructions every app session gets.
+- `src/apps-cli.ts` and `bin/anyapp.mjs` – the `anyapp` command the apps' agents use to see the
+  person's other apps (`anyapp apps`, `anyapp overview <app>`, `anyapp path <app>`). The companion
+  writes `anyapp` and `anyapp.cmd` launchers into `<state>/bin` at start and puts that folder first
+  on every agent session's PATH, with `ANYAPP_CLI_STATE_DIR` and `ANYAPP_CLI_APP`. It reads
+  `apps.json` and the app folders directly: no token in the agents' environment, read only.
 - `src/http.ts` – routes and WebSocket; `src/auth.ts` – pairing and tokens; `src/store.ts` – JSON
   persistence; `src/builder.ts` – the adapter to `builder/`; `src/fake-builder.ts` – the fake.

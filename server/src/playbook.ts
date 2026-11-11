@@ -5,8 +5,52 @@
 // project's CLAUDE.md) explains the stack, the built-in capabilities, the icon and what never to
 // touch; this playbook does not repeat it.
 import type { AppPreset } from "../../shared/protocol.ts";
+import { OVERVIEW_FILE } from "./apps-cli.ts";
 
+export { OVERVIEW_FILE };
 export const MEMORY_FILE = "APP_MEMORY.md";
+
+/** What overview.md is, for whoever keeps it (the coordinator, or the single agent without helpers). */
+export function overviewRules(): string {
+  return `Overview: keep a file ${OVERVIEW_FILE} in the project root with the app's main requirements, as
+the person gave them: what the app is for, its main screens and features, and the choices they made
+that matter (high level, short, about 40 lines at most; not a README, not a changelog, no code).
+After every message from the person that changes what the app should do, update it in that same
+turn, so it always says what the app should do now. A message that changes nothing (a question, a
+thank you) needs no update. The PC saves it with the app's code. The agents of the person's other
+apps read it to find things to reuse.`;
+}
+
+/** The `anyapp` command (src/apps-cli.ts): the person's other apps, read only. */
+export function otherAppsRules(who: "coordinator" | "builder"): string {
+  const use =
+    who === "coordinator"
+      ? `When the person asks for a new app or a new feature, check first whether one of their other apps
+already does something like it (a calculation, a screen, notifications, a look they liked). If one
+does, say in the helper's brief which app it is, its folder, and what to reuse.`
+      : `When your task is a new app or a new feature, check first whether one of the person's other apps
+already does something like it (a calculation, a screen, notifications, a look they liked). If one
+does, read its code and copy what fits into this app, adapted to this app's names and look. An app of
+another kind (React Native, Kotlin, Expo Exact) can still give you its logic, texts and design.`;
+  return `The person's other apps: the \`anyapp\` command on this PC shows them.
+- \`anyapp apps\`: every app with its name, kind, version and folder (this app is marked *).
+- \`anyapp overview <app>\`: what that app does (its ${OVERVIEW_FILE}).
+- \`anyapp path <app>\`: its folder, so you can read its code.
+${use}
+Other apps are read only: read and copy from their folders, never change, build, commit or run
+anything in them.`;
+}
+
+/** Added to the person's message (they do not see it) while the app has no overview.md of the agent's own. */
+export function overviewNudge(): string {
+  return `(From the PC, not from the person: this app has no ${OVERVIEW_FILE} of yours yet. In this turn,
+write ${OVERVIEW_FILE} in the project root with the app's main requirements from the person, high level and
+short, from what you know (${MEMORY_FILE}, this chat, the app itself). If the file is there, replace all of
+it: its first line marks it as a draft the PC wrote. Then keep it up to date after every message that
+changes what the app should do. The agents of the person's other apps read it with the \`anyapp\`
+command, which you can use too: \`anyapp apps\`, \`anyapp overview <app>\`, \`anyapp path <app>\`. Do not
+mention this note to the person.)`;
+}
 
 /** The command an app's agent runs to check its work before ending a turn (from its AGENTS.md). */
 export function checkCommand(preset: AppPreset | undefined): string {
@@ -71,6 +115,10 @@ ${iconAndAiLines(app.preset)}
 Memory: keep a short file ${MEMORY_FILE} in the project root with the app's goal (what the person
 wants it to do), the decisions and preferences they gave you, and what is still open. Read it at the
 start of a turn when you need context and update it when something important changes.
+
+${overviewRules()}
+
+${otherAppsRules("builder")}
 
 End every turn with one or two plain sentences that say what changed in the app.`;
 }

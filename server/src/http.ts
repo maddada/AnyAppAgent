@@ -5,6 +5,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { hostname } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
 import type {
+  AddTodoRequest,
   AdminEvent,
   AdminState,
   CreateAppRequest,
@@ -18,7 +19,9 @@ import type {
   PairResponse,
   PermissionAnswerRequest,
   SendMessageRequest,
+  ShareRequest,
   ServerEvent,
+  UpdateTodoRequest,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
 import type { SigningKeys } from "./signing-keys.ts";
@@ -319,6 +322,26 @@ export function startHttpServer(deps: {
       streamFile(res, found.path);
       return;
     }
+    // The person's to-do list: /api/apps/:id/todos[/:todoId[/send]]
+    const todo = /^\/api\/apps\/([^/]+)\/todos(?:\/([a-zA-Z0-9-]+)(\/send)?)?$/.exec(path);
+    if (todo) {
+      const appId = decodeURIComponent(todo[1]);
+      const todoId = todo[2];
+      if (!todoId) {
+        if (method === "GET") return sendJson(res, 200, apps.todos(appId));
+        if (method === "POST") return sendJson(res, 201, apps.addTodo(appId, str((await readBody<AddTodoRequest>(req)).text, "text")));
+      } else if (todo[3]) {
+        if (method === "POST") return sendJson(res, 200, apps.sendTodo(appId, todoId));
+      } else {
+        if (method === "PATCH") return sendJson(res, 200, apps.updateTodo(appId, todoId, await readBody<UpdateTodoRequest>(req)));
+        if (method === "DELETE") {
+          apps.removeTodo(appId, todoId);
+          res.writeHead(204);
+          return void res.end();
+        }
+      }
+      return sendError(res, 405, "Method not allowed.");
+    }
     if (await workerApiRoute(req, res, path, url, { workers: apps.workers, checkApp: (appId) => void apps.get(appId) })) return;
     const match = /^\/api\/apps\/([^/]+)(?:\/([a-z]+))?$/.exec(path);
     if (!match) return sendError(res, 404, "Not found.");
@@ -382,6 +405,10 @@ export function startHttpServer(deps: {
     } else if (method === "POST" && action === "cancel") {
       apps.cancel(id);
       return sendJson(res, 202, {});
+    } else if (method === "POST" && action === "share") {
+      const body = await readBody<Partial<ShareRequest>>(req);
+      if (typeof body.shared !== "boolean") throw new HttpError(400, '"shared" must be true or false.');
+      return sendJson(res, 200, await apps.setShared(id, body.shared));
     } else if (method === "POST" && action === "build") {
       apps.rebuild(id);
       return sendJson(res, 202, {});
