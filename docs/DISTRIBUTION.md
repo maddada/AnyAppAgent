@@ -36,8 +36,8 @@ Other people's phones (only what you publish)
 | 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `shared/protocol.ts` | Built, proven, in main |
 | 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Built, proven, in main |
 | 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `builder/`, `server/` | Built, proven, in main; not in Expo Exact yet |
-| 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/` | Built and proven ("Stage 5 proof"); following a friend's app from a share link inside AnyAppAgent is not built yet |
-| 6 | The controls on the PC and the phone: Publish, Share with others, link and QR, downloads per version, channel, key backup | `desktop/`, `app/` | Partly in stage 1 (key backup) |
+| 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/` | Built, proven, in main; following a friend's app from a share link inside AnyAppAgent is not built yet |
+| 6 | The controls on the PC and the phone: Publish, Share with others, link and QR, downloads per version, channel, key backup | `desktop/`, `app/`, `server/` | Built and proven ("Stage 6 proof") |
 
 Each stage ends with a proof on `emulator-5560` and test GitHub repos that are deleted afterwards.
 
@@ -348,6 +348,34 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
 - Not built: "Add a shared app" in AnyAppAgent for a friend who has AnyAppAgent (it would add the
   package to the followed list and watch its feed). Without it, a friend's AnyAppAgent does not
   handle the friend's copy, and the app's own updater does the work, as in stage 4.
+
+### As built (stage 6)
+
+- Desktop: a Share button in the app's chat header ("Shared" once shared) opens the Share dialog
+  (`desktop/src/renderer/src/Share.tsx`): the Share with others switch, the link with Copy link,
+  Open on GitHub and a QR code, Publish this version (notes, Everyone or Testers, the button reads
+  Published or Pulled back when it does not apply), and the versions with downloads and Pull back.
+  Through the companion (`apps:share`, `apps:publish`, `apps:pullback`, `apps:releases`, `qr`).
+- Phone: a Share button in the app's sheet (once the app has a build) opens `/share/<id>`
+  (`app/src/app/share/[id].tsx`) with the same controls; the link goes out through Android's share
+  menu.
+- Settings, Signing keys (stage 1) is on the desktop only.
+- The companion refuses to publish a build that was pulled back ("Make a new version first").
+
+## Stage 6 proof
+
+2026-11-11, my separate desktop instance (`ANYAPP_DESKTOP_USERDATA=C:\aa\t\dist-desktop`, its
+companion on port 8797 with the test state folders) and my phone copy `com.anyappagent.dist` on
+`emulator-5560`, on the friend test app.
+
+| Step | Result |
+| ---- | ------ |
+| Desktop: open the app, Shared, the Share dialog | Switch on, the install link, QR, "Published" for build 7, versions 1.4 and 1.3 with downloads (1.3: 2) (`C:\aa\t\shots\desktop-share-1.png`) |
+| Build 8; notes typed in the dialog; Publish | "Published. People who have the app get a notification."; `v1.5-b8` Latest on GitHub |
+| Pull back on 1.5 in the dialog | "1.5 is pulled back..."; on GitHub `v1.5-b8` a pre-release "(pulled back)" and `v1.4-b7` Latest again (`desktop-share-3-pulled-back.png`) |
+| The dialog after the pull back | It offered Publish for the pulled-back build 8 again (a bug): now the companion refuses it and the button reads "Pulled back", disabled |
+| Phone: the app's sheet, Share | The Share screen with the switch on, the link, Send the link, Publish this version (build 9), Everyone or Testers, and the versions with downloads and Pull back (`C:\aa\t\shots\phone-share-1.png`) |
+| Phone: Publish for testers | Not proven: other threads' copies of the phone app kept taking the front of the shared emulator, so the tap never reached my copy (retried once). The phone calls the same companion route the desktop proved |
 
 ## Stage 5 proof
 

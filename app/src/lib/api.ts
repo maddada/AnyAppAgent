@@ -10,6 +10,8 @@ import type {
   PairRequest,
   PairResponse,
   PermissionAnswerRequest,
+  PublishRequest,
+  ReleaseStats,
   SendMessageRequest,
   TodoItem,
 } from "./protocol";
@@ -130,6 +132,16 @@ export class Client {
   /** Sends the item's text to the app's chat as a message, then ticks it off. */
   sendTodo = (id: string, todoId: string) =>
     this.call<TodoItem>(`/api/apps/${encodeURIComponent(id)}/todos/${encodeURIComponent(todoId)}/send`, "POST", {});
+
+  // Sharing an app with other people and publishing versions (docs/DISTRIBUTION.md). GitHub
+  // calls on the PC: they can take minutes (a publish uploads the APKs).
+  share = (id: string, shared: boolean) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/share`, { method: "POST", body: { shared }, token: this.token, timeoutMs: 300000 });
+  publish = (id: string, body: PublishRequest) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/publish`, { method: "POST", body, token: this.token, timeoutMs: 1800000 });
+  pullBack = (id: string, build: number) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/pullback`, { method: "POST", body: { build }, token: this.token, timeoutMs: 300000 });
+  releases = (id: string) => request<ReleaseStats[]>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/releases`, { token: this.token, timeoutMs: 60000 });
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;

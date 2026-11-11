@@ -78,6 +78,9 @@ export async function publishVersion(app: App, build: BuildInfo | undefined, req
   if (!build || build.status !== "succeeded" || deps.apks.length === 0) throw new HttpError(409, "This app has no finished version to publish yet.");
   const channel = req.channel === "testing" ? "testing" : "stable";
   const releases = app.sharing.releases ?? [];
+  if (releases.some((r) => r.build === build.number && r.pulledBack)) {
+    throw new HttpError(409, `This version (build ${build.number}) was pulled back. Make a new version first, then publish that.`);
+  }
   if (releases.some((r) => r.build === build.number && r.channel === channel && !r.pulledBack)) {
     throw new HttpError(409, `This version (build ${build.number}) is already published${channel === "testing" ? " for testing" : ""}.`);
   }
