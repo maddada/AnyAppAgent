@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, TodoItem, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, PublishRequest, ReleaseStats, ServerEvent, TodoItem, WorkerInfo } from "../../shared/protocol.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import type { PromptImage } from "./acp/claude-session.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
@@ -17,6 +17,8 @@ import { nowIso } from "./fs-util.ts";
 import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
 import { realGithub, shareApp, unshareApp, type GithubApi } from "./sharing.ts";
+import * as githubCli from "./github.ts";
+import { publishVersion, pullBack, StaleSignerError, parseUpdateJson, repoOf, type ApkFile, type ReleaseApi } from "./publish.ts";
 import { appPlaybook, buildFixPrompt } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
 import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
@@ -25,13 +27,8 @@ import { WorkerManager, type BuildChangeOutcome } from "./workers.ts";
 import { cleanTodoText, TodoLists } from "./todos.ts";
 import { isJsonObject } from "./acp/acp-client.ts";
 
-export class HttpError extends Error {
-  readonly status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+export { HttpError } from "./http-error.ts";
+import { HttpError } from "./http-error.ts";
 
 // itemId: the user's chat item for a prompt the user sent, marked `queued` while it waits.
 // A report carries finished helpers' reports to the coordinator (never dropped by Stop).
@@ -574,6 +571,111 @@ export class AppManager {
     }
   }
 
+  /**
+   * Publishes the newest build of a shared app as a GitHub release (docs/DISTRIBUTION.md, stage 3).
+   * A build signed before the app got its own key is built again instead (409).
+   */
+  async publish(id: string, req: PublishRequest): Promise<App> {
+    const record = this.record(id);
+    if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
+    if (this.sharingBusy.has(id)) throw new HttpError(409, "This app is already being published or shared.");
+    this.sharingBusy.add(id);
+    try {
+      const build = record.app.latestApk;
+      const apks: ApkFile[] = [];
+      if (build?.sha256) {
+        const dir = this.store.apkDir(id);
+        const full = join(dir, apkFileName(build.number));
+        if (existsSync(full)) apks.push({ abi: "universal", path: full, size: statSync(full).size, sha256: build.sha256 });
+        for (const v of build.variants ?? []) {
+          const path = join(dir, apkFileName(build.number, v.abi));
+          if (existsSync(path)) apks.push({ abi: v.abi, path, size: v.sizeBytes, sha256: v.sha256 });
+        }
+      }
+      try {
+        const releases = await publishVersion(record.app, build, req, {
+          github: this.releaseApi,
+          apks,
+          currentSigner: () => this.currentSigner(record),
+          notesBetween: (after, upTo) => this.buildSummaries(record, after, upTo),
+          log: this.log,
+        });
+        record.app.sharing = { ...record.app.sharing!, releases };
+        this.touch(record);
+        return record.app;
+      } catch (error) {
+        if (error instanceof StaleSignerError) this.enqueue(record, { kind: "build" });
+        throw error;
+      }
+    } finally {
+      this.sharingBusy.delete(id);
+    }
+  }
+
+  /** Certificate SHA-256 of the key that signs this app's builds now (null with the fake builder). */
+  private async currentSigner(record: AppRecord): Promise<string | null> {
+    if (!this.builder.keys) return null;
+    const listed = await this.builder.keys.list();
+    const kind = this.builder.keys.kind(record.app.packageName);
+    return listed.keys.find((k) => k.id === (kind === "shared" ? "shared" : record.app.packageName))?.certSha256 ?? null;
+  }
+
+  /** Stops offering a published stable version (docs/DISTRIBUTION.md, "Pull back"). */
+  async pullBack(id: string, buildNumber: number): Promise<App> {
+    const record = this.record(id);
+    if (this.sharingBusy.has(id)) throw new HttpError(409, "This app is already being published or shared.");
+    this.sharingBusy.add(id);
+    try {
+      const releases = await pullBack(record.app, buildNumber, {
+        github: this.releaseApi,
+        readUpdateJson: async (full, tag) => parseUpdateJson(await githubCli.downloadAsset(full, tag, "update.json")),
+        writeAsset: (full, tag, name, content) => githubCli.writeAsset(full, tag, name, content),
+        log: this.log,
+      });
+      record.app.sharing = { ...record.app.sharing!, releases };
+      this.touch(record);
+      return record.app;
+    } finally {
+      this.sharingBusy.delete(id);
+    }
+  }
+
+  /** Downloads per published version, from GitHub. */
+  async releaseStats(id: string): Promise<ReleaseStats[]> {
+    const record = this.record(id);
+    if (!record.app.sharing) return [];
+    try {
+      const list = await githubCli.listReleases(repoOf(record.app));
+      return list.map((r) => ({ tag: r.tag, downloads: r.assets.filter((a) => a.name.endsWith(".apk")).reduce((n, a) => n + a.downloads, 0) }));
+    } catch (error) {
+      throw new HttpError(502, `GitHub is not reachable: ${(error as Error).message.split(/\r?\n/)[0].slice(0, 160)}`);
+    }
+  }
+
+  private get releaseApi(): ReleaseApi {
+    return {
+      createRelease: githubCli.createRelease,
+      uploadAssets: githubCli.uploadAssets,
+      editRelease: githubCli.editRelease,
+      releaseExists: githubCli.releaseExists,
+      putFile: (full, path, content, message) => this.github.putFile(full, path, content, message),
+    };
+  }
+
+  /** "Build 5: add a dark mode" commit summaries for the builds after `after` up to `upTo`. */
+  private async buildSummaries(record: AppRecord, after: number, upTo: number): Promise<string> {
+    const log = await git.run("git", ["log", "--format=%s", "-n", "200"], record.dir);
+    if (log.code !== 0) return "";
+    const lines: string[] = [];
+    for (const subject of log.stdout.split(/\r?\n/)) {
+      const m = /^Build (\d+): (.+)$/.exec(subject.trim());
+      if (!m) continue;
+      const n = Number(m[1]);
+      if (n > after && n <= upTo && !lines.includes(m[2])) lines.push(m[2]);
+    }
+    return lines.reverse().map((l) => `- ${l}`).join("\n");
+  }
+
   /** The app's private code repo: made now if GitHub failed when the app was created. */
   private async ensureCodeRepo(record: AppRecord): Promise<void> {
     if (record.app.repoUrl) return;
@@ -954,6 +1056,7 @@ export class AppManager {
         finishedAt: nowIso(),
         sizeBytes: statSync(target).size,
         sha256: result.sha256,
+        ...(result.signing?.certSha256 ? { signerSha256: result.signing.certSha256 } : {}),
         ...(variants.length > 0 ? { variants } : {}),
       };
       app.latestBuild = build;

@@ -33,8 +33,8 @@ Other people's phones (only what you publish)
 | # | Stage | Folders | Status |
 | - | ----- | ------- | ------ |
 | 1 | Per-app signing keys, moving existing apps by key rotation, an encrypted backup the user can restore | `builder/`, `server/`, `desktop/`, `shared/protocol.ts`, `template-kotlin/.gitignore` | Built, proven, in main |
-| 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `shared/protocol.ts` | Built and proven ("Stage 2 proof") |
-| 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Planned |
+| 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `shared/protocol.ts` | Built, proven, in main |
+| 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Built and proven ("Stage 3 proof") |
 | 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `template-exact/` (if its native modules allow it), `builder/` | Planned |
 | 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/`, `shared/protocol.ts` | Planned |
 | 6 | The controls on the PC and the phone: Publish, Share with others, link and QR, downloads per version, channel, key backup | `desktop/`, `app/` | Partly in stage 1 (key backup) |
@@ -208,8 +208,14 @@ parses it), made from the APKs the PC already built and the owner already ran (n
   first supported ABI, else `universal`, and checks its size and SHA-256 before installing.
 - `signer` lets the app refuse a download signed by another key before Android does, with a clear
   message instead of a failed install.
-- Testing channel: a GitHub pre-release with `update-testing.json`; the updater reads it only when
-  the person switched the app to Testing. `releases/latest` never returns a pre-release.
+- Testing channel: one GitHub pre-release with the fixed tag `testing`, whose files are replaced
+  at each Testing publish, so its feed never moves:
+  `https://github.com/<owner>/anyapp-<slug>-releases/releases/download/testing/update-testing.json`.
+  The updater reads it (as well as the stable feed, taking the higher build) only when the person
+  switched the app to Testing. `releases/latest` never returns a pre-release.
+- APK addresses are relative to the feed: an updater replaces `update.json` in the feed address
+  with the APK's `name`, so a stable feed points at the latest release's files and the Testing feed
+  at the `testing` release's.
 - `blocked`: builds pulled back, so an updater that has not installed one yet skips it. Android
   never installs a lower `versionCode`, so "Pull back" also rebuilds the older commit with a new,
   higher build number and publishes that.
@@ -271,6 +277,47 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
 | Play Protect, Google's developer verification (four countries since 2026-09-30, global in 2027) | Out of scope for these stages; needs its own look before 2027 (advanced flow, or a free limited-distribution account). |
 | A bad update reaches everyone | Testing channel, publishing only builds the owner already ran, Pull back. |
 | Rate limits | `releases/latest/download/update.json`, not the API; at most every 6 hours plus once a day. |
+
+### As built (stage 3)
+
+- `POST /api/apps/:id/publish {notes?, channel?}` publishes the newest build (no rebuild). Version
+  names count stable releases: `1.0`, `1.1`, ...; Testing: `1.<n>-test.<build>`. Stable tags are
+  `v<version>-b<build>`. Default notes: the summaries of the builds since the last stable version
+  (the "Build N: ..." commit subjects).
+- Refused with 409: not shared, no finished build, the build already published, an older build
+  than the latest stable one, or a build signed by a key the app no longer uses (a build made
+  before its key moved, or before builds recorded their signer): that one is built again by
+  itself. Refused with 400 before any upload: anything that looks like a secret inside the APK
+  (every code, script, config and resource file is read, `server/src/apk-scan.ts`) or in the notes.
+- A stable publish also rewrites the public README with the version.
+- `POST /api/apps/:id/pullback {build}`: the version becomes a pre-release titled "(pulled back)",
+  the stable version before it becomes the latest again and its `update.json` gets the build in
+  `blocked`; without one, the README says no version is published.
+- `GET /api/apps/:id/releases`: downloads of the APK files per release (GitHub counts downloads,
+  and updates the counts some minutes later).
+- GitHub's public download addresses lag behind changes by a few minutes: right after a publish
+  `releases/latest` can still point at the version before, and a replaced file (the `update.json`
+  of a pull back) can still be served as it was for several minutes. With checks at most every 6
+  hours that only delays an update; the API (`gh release download`) shows the change at once.
+
+## Stage 3 proof
+
+2026-11-11, the same companion setup as stage 2, on `anyapp-disttest-share-releases`.
+
+| Step | Result |
+| ---- | ------ |
+| Publish build 2 (made before builds recorded their signer) | 409 "This version was made before the app got its own key. It is being built again...", and build 3 built by itself |
+| Publish build 3 | Release `v1.0-b3` "Dist Share Test 1.0", Latest, files `disttest-share.apk` and `update.json` |
+| `releases/latest/download/update.json`, anonymous | 302, 302, 200, no `X-RateLimit` headers (not the API); build 3, the APK's size and sha256, the signer |
+| The README link `.../latest/download/disttest-share.apk` | 200, 941,605 bytes, sha256 equal to `update.json` |
+| A fake GitHub token in the app's code, shrunk away by R8 (only `ghp_` left) | Published (`v1.1-b4`): nothing secret was in the APK |
+| The whole token used by the code, build 5 | 400 "Not published: found what looks like a secret (GitHub token in classes.dex)"; no release made |
+| Testing publish of build 6 | Pre-release `testing` "1.2-test.6 (testing)"; `update-testing.json` build 6; the stable feed still build 4 |
+| Stable publish of build 6, then Pull back | `v1.2-b6` became Latest, then a pre-release "(pulled back)"; `releases/latest` points at `v1.1-b4` again, whose `update.json` lists `blocked: [6]` (through the API at once, the public address some minutes later) |
+| Every APK of the user's own apps in `C:\aa\apps` (read only) | No secret found (after narrowing the OpenAI pattern, which first matched words such as `sk-removeDuplicates` in a bundle) |
+
+Tests: `server` 66 (8 new in `test/publish.test.ts`: the zip reader and scanner, the stable and
+Testing releases and their `update.json`, every refusal, the stale signer, pull back) and `tsc` pass.
 
 ## Stage 2 proof
 

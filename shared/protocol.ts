@@ -16,6 +16,7 @@ export interface BuildInfo {
   finishedAt?: string;
   sizeBytes?: number; // set when succeeded
   sha256?: string; // set when succeeded
+  signerSha256?: string; // certificate SHA-256 of the key that signed it (docs/DISTRIBUTION.md); absent from older PCs
   error?: string; // short, human readable, set when failed
   // Added for smaller downloads: the same build as one APK per phone processor type (ABI), each
   // much smaller than the full APK (sizeBytes/sha256 above), which holds every ABI. Set when
@@ -68,6 +69,36 @@ export interface AppSharing {
   installUrl: string; // the latest full APK, for a link or a QR (404 until a version is published)
   feedUrl: string; // the update.json the app's own updater reads
   since: string; // when it was first shared
+  releases?: PublishedRelease[]; // newest first; absent until a version is published
+}
+
+// One published version (docs/DISTRIBUTION.md, "The release format").
+export interface PublishedRelease {
+  version: string; // "1.4" (Testing: "1.4-test.37")
+  build: number; // the APK's versionCode
+  channel: "stable" | "testing";
+  tag: string; // the GitHub release tag: "v1.4-b37", or "testing" for the Testing channel
+  url: string; // the release page on GitHub
+  notes: string;
+  publishedAt: string;
+  pulledBack?: boolean; // stable only: no longer offered (Pull back)
+}
+// POST /api/apps/:id/publish PublishRequest -> App (publishes the newest build; 409 when the app is
+// not shared or has no build, 409 + a new build when the newest build was signed by another key,
+// 400 when the APK or the notes hold something that looks like a secret)
+export interface PublishRequest {
+  notes?: string; // default: the summaries of the builds since the last published one
+  channel?: "stable" | "testing"; // default stable
+}
+// POST /api/apps/:id/pullback PullBackRequest -> App (stable only: the version is no longer offered;
+// the version before it becomes the latest again, and update.json lists the build as blocked)
+export interface PullBackRequest {
+  build: number;
+}
+// GET /api/apps/:id/releases -> ReleaseStats[] (from GitHub: downloads per version)
+export interface ReleaseStats {
+  tag: string;
+  downloads: number; // GitHub counts downloads of the APK files, not people
 }
 // POST /api/apps/:id/share ShareRequest -> App (turns sharing on or off; 400 with a plain sentence
 // when something that looks like a secret would go public, 502 when GitHub fails)

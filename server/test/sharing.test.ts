@@ -102,8 +102,8 @@ describe("findSecrets", () => {
   it("finds keys and tokens without printing them", () => {
     const text = [
       "const k = 'sk-ant-api03-" + "x".repeat(40) + "'",
-      "ghp_" + "a".repeat(36),
-      "AKIA" + "B".repeat(16),
+      "ghp_" + "a1".repeat(18),
+      "AKIA" + "B2".repeat(8),
       "-----BEGIN RSA PRIVATE KEY-----",
       "sk-or-v1-" + "0".repeat(64),
     ].join("\n");
@@ -114,6 +114,6 @@ describe("findSecrets", () => {
 
   it("leaves ordinary text alone", () => {
     expect(findSecrets(releasesReadme(app(), "someone"), "README.md")).toEqual([]);
-    expect(findSecrets("the sky is blue; sk-short; AKIA123", "x")).toEqual([]);
+    expect(findSecrets("the sky is blue; sk-short; AKIA123; mask-removeDuplicatesAndSortThemAllPlease", "x")).toEqual([]);
   });
 });

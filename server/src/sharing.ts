@@ -4,7 +4,7 @@
 // the PC's shared key, and nothing goes public before a secrets scan.
 import type { App, AppSharing } from "../../shared/protocol.ts";
 import * as github from "./github.ts";
-import { HttpError } from "./apps.ts";
+import { HttpError } from "./http-error.ts";
 import { describeSecrets, findSecrets } from "./secrets.ts";
 
 export interface GithubApi {

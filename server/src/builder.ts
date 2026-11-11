@@ -13,6 +13,8 @@ export interface BuildResult {
   sha256: string;
   // One smaller APK per ABI (builder/ with ABI splits); absent when the app has no native code.
   variants?: { abi: string; apkPath: string; sizeBytes: number; sha256: string }[];
+  // Which key signed it (builder/ since per-app keys, docs/DISTRIBUTION.md).
+  signing?: { kind: "shared" | "own" | "moved"; certSha256: string };
 }
 
 export interface Builder {

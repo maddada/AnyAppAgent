@@ -19,6 +19,8 @@ import type {
   PairResponse,
   PermissionAnswerRequest,
   SendMessageRequest,
+  PublishRequest,
+  PullBackRequest,
   ShareRequest,
   ServerEvent,
   UpdateTodoRequest,
@@ -409,6 +411,17 @@ export function startHttpServer(deps: {
       const body = await readBody<Partial<ShareRequest>>(req);
       if (typeof body.shared !== "boolean") throw new HttpError(400, '"shared" must be true or false.');
       return sendJson(res, 200, await apps.setShared(id, body.shared));
+    } else if (method === "POST" && action === "publish") {
+      const body = await readBody<Partial<PublishRequest>>(req);
+      if (body.notes !== undefined && typeof body.notes !== "string") throw new HttpError(400, '"notes" must be text.');
+      if (body.channel !== undefined && body.channel !== "stable" && body.channel !== "testing") throw new HttpError(400, '"channel" must be "stable" or "testing".');
+      return sendJson(res, 200, await apps.publish(id, { ...(body.notes ? { notes: body.notes } : {}), ...(body.channel ? { channel: body.channel } : {}) }));
+    } else if (method === "POST" && action === "pullback") {
+      const body = await readBody<Partial<PullBackRequest>>(req);
+      if (typeof body.build !== "number" || !Number.isInteger(body.build)) throw new HttpError(400, '"build" must be a build number.');
+      return sendJson(res, 200, await apps.pullBack(id, body.build));
+    } else if (method === "GET" && action === "releases") {
+      return sendJson(res, 200, await apps.releaseStats(id));
     } else if (method === "POST" && action === "build") {
       apps.rebuild(id);
       return sendJson(res, 202, {});

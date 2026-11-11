@@ -9,9 +9,10 @@ export interface SecretHit {
 }
 
 const PATTERNS: { kind: string; re: RegExp }[] = [
-  { kind: "Anthropic API key", re: /sk-ant-[A-Za-z0-9_-]{20,}/g },
-  { kind: "OpenRouter API key", re: /sk-or-v1-[A-Za-z0-9]{32,}/g },
-  { kind: "OpenAI API key", re: /sk-(?:proj-)?[A-Za-z0-9]{32,}/g },
+  { kind: "Anthropic API key", re: /\bsk-ant-[A-Za-z0-9_-]{20,}/g },
+  { kind: "OpenRouter API key", re: /\bsk-or-v1-[A-Za-z0-9]{32,}/g },
+  // Real OpenAI formats only: project keys, and legacy keys with their fixed "T3BlbkFJ" middle.
+  { kind: "OpenAI API key", re: /\bsk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{40,}|\bsk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}\b/g },
   { kind: "GitHub token", re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,})/g },
   { kind: "AWS access key", re: /\bAKIA[0-9A-Z]{16}\b/g },
   { kind: "Google API key", re: /\bAIza[0-9A-Za-z_-]{35}\b/g },
@@ -27,6 +28,8 @@ export function findSecrets(text: string, where: string): SecretHit[] {
     re.lastIndex = 0;
     for (const m of text.matchAll(re)) {
       if (seen.has(m[0])) continue;
+      // Every real key or token has a digit somewhere; code words such as "sk-removeDuplicates" do not.
+      if (kind !== "Private key" && !/[0-9]/.test(m[0])) continue;
       seen.add(m[0]);
       hits.push({ kind, where, preview: `${m[0].slice(0, 10)}… (${m[0].length} characters)` });
       if (hits.length >= 20) return hits;
@@ -36,8 +39,8 @@ export function findSecrets(text: string, where: string): SecretHit[] {
 }
 
 /** One plain sentence for the chat and the desktop: what was found and where. */
-export function describeSecrets(hits: SecretHit[]): string {
+export function describeSecrets(hits: SecretHit[], what: "shared" | "published" = "shared"): string {
   const first = hits.slice(0, 3).map((h) => `${h.kind} in ${h.where}`);
   const more = hits.length > 3 ? ` and ${hits.length - 3} more` : "";
-  return `Not shared: found what looks like a secret (${first.join("; ")}${more}). Take it out of the app first, then try again.`;
+  return `Not ${what}: found what looks like a secret (${first.join("; ")}${more}). Take it out of the app first, then try again.`;
 }
