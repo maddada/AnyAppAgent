@@ -146,6 +146,8 @@ export class Client {
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;
   /** With `abi`, the smaller APK made for that processor type (when the build has one). */
+  /** The latest build's quick update (docs/FAST-LANE.md). */
+  otaUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/ota`;
   apkUrl = (id: string, abi?: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/apk${abi ? `?abi=${encodeURIComponent(abi)}` : ""}`;
   socketUrl = () => `${this.baseUrl.replace(/^http/i, "ws")}/ws?token=${encodeURIComponent(this.token)}`;
   authHeaders = () => ({ Authorization: `Bearer ${this.token}` });

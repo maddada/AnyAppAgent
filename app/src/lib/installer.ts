@@ -82,6 +82,17 @@ export async function autoInstallIfNew(app: App) {
   setState({ prefs: { ...prefs, offeredBuilds } });
   void loadPrefs().then((p) => savePrefs({ ...p, offeredBuilds: { ...p.offeredBuilds, [app.id]: build.number } }));
 
+  // The fast lane (docs/FAST-LANE.md): only JavaScript changed and the app on this phone has the
+  // same native part, so it gets the quick update: no APK download, no install.
+  if (await sendQuickUpdate(app, build)) return;
+
+  // The person is using that app right now (it says so): do not replace it under their finger.
+  // Download it, then the app's own "Version N is ready, Reload" popup starts the install.
+  if (AppState.currentState !== "active" && AnyAppNative.appInFront?.(app.packageName)) {
+    void installApp(app, { park: true });
+    return;
+  }
+
   // In the background the update still downloads and installs by itself when the keep-alive
   // service runs (it kept AnyAppAgent alive while the PC built it): Android will not freeze the
   // download. Without it, a notification asks for the tap instead.
@@ -94,6 +105,80 @@ export async function autoInstallIfNew(app: App) {
 }
 
 const pendingFromBackground = new Set<string>();
+
+// ---------- quick updates (docs/FAST-LANE.md)
+
+/** True when this build can go to the app as a quick update (same native fingerprint, not refused before). */
+export function canSendQuickUpdate(app: App, build: BuildInfo): boolean {
+  if (!build.ota || build.delivery !== "quick" || !AnyAppNative?.setAppReady || !AnyAppNative.appRuntime) return false;
+  const runtime = AnyAppNative.appRuntime(app.packageName);
+  if (!runtime || runtime !== build.ota.runtime) return false;
+  const report = AnyAppNative.appUpdateReport?.(app.packageName);
+  return !report?.bad.includes(build.number);
+}
+
+/**
+ * Downloads the quick update (small: the bundle and its pictures), checks its SHA-256 and hands it
+ * to the app, which checks the signature itself and shows its Reload popup (or starts with it next
+ * time). False when it could not: then the APK goes the usual way.
+ */
+async function sendQuickUpdate(app: App, build: BuildInfo): Promise<boolean> {
+  const client = getState().client;
+  if (!client || !build.ota || !canSendQuickUpdate(app, build)) return false;
+  const t0 = Date.now();
+  const dir = new Directory(Paths.cache, "ota");
+  const file = new File(dir, `${app.slug || app.id}-${build.number}-ota.zip`);
+  try {
+    if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
+    if (file.exists) file.delete();
+    setInstall(app.id, { buildNumber: build.number, phase: "downloading", quick: true, progress: 0, totalBytes: build.ota.sizeBytes });
+    const task = File.createDownloadTask(client.otaUrl(app.id), file, { headers: client.authHeaders() });
+    const done = await task.downloadAsync();
+    if (!done) throw new Error("the download stopped");
+    const sum = await AnyAppNative!.sha256File(file.uri);
+    if (sum.toLowerCase() !== build.ota.sha256.toLowerCase()) throw new Error("the quick update was damaged");
+    await AnyAppNative!.setAppReady!(app.packageName, "ota", build.number, file.uri);
+    console.log(`quick update ${app.packageName} ${build.number}: handed to the app in ${Date.now() - t0} ms`);
+    installedVersion(app);
+    setInstall(app.id, { buildNumber: build.number, phase: "done", quick: true });
+    setTimeout(() => {
+      if (getState().installs[app.id]?.phase === "done") setInstall(app.id, null);
+    }, 4000);
+    return true;
+  } catch (e) {
+    console.warn(`quick update ${app.packageName} ${build.number}: ${e instanceof Error ? e.message : String(e)}; sending the APK`);
+    setInstall(app.id, null);
+    return false;
+  } finally {
+    try {
+      if (file.exists) file.delete();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
+ * An app's Reload popup asked for its new APK (anyappagent://?update=<package>): install it now and
+ * open the app again when it is in.
+ */
+export function updateFromLink(packageName: string) {
+  const app = Object.values(getState().apps).find((a) => a.packageName === packageName);
+  if (app) void installApp(app, { reopen: true });
+  else pendingUpdateLinks.add(packageName);
+}
+
+const pendingUpdateLinks = new Set<string>();
+
+/** An app reported what it runs, or a quick update it refused or rolled back. */
+export function onAppReport(packageName: string) {
+  refreshPackages();
+  const app = Object.values(getState().apps).find((a) => a.packageName === packageName);
+  const report = AnyAppNative?.appUpdateReport?.(packageName);
+  if (app && report && app.latestApk && report.bad.includes(app.latestApk.number)) {
+    console.warn(`quick update ${packageName} ${app.latestApk.number} did not start on the phone; it went back to ${report.running || "the installed version"}`);
+  }
+}
 
 // ---------- unfinished installs survive a restart of AnyAppAgent
 
@@ -150,6 +235,12 @@ export async function resumePendingInstall() {
     const app = getState().apps[waiting];
     if (app) void installApp(app);
   }
+  for (const pkg of [...pendingUpdateLinks]) {
+    const app = Object.values(getState().apps).find((a) => a.packageName === pkg);
+    if (!app) continue;
+    pendingUpdateLinks.delete(pkg);
+    void installApp(app, { reopen: true });
+  }
   for (const appId of [...pendingFromBackground]) {
     pendingFromBackground.delete(appId);
     const app = getState().apps[appId];
@@ -177,7 +268,23 @@ let queue: Promise<void> = Promise.resolve();
 /** The app the queue works on now: the others say "Waiting for <its name>". */
 let current: string | null = null;
 
-export function installApp(app: App): Promise<void> {
+/**
+ * park: download and check only, then tell the app an APK is ready (its Reload popup asks for the
+ * install). reopen: open the app again once it is installed (the popup's Reload).
+ */
+export interface InstallOptions {
+  park?: boolean;
+  reopen?: boolean;
+}
+
+/** Apps to open again once their install is in (asked from the app's own Reload popup). */
+const reopenAfter = new Set<string>();
+
+export function installApp(app: App, options: InstallOptions = {}): Promise<void> {
+  if (options.reopen) {
+    reopenAfter.add(app.id);
+    AnyAppNative?.reopenAfterInstall?.(app.packageName);
+  }
   const now = getState().installs[app.id];
   if (now && BUSY.has(now.phase)) return queue;
   const build = app.latestApk;
@@ -185,18 +292,18 @@ export function installApp(app: App): Promise<void> {
   const ahead = current && current !== app.id ? getState().apps[current]?.name : undefined;
   setInstall(app.id, { buildNumber: build.number, phase: "waiting", ...(ahead ? { waitingFor: ahead } : {}) });
   updateKeepAlive();
-  queue = queue.then(() => runInstall(app.id)).catch(() => undefined);
+  queue = queue.then(() => runInstall(app.id, options)).catch(() => undefined);
   return queue;
 }
 
-async function runInstall(appId: string) {
+async function runInstall(appId: string, options: InstallOptions = {}) {
   current = appId;
   const name = getState().apps[appId]?.name;
   for (const [id, install] of Object.entries(getState().installs)) {
     if (id !== appId && install.phase === "waiting") setInstall(id, { ...install, ...(name ? { waitingFor: name } : {}) });
   }
   try {
-    await installOne(appId);
+    await installOne(appId, options);
   } finally {
     current = null;
     updateKeepAlive();
@@ -223,7 +330,7 @@ function dropOtherDownloads(app: App, keep: string) {
   }
 }
 
-async function installOne(appId: string) {
+async function installOne(appId: string, options: InstallOptions = {}) {
   const app = getState().apps[appId];
   const build = app?.latestApk;
   if (!getState().client || !app || !build || !AnyAppNative) {
@@ -257,6 +364,14 @@ async function installOne(appId: string) {
         file.delete();
         throw new Error("The download was damaged. Try again.");
       }
+    }
+
+    if (options.park && !reopenAfter.has(appId) && AnyAppNative.setAppReady) {
+      // Downloaded and checked; the app on screen offers Reload, which brings us back here.
+      await AnyAppNative.setAppReady(app.packageName, "apk", build.number, null);
+      console.log(`${app.packageName} ${build.number}: downloaded, waiting for Reload in the app`);
+      setInstall(appId, null);
+      return;
     }
 
     setInstall(appId, { buildNumber: build.number, phase: "installing" });
@@ -390,6 +505,8 @@ function finish(app: App, buildNumber: number, result: InstallResult, fileName: 
   switch (result.status) {
     case "success":
       clearUnfinished(app.id);
+      // The native side already opened it again (reopenAfterInstall); older builds only have this.
+      if (reopenAfter.delete(app.id) && !AnyAppNative?.reopenAfterInstall) launchApp(app);
       setInstall(app.id, { buildNumber, phase: "done" });
       cleanup(fileName);
       setTimeout(() => {
@@ -397,6 +514,7 @@ function finish(app: App, buildNumber: number, result: InstallResult, fileName: 
       }, 4000);
       return;
     case "cancelled":
+      reopenAfter.delete(app.id);
       // The person said no: nothing to retry by itself.
       clearUnfinished(app.id);
       setInstall(app.id, null);

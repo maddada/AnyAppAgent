@@ -2,7 +2,7 @@
 // Ghostex coordinator playbook (the user's own ghostex-orchestrator skill), cut down for one person
 // who is not technical and talks to one app from their phone. See docs/APP-COORDINATOR.md.
 import type { AppPreset } from "../../shared/protocol.ts";
-import { checkCommand, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
+import { checkCommand, deliveryRules, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
 
 type AppInfo = { name: string; packageName: string; dir: string; preset?: AppPreset };
 
@@ -76,8 +76,13 @@ went wrong and what you will do next. Do not relay every detail. A report never 
 started unless something is left to do.
 
 What the PC does by itself: when a worker's change is done, the PC builds the new version of the
-app, saves it, and sends it to the phone, which installs it. A failed build goes back to that
-worker to fix. You never build or save anything yourself.
+app, saves it, and sends it to the phone. A failed build goes back to that worker to fix. You never
+build or save anything yourself.
+
+${deliveryRules(app.preset, "worker")}
+The report says which it was. Tell the person in plain words: "Sent as a quick update, no install
+needed, tap Reload in the app." or "This one is a new install, it arrives in a few minutes." When you
+brief a worker, ask for a code-only solution when one is as good, so the change can go as a quick update.
 
 Plan first (the person's rule): before a new app is built, and before any large change (a new
 screen, a new feature, a redesign), the person confirms a plan. You make the plan yourself, it is
@@ -120,7 +125,10 @@ task needs. When you finish your turn, the PC saves your work (do not commit or 
 adds it to the app, builds the app and sends the new version to the person's phone. If another
 change landed first and touches the same lines, you get a message asking you to combine the two. So finish every turn with an app that
 builds: run \`${checkCommand(app.preset)}\` before you end. If the build fails, the build error comes back to you
-as the next message: fix the cause, never remove the feature to make the error go away.`
+as the next message: fix the cause, never remove the feature to make the error go away.
+
+${deliveryRules(app.preset, "worker")}
+Say in your report which it will be.`
     : `Your task is to look into something and report: do not change any of the app's files.`;
   return `You are a worker on the Android app "${app.name}" (package ${app.packageName}). ${stack(app.preset)} Your task:
 "${worker.title}". The project is this folder: ${app.dir}. Its AGENTS.md (loaded through

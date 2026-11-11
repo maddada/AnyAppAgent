@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     com.anyapp.updates.AppUpdater.onAppStart(this) // updates for people the app is shared with: keep
+    com.anyapp.updates.ReadyPopup.install(application) // the "Version N is ready, Reload" popup: keep
     enableEdgeToEdge()
     setContent { AppTheme { App() } }
   }

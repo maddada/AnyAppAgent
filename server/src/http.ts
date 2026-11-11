@@ -415,6 +415,19 @@ export function startHttpServer(deps: {
           else log(`${what}: done, ${mb(sent)} MB sent`);
         },
       );
+    } else if (action === "ota" && (method === "GET" || method === "HEAD")) {
+      // The latest build's quick update (docs/FAST-LANE.md); the app checks its signature itself.
+      const ota = apps.otaFile(id);
+      if (!ota) return sendError(res, 404, "This version has no quick update. Install the APK instead.");
+      const name = `${ota.app.slug}-${ota.build.number}-ota.zip`;
+      return sendFileWithRange(req, res, ota.path, {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${name}"`,
+        ETag: `"${ota.sha256}"`,
+      }, ({ sent, size, error }) => {
+        if (method === "HEAD") return;
+        log(`[${ota.app.slug}] quick update ${ota.build.number}: ${error || sent < size ? `stopped at ${mb(sent)} MB` : `sent, ${mb(sent)} MB`}`);
+      });
     } else if (action === "messages") {
       if (method === "GET") {
         const afterSeq = Number(url.searchParams.get("afterSeq") ?? 0);

@@ -348,7 +348,31 @@ if (updatesOn()) {
 
 `expo-constants` (app name/version: `Constants.expoConfig?.name`),
 `@expo/vector-icons`, `react-native-safe-area-context`, `expo-status-bar`. `fetch` works for the
-internet (HTTPS). `expo-updates` is installed for later over-the-air updates but **off**; leave it.
+internet (HTTPS). `expo-updates` is installed but **off**: over-the-air updates are done by
+`modules/updates` (see "Quick updates and new installs"); leave both as they are.
+
+## Quick updates and new installs (the PC decides, you choose wisely)
+
+After your turn the PC looks at what changed and picks how the new version reaches the phone:
+
+- **Quick update (seconds, no install):** only the JavaScript changed: anything in `src/`, the
+  TypeScript in `modules/*/index.ts`, texts, colours, layout, logic, new screens. The PC bundles it
+  without Gradle and sends it over the air through AnyAppAgent. The app shows a small "Version N is
+  ready" card with **Reload**, which starts the new code in place in about a second. If the app is
+  closed, it simply opens with the new version next time.
+- **New install (a few minutes):** anything native changed: `app.json` (name, permissions,
+  plugins), `package.json` or the lockfile (a new library), anything in `assets/` (the icon,
+  pictures, sounds, fonts), native files in `modules/` (Kotlin, manifests, `app.plugin.js`). The PC
+  runs the full build; the same card appears and Reload installs the new APK and opens the app again.
+- A quick update that crashes when it starts is rolled back on the phone by itself (to the last
+  version that worked) and AnyAppAgent is told.
+
+So: prefer a solution in code when it is as good (an icon from `@expo/vector-icons` instead of a
+new picture, a library already installed instead of a new one), and say in your last sentence which
+it will be: "Sent as a quick update, no install needed." or "This one needs a new install, it takes
+a few minutes." The quick update code lives in `modules/updates` (`Ota.kt`, `ReadyPopup.kt`, the
+loader in `AnyappUpdatesPackage.kt`): never edit or remove it, never add another updater, and never
+turn on `expo-updates`.
 
 ## The app icon
 

@@ -18,6 +18,7 @@ export interface InstallProgress {
   retrying?: boolean; // while downloading: the link stalled or dropped; reconnecting to carry on
   message?: string; // shown when failed
   conflict?: boolean; // signed differently from the installed app: offer to remove it first
+  quick?: boolean; // a quick update (docs/FAST-LANE.md): handed to the app, no install
 }
 
 export interface State {

@@ -32,7 +32,8 @@ import {
 } from "./helper-copies.ts";
 import { ChatLog, type AppRecord } from "./store.ts";
 
-export type BuildChangeOutcome = { ok: true; number: number } | { ok: false; error: string; cancelled?: boolean };
+// delivery (docs/FAST-LANE.md): "quick" when the build went to the phone as a quick update.
+export type BuildChangeOutcome = { ok: true; number: number; delivery?: "quick" | "full" } | { ok: false; error: string; cancelled?: boolean };
 
 /** What the worker manager needs from the app manager. */
 export interface WorkerHost {
@@ -564,7 +565,8 @@ export class WorkerManager {
           w.info.buildNumber = outcome.number;
           const combined = w.conflictsResolved ? ` It was combined with a change that landed first (${w.conflictsResolved} time${w.conflictsResolved > 1 ? "s" : ""}).` : "";
           delete w.conflictsResolved;
-          return { state: "done", build: `Its change was added to the app and the new version (build ${outcome.number}) was built and sent to the person's phone.${combined}` };
+          const how = outcome.delivery === "quick" ? " as a quick update (no install needed: the app shows a Reload button)" : " as a new version to install";
+          return { state: "done", build: `Its change was added to the app and the new version (build ${outcome.number}) was built and sent to the person's phone${how}.${combined}` };
         }
         const undone = await undoLanding(record.dir, land.before);
         const back = undone ? " The app was put back as it was before this change; the change is kept in the helper's copy." : "";

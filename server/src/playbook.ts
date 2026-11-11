@@ -126,6 +126,30 @@ function stackLine(preset: AppPreset | undefined): string {
 }
 
 /** The icon and AI lines of the taste rules: Expo Exact apps have neither yet. */
+/**
+ * How a new version reaches the phone (docs/FAST-LANE.md): the PC decides after every turn, by the
+ * native fingerprint. The agent knows it so it can prefer code-only changes and say which it was.
+ */
+export function deliveryRules(preset: AppPreset | undefined, who: "you" | "worker" = "you"): string {
+  const subject = who === "you" ? "your turn" : "a worker's change";
+  if (preset === "kotlin" || preset === "expo-exact") {
+    return `How the new version reaches the phone: after ${subject} the PC builds a new APK (a few
+minutes) and AnyAppAgent installs it. If the person is inside the app when it arrives, the app shows
+"Version N is ready" with a Reload button that installs it and opens the app again.`;
+  }
+  return `How the new version reaches the phone (the PC decides by itself after ${subject}):
+- Quick update, in seconds: when only the app's code changed (screens, texts, colours, logic,
+  anything in src/), the PC sends it over the air. The app shows "Version N is ready" with a Reload
+  button and reloads in place, no install. Most changes should be this: prefer a solution in code.
+- New install, a few minutes: a change to app.json (name, permissions, plugins), package.json (a new
+  library), anything in assets/ (the icon, pictures, sounds) or native code in modules/ needs a full
+  build. The same popup appears, and Reload installs it and opens the app again.
+- A quick update that crashes when it starts is rolled back on the phone by itself.
+- Say which it will be in your last sentence, in plain words: "Sent as a quick update, no install
+  needed." or "This one needs a new install, it takes a few minutes." Never add a library or a
+  picture for something code can do just as well.`;
+}
+
 function iconAndAiLines(preset: AppPreset | undefined): string {
   if (preset === "expo-exact") {
     return `- This kind of app has no custom launcher icon and no AI through AnyAppAgent yet: if they ask
@@ -157,6 +181,8 @@ What happens after your turn (the server does it, not you):
   builds: run \`${checkCommand(app.preset)}\` before you end.
 - If the build fails, the build error comes back to you as the next message. Fix the cause, never
   remove the feature to make the error go away.
+
+${deliveryRules(app.preset)}
 
 Taste (the person's rules for every app you make):
 - Never use the em dash character (U+2014), not in your replies and not anywhere in the app: its

@@ -60,5 +60,18 @@ export function buildCard(item: ChatItem, app: App | undefined, side: "phone" | 
       : sent
         ? `Version ${b.number}${size}. Sent to your phone`
         : `Version ${b.number}${size}. Saving it, then it goes to your phone`;
+  // The fast lane (docs/FAST-LANE.md): a quick update goes to the app over the air, no install.
+  // A phone without the app (or with older native parts) still gets the APK, as above.
+  if (b.delivery === "quick" && b.ota && (side === "pc" || installedVersion != null)) {
+    const quickSub =
+      side === "phone"
+        ? installed
+          ? `Version ${b.number}. No install needed: tap Reload in the app`
+          : `Version ${b.number}, ${formatSize(b.ota.sizeBytes)}. No install needed`
+        : sent
+          ? `Version ${b.number}, ${formatSize(b.ota.sizeBytes)}. No install needed`
+          : `Version ${b.number}. Saving it, then it goes to your phone`;
+    return { state: "ready", number: b.number, title: "Sent as a quick update", sub: quickSub, sent, installed };
+  }
   return { state: "ready", number: b.number, title: "Your app is ready", sub, sent, installed };
 }

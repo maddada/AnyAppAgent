@@ -308,6 +308,14 @@ opens the update box.
 Adding a permission: one `<uses-permission>` line in `AndroidManifest.xml`; ask for dangerous
 ones at run time as above.
 
+## New versions on the phone
+
+After your turn the PC builds a new APK (a few minutes) and AnyAppAgent installs it. If the person is
+inside the app when it arrives, the app shows a small "Version N is ready" card with **Reload**,
+which installs it and opens the app again (`com.anyapp.updates.ReadyPopup`, started in
+`MainActivity.onCreate`: keep that line). Kotlin apps have no quick (over-the-air) updates: every
+change is a new install.
+
 ## The app icon
 
 The launcher icon is **`icon.png`** at the project root: a 1024x1024 PNG, square, opaque,

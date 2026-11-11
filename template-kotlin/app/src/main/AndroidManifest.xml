@@ -64,6 +64,14 @@
     <receiver
       android:name="com.anyapp.updates.InstallReceiver"
       android:exported="false" />
+    <!-- AnyAppAgent says a new version of this app is ready: the Reload popup (com.anyapp.updates.ReadyPopup). -->
+    <receiver
+      android:name="com.anyapp.updates.ReadyReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="com.anyapp.updates.READY" />
+      </intent-filter>
+    </receiver>
 
     <!-- Alarms (com.anyapp.app.alarms): keep these. -->
     <receiver

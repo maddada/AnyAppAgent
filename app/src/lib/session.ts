@@ -20,7 +20,7 @@ import {
   replaceHelperChat,
 } from "./store";
 import { loadPairing, loadPrefs, savePairing, savePrefs, type Pairing, type Prefs } from "./storage";
-import { autoInstallIfNew, installerHooks, onApkReady, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
+import { autoInstallIfNew, installerHooks, onApkReady, onAppReport, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
 import { updateKeepAlive } from "./keepalive";
 
 // ---------- startup, pairing
@@ -40,6 +40,7 @@ export async function boot() {
   installerHooks.linkTrouble = () => reconnectNow();
   startUnpairRetries();
   AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
+  AnyAppNative?.addListener("onAppReport", (e) => onAppReport(e.packageName));
 }
 
 function applyPairing(pairing: Pairing, client?: Client) {

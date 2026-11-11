@@ -16,6 +16,8 @@ Decided on the page `C:\aa\ideas\distribution.html` (2026-11-11):
 
 This file is the plan and, stage by stage, the record of what was built and proven.
 
+Quick updates (over the air) and the Reload popup inside every app build on this: `docs/FAST-LANE.md`.
+
 ## The flow in one picture
 
 ```

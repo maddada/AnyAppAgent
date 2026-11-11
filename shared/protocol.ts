@@ -22,6 +22,22 @@ export interface BuildInfo {
   // much smaller than the full APK (sizeBytes/sha256 above), which holds every ABI. Set when
   // succeeded and the PC built them; absent from older PCs and from apps without native code.
   variants?: ApkVariant[];
+  // Added for the fast lane (docs/FAST-LANE.md). "quick": only JavaScript changed, so the PC made
+  // this build in seconds without Gradle (the APK above is the last one with the new bundle) and
+  // also a quick update (`ota`) that a phone whose app has the same native part (`runtime`) applies
+  // without an install. "full": a normal build. Absent from older PCs (treat as "full").
+  delivery?: "quick" | "full";
+  // The build's native fingerprint (the app's string resource anyapp_runtime). React Native only.
+  runtime?: string;
+  ota?: OtaInfo;
+}
+
+// A quick update: GET /api/apps/:id/ota serves the zip of the app's latest build (a signed
+// manifest, the Hermes bundle and its pictures; the app checks the signature with its own key).
+export interface OtaInfo {
+  sizeBytes: number;
+  sha256: string; // of the zip
+  runtime: string; // the native fingerprint it needs; the app refuses it on other native code
 }
 
 // One APK of a build for one processor type: what GET /api/apps/:id/apk?abi=<abi> serves.

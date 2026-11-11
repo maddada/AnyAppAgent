@@ -7,7 +7,7 @@ import { ChevronDown, Download, ListTodo, MessageCircle, Plus, Settings, Share2,
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, tileState } from "@/lib/describe";
 import { installLabel } from "@shared/chat/index";
-import { installApp, installFromLink, launchApp } from "@/lib/installer";
+import { installApp, installFromLink, launchApp, updateFromLink } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
@@ -32,7 +32,7 @@ type Tile = { kind: "new" } | { kind: "app"; app: App };
 export default function Home() {
   const pairing = useStore((s) => s.pairing);
   const authLost = useStore((s) => s.authLost);
-  const params = useLocalSearchParams<{ install?: string }>();
+  const params = useLocalSearchParams<{ install?: string; update?: string }>();
 
   // Tapped "ready to install" notification: anyappagent://?install=<appId>
   useEffect(() => {
@@ -41,6 +41,14 @@ export default function Home() {
       router.setParams({ install: undefined });
     }
   }, [params.install]);
+
+  // An app's Reload popup (docs/FAST-LANE.md): anyappagent://?update=<its package>
+  useEffect(() => {
+    if (params.update) {
+      updateFromLink(String(params.update));
+      router.setParams({ update: undefined });
+    }
+  }, [params.update]);
 
   if (!pairing) return <Redirect href="/connect" />;
   if (authLost) return <AuthLost />;
