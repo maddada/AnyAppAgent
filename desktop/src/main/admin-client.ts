@@ -21,6 +21,7 @@ import type {
   KeysRestoreRequest,
   KeysRestoreResult,
   PairedDevice,
+  TodoItem,
   WorkerInfo,
 } from "../../../shared/protocol.ts";
 
@@ -240,6 +241,9 @@ export class AdminClient extends EventEmitter {
       case "worker.item":
         this.emit("helper-item", event.item);
         break;
+      case "todos.updated":
+        this.emit("todos", event.appId, event.todos);
+        break;
     }
   }
 
@@ -297,6 +301,28 @@ export class AdminClient extends EventEmitter {
 
   answerPermission(appId: string, requestId: string, optionId: string): Promise<void> {
     return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/permission`, { requestId, optionId });
+  }
+
+  // ---------- the person's to-do list for an app (shared/protocol.ts "To-do")
+
+  todos(appId: string): Promise<TodoItem[]> {
+    return this.request<TodoItem[]>("GET", `/api/apps/${encodeURIComponent(appId)}/todos`);
+  }
+
+  addTodo(appId: string, text: string): Promise<TodoItem> {
+    return this.request<TodoItem>("POST", `/api/apps/${encodeURIComponent(appId)}/todos`, { text });
+  }
+
+  updateTodo(appId: string, todoId: string, change: { done?: boolean; text?: string }): Promise<TodoItem> {
+    return this.request<TodoItem>("PATCH", `/api/apps/${encodeURIComponent(appId)}/todos/${encodeURIComponent(todoId)}`, change);
+  }
+
+  removeTodo(appId: string, todoId: string): Promise<void> {
+    return this.request("DELETE", `/api/apps/${encodeURIComponent(appId)}/todos/${encodeURIComponent(todoId)}`);
+  }
+
+  sendTodo(appId: string, todoId: string): Promise<TodoItem> {
+    return this.request<TodoItem>("POST", `/api/apps/${encodeURIComponent(appId)}/todos/${encodeURIComponent(todoId)}/send`, {});
   }
 
   /** A new app, made from this PC: the same route and fields as the phone's New app sheet. */
