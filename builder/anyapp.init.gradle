@@ -3,6 +3,8 @@
 //   - signs release builds with the shared AnyAppAgent key (properties passed as
 //     ORG_GRADLE_PROJECT_anyapp* environment variables, never written to disk in the app),
 //   - sets versionCode to the build number (-PanyappVersionCode=<n>),
+//   - with -PanyappUpdateFeed=<url> (and -PanyappUpdateTestingFeed): the shared app's update feeds
+//     as string resources anyapp_update_feed / anyapp_update_testing_feed (AppUpdater reads them),
 //   - skips the release lint check (slow, and not useful for side-loaded apps),
 //   - with -PanyappAbiSplits=<abi,abi>: also one APK per ABI next to the full one, so a phone
 //     downloads only its own native code (about a third of the full APK),
@@ -26,6 +28,12 @@ gradle.allprojects { p ->
         android.buildTypes.getByName('release').signingConfig = cfg
       }
       if (code) android.defaultConfig.versionCode = Integer.parseInt(code.toString())
+      def feed = p.findProperty('anyappUpdateFeed')?.toString()?.trim()
+      if (feed) {
+        android.buildFeatures.resValues = true
+        android.defaultConfig.resValue('string', 'anyapp_update_feed', feed)
+        android.defaultConfig.resValue('string', 'anyapp_update_testing_feed', p.findProperty('anyappUpdateTestingFeed')?.toString()?.trim() ?: '')
+      }
       def splits = p.findProperty('anyappAbiSplits')?.toString()?.trim()
       if (splits) {
         def abis = splits.split(',').collect { it.trim() }.findAll { it }

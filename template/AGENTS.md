@@ -351,6 +351,25 @@ import { openFeedback } from '../../modules/feedback';
 
 It does not open while a full-screen alarm shows.
 
+### Updates for people the app is shared with (built in, nothing to do)
+
+When the person shares the app from AnyAppAgent, the PC builds it with its update feed and the
+app updates itself on other people's phones: it checks when it opens and once a day, shows a
+notification when a new version is published, and a tap downloads, checks and installs it. On the
+person's own phone AnyAppAgent installs every build, so the app stays quiet. This lives in
+`modules/updates` (Kotlin, the same code as every AnyAppAgent app): never edit or remove it, and
+never add another updater. Only if the person asks for an update line or a "Check for updates"
+button, use `modules/updates/index.ts`:
+
+```ts
+import { checkForUpdate, openUpdate, updatesOn } from '../../modules/updates'; // from a file in src/app/ or src/lib/
+
+if (updatesOn()) {
+  const s = await checkForUpdate(); // { state: 'available', version, notes } | 'up-to-date' | 'anyappagent' | 'off' | 'problem'
+  if (s.state === 'available') openUpdate(); // the update box: download, check, install
+}
+```
+
 ### Other things already installed
 
 `expo-constants` (app name/version: `Constants.expoConfig?.name`),

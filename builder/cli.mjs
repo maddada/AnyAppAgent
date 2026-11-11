@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // CLI for humans and tests.
 //   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact]
-//   node builder/cli.mjs build <dir> --build-number <n> [--quiet]
+//   node builder/cli.mjs build <dir> --build-number <n> [--quiet] [--update-feed <url>] [--update-testing-feed <url>]
 //   node builder/cli.mjs icon <dir>
 //   node builder/cli.mjs warm [<spareRootDir>] [--preset react-native|kotlin|expo-exact]
 //        (react-native: the deps cache and a spare; kotlin: a spare and one warm-up build for Gradle's caches)
@@ -81,6 +81,8 @@ try {
     const result = await buildApk({
       dir: path.resolve(dirArg),
       buildNumber: Number(flags['build-number']),
+      ...(flags['update-feed'] ? { updateFeed: flags['update-feed'] } : {}),
+      ...(flags['update-testing-feed'] ? { updateTestingFeed: flags['update-testing-feed'] } : {}),
       onLog: flags.quiet ? undefined : log,
     });
     console.log(JSON.stringify(result, null, 2));

@@ -153,6 +153,15 @@ class AnyAppNativeModule : Module() {
     }
 
     /** The ABIs this phone runs, best first (Build.SUPPORTED_ABIS), to pick the smallest APK. */
+    // AnyAppAgent first (docs/DISTRIBUTION.md stage 5): apps followed from a share link.
+    Function("setFollowedApps") { packageNames: List<String> ->
+      UpdatesProvider.setFollowed(context, packageNames)
+    }
+
+    Function("handlesUpdatesOf") { packageName: String ->
+      UpdatesProvider.handles(context, packageName)
+    }
+
     Function("supportedAbis") {
       Build.SUPPORTED_ABIS.toList()
     }

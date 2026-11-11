@@ -128,20 +128,29 @@ class BuildError extends Error {}
 
 const building = new Map();
 
-export async function buildApk({ dir, buildNumber, onLog = noop }) {
+export async function buildApk({ dir, buildNumber, onLog = noop, updateFeed, updateTestingFeed }) {
   if (!dir || !path.isAbsolute(dir)) throw new Error('buildApk: dir must be an absolute path');
   dir = path.resolve(dir);
   const n = Number(buildNumber);
   if (!Number.isInteger(n) || n < 1 || n > 2_100_000_000) throw new Error('buildApk: buildNumber must be a positive integer');
   const preset = presetOf(dir);
   if (!preset) throw new Error(`buildApk: ${dir} has neither app.json (React Native) nor anyapp.json (Kotlin)`);
+  // A shared app's update feeds (docs/DISTRIBUTION.md): written into the build for its updater.
+  const feeds = {};
+  for (const [name, url] of [['anyappUpdateFeed', updateFeed], ['anyappUpdateTestingFeed', updateTestingFeed]]) {
+    if (url === undefined || url === null || url === '') continue;
+    if (!/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/releases\/[A-Za-z0-9._/-]+\.json$/.test(url)) {
+      throw new Error(`buildApk: ${name} must be the GitHub release address of a .json file`);
+    }
+    feeds[`ORG_GRADLE_PROJECT_${name}`] = url;
+  }
 
   const key = dir.toLowerCase();
   if (building.has(key)) throw new Error(`buildApk: a build of ${dir} is already running`);
   await fsp.mkdir(path.join(dir, 'build', 'logs'), { recursive: true });
   const release = await tryLock(path.join(dir, 'build', '.build.lock'), { staleMs: 30 * 60_000 });
   if (!release) throw new Error(`buildApk: a build of ${dir} is already running (build/.build.lock)`);
-  const job = runBuild(dir, n, onLog, preset);
+  const job = runBuild(dir, n, onLog, preset, feeds);
   building.set(key, job);
   try {
     return await job;
@@ -151,7 +160,7 @@ export async function buildApk({ dir, buildNumber, onLog = noop }) {
   }
 }
 
-async function runBuild(dir, n, onLog, preset) {
+async function runBuild(dir, n, onLog, preset, feeds = {}) {
   const t0 = Date.now();
   const logFile = path.join(dir, 'build', 'logs', `build-${n}.log`);
   const logStream = fs.createWriteStream(logFile);
@@ -198,6 +207,7 @@ async function runBuild(dir, n, onLog, preset) {
       const { env: xenv, bun } = exactEnv(env, { javaHome, sdk, exactDir });
       const gradleProps = {
         ORG_GRADLE_PROJECT_anyappVersionCode: String(n),
+      ...feeds,
         ORG_GRADLE_PROJECT_anyappStoreFile: keystore.storeFile,
         ORG_GRADLE_PROJECT_anyappStorePassword: keystore.storePassword,
         ORG_GRADLE_PROJECT_anyappKeyAlias: keystore.keyAlias,
@@ -283,6 +293,7 @@ async function runBuild(dir, n, onLog, preset) {
     const gradleEnv = {
       ...env,
       ORG_GRADLE_PROJECT_anyappVersionCode: String(n),
+      ...feeds,
       ORG_GRADLE_PROJECT_anyappStoreFile: keystore.storeFile,
       ORG_GRADLE_PROJECT_anyappStorePassword: keystore.storePassword,
       ORG_GRADLE_PROJECT_anyappKeyAlias: keystore.keyAlias,

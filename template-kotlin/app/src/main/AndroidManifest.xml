@@ -15,6 +15,10 @@
   <!-- Alarms play their sound and speak their text from a short foreground service. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <!-- Updates for people the app is shared with (com.anyapp.updates): the app installs its own new version. -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <!-- The daily update check runs only when the phone is online. -->
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
   <!-- "Point at it" feedback saves to the gallery: no permission from Android 10 on, older phones ask once. -->
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
@@ -24,6 +28,10 @@
     <package android:name="com.anyappagent" />
     <intent>
       <action android:name="com.anyappagent.action.AI" />
+    </intent>
+    <!-- AnyAppAgent says whether it handles this app's updates (then the app stays silent). -->
+    <intent>
+      <action android:name="com.anyappagent.action.UPDATES" />
     </intent>
   </queries>
 
@@ -44,6 +52,20 @@
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
     </activity>
+
+    <!-- Updates for people the app is shared with (com.anyapp.updates): keep these. -->
+    <activity
+      android:name="com.anyapp.updates.UpdateActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:theme="@android:style/Theme.DeviceDefault.Light.Dialog.NoActionBar" />
+    <service
+      android:name="com.anyapp.updates.UpdateJob"
+      android:exported="false"
+      android:permission="android.permission.BIND_JOB_SERVICE" />
+    <receiver
+      android:name="com.anyapp.updates.InstallReceiver"
+      android:exported="false" />
 
     <!-- Alarms (com.anyapp.app.alarms): keep these. -->
     <receiver

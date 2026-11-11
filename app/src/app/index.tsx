@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindow
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, Download, ListTodo, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
+import { ChevronDown, Download, ListTodo, MessageCircle, Plus, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, tileState } from "@/lib/describe";
 import { installLabel } from "@shared/chat/index";
@@ -325,6 +325,11 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
     router.push(`/todo/${shown.id}`);
   };
   const todoLabel = shown?.openTodos ? `To-do (${shown.openTodos})` : "To-do";
+  const doShare = () => {
+    if (!shown) return;
+    onClose();
+    router.push(`/share/${shown.id}`);
+  };
 
   return (
     <Sheet visible={!!selection && !!app} onClose={onClose}>
@@ -391,6 +396,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                 <Button testID="app-change" label="Change it" icon={MessageCircle} onPress={doChange} />
               )}
               <Button testID="app-todo" label={todoLabel} icon={ListTodo} variant="quiet" onPress={doTodo} />
+              {shown.latestApk ? <Button testID="app-share" label={shown.sharing?.shared ? "Shared" : "Share"} icon={Share2} variant="quiet" onPress={doShare} /> : null}
               {pkg && action === "update" ? (
                 <T variant="caption" color="textSecondary" style={{ textAlign: "center", marginTop: space.xs }}>
                   {`Version ${pkg.versionCode} is on this phone.`}

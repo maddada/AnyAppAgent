@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The update feeds the PC writes into a shared app's build are read by name (com.anyapp.updates):
+     keep them through resource shrinking. Keep this file. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+  tools:keep="@string/anyapp_update_feed,@string/anyapp_update_testing_feed" />

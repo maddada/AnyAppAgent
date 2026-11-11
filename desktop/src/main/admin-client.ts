@@ -22,6 +22,8 @@ import type {
   KeysRestoreResult,
   PageOpenResponse,
   PairedDevice,
+  PublishRequest,
+  ReleaseStats,
   TodoItem,
   WorkerInfo,
 } from "../../../shared/protocol.ts";
@@ -296,6 +298,23 @@ export class AdminClient extends EventEmitter {
   }
 
   /** Builds again without a new message (a failed build's Try again). */
+  /** Sharing and publishing (docs/DISTRIBUTION.md): GitHub calls, so they can take minutes. */
+  share(appId: string, shared: boolean): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/share`, { shared }, 5 * 60_000);
+  }
+
+  publish(appId: string, body: PublishRequest): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/publish`, body, 30 * 60_000);
+  }
+
+  pullBack(appId: string, build: number): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/pullback`, { build }, 5 * 60_000);
+  }
+
+  releases(appId: string): Promise<ReleaseStats[]> {
+    return this.request<ReleaseStats[]>("GET", `/api/apps/${encodeURIComponent(appId)}/releases`, undefined, 60_000);
+  }
+
   rebuild(appId: string): Promise<void> {
     return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/build`, {});
   }
