@@ -22,7 +22,8 @@ export interface BuildInfo {
 // What an app is made from (chosen under "Advanced" in the New app sheet):
 //   "react-native": Expo / React Native (the default; can come to iPhone later)
 //   "kotlin": native Android (Kotlin, Jetpack Compose; smaller, faster, Android only)
-export type AppPreset = "react-native" | "kotlin";
+//   "expo-exact": Expo Exact, alpha (Contract + TypeScript; one app for Android, iPhone, Mac, web)
+export type AppPreset = "react-native" | "kotlin" | "expo-exact";
 
 export interface App {
   id: string;

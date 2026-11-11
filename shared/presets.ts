@@ -23,4 +23,10 @@ export const PRESET_CHOICES: readonly PresetChoice[] = [
     title: "Kotlin",
     line: "Fully native Android, smaller and faster apps (a few MB). Android only.",
   },
+  {
+    id: "expo-exact",
+    title: "Expo Exact",
+    tag: "Alpha",
+    line: "One app for Android, iPhone, Mac and the web. Very new and may break. Apps are about 28 MB, and the first build takes about 7 minutes.",
+  },
 ];

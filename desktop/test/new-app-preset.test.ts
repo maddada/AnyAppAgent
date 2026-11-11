@@ -39,10 +39,11 @@ describe("New app preset from the PC", () => {
     ]);
   });
 
-  it("shows the same two choices as the phone, React Native first and default", () => {
+  it("shows the same choices as the phone, React Native first and default, Expo Exact last as Alpha", () => {
     expect(PRESET_CHOICES.map((p) => [p.id, p.title, p.tag ?? null])).toEqual([
       ["react-native", "React Native", "Default"],
       ["kotlin", "Kotlin", null],
+      ["expo-exact", "Expo Exact", "Alpha"],
     ]);
     for (const p of PRESET_CHOICES) expect(p.line).not.toMatch(/\u2014/);
   });

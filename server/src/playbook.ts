@@ -10,7 +10,9 @@ export const MEMORY_FILE = "APP_MEMORY.md";
 
 /** The command an app's agent runs to check its work before ending a turn (from its AGENTS.md). */
 export function checkCommand(preset: AppPreset | undefined): string {
-  return preset === "kotlin" ? "./gradlew --console=plain -q :app:compileReleaseKotlin" : "npm run check";
+  if (preset === "kotlin") return "./gradlew --console=plain -q :app:compileReleaseKotlin";
+  if (preset === "expo-exact") return "bun exact.mjs contract build app.contract --json";
+  return "npm run check";
 }
 
 /** Where an app's AI client lives (AGENTS.md, "AI"). */
@@ -19,9 +21,22 @@ function aiFile(preset: AppPreset | undefined): string {
 }
 
 function stackLine(preset: AppPreset | undefined): string {
-  return preset === "kotlin"
-    ? "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native."
-    : "It is a React Native (Expo) app.";
+  if (preset === "kotlin") return "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native.";
+  if (preset === "expo-exact") return "It is an Expo Exact app (Contract view, TypeScript data; very new, alpha), not React Native.";
+  return "It is a React Native (Expo) app.";
+}
+
+/** The icon and AI lines of the taste rules: Expo Exact apps have neither yet. */
+function iconAndAiLines(preset: AppPreset | undefined): string {
+  if (preset === "expo-exact") {
+    return `- This kind of app has no custom launcher icon and no AI through AnyAppAgent yet: if they ask
+  for either, say in one line that it is not possible in this kind of app yet.`;
+  }
+  return `- On your first turn give the app an icon of its own that matches what it does (see "The app
+  icon" in AGENTS.md), never the starter icon.
+- When they ask for anything AI (a chat, an assistant, smart suggestions, an agent that does things
+  in the app), use the built-in AI through AnyAppAgent ("AI" in AGENTS.md, ${aiFile(preset)}). Never ask
+  them for an API key and never call an AI service directly.`;
 }
 
 export function appPlaybook(app: { name: string; packageName: string; dir: string; preset?: AppPreset }): string {
@@ -51,11 +66,7 @@ Taste (the person's rules for every app you make):
 - A calm, well-made design that fits what the app is for: a clear layout, good spacing, readable
   text, colours chosen for this app, working in light and dark mode.
 - No purple gradients, no sparkle icons, nothing that looks like a generic "AI" app.
-- On your first turn give the app an icon of its own that matches what it does (see "The app
-  icon" in AGENTS.md), never the starter icon.
-- When they ask for anything AI (a chat, an assistant, smart suggestions, an agent that does things
-  in the app), use the built-in AI through AnyAppAgent ("AI" in AGENTS.md, ${aiFile(app.preset)}). Never ask
-  them for an API key and never call an AI service directly.
+${iconAndAiLines(app.preset)}
 
 Memory: keep a short file ${MEMORY_FILE} in the project root with the app's goal (what the person
 wants it to do), the decisions and preferences they gave you, and what is still open. Read it at the

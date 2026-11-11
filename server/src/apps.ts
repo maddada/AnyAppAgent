@@ -74,7 +74,7 @@ interface ReadyRecord extends AppRecord {
 }
 
 /** The presets the phone may ask for (shared/protocol.ts AppPreset). */
-export const PRESETS: readonly AppPreset[] = ["react-native", "kotlin"];
+export const PRESETS: readonly AppPreset[] = ["react-native", "kotlin", "expo-exact"];
 
 const JAVA_KEYWORDS = new Set(
   "abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null var record yield".split(
@@ -313,7 +313,7 @@ export class AppManager {
 
   create(name: string, prompt: string, preset: unknown = "react-native"): App {
     const cleanName = name.trim().replace(/\s+/g, " ");
-    if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native or Kotlin.");
+    if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native, Kotlin or Expo Exact.");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
     if (prompt.trim() === "") throw new HttpError(400, "Say what the app should do.");
     const base = slugify(cleanName);

@@ -15,7 +15,8 @@ import { CommandError, killTree, npmCommand, run } from './lib/exec.mjs';
 import { ensureKeystore } from './lib/keystore.mjs';
 import { renameWithRetry, tryLock } from './lib/lock.mjs';
 import { fillKotlinPlaceholders, KOTLIN_ICON, syncKotlinIcon } from './lib/kotlin.mjs';
-import { checkPreset, presetOf, readKotlinMeta } from './lib/presets.mjs';
+import { createExactApp, ensureExact, exactDirFor, exactEnv, extractExactError, runExactAndroidBuild } from './lib/exact.mjs';
+import { checkPreset, presetOf, readAppMeta, readKotlinMeta } from './lib/presets.mjs';
 import { claimSpare, refillSparesInBackground } from './lib/spare.mjs';
 import { DEPS_STAMP, depsHash, makeAppTree, templateHash } from './lib/template.mjs';
 
@@ -48,6 +49,12 @@ export async function createApp({ dir, name, slug, packageName, preset, onLog = 
   await fsp.mkdir(path.dirname(dir), { recursive: true });
 
   const t0 = Date.now();
+  if (preset === 'expo-exact') {
+    // `exact new` makes the app in about a second, so there is no spare (lib/exact.mjs).
+    await createExactApp(dir, { name: String(name).trim(), slug, packageName }, onLog);
+    onLog(`Created ${dir} with Expo Exact (${((Date.now() - t0) / 1000).toFixed(1)}s).`);
+    return;
+  }
   const hash = templateHash(preset);
   let how = 'spare';
   if (!(await claimSpare(dir, hash, preset))) {
@@ -93,7 +100,8 @@ async function fillPlaceholders(dir, { name, slug, packageName }) {
 // getIconPath
 
 export function getIconPath({ dir }) {
-  if (readKotlinMeta(dir)) {
+  // Kotlin and Expo Exact apps: icon.png at the project root (an Exact app has none yet: null).
+  if (readAppMeta(dir)) {
     const p = path.resolve(dir, KOTLIN_ICON);
     return fs.existsSync(p) ? p : null;
   }
@@ -163,8 +171,8 @@ async function runBuild(dir, n, onLog, preset) {
     const kotlin = preset === 'kotlin';
     let slug;
     let packageName;
-    if (kotlin) {
-      const meta = readKotlinMeta(dir);
+    if (kotlin || preset === 'expo-exact') {
+      const meta = readAppMeta(dir);
       slug = meta.slug ?? path.basename(dir);
       packageName = meta.package;
     } else {
@@ -173,6 +181,37 @@ async function runBuild(dir, n, onLog, preset) {
       packageName = appJson.expo?.android?.package;
     }
     say(`Building ${packageName ?? slug} #${n} (${preset}) in ${dir}`);
+    const finish = (built) => finishApk({ built, sdk, n, dir, slug, packageName, preset, t0, timings, logFile, say });
+
+    if (preset === 'expo-exact') {
+      // Exact's own Android build (Rust, then Gradle), with the builder's init script for the
+      // shared key and versionCode (lib/exact.mjs, builder/exact/pin.json).
+      const exactDir = await phase('exact-setup', () => ensureExact(dir, say, { env: exactEnv(env, { javaHome, sdk, exactDir: exactDirFor(dir) }).env }));
+      const { env: xenv, bun } = exactEnv(env, { javaHome, sdk, exactDir });
+      const gradleProps = {
+        ORG_GRADLE_PROJECT_anyappVersionCode: String(n),
+        ORG_GRADLE_PROJECT_anyappStoreFile: keystore.storeFile,
+        ORG_GRADLE_PROJECT_anyappStorePassword: keystore.storePassword,
+        ORG_GRADLE_PROJECT_anyappKeyAlias: keystore.keyAlias,
+        ORG_GRADLE_PROJECT_anyappKeyPassword: keystore.keyPassword,
+      };
+      say('Running the Expo Exact Android build (Rust, then Gradle)…');
+      const built = await phase('exact', async () => {
+        try {
+          return await runExactAndroidBuild(dir, {
+            env: { ...xenv, ...gradleProps },
+            bun,
+            exactDir,
+            extraGradleArgs: ['--init-script', path.join(BUILDER_DIR, 'anyapp.init.gradle')],
+            stream,
+          });
+        } catch (e) {
+          const lines = e.lines ?? [];
+          throw new BuildError(extractExactError(lines) ?? extractGradle(lines) ?? `The Expo Exact build failed:\n${tail(lines)}`);
+        }
+      });
+      return await finish(built);
+    }
 
     const tscHandle = {};
     const gradleHandle = {};
@@ -289,35 +328,7 @@ async function runBuild(dir, n, onLog, preset) {
     // 5. Check, copy and fingerprint the APK.
     const built = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
     if (!fs.existsSync(built)) throw new BuildError(`Gradle succeeded but ${built} is missing`);
-    const badging = await readBadging(sdk, built);
-    if (badging && badging.versionCode !== n) {
-      throw new BuildError(`APK versionCode is ${badging.versionCode}, expected ${n} (the builder's init script did not apply)`);
-    }
-    if (kotlin && badging && packageName && badging.packageName !== packageName) {
-      throw new BuildError(
-        `The app's package id is ${badging.packageName} but must stay ${packageName} (anyapp.json, used by app/build.gradle.kts). Put it back: a different id cannot update the app on the phone.`,
-      );
-    }
-    const outDir = path.join(dir, 'build', 'apk');
-    await fsp.mkdir(outDir, { recursive: true });
-    const apkPath = path.join(outDir, `${slug}-${n}.apk`);
-    await fsp.copyFile(built, apkPath);
-    await pruneApks(outDir, KEEP_APKS);
-    const buf = await fsp.readFile(apkPath);
-    const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
-    const durationMs = Date.now() - t0;
-    say(`APK ready: ${apkPath} (${(buf.length / 1048576).toFixed(1)} MB) in ${(durationMs / 1000).toFixed(1)}s`);
-    return {
-      apkPath,
-      sizeBytes: buf.length,
-      sha256,
-      versionCode: n,
-      packageName: badging?.packageName ?? packageName,
-      preset,
-      durationMs,
-      timings,
-      logPath: logFile,
-    };
+    return await finish(built);
   } catch (e) {
     const msg = e instanceof BuildError ? e.message : e instanceof CommandError ? `${e.message}\n${tail(e.lines)}` : e.message;
     logStream.write(`[builder] FAILED: ${msg}\n`);
@@ -327,6 +338,40 @@ async function runBuild(dir, n, onLog, preset) {
   } finally {
     await new Promise((r) => logStream.end(r));
   }
+}
+
+/** Checks the built APK (versionCode, package id), copies it to build/apk/ and fingerprints it. */
+async function finishApk({ built, sdk, n, dir, slug, packageName, preset, t0, timings, logFile, say }) {
+  const badging = await readBadging(sdk, built);
+  if (badging && badging.versionCode !== n) {
+    throw new BuildError(`APK versionCode is ${badging.versionCode}, expected ${n} (the builder's init script did not apply)`);
+  }
+  if (preset !== 'react-native' && badging && packageName && badging.packageName !== packageName) {
+    const where = preset === 'kotlin' ? 'anyapp.json, used by app/build.gradle.kts' : 'app.json app.id';
+    throw new BuildError(
+      `The app's package id is ${badging.packageName} but must stay ${packageName} (${where}). Put it back: a different id cannot update the app on the phone.`,
+    );
+  }
+  const outDir = path.join(dir, 'build', 'apk');
+  await fsp.mkdir(outDir, { recursive: true });
+  const apkPath = path.join(outDir, `${slug}-${n}.apk`);
+  await fsp.copyFile(built, apkPath);
+  await pruneApks(outDir, KEEP_APKS);
+  const buf = await fsp.readFile(apkPath);
+  const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
+  const durationMs = Date.now() - t0;
+  say(`APK ready: ${apkPath} (${(buf.length / 1048576).toFixed(1)} MB) in ${(durationMs / 1000).toFixed(1)}s`);
+  return {
+    apkPath,
+    sizeBytes: buf.length,
+    sha256,
+    versionCode: n,
+    packageName: badging?.packageName ?? packageName,
+    preset,
+    durationMs,
+    timings,
+    logPath: logFile,
+  };
 }
 
 /** Files whose change requires `expo prebuild` to run again. */

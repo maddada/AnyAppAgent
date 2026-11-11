@@ -151,3 +151,39 @@ an unknown preset, the PNG code, two real builds (versionCode, size, icon sizes 
 Error messages are cut to what an agent needs: TypeScript errors, the Metro error (file, line,
 code frame), Kotlin/Java compiler errors and Gradle's "What went wrong", npm `ERESOLVE`s, or
 prebuild/config-plugin errors; never more than ~60 lines.
+
+## The Expo Exact preset (alpha)
+
+`createApp({ ..., preset: 'expo-exact' })` makes an [Expo Exact](https://github.com/expo/exact) app:
+the view in Contract (`app.contract`), the data in TypeScript (`app.ts`), built for Android by
+Exact's own scripts. Exact is pre-1.0 and changes daily, so the builder pins it
+(`exact/pin.json`, commit `c3eb81b7`) and applies `exact/windows.patch`, because Exact does not
+build Android on a Windows host yet. The fixes were sent upstream as issues (Exact takes fixes as
+issues, not pull requests): expo/exact#147 (CRLF checkout; handled here by cloning with
+`core.autocrlf=false`), #148 (NDK `windows-x86_64` tools), #149 (verbatim `\\?\C:\` roots) and
+#150 (Gradle wrapper on Windows). The patch also adds `EXACT_GRADLE_ARGS`, through which the builder
+passes `anyapp.init.gradle` (shared key, `versionCode = buildNumber`). Drop the patch and move the
+pin once upstream has the fixes.
+
+- **Where**: the checkout is two folders above the apps (`C:\aa\exact` for `C:\aa\apps\<slug>`),
+  because an Exact app refers to it as `../../exact` (`ANYAPP_EXACT_DIR` overrides it, but then the
+  app's own `bun exact.mjs` needs `EXACT2`). `ensureExact` clones it once, refuses a checkout at
+  another commit, applies the patch if needed, and runs `exact setup` once (marker file).
+- **Needs**: Bun 1.4.2 (`%USERPROFILE%\.bun-1.4.2`, or `ANYAPP_BUN`), rustup (`exact setup` adds
+  the pinned toolchains and `aarch64-linux-android`), the SDK's NDK, JDK 17+. About 8.5 GB of tools
+  once, then about 6.3 GB per app (each app has its own `target/`).
+- **createApp**: `exact new <dir> --with android --name <name> --bundle-id <package>` (about 1 s,
+  so no spare), then `anyapp.json`, `template-exact/AGENTS.md` above Exact's own block, a plain
+  `CLAUDE.md` and `/build/` in `.gitignore`.
+- **buildApk**: `bun <exact>/scripts/agent-android.mjs build <app> --apk` (Rust for
+  `aarch64-linux-android`, then Gradle 9.8), then the same APK checks as the other presets.
+- **Not there yet**: no launcher icon (Exact's Android shell has none, `getIconPath` returns null),
+  no AI through AnyAppAgent (an Exact app's data runs in Hermes behind Exact's data seam; reaching
+  AnyAppAgent's bound service needs an Android native data module, which Exact does not document
+  yet), arm64 only (the emulator runs it through Android's arm64 translation).
+
+Measured on this PC: `exact setup` (already set up) 2 min 20 s; `createApp` 0.9 s; first build of
+a new app 6 min 25 s; rebuild after a one-line change 61 s; APK 28.0 MB.
+
+`test/exact.test.mjs` checks the pin and the patch, creating an app (skipped without Bun or the
+checkout), and with `ANYAPP_EXACT_BUILD_TEST=1` a real build.
