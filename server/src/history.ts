@@ -33,7 +33,9 @@ export interface HistoryHost {
 }
 
 const MAX_TEXT = 300;
-const DIARY_WAIT_MS = 25_000;
+// The phone first waits for an install of that app that is running (up to 42 s), then asks the app
+// (10 s). Claude Code gives up on an MCP tool call after about 60 s, so all of it stays under that.
+const DIARY_WAIT_MS = 56_000;
 
 function clean(text: unknown, max = MAX_TEXT): string | undefined {
   if (typeof text !== "string") return undefined;
@@ -226,11 +228,18 @@ export class History {
       const problem =
         answer?.problem === "not_installed"
           ? "the app is not on your phone"
+          : answer?.problem === "installing"
+            ? "the app is still being installed on your phone"
           : answer?.problem === "not_supported"
             ? "this version of the app does not keep a diary yet"
             : "the app on your phone did not answer";
       this.host.diaryRead(appId, { ok: false, entries: 0, problem });
-      const hint = answer?.problem === "not_supported" ? " Apps get the diary from the template; the next version you build has it if the app uses src/lib/diary.ts (or Diary.note in Kotlin)." : "";
+      const hint =
+        answer?.problem === "not_supported"
+          ? " Apps get the diary from the template; the next version you build has it if the app uses src/lib/diary.ts (or Diary.note in Kotlin)."
+          : answer?.problem === "installing"
+            ? " The phone waited for the install, and it is not done yet. In this same turn, wait about 30 seconds (run sleep 30 in the foreground) and call read_diary again before you answer; do not ask the person to do anything for it."
+            : "";
       return `The diary could not be read: ${problem}.${hint}`;
     }
     const entries = cleanDiary(answer.entries);

@@ -35,6 +35,17 @@ export interface InstallStatusEvent {
   packageName?: string | null;
 }
 
+/** Something shared into AnyAppAgent from another app ("Like this, but mine"). */
+export interface SharedItem {
+  /** EXTRA_TEXT: often a link, sometimes a line of text around one. */
+  text: string | null;
+  subject: string | null;
+  /** Pictures copied into AnyAppAgent's cache (file:// uris), at most 6. */
+  pictures: { uri: string; mimeType: string; width: number; height: number }[];
+  /** Shared files that were not pictures, too large, or unreadable. */
+  skipped: number;
+}
+
 type Events = {
   onInstallStatus: (event: InstallStatusEvent) => void;
   /** The phone's network changed (debounced 750 ms). */
@@ -45,6 +56,8 @@ type Events = {
   onAppDiary: (event: { packageName: string; requestId: string; diary: string }) => void;
   /** An app reported the version it runs, or a quick update it refused or rolled back. */
   onAppReport: (event: { packageName: string }) => void;
+  /** Something was shared into AnyAppAgent while it was running: takeSharedItem() has it. */
+  onShareIn: () => void;
 };
 
 declare class AnyAppNativeModule extends NativeModule<Events> {
@@ -89,6 +102,17 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   takeWaitingCrashes?(): string;
   /** Asks an app for its diary (answer: onAppDiary); false when the app is not on this phone. */
   requestDiary?(packageName: string, requestId: string): boolean;
+  /** The share AnyAppAgent was opened with or received last, once (null after). Missing on older builds. */
+  takeSharedItem?(): Promise<SharedItem | null>;
+  /**
+   * Opens Android's share sheet with the app's installed APK, named "<appName>.apk". Rejects with a
+   * plain sentence (not on this phone, installed in parts). Missing on older builds.
+   */
+  shareApk?(packageName: string, appName: string, title: string): Promise<boolean>;
+  /** Android's save screen for the same file ("Save to Files"): true when saved, false when cancelled. */
+  saveApk?(packageName: string, appName: string): Promise<boolean>;
+  /** Resolves after `ms`, also while AnyAppAgent is behind another screen (JS timers wait for it to return). */
+  delay?(ms: number): Promise<void>;
   /** Starts the keep-alive foreground service (only allowed in front), or changes its text when it runs. */
   startKeepAlive(text: string, color: string | null): boolean;
   /** True while the keep-alive service runs in the foreground: this process is not frozen. */

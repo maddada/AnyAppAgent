@@ -31,7 +31,12 @@
         "android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION",
         "android.permission.RECORD_AUDIO"
       ],
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        { "action": "SEND", "category": ["DEFAULT"], "data": [{ "mimeType": "image/*" }] },
+        { "action": "SEND_MULTIPLE", "category": ["DEFAULT"], "data": [{ "mimeType": "image/*" }] },
+        { "action": "SEND", "category": ["DEFAULT"], "data": [{ "mimeType": "text/plain" }] }
+      ]
     },
     "plugins": [
       "expo-router",

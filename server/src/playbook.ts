@@ -46,6 +46,19 @@ Small changes (a colour, a word, a fix, a bug) need no plan: just do them.`;
 }
 
 /** The first message of a new app as the agent gets it (the chat shows only the person's words). */
+/**
+ * "Like this, but mine" (shared into AnyAppAgent from another app's share sheet): the note the agent
+ * gets with the person's message. The person sees only their own words, the link and the pictures.
+ */
+export function sharedInNote(hasLink: boolean): string {
+  return `(From the PC: the person shared this from another app with AnyAppAgent's share button: "Like
+this, but mine". They want what the picture${hasLink ? " or the link" : ""} shows, made their own, with
+what they wrote about what to keep and what to change. Take the idea, layout and features, not the
+other app's name, logo or artwork.${hasLink ? ` Read the linked page with your web tools if you have
+them. If you cannot open it (no web access, a sign-in, an app-only link), say in one plain line what
+you could not see, work from what you have, and ask for a screenshot if it matters.` : ""})`;
+}
+
 export function firstPrompt(prompt: string, opts: { askMore: boolean; planFirst: boolean }): string {
   if (opts.askMore && opts.planFirst) {
     return `${prompt}
