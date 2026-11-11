@@ -18,7 +18,7 @@ export interface Attachment {
 let counter = 0;
 
 /** Downscales to at most 1568 px on the long edge and re-encodes as JPEG with its base64. */
-async function prepare(uri: string, width: number, height: number): Promise<Attachment> {
+export async function prepare(uri: string, width: number, height: number): Promise<Attachment> {
   const fit = fitWithin(width, height);
   const out = await manipulateAsync(uri, fit.scaled ? [{ resize: { width: fit.width, height: fit.height } }] : [], {
     compress: IMAGE_QUALITY,

@@ -32,6 +32,7 @@ import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
 import { workerApiRoute, workerToolsRoute } from "./worker-http.ts";
+import { sharedInNote } from "./playbook.ts";
 
 const MAX_BODY = 1024 * 1024;
 /** A message can carry pictures (up to 6, each at most about 5 MB as base64) and long pasted text. */
@@ -319,8 +320,8 @@ export function startHttpServer(deps: {
     if (path === "/api/apps") {
       if (method === "GET") return sendJson(res, 200, apps.list());
       if (method === "POST") {
-        const body = await readBody<CreateAppRequest>(req);
-        return sendJson(res, 201, apps.create(str(body.name, "name"), str(body.prompt, "prompt"), body.preset, body.askMore === true));
+        const body = await readBody<CreateAppRequest>(req, MAX_MESSAGE_BODY);
+        return sendJson(res, 201, apps.create(str(body.name, "name"), str(body.prompt, "prompt"), body.preset, body.askMore === true, Array.isArray(body.images) ? body.images : [], body.sharedIn === true));
       }
       return sendError(res, 405, "Method not allowed.");
     }
@@ -447,7 +448,8 @@ export function startHttpServer(deps: {
       }
       if (method === "POST") {
         const body = await readBody<SendMessageRequest>(req, MAX_MESSAGE_BODY);
-        apps.sendMessage(id, body.text === undefined && body.images?.length ? "" : str(body.text, "text"), Array.isArray(body.images) ? body.images : []);
+        const text = body.text === undefined && body.images?.length ? "" : str(body.text, "text");
+        apps.sendMessage(id, text, Array.isArray(body.images) ? body.images : [], body.sharedIn === true ? sharedInNote(/https?:\/\//i.test(text)) : "");
         return sendJson(res, 202, {});
       }
     } else if (method === "POST" && action === "cancel") {

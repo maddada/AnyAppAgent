@@ -94,8 +94,9 @@ The card: "Apps keep a small private log of what they did ("Asr alarm set for 15
   (action `com.anyapp.action.DIARY_REQUEST`, package = the app, extra `requestId`); the app's
   receiver answers only to its installer (action `com.anyappagent.action.DIARY`, extras
   `requestId`, `diary` = JSON array of `{at, text}`, `sender` as above); AnyAppAgent posts it to
-  the PC (`POST /api/apps/:id/diary`). No phone connected, or no answer within 25 s: the tool
-  says so in a sentence, and the chat line says so too.
+  the PC (`POST /api/apps/:id/diary`). While that app is being installed, the phone first waits
+  for the install (up to 60 s). No phone connected, or no answer within 80 s: the tool says so in
+  a sentence, and the chat line says so too.
 
 Protocol (additive): `ChatItemKind` `crash` and `diary`, `ChatItem.crash`, `ChatItem.diary`,
 `CrashReport`, `CrashInfo`, `DiaryEntry`, `DiaryReadInfo`, `DiaryAnswer`,

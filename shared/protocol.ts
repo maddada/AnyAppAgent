@@ -378,6 +378,12 @@ export interface CreateAppRequest {
   preset?: AppPreset; // default "react-native"; an unknown value is refused with 400
   // Added: "Ask me more": before it plans, the agent asks the person questions about the app (on a page).
   askMore?: boolean;
+  // Added: pictures for the first message (the same limits as SendMessageRequest.images). An older PC ignores them.
+  images?: ImageUpload[];
+  // Added: shared into AnyAppAgent from another app ("Like this, but mine"): the PC adds a short
+  // note for the agent (make it like the picture or link, with the person's changes; open a link
+  // if it can, otherwise say what it could not see).
+  sharedIn?: boolean;
 }
 
 // GET /api/apps/:id/icon -> image/png (the app's launcher icon; a generated placeholder until it has one)
@@ -392,6 +398,7 @@ export interface CreateAppRequest {
 export interface SendMessageRequest {
   text: string; // may be "" when images are sent
   images?: ImageUpload[]; // pictures sent with the message (limits: shared/chat/images.ts)
+  sharedIn?: boolean; // added: as CreateAppRequest.sharedIn ("Like this, but mine" into an existing app)
 }
 
 // A picture as it is sent: already downscaled on the device to at most 1568 px on the long edge.

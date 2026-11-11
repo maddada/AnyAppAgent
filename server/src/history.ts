@@ -33,7 +33,8 @@ export interface HistoryHost {
 }
 
 const MAX_TEXT = 300;
-const DIARY_WAIT_MS = 25_000;
+// The phone first waits for an install of that app that is running (up to 60 s), then asks the app.
+const DIARY_WAIT_MS = 80_000;
 
 function clean(text: unknown, max = MAX_TEXT): string | undefined {
   if (typeof text !== "string") return undefined;

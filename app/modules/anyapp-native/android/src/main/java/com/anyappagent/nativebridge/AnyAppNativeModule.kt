@@ -34,6 +34,9 @@ import java.util.concurrent.Executors
 /** Request codes for Android's install prompts (startActivityForResult): this + (session id and 0xff). */
 private const val PROMPT_REQUEST_BASE = 0x4100
 
+/** Request code for "Save to Files" (ACTION_CREATE_DOCUMENT), outside the prompts' range. */
+private const val SAVE_APK_REQUEST = 0x4300
+
 class InstallException(message: String) : CodedException("ERR_INSTALL", message, null)
 
 class EasyConnectException(message: String) : CodedException("ERR_EASY_CONNECT", message, null)
@@ -69,10 +72,24 @@ class AnyAppNativeModule : Module() {
 
   private var networkObserver: NetworkObserver? = null
 
+  /** "Save to Files": the APK copy and the JS promise, while Android's save screen is open. */
+  @Volatile private var pendingSave: Pair<File, Promise>? = null
+
+  /** The newest share that arrived while AnyAppAgent was running (onNewIntent), until JS takes it. */
+  @Volatile private var sharedIntent: Intent? = null
+
   override fun definition() = ModuleDefinition {
     Name("AnyAppNative")
 
-    Events("onInstallStatus", "onNetworkChanged", "onAppReport", "onAppCrash", "onAppDiary")
+    Events("onInstallStatus", "onNetworkChanged", "onAppReport", "onAppCrash", "onAppDiary", "onShareIn")
+
+    // Shared into AnyAppAgent while it runs ("Like this, but mine"): JS takes it with takeSharedItem.
+    OnNewIntent { intent ->
+      if (ShareFiles.isShare(intent)) {
+        sharedIntent = intent
+        sendEvent("onShareIn", mapOf<String, Any>())
+      }
+    }
 
     OnCreate {
       AppReports.onCrash = { pkg -> sendEvent("onAppCrash", mapOf("packageName" to pkg)) }
@@ -300,6 +317,80 @@ class AnyAppNativeModule : Module() {
         true
       } catch (_: SecurityException) {
         false
+      }
+    }
+
+    // ---------- the share sheet: "Like this, but mine" in, "Send app" out
+
+    /** What was shared into AnyAppAgent (the newest share, or the one it was opened with), once; null when nothing. */
+    AsyncFunction("takeSharedItem") {
+      val intent = sharedIntent ?: appContext.currentActivity?.intent
+      sharedIntent = null
+      ShareFiles.take(context, intent)
+    }
+
+    /** Opens the share sheet with the app's installed APK as "<name>.apk". Rejects with a plain sentence. */
+    AsyncFunction("shareApk") { packageName: String, appName: String, title: String, promise: Promise ->
+      val chooser = try {
+        ShareFiles.apkShareIntent(context, packageName, appName, title)
+      } catch (e: ShareFiles.SendException) {
+        promise.reject(CodedException("ERR_SEND_APP_${e.code.uppercase()}", e.message ?: "It could not be sent.", null))
+        return@AsyncFunction
+      } catch (e: Exception) {
+        promise.reject(CodedException("ERR_SEND_APP", "The app could not be copied for sending.", e))
+        return@AsyncFunction
+      }
+      Handler(Looper.getMainLooper()).post {
+        if (startActivity(chooser)) promise.resolve(true)
+        else promise.reject(CodedException("ERR_SEND_APP", "The share sheet did not open.", null))
+      }
+    }
+
+    /** Android's save screen for the app's APK ("<appName>.apk"); true when it was saved, false when cancelled. */
+    AsyncFunction("saveApk") { packageName: String, appName: String, promise: Promise ->
+      val activity = appContext.currentActivity
+      if (activity == null) {
+        promise.reject(CodedException("ERR_SAVE_APP", "Open AnyAppAgent and try again.", null))
+        return@AsyncFunction
+      }
+      val file = try {
+        ShareFiles.copyApk(context, packageName, appName)
+      } catch (e: ShareFiles.SendException) {
+        promise.reject(CodedException("ERR_SEND_APP_${e.code.uppercase()}", e.message ?: "It could not be saved.", null))
+        return@AsyncFunction
+      } catch (e: Exception) {
+        promise.reject(CodedException("ERR_SAVE_APP", "The app could not be copied for saving.", e))
+        return@AsyncFunction
+      }
+      pendingSave?.second?.resolve(false)
+      pendingSave = file to promise
+      Handler(Looper.getMainLooper()).post {
+        try {
+          activity.startActivityForResult(ShareFiles.saveIntent(file), SAVE_APK_REQUEST)
+        } catch (e: Exception) {
+          pendingSave = null
+          promise.reject(CodedException("ERR_SAVE_APP", "This phone has no screen for saving files.", null))
+        }
+      }
+    }
+
+    OnActivityResult { _, payload ->
+      if (payload.requestCode != SAVE_APK_REQUEST) return@OnActivityResult
+      val (file, promise) = pendingSave ?: return@OnActivityResult
+      pendingSave = null
+      val target = payload.data?.data
+      if (payload.resultCode != Activity.RESULT_OK || target == null) {
+        promise.resolve(false)
+        return@OnActivityResult
+      }
+      easyConnectExecutor.execute {
+        try {
+          context.contentResolver.openOutputStream(target, "w")?.use { out -> file.inputStream().use { it.copyTo(out, 256 * 1024) } }
+            ?: throw IllegalStateException("no stream")
+          promise.resolve(true)
+        } catch (e: Exception) {
+          promise.reject(CodedException("ERR_SAVE_APP", "It could not be saved there. Pick another place.", null))
+        }
       }
     }
 
