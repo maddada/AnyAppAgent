@@ -17,6 +17,7 @@ import { commitAll } from "./git.ts";
 import { checkCommand } from "./playbook.ts";
 import { nowIso, readJson, writeJsonAtomic } from "./fs-util.ts";
 import { existsSync } from "node:fs";
+import { isJsonObject } from "./acp/acp-client.ts";
 import {
   appBranch,
   ensureHelperCopy,
@@ -49,6 +50,10 @@ export interface WorkerHost {
   report(record: AppRecord, workerId: string, text: string): void;
   /** A worker started or settled: the app's status may change. */
   activityChanged(record: AppRecord): void;
+  /** The page tools (show_page) for a worker's session: its pages show in the main chat. */
+  pageTools?(appId: string, from: { workerId: string; title: string }): unknown;
+  /** Tool calls that are plumbing and never shown (the page tools: a page card stands for them). */
+  hiddenTool?(update: Record<string, unknown>): boolean;
 }
 
 interface WorkerRecord {
@@ -82,6 +87,8 @@ interface WorkerRuntime {
   stopRequested: boolean;
   latestTimer?: NodeJS.Timeout;
   latestShownAt: number;
+  /** ACP tool call ids that are never shown (hiddenTool). */
+  hiddenTools: Set<string>;
 }
 
 interface AppWorkers {
@@ -188,7 +195,7 @@ export class WorkerManager {
     const key = `${appId}/${workerId}`;
     let rt = this.runtimes.get(key);
     if (!rt) {
-      rt = { translator: new ChatTranslator({ cwd, newId: () => randomUUID() }), running: false, stopRequested: false, latestShownAt: 0 };
+      rt = { translator: new ChatTranslator({ cwd, newId: () => randomUUID() }), running: false, stopRequested: false, latestShownAt: 0, hiddenTools: new Set() };
       this.runtimes.set(key, rt);
     }
     return rt;
@@ -361,8 +368,18 @@ export class WorkerManager {
       env: appsCliEnv(this.host.stateDir, appId),
       ...(w.sessionId ? { resumeSessionId: w.sessionId } : {}),
       instructions: workerPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: cwd, preset: record.app.preset }, w.info),
+      ...(this.host.pageTools ? { mcpServers: [this.host.pageTools(appId, { workerId: w.info.id, title: w.info.title })] } : {}),
       launch: claudeLaunchSpec(this.host.config.acpLaunch),
       onUpdate: (update) => {
+        if (this.host.hiddenTool && isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
+          const toolCallId = String(update["toolCallId"] ?? "");
+          if (rt.hiddenTools.has(toolCallId)) return;
+          if (this.host.hiddenTool(update)) {
+            rt.hiddenTools.add(toolCallId);
+            for (const draft of rt.translator.closeStreams()) this.emitWorkerItem(appId, w.info.id, draft);
+            return;
+          }
+        }
         for (const draft of rt.translator.translate(update)) {
           this.emitWorkerItem(appId, w.info.id, draft);
           if (draft.kind === "tool" && draft.tool && draft.tool.status !== "failed") this.noteLatest(record, w, rt, draft.tool.title);

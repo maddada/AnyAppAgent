@@ -83,7 +83,7 @@ const [cmd, ...rest] = argv;
 
 // The emulator is shared with other threads: only ever send input to our own windows (and the
 // system screens our flow opens). If someone else's app is in front, bring ours back first.
-const PACKAGE = process.env.ANYAPP_UI_PACKAGE || "com.anyappagent";
+const PACKAGE = process.env.ANYAPP_UI_PACKAGE || process.env.UI_PACKAGE || "com.anyappagent";
 const OURS = [(name) => name === PACKAGE, /packageinstaller/, /permissioncontroller/, /com\.android\.settings/, /^$/].map((r) =>
   typeof r === "function" ? r : (name) => r.test(name),
 );
@@ -98,7 +98,7 @@ async function ensureOurs() {
     if (isOurs(f)) return;
     console.error(`(someone else's window is in front: ${f}; bringing ${PACKAGE} back)`);
     try {
-      adb("shell", "am", "start", "-n", `${PACKAGE}/com.anyappagent.MainActivity`);
+      adb("shell", "am", "start", "-n", `${PACKAGE}/.MainActivity`);
     } catch {
       break; // not installed: nothing to bring back
     }

@@ -1,8 +1,8 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
-export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, TodoItem, WorkerInfo };
+export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, PageInfo, TodoItem, WorkerInfo };
 
 /** One self-check in the setup checklist. */
 export type CheckState = "checking" | "done" | "needed" | "working" | "skipped" | "problem";
@@ -248,7 +248,10 @@ export interface AnyAppBridge {
   /** Sends the item's text to the app's chat as a message, then ticks it off. */
   sendTodo(appId: string, todoId: string): Promise<ActionResult>;
   /** New app from this PC: the same as the phone's New app sheet (preset: Advanced, default React Native). */
-  createApp(name: string, prompt: string, preset?: AppPreset): Promise<ActionResult & { app?: App }>;
+  /** askMore: "Ask me more", the agent asks the person questions about the app before it plans it. */
+  createApp(name: string, prompt: string, preset?: AppPreset, askMore?: boolean): Promise<ActionResult & { app?: App }>;
+  /** Opens a page an app's agent published, in its own window over the app. */
+  openPage(appId: string, pageId: string, title?: string): Promise<ActionResult>;
 
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>;
   restartCompanion(): Promise<void>;

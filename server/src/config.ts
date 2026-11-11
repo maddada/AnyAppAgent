@@ -22,6 +22,8 @@ export interface Config {
   askPermissions: boolean;
   /** Each app's main chat is a coordinator that hands work to workers (docs/APP-COORDINATOR.md). */
   coordinator: boolean;
+  /** The agent explains its plan (bullets and a page) and waits for a yes before it builds a new app. ANYAPP_PLAN_FIRST=off skips that (scripts). */
+  planFirst: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -38,5 +40,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxBuildFixes: 3,
     askPermissions: env.ANYAPP_ASK_PERMISSIONS === "1",
     coordinator: !["off", "0", "false", "no"].includes((env.ANYAPP_COORDINATOR ?? "on").toLowerCase()),
+    planFirst: !["off", "0", "false", "no"].includes((env.ANYAPP_PLAN_FIRST ?? "on").toLowerCase()),
   };
 }

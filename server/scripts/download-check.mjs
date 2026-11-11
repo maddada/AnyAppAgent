@@ -83,6 +83,8 @@ function startServer() {
       ANYAPP_FAKE_BUILD_MS: "12000",
       ANYAPP_FAKE_APK_DIR: apkDir,
       ANYAPP_GITHUB: "off",
+
+      ANYAPP_PLAN_FIRST: "off", // the script expects a build right after the first prompt (docs/PAGES.md)
       ANYAPP_COORDINATOR: coordinator,
       ANYAPP_ADMIN_TOKEN: ADMIN,
       ANYAPP_TAILCAT_BIN: tailcat,

@@ -45,7 +45,7 @@ folder(s).
   code is fine; keep its MIT notice in `THIRD_PARTY_NOTICES.md`.
 - **One session per app**: each app has exactly one long-lived Claude Code session on the PC,
   working in that app's project folder. It is the only thing the user talks to for that app. Model
-  it on the Ghostex coordinator idea (`C:\Users\madda\.claude\skills\ghostex-orchestrator\SKILL.md`,
+  it on the Ghostex coordinator idea (`%USERPROFILE%\.claude\skills\ghostex-orchestrator\SKILL.md`,
   project at `C:\dev\Ghostex`): the session gets a short playbook that says it owns this one app
   for a non-technical user on a phone, answers in short plain language, never asks the user to run
   commands or open files, may hand large work to its own subagents, keeps the app building, and
@@ -211,3 +211,20 @@ after each prompt the user gives ... Just giving them access to the code is enou
   folder. Other apps are read only (playbook rule; the command itself never writes).
 - **Reuse**: the playbooks tell the main chat to check the person's other apps before a new app or
   feature and point the helper at what to reuse, and tell helpers to read and copy that code.
+
+## Pages in the chat, plan first, "Ask me more" (added 2026-11-11)
+
+The user: "the agent should always write bullet points and subpoints and give HTML that explains the
+app that it's going to build before it starts, so the user can confirm. Copy how inline HTML works in
+Ghostex", answering questions inside the page, the same page on the phone and the PC, and an "Ask me
+more" option in the New app sheet.
+
+- An app's agent (or a helper it asks) publishes a self-contained HTML page into the app's main chat
+  with the `show_page` tool (MCP server `pages`). The chat shows a card; the phone opens it in a web
+  view, the PC in a window. Ghostex's page kit (question kit, drafts, answers, Mark as seen) is copied
+  as is, with the Workbench theme. Answers reach the agent as one message (`<page-answers ...>`).
+- Pages are sandboxed: an opaque origin, no bridge into the phone app, no session token (a signed
+  ticket opens each page), fetches only to the page's own routes and https.
+- Plan first: before a new app or a large change, the plan in bullets and a plan page, then wait for
+  "Build it" or a yes. "Ask me more" adds a question page before the plan.
+- Details, routes and the protocol additions: `docs/PAGES.md`.

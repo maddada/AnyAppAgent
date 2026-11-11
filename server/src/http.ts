@@ -298,6 +298,12 @@ export function startHttpServer(deps: {
       res.writeHead(204);
       return void res.end();
     }
+    if (path.startsWith("/page/") || path.startsWith("/page-kit/")) {
+      if (await apps.pages.route(req, res, path, url)) return;
+    }
+    if (path.startsWith("/mcp/pages/")) {
+      if (await apps.pages.mcpRoute(req, res, path, url)) return;
+    }
     if (path.startsWith("/mcp/")) {
       const exists = (appId: string) => apps.list().some((app) => app.id === appId);
       if (await workerToolsRoute(req, res, path, { workers: apps.workers, appExists: exists, log })) return;
@@ -310,7 +316,7 @@ export function startHttpServer(deps: {
       if (method === "GET") return sendJson(res, 200, apps.list());
       if (method === "POST") {
         const body = await readBody<CreateAppRequest>(req);
-        return sendJson(res, 201, apps.create(str(body.name, "name"), str(body.prompt, "prompt"), body.preset));
+        return sendJson(res, 201, apps.create(str(body.name, "name"), str(body.prompt, "prompt"), body.preset, body.askMore === true));
       }
       return sendError(res, 405, "Method not allowed.");
     }
@@ -323,6 +329,21 @@ export function startHttpServer(deps: {
       if (method === "HEAD") return void res.end();
       streamFile(res, found.path);
       return;
+    }
+    // Pages: GET /api/apps/:id/pages, POST /api/apps/:id/pages/:pageId/open
+    const pages = /^\/api\/apps\/([^/]+)\/pages(?:\/([0-9a-f]{32})\/open)?$/.exec(path);
+    if (pages) {
+      const appId = decodeURIComponent(pages[1]);
+      apps.get(appId);
+      if (!pages[2] && method === "GET") return sendJson(res, 200, apps.pages.list(appId));
+      if (pages[2] && method === "POST") {
+        try {
+          return sendJson(res, 200, apps.pages.open(appId, pages[2]));
+        } catch (error) {
+          return sendError(res, (error as { status?: number }).status ?? 500, (error as Error).message);
+        }
+      }
+      return sendError(res, 405, "Method not allowed.");
     }
     // The person's to-do list: /api/apps/:id/todos[/:todoId[/send]]
     const todo = /^\/api\/apps\/([^/]+)\/todos(?:\/([a-zA-Z0-9-]+)(\/send)?)?$/.exec(path);

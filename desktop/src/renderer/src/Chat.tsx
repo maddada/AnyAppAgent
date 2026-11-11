@@ -5,12 +5,12 @@
 import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FilePen, FileText, Folder, GitMerge, Globe, Hand, ImagePlus, ListTodo, Lock, MessageSquare, Mic, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
+  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FileCheck, FilePen, FileQuestion, FileText, Folder, GitMerge, Globe, Hand, ImagePlus, ListTodo, Lock, MessageSquare, Mic, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
 } from "lucide-react";
-import type { App, ChatImage, ChatItem, HexCheck, WorkerInfo } from "../../shared/types.ts";
+import type { App, ChatImage, ChatItem, HexCheck, PageInfo, WorkerInfo } from "../../shared/types.ts";
 import { DICTATE_HOTKEY, HOLD_MS, insertAt, isDictateHotkey, useDictation } from "./dictation.ts";
 import {
-  buildCard, buildRows, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
+  answerLines, buildCard, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
 } from "../../../../shared/chat/index.ts";
 import { drafts, useChat } from "./chatStore.ts";
 import { useHelperChat, useHelpers } from "./helperStore.ts";
@@ -489,6 +489,8 @@ const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App }) {
   if (row.type === "helper") return <HelperRow worker={row.worker} />;
   if (row.type === "stopped") return <StoppedRow label={row.label} />;
   if (row.type === "task") return <TaskCard label={row.label} text={row.text} />;
+  if (row.type === "page") return <PageCard page={row.page} />;
+  if (row.type === "answers") return <AnswersCard item={row.item} answers={row.answers} />;
   const item = row.item;
   switch (item.kind) {
     case "user":
@@ -777,6 +779,92 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
           >
             {retrying ? <Spinner /> : <Icon of={RotateCcw} size="sm" />} {retrying ? "Building" : "Try again"}
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ pages
+
+const PAGE_ICONS: Record<PageCardView["icon"], LucideIcon> = { "file-question": FileQuestion, "file-text": FileText, "file-check": FileCheck };
+
+/** Opens a page an agent published, in its own window; a problem comes back as a plain sentence. */
+function useOpenPage(appId: string, pageId: string, title: string): { open: () => void; opening: boolean; error: string | null } {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const open = () => {
+    if (opening) return;
+    setOpening(true);
+    setError(null);
+    void api.openPage(appId, pageId, title).then((r) => {
+      setOpening(false);
+      if (!r.ok) setError(r.error ?? "The page could not be opened. Try again.");
+    });
+  };
+  return { open, opening, error };
+}
+
+/** A page the agent published (shared/chat/pages.ts pageCard): what it is, what it wants, Open. */
+function PageCard({ page }: { page: PageInfo }) {
+  const view = pageCard(page);
+  const { open, opening, error } = useOpenPage(page.appId, page.id, page.title);
+  const waiting = view.state === "questions" || (view.state === "look" && page.awaitsSeen === true);
+  const done = view.state === "answered" || view.state === "seen";
+  return (
+    <div className={`card page-card is-${view.state}`} data-testid={`page-card-${page.id}`}>
+      <button className="page-card-main" onClick={open} aria-label={`${view.title}. ${view.status}. ${view.action}.`}>
+        <span className={`badge${done ? " ready" : ""}`}>
+          <Icon of={PAGE_ICONS[view.icon]} size="md" />
+        </span>
+        <span className="page-card-body">
+          <span className="page-card-eyebrow">Page</span>
+          <span className="heading page-card-title">{view.title}</span>
+          <span className={`row-type page-card-status${waiting ? " is-waiting" : ""}`}>{view.status}</span>
+          {view.from ? <span className="caption tertiary">{view.from}</span> : null}
+        </span>
+      </button>
+      <div className="page-card-actions">
+        <button className={`btn btn-sm ${waiting ? "btn-primary" : "btn-quiet"}`} onClick={open} disabled={opening} data-testid={`page-open-${page.id}`}>
+          {opening ? <Spinner /> : null} {view.action}
+        </button>
+      </div>
+      {error && <p className="label problem-text">{error}</p>}
+    </div>
+  );
+}
+
+/** The person's answers from a page: their side of the chat, one line per question. */
+function AnswersCard({ item, answers }: { item: ChatItem; answers: PageAnswers }) {
+  const lines = answerLines(answers.answers);
+  const { open, opening, error } = useOpenPage(item.appId, answers.pageId, answers.title);
+  const note = userNote(item);
+  return (
+    <div className="msg-user">
+      <div className="answers-card" data-testid={`answers-card-${answers.pageId}`}>
+        <div className="answers-head">
+          <Icon of={FileCheck} px={16} />
+          <span className="answers-title">Answers: {answers.title}</span>
+        </div>
+        <dl className="answers-lines">
+          {lines.map((line, i) => (
+            <div key={i} className="answers-line">
+              <dt className="caption secondary">{line.label}</dt>
+              {line.value ? <dd className="answers-value">{line.value}</dd> : null}
+              {line.note ? <dd className="answers-note">{line.note}</dd> : null}
+            </div>
+          ))}
+        </dl>
+        {answers.extra ? <div className="answers-extra">{answers.extra}</div> : null}
+        <button className="btn btn-text btn-sm answers-open" onClick={open} disabled={opening}>
+          {opening ? "Opening" : "Open page"}
+        </button>
+        {error && <p className="label problem-text">{error}</p>}
+      </div>
+      {note && (
+        <div className={`user-note caption is-${note.kind}`}>
+          {note.kind === "queued" && <Spinner />}
+          <span>{note.text}</span>
         </div>
       )}
     </div>

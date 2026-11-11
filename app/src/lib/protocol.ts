@@ -23,4 +23,6 @@ export type {
   ToolCallInfo,
   TodoItem,
   WorkerInfo,
+  PageInfo,
+  PageOpenResponse,
 } from "@shared/protocol";

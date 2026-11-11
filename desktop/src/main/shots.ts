@@ -5,6 +5,7 @@
 // screens with nothing secret on them, each QR popup, and a check that no pairing code is made or
 // renewed while no popup is open).
 import { nativeTheme, type BrowserWindow } from "electron";
+import { openPageWindows } from "./page-window.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -31,6 +32,7 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
   };
   const steps = ["welcome", "claude", "tools", "github", "phone-get", "phone-pair", "done"];
   if (set === "qr") return qrSet(win, js, shot, log).catch((e) => log(`[shots] qr set failed: ${(e as Error).message}`));
+  if (set === "pages") return pagesSet(win, js, shot, log).catch((e) => log(`[shots] pages set failed: ${(e as Error).message}`));
   if (set === "real") {
     // Against the real companion: a phone pairs (an outside script plays the phone), then an app is
     // created through the companion and must show up in the main window.
@@ -142,6 +144,49 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
 }
 
 type Js = (code: string) => Promise<unknown>;
+
+/**
+ * Pages in the chat, light and dark: the chat with a page card and an answers card, the page's own
+ * window, and the New app sheet with "Ask me more" on. Needs an app whose chat has a page (the fake
+ * companion's FAKE_SEED=1 idle apps, or a real one).
+ */
+async function pagesSet(win: BrowserWindow, js: (code: string) => Promise<unknown>, shot: (name: string) => Promise<void>, log: (l: string) => void): Promise<void> {
+  await js(`window.anyapp.setSetting("onboardingDone", true); window.__app.setup(null)`);
+  await wait(600);
+  const appId = (await js(`(async () => { const s = await window.anyapp.getSnapshot(); for (const a of s.apps) { const m = await window.anyapp.getMessages(a.id); if (m.some((i) => i.kind === "page")) return a.id; } return null })()`)) as string | null;
+  if (!appId) return log("[shots] no app has a page in its chat");
+  for (const theme of ["light", "dark"] as const) {
+    nativeTheme.themeSource = theme;
+    await wait(400);
+    await js(`window.__main.openApp(${JSON.stringify(appId)})`);
+    await wait(1200);
+    await shot(`${theme}-pages-1-chat`);
+    await js(`document.querySelector('[data-testid^="page-open-"]')?.click()`);
+    let page: BrowserWindow | undefined;
+    for (let i = 0; i < 40 && !page; i++) {
+      await wait(250);
+      page = openPageWindows()[0];
+    }
+    if (page) {
+      await new Promise<void>((r) => (page!.webContents.isLoading() ? page!.webContents.once("did-finish-load", () => r()) : r()));
+      await wait(1500);
+      page.webContents.invalidate();
+      await page.webContents.capturePage();
+      await wait(250);
+      const image = await page.webContents.capturePage();
+      writeFileSync(join(process.env.ANYAPP_DESKTOP_SHOTS!, `${theme}-pages-2-window.png`), image.toPNG());
+      log(`[shots] ${theme}-pages-2-window (${page.getTitle()}, ${page.webContents.getURL().replace(/\/page\/[^/]+\/[^/#]+/, "/page/<id>/<ticket>")})`);
+      page.close();
+      await wait(400);
+    } else log("[shots] the page window did not open");
+    await js(`window.__main.openApp(null); window.__main.newApp(true)`);
+    await wait(600);
+    await js(`document.querySelector('[data-testid="new-app-ask-more"] [role="switch"]')?.click()`);
+    await shot(`${theme}-pages-3-new-app-ask-more`);
+    await js(`window.__main.newApp(false)`);
+    await wait(300);
+  }
+}
 
 /** The "qr" set. Logs every pairing-code check as "[shots] code check: ...". */
 async function qrSet(win: BrowserWindow, js: Js, shot: (name: string) => Promise<void>, log: (l: string) => void): Promise<void> {

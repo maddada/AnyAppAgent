@@ -2,6 +2,7 @@ import type {
   App,
   ChatItem,
   WorkerInfo,
+  PageOpenResponse,
   CreateAppRequest,
   EasyConnectPairRequest,
   ErrorBody,
@@ -117,6 +118,9 @@ export class Client {
   stopHelper = (id: string, workerId: string) =>
     this.call<void>(`/api/apps/${encodeURIComponent(id)}/workers/${encodeURIComponent(workerId)}/cancel`, "POST", {});
 
+  // Pages: a fresh signed address for one page (served without a token; the ticket is the grant).
+  openPage = (id: string, pageId: string) =>
+    this.call<PageOpenResponse>(`/api/apps/${encodeURIComponent(id)}/pages/${encodeURIComponent(pageId)}/open`, "POST", {});
   // The person's own to-do list for an app (the agent never sees it).
   todos = (id: string) => this.call<TodoItem[]>(`/api/apps/${encodeURIComponent(id)}/todos`);
   addTodo = (id: string, text: string) => this.call<TodoItem>(`/api/apps/${encodeURIComponent(id)}/todos`, "POST", { text });

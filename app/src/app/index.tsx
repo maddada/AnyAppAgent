@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, RefreshControl, TextInput, View, useWindowDimensions } from "react-native";
+import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -432,6 +432,7 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   const [prompt, setPrompt] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [preset, setPreset] = useState<AppPreset>("react-native");
+  const [askMore, setAskMore] = useState(false);
   const promptRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -443,12 +444,13 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
     setError(null);
     try {
       // The default is left out of the request, so an older PC companion still accepts it.
-      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim(), ...(preset !== "react-native" ? { preset } : {}) });
+      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim(), ...(preset !== "react-native" ? { preset } : {}), ...(askMore ? { askMore: true } : {}) });
       useStore.setState((s) => ({ apps: { ...s.apps, [app.id]: app } }));
       setName("");
       setPrompt("");
       setAdvanced(false);
       setPreset("react-native");
+      setAskMore(false);
       onClose();
       void askForNotificationsOnce();
       router.push(`/chat/${app.id}`);
@@ -475,6 +477,7 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         multiline
         containerStyle={{ marginTop: space.lg }}
       />
+      <AskMore value={askMore} onChange={setAskMore} />
       <Advanced open={advanced} onToggle={() => setAdvanced(!advanced)} preset={preset} onPreset={setPreset} />
       {error ? (
         <T variant="caption" color="problem" style={{ marginTop: space.sm }}>
@@ -488,6 +491,29 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         </T>
       ) : null}
     </Sheet>
+  );
+}
+
+/** "Ask me more": the agent asks a few questions about the app before it plans it. */
+function AskMore({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      testID="new-app-ask-more"
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      accessibilityLabel="Ask me more. The agent asks you a few questions about the app before it plans it."
+      onPress={() => onChange(!value)}
+      style={{ flexDirection: "row", alignItems: "center", gap: space.md, marginTop: space.lg, minHeight: size.touch }}
+    >
+      <View style={{ flex: 1, gap: space.hair }}>
+        <T variant="label">Ask me more</T>
+        <T variant="caption" color="textSecondary">
+          The agent asks you a few questions about the app before it plans it
+        </T>
+      </View>
+      <Switch value={value} onValueChange={onChange} trackColor={{ false: t.borderStrong, true: t.accent }} thumbColor={t.surfaceOverlay} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+    </Pressable>
   );
 }
 

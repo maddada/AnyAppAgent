@@ -42,6 +42,8 @@ function startServer(label) {
       ANYAPP_APPS_DIR: APPS,
       ANYAPP_BUILDER: "fake",
       ANYAPP_GITHUB: "off",
+
+      ANYAPP_PLAN_FIRST: "off", // the script expects a build right after the first prompt (docs/PAGES.md)
       ANYAPP_FAKE_BUILD_MS: "1500",
       ANYAPP_COORDINATOR: "off", // this script checks the one-session flow; scripts/coordinator-e2e.mjs checks workers
     },

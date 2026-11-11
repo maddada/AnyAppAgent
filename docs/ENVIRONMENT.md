@@ -17,7 +17,7 @@ Everything here was installed and proven on 2026-11-10. Follow it literally.
 | CMake                   | 3.30.5, 3.22.1                  | `D:\tools\android\sdk\cmake`                      |
 | System image            | android-35 google_apis x86_64   | `D:\tools\android\sdk\system-images\android-35\google_apis\x86_64` |
 | AVDs (`ANDROID_AVD_HOME`) | `anyapp` (ours), `ghostex` (NOT ours) | `D:\tools\android\avd`                     |
-| Gradle caches           | default user home               | `C:\Users\madda\.gradle` (warm)                   |
+| Gradle caches           | default user home               | `%USERPROFILE%\.gradle` (warm)                    |
 | Node                    | 24 (on PATH)                    |                                                   |
 
 These are what **Expo SDK 58** (`expo@58.0.23`, `react-native@0.88.1`, React 19.3, Gradle 9.4.1,
@@ -123,7 +123,7 @@ resumed, "Welcome to Expo" rendered), and the rebuilt bundle with the JS change 
 it. Only `x86_64` is needed for the emulator and `arm64-v8a` for real phones; building all four
 default ABIs makes every build slower and the APK bigger.
 
-Gradle caches stay warm in `C:\Users\madda\.gradle` (5 GB). Do not run `gradlew --stop`: it
+Gradle caches stay warm in `%USERPROFILE%\.gradle` (5 GB). Do not run `gradlew --stop`: it
 stops the daemons other threads are building with.
 
 ## Pitfalls and fixes

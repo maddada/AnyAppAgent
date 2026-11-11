@@ -12,6 +12,7 @@ import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
 import { AdminClient, lanAddresses } from "./admin-client.ts";
+import { openPageWindow, pageAnswered } from "./page-window.ts";
 import { Companion } from "./companion.ts";
 import { claudeCliCandidates, detectClaude } from "./detect/claude.ts";
 import { detectGitHub, ghCandidates, type GhLocation } from "./detect/github.ts";
@@ -137,7 +138,10 @@ async function connectAdmin(): Promise<void> {
       void loadIcons();
       broadcast();
     });
-    client.on("chat", (item: ChatItem) => win?.webContents.send("chat:item", item));
+    client.on("chat", (item: ChatItem) => {
+      win?.webContents.send("chat:item", item);
+      if (item.kind === "page" && item.page?.answeredAt) pageAnswered(item.appId, item.page.id);
+    });
     client.on("helper", (worker: WorkerInfo) => win?.webContents.send("helper:updated", worker));
     client.on("helper-item", (item: ChatItem) => win?.webContents.send("helper:item", item));
     client.on("todos", (appId: string, todos: unknown) => win?.webContents.send("todos:updated", appId, todos));
@@ -676,10 +680,23 @@ function ipc(): void {
   );
   ipcMain.handle("todos:remove", (_e, appId: string, todoId: string) => chatAction((c) => c.removeTodo(String(appId), String(todoId)))());
   ipcMain.handle("todos:send", (_e, appId: string, todoId: string) => chatAction((c) => c.sendTodo(String(appId), String(todoId)))());
-  ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string) =>
+    ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string, askMore?: boolean) =>
     // Only a known preset passes; anything else is the default (React Native).
-    chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" || preset === "expo-exact" ? preset : undefined))(),
+    chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" || preset === "expo-exact" ? preset : undefined, askMore === true))(),
   );
+  // A page an agent published: a fresh ticket from the companion, then its own window over the app.
+  ipcMain.handle("pages:open", async (_e, appId: string, pageId: string, title?: string) => {
+    try {
+      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      const { path } = await admin.openPage(String(appId), String(pageId));
+      if (typeof path !== "string" || !path.startsWith("/page/")) throw new Error("The companion did not give an address for this page.");
+      openPageWindow({ appId: String(appId), pageId: String(pageId), title: String(title ?? ""), baseUrl: admin.baseUrl, path, ...(win ? { parent: win } : {}), icon: appIcon() });
+      return { ok: true };
+    } catch (error) {
+      const message = (error as Error).message;
+      return { ok: false, error: /fetch failed|ECONNREFUSED|aborted|timeout/i.test(message) ? "The companion on this PC is not answering. It restarts by itself; try again in a moment." : message };
+    }
+  });
   ipcMain.handle("settings:set", (_e, key: keyof Settings, value: unknown) => {
     if (key in settings && typeof value === typeof settings[key]) setSetting(key, value as never);
   });
