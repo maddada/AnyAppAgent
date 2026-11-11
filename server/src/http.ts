@@ -18,6 +18,7 @@ import type {
   PairResponse,
   PermissionAnswerRequest,
   SendMessageRequest,
+  ShareRequest,
   ServerEvent,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
@@ -382,6 +383,10 @@ export function startHttpServer(deps: {
     } else if (method === "POST" && action === "cancel") {
       apps.cancel(id);
       return sendJson(res, 202, {});
+    } else if (method === "POST" && action === "share") {
+      const body = await readBody<Partial<ShareRequest>>(req);
+      if (typeof body.shared !== "boolean") throw new HttpError(400, '"shared" must be true or false.');
+      return sendJson(res, 200, await apps.setShared(id, body.shared));
     } else if (method === "POST" && action === "build") {
       apps.rebuild(id);
       return sendJson(res, 202, {});

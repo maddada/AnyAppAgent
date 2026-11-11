@@ -1,7 +1,7 @@
 // The app manager: creating apps, one Claude Code session per app, a build after every turn,
 // Git/GitHub, and the chat timeline. Every change goes out as a ServerEvent.
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
@@ -16,6 +16,7 @@ import type { Config } from "./config.ts";
 import { nowIso } from "./fs-util.ts";
 import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
+import { realGithub, shareApp, unshareApp, type GithubApi } from "./sharing.ts";
 import { appPlaybook, buildFixPrompt } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
 import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
@@ -132,6 +133,9 @@ export class AppManager {
   private readonly interruptedBuilds = new Set<string>();
   /** A plain sentence when the builder cannot run on this PC (no Android toolchain), else null. */
   private readonly checkToolchain: () => string | null;
+  private readonly github: GithubApi;
+  /** Apps whose sharing is being turned on or off right now (one change at a time). */
+  private readonly sharingBusy = new Set<string>();
   /** Each app's workers, when its main chat is a coordinator (config.coordinator). */
   readonly workers: WorkerManager | undefined;
 
@@ -142,7 +146,9 @@ export class AppManager {
     broadcast: (event: ServerEvent) => void;
     log: (...parts: unknown[]) => void;
     checkToolchain?: () => string | null;
+    github?: GithubApi;
   }) {
+    this.github = deps.github ?? realGithub;
     this.store = deps.store;
     this.builder = deps.builder;
     this.config = deps.config;
@@ -205,6 +211,7 @@ export class AppManager {
         }
       }
       delete app.replying;
+      this.refreshSigning(record);
       if (app.latestBuild?.status === "running") {
         app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD };
         // Built again by itself once the server listens (startWork), not left for the person to notice.
@@ -458,6 +465,67 @@ export class AppManager {
       if (existsSync(path)) return { path, mimeType };
     }
     return null;
+  }
+
+  /** Which key signs this app's builds (docs/DISTRIBUTION.md); unknown with the fake builder. */
+  private refreshSigning(record: AppRecord): void {
+    if (!this.builder.keys) return;
+    try {
+      record.app.signing = this.builder.keys.kind(record.app.packageName);
+    } catch {
+      // a broken key record is reported by the next build
+    }
+  }
+
+  /**
+   * "Share with others" on or off (docs/DISTRIBUTION.md, "GitHub"). On: the code stays in the
+   * private repo, a public anyapp-<slug>-releases repo gets a README and the icon, and an app still
+   * on the shared key moves to its own key first (then builds again, so the phone gets that build).
+   */
+  async setShared(id: string, shared: boolean): Promise<App> {
+    const record = this.record(id);
+    if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
+    if (!this.config.github) throw new HttpError(409, "GitHub is turned off on this PC, so apps cannot be shared.");
+    if (this.sharingBusy.has(id)) throw new HttpError(409, "Sharing is already being changed for this app.");
+    if (shared === Boolean(record.app.sharing?.shared)) return record.app;
+    this.sharingBusy.add(id);
+    try {
+      if (shared) {
+        const { sharing, movedKey } = await shareApp(record.app, {
+          github: this.github,
+          ensureCodeRepo: () => this.ensureCodeRepo(record),
+          ...(this.builder.keys
+            ? { keys: { kind: (p: string) => this.builder.keys!.kind(p), move: async (p: string) => void (await this.builder.keys!.move(p)) } }
+            : {}),
+          iconPng: () => this.iconPng(record),
+          log: this.log,
+        });
+        record.app.sharing = sharing;
+        this.refreshSigning(record);
+        this.touch(record);
+        // A plain build (no agent turn unless it fails), so the phone gets the build with the new key.
+        if (movedKey && record.app.latestApk) this.enqueue(record, { kind: "build" });
+      } else {
+        record.app.sharing = await unshareApp(record.app, { github: this.github, log: this.log });
+        this.touch(record);
+      }
+      return record.app;
+    } finally {
+      this.sharingBusy.delete(id);
+    }
+  }
+
+  /** The app's private code repo: made now if GitHub failed when the app was created. */
+  private async ensureCodeRepo(record: AppRecord): Promise<void> {
+    if (record.app.repoUrl) return;
+    if (!existsSync(join(record.dir, ".git"))) await git.initRepo(record.dir, `Create ${record.app.name}`);
+    record.app.repoUrl = await git.createGithubRepo(record.dir, `anyapp-${record.app.slug}`);
+    this.store.save();
+  }
+
+  private iconPng(record: AppRecord): Buffer {
+    const path = this.safeIconPath(record);
+    return path ? readFileSync(path) : placeholderIconPng(record.app.name);
   }
 
   rebuild(id: string): void {
@@ -764,6 +832,7 @@ export class AppManager {
         this.errorItem(record, "Could not save this version to GitHub right now; it is kept on the PC.");
       }
       record.app.latestApk = build;
+      this.refreshSigning(record);
       this.checkIcon(record);
       this.setStatus(record, "idle");
       this.broadcast({ type: "apk.ready", app: record.app });

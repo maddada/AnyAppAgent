@@ -25,6 +25,8 @@ export interface Builder {
     list(): Promise<{ keys: { id: string; kind: "shared" | "own" | "moved"; certSha256: string }[]; lastBackupAt: string | null; notBackedUp: string[] }>;
     backup(args: { file: string; password: string }): Promise<{ file: string; count: number; createdAt: string }>;
     restore(args: { file: string; password: string }): Promise<{ added: string[]; same: string[]; conflicts: { id: string; reason: string }[] }>;
+    kind(packageName: string): "shared" | "own" | "moved";
+    move(packageName: string): Promise<unknown>;
   };
 }
 
@@ -32,6 +34,8 @@ interface KeysModule {
   listSigningKeys?: NonNullable<Builder["keys"]>["list"];
   backupSigningKeys?: NonNullable<Builder["keys"]>["backup"];
   restoreSigningKeys?: NonNullable<Builder["keys"]>["restore"];
+  appSigningKind?: (args: { packageName: string }) => "shared" | "own" | "moved";
+  moveAppToOwnKey?: (args: { packageName: string }) => Promise<unknown>;
 }
 
 export const REAL_BUILDER_PATH = join(REPO_DIR, "builder", "index.mjs");
@@ -48,12 +52,14 @@ export async function loadBuilder(choice: "auto" | "real" | "fake"): Promise<Bui
     createApp: (args) => mod.createApp(args),
     buildApk: (args) => mod.buildApk(args),
     getIconPath: (args) => mod.getIconPath(args),
-    ...(mod.listSigningKeys && mod.backupSigningKeys && mod.restoreSigningKeys
+    ...(mod.listSigningKeys && mod.backupSigningKeys && mod.restoreSigningKeys && mod.appSigningKind && mod.moveAppToOwnKey
       ? {
           keys: {
             list: mod.listSigningKeys,
             backup: mod.backupSigningKeys,
             restore: mod.restoreSigningKeys,
+            kind: (packageName: string) => mod.appSigningKind!({ packageName }),
+            move: (packageName: string) => mod.moveAppToOwnKey!({ packageName }),
           },
         }
       : {}),

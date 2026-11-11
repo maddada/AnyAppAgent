@@ -52,8 +52,26 @@ export interface App {
   // With helpers (docs/APP-COORDINATOR.md): status is "working" while the main chat OR any helper works.
   replying?: boolean; // the main chat itself is answering now (its Stop applies); absent from older PCs
   activeHelpers?: number; // helpers waiting, working or building now; set (0 or more) only when the chat uses helpers
+  signing?: "shared" | "own" | "moved"; // which key signs its builds (docs/DISTRIBUTION.md); absent from older PCs
+  sharing?: AppSharing; // absent until the app is shared once (docs/DISTRIBUTION.md)
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------- Sharing an app with other people (docs/DISTRIBUTION.md, "GitHub")
+// The code stays in the app's private repo; sharing makes a second, public repo that holds only a
+// README and the published versions (releases), so a friend can install it and get updates.
+export interface AppSharing {
+  shared: boolean; // true: the releases repo is public and new versions can be published
+  releasesRepoUrl: string; // https://github.com/<owner>/anyapp-<slug>-releases
+  installUrl: string; // the latest full APK, for a link or a QR (404 until a version is published)
+  feedUrl: string; // the update.json the app's own updater reads
+  since: string; // when it was first shared
+}
+// POST /api/apps/:id/share ShareRequest -> App (turns sharing on or off; 400 with a plain sentence
+// when something that looks like a secret would go public, 502 when GitHub fails)
+export interface ShareRequest {
+  shared: boolean;
 }
 
 export type ChatItemKind =

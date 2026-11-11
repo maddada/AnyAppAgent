@@ -27,6 +27,8 @@ function fakeBuilder(): { builder: Builder; calls: { backup: unknown[]; restore:
         calls.restore.push(args);
         return { added: ["com.anyapp.tea"], same: ["shared"], conflicts: [] };
       },
+      kind: () => "own" as const,
+      move: async () => ({}),
     },
   } satisfies Builder;
   return { builder, calls };
