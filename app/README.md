@@ -27,6 +27,10 @@ Build from PowerShell after `. C:\dev\AnyAppAgent\scripts\android-env.ps1` (see 
 - `modules/anyapp-native/` the Kotlin Expo module: PackageInstaller sessions (+ system-intent
   fallback through a FileProvider), package info, launch, settings pages, notifications and the
   keep-alive foreground service.
+- `modules/anyapp-ai/` "AI for your apps": the AI key (Keystore-encrypted), the local proxy service
+  generated apps bind to (`AiProxyService`, caller check in `AiTrust.kt`), provider streaming
+  (`AiProviders.kt`) and usage per app. Settings UI: `src/ui/AiSettings.tsx`. Test without a key:
+  `node dev/fake-ai-provider.mjs` + `adb shell setprop debug.anyapp.ai.url http://10.0.2.2:8913`.
 - `dev/` the mock PC (`mock-server.mjs`), the tiny test-APK builder (`make-test-apk.mjs`), the icon
   painter (`png.mjs`, `make-app-icons.mjs`) and the adb driver (`ui.mjs`).
 - `docs/screens/` screenshots from the emulator.

@@ -54,3 +54,18 @@ export async function withFileLock(file, fn, { staleMs, timeoutMs = 30 * 60_000 
     await release();
   }
 }
+
+/**
+ * fs.rename that waits out Windows' brief holds on files that were just written (antivirus and
+ * the search indexer open new files for a moment: EPERM, EBUSY or EACCES). About 6 s at most.
+ */
+export async function renameWithRetry(from, to) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fsp.rename(from, to);
+    } catch (e) {
+      if (i >= 9 || !['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) throw e;
+      await sleep(150 * (i + 1));
+    }
+  }
+}

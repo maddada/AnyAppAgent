@@ -1,0 +1,5 @@
+{
+  "preset": "kotlin",
+  "slug": "__APP_SLUG__",
+  "package": "__APP_PACKAGE__"
+}

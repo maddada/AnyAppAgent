@@ -1,5 +1,6 @@
 // HTTP routes and the WebSockets of shared/protocol.ts, including the desktop app's admin surface.
 import { createReadStream, existsSync, statSync } from "node:fs";
+import { pipeline } from "node:stream";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { hostname } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
@@ -11,6 +12,7 @@ import type {
   EasyConnectToggleRequest,
   ErrorBody,
   HealthResponse,
+  KeysBackupRequest,
   PairedDevice,
   PairRequest,
   PairResponse,
@@ -19,12 +21,16 @@ import type {
   ServerEvent,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
+import type { SigningKeys } from "./signing-keys.ts";
 import { ADMIN_DEVICE_ID, cleanDeviceName, type Auth } from "./auth.ts";
 import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
+import { workerApiRoute, workerToolsRoute } from "./worker-http.ts";
 
 const MAX_BODY = 1024 * 1024;
+/** A message can carry pictures (up to 6, each at most about 5 MB as base64) and long pasted text. */
+const MAX_MESSAGE_BODY = 40 * 1024 * 1024;
 
 export function serverName(): string {
   return hostname();
@@ -40,12 +46,12 @@ function sendError(res: ServerResponse, status: number, error: string): void {
   sendJson(res, status, { error } satisfies ErrorBody);
 }
 
-async function readBody<T>(req: IncomingMessage): Promise<T> {
+async function readBody<T>(req: IncomingMessage, limit = MAX_BODY): Promise<T> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > MAX_BODY) throw new HttpError(413, "The request is too large.");
+    if (size > limit) throw new HttpError(413, limit === MAX_BODY ? "The request is too large." : "That message is too big to send. Send fewer or smaller pictures.");
     chunks.push(chunk as Buffer);
   }
   if (size === 0) return {} as T;
@@ -66,9 +72,33 @@ function bearer(req: IncomingMessage): string | undefined {
   return header?.startsWith("Bearer ") ? header.slice(7).trim() : undefined;
 }
 
-function sendFileWithRange(req: IncomingMessage, res: ServerResponse, path: string, headers: Record<string, string>): void {
+/**
+ * Streams a file into a response and always closes the file: stream.pipeline destroys the read
+ * stream when the phone drops the connection (a plain .pipe() kept the file open for good).
+ */
+function streamFile(res: ServerResponse, path: string, range?: { start: number; end: number }, done?: (sent: number, error?: Error) => void): void {
+  const file = createReadStream(path, range);
+  let sent = 0;
+  file.on("data", (chunk: string | Buffer) => {
+    sent += chunk.length;
+  });
+  pipeline(file, res, (error) => done?.(sent, error ?? undefined));
+}
+
+/**
+ * Serves a file with Range support. If-Range (an ETag) is honoured: when it does not match the
+ * file's ETag, the whole file is sent with 200, so a resumed download never mixes two builds.
+ */
+function sendFileWithRange(
+  req: IncomingMessage,
+  res: ServerResponse,
+  path: string,
+  headers: Record<string, string>,
+  done?: (info: { start: number; length: number; size: number; sent: number; error?: Error }) => void,
+): void {
   const size = statSync(path).size;
-  const range = req.headers.range;
+  const ifRange = req.headers["if-range"];
+  const range = ifRange !== undefined && ifRange !== headers.ETag ? undefined : req.headers.range;
   const base = { ...headers, "Accept-Ranges": "bytes" };
   if (range) {
     const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
@@ -86,13 +116,15 @@ function sendFileWithRange(req: IncomingMessage, res: ServerResponse, path: stri
     }
     res.writeHead(206, { ...base, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": end - start + 1 });
     if (req.method === "HEAD") return void res.end();
-    createReadStream(path, { start, end }).pipe(res);
+    streamFile(res, path, { start, end }, (sent, error) => done?.({ start, length: end - start + 1, size, sent, ...(error ? { error } : {}) }));
     return;
   }
   res.writeHead(200, { ...base, "Content-Length": size });
   if (req.method === "HEAD") return void res.end();
-  createReadStream(path).pipe(res);
+  streamFile(res, path, undefined, (sent, error) => done?.({ start: 0, length: size, size, sent, ...(error ? { error } : {}) }));
 }
+
+const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
 
 export function startHttpServer(deps: {
   host: string;
@@ -101,6 +133,7 @@ export function startHttpServer(deps: {
   auth: Auth;
   apps: AppManager;
   easyConnect: EasyConnect;
+  signing?: SigningKeys;
   hostApkPath?: string;
 }): {
   server: Server;
@@ -171,6 +204,7 @@ export function startHttpServer(deps: {
       },
       easyConnect: easyConnect.state(),
       devices,
+      ...(deps.signing?.state() ? { signing: deps.signing.state() } : {}),
     };
   }
 
@@ -202,6 +236,12 @@ export function startHttpServer(deps: {
       await easyConnect.setEnabled(body.enabled);
       adminChanged();
       return sendJson(res, 200, adminState());
+    }
+    if (method === "POST" && (path === "/api/admin/keys/backup" || path === "/api/admin/keys/restore")) {
+      if (!deps.signing) throw new HttpError(409, "Signing keys are not available in this companion.");
+      const body = await readBody<Partial<KeysBackupRequest>>(req);
+      if (path === "/api/admin/keys/backup") return sendJson(res, 200, await deps.signing.backup(body.file, body.password));
+      return sendJson(res, 200, await deps.signing.restore(body.file, body.password));
     }
     const device = /^\/api\/admin\/devices\/([^/]+)$/.exec(path);
     if (method === "DELETE" && device) {
@@ -253,6 +293,10 @@ export function startHttpServer(deps: {
       res.writeHead(204);
       return void res.end();
     }
+    if (path.startsWith("/mcp/")) {
+      const exists = (appId: string) => apps.list().some((app) => app.id === appId);
+      if (await workerToolsRoute(req, res, path, { workers: apps.workers, appExists: exists, log })) return;
+    }
     if (path.startsWith("/api/admin/")) return adminRoute(req, res, path, method);
     if (!path.startsWith("/api/")) return sendError(res, 404, "Not found.");
     if (!auth.check(bearer(req))) return sendError(res, 401, "This phone is not paired with this PC. Pair it again.");
@@ -261,10 +305,21 @@ export function startHttpServer(deps: {
       if (method === "GET") return sendJson(res, 200, apps.list());
       if (method === "POST") {
         const body = await readBody<CreateAppRequest>(req);
-        return sendJson(res, 201, apps.create(str(body.name, "name"), str(body.prompt, "prompt")));
+        return sendJson(res, 201, apps.create(str(body.name, "name"), str(body.prompt, "prompt"), body.preset));
       }
       return sendError(res, 405, "Method not allowed.");
     }
+    // A picture sent in the chat: GET /api/apps/:id/images/:imageId
+    const image = /^\/api\/apps\/([^/]+)\/images\/([a-zA-Z0-9-]+)$/.exec(path);
+    if (image && (method === "GET" || method === "HEAD")) {
+      const found = apps.imageFile(decodeURIComponent(image[1]), image[2]);
+      if (!found) return sendError(res, 404, "That picture is not on this PC any more.");
+      res.writeHead(200, { "content-type": found.mimeType, "content-length": statSync(found.path).size, "cache-control": "private, max-age=31536000, immutable" });
+      if (method === "HEAD") return void res.end();
+      streamFile(res, found.path);
+      return;
+    }
+    if (await workerApiRoute(req, res, path, url, { workers: apps.workers, checkApp: (appId) => void apps.get(appId) })) return;
     const match = /^\/api\/apps\/([^/]+)(?:\/([a-z]+))?$/.exec(path);
     if (!match) return sendError(res, 404, "Not found.");
     const id = decodeURIComponent(match[1]);
@@ -291,21 +346,37 @@ export function startHttpServer(deps: {
       }
       return sendFileWithRange(req, res, icon.path, headers);
     } else if (action === "apk" && (method === "GET" || method === "HEAD")) {
-      const apk = apps.apkFile(id);
+      const abi = url.searchParams.get("abi") ?? undefined;
+      const apk = apps.apkFile(id, abi);
       if (!apk) return sendError(res, 404, "This app has no APK yet.");
-      return sendFileWithRange(req, res, apk.path, {
-        "Content-Type": "application/vnd.android.package-archive",
-        "Content-Disposition": `attachment; filename="${apk.app.slug}-${apk.app.latestApk!.number}.apk"`,
-        ETag: `"${apk.app.latestApk!.sha256 ?? apk.app.latestApk!.number}"`,
-      });
+      if ("missing" in apk) return sendError(res, 404, "This version for your phone is not on the PC any more. Ask for a change to make a new one.");
+      const name = `${apk.app.slug}-${apk.build.number}${apk.abi ? `-${apk.abi}` : ""}`;
+      const who = auth.list().find((device) => device.id === auth.identify(bearer(req)))?.deviceName ?? "a phone";
+      return sendFileWithRange(
+        req,
+        res,
+        apk.path,
+        {
+          "Content-Type": "application/vnd.android.package-archive",
+          "Content-Disposition": `attachment; filename="${name}.apk"`,
+          ETag: `"${apk.sha256 ?? apk.build.number}"`,
+        },
+        ({ start, length, size, sent, error }) => {
+          if (method === "HEAD") return;
+          const from = start > 0 ? ` from ${mb(start)} MB` : "";
+          const what = `[${apk.app.slug}] ${who.slice(0, 60)} downloading ${name}.apk${from}`;
+          if (error || sent < length) log(`${what}: stopped at ${mb(start + sent)} of ${mb(size)} MB (the connection closed)`);
+          else log(`${what}: done, ${mb(sent)} MB sent`);
+        },
+      );
     } else if (action === "messages") {
       if (method === "GET") {
         const afterSeq = Number(url.searchParams.get("afterSeq") ?? 0);
         return sendJson(res, 200, apps.messages(id, Number.isFinite(afterSeq) ? afterSeq : 0));
       }
       if (method === "POST") {
-        const body = await readBody<SendMessageRequest>(req);
-        apps.sendMessage(id, str(body.text, "text"));
+        const body = await readBody<SendMessageRequest>(req, MAX_MESSAGE_BODY);
+        apps.sendMessage(id, body.text === undefined && body.images?.length ? "" : str(body.text, "text"), Array.isArray(body.images) ? body.images : []);
         return sendJson(res, 202, {});
       }
     } else if (method === "POST" && action === "cancel") {

@@ -1,6 +1,6 @@
 // The typed bridge between the renderer (no Node, context isolated) and the main process.
 import { contextBridge, ipcRenderer } from "electron";
-import type { AnyAppBridge, ChatItem, Snapshot } from "../shared/types.ts";
+import type { AnyAppBridge, ChatItem, Snapshot, WorkerInfo } from "../shared/types.ts";
 
 const bridge: AnyAppBridge = {
   getSnapshot: () => ipcRenderer.invoke("snapshot"),
@@ -13,6 +13,16 @@ const bridge: AnyAppBridge = {
     const fn = (_e: unknown, item: ChatItem) => listener(item);
     ipcRenderer.on("chat:item", fn);
     return () => ipcRenderer.removeListener("chat:item", fn);
+  },
+  onHelper: (listener) => {
+    const fn = (_e: unknown, worker: WorkerInfo) => listener(worker);
+    ipcRenderer.on("helper:updated", fn);
+    return () => ipcRenderer.removeListener("helper:updated", fn);
+  },
+  onHelperItem: (listener) => {
+    const fn = (_e: unknown, item: ChatItem) => listener(item);
+    ipcRenderer.on("helper:item", fn);
+    return () => ipcRenderer.removeListener("helper:item", fn);
   },
   onNavigate: (listener) => {
     const fn = (_e: unknown, where: "connect-phone" | "home") => listener(where);
@@ -30,6 +40,7 @@ const bridge: AnyAppBridge = {
   toolsInstall: () => ipcRenderer.invoke("tools:install"),
   toolsCancel: () => ipcRenderer.invoke("tools:cancel"),
   phoneDownload: () => ipcRenderer.invoke("phone:download"),
+  phoneRelease: () => ipcRenderer.invoke("phone:release"),
   newPairingCode: () => ipcRenderer.invoke("pairing:new"),
   setEasyConnect: (enabled) => ipcRenderer.invoke("pairing:easy", enabled),
   easyConnectAuto: () => ipcRenderer.invoke("pairing:easy-auto"),
@@ -38,8 +49,18 @@ const bridge: AnyAppBridge = {
   hexOpen: () => ipcRenderer.invoke("hex:open"),
   hexCheck: () => ipcRenderer.invoke("hex:check"),
   hexTranscribe: (wav) => ipcRenderer.invoke("hex:transcribe", wav),
+  backupKeys: (password) => ipcRenderer.invoke("keys:backup", password),
+  restoreKeys: (password) => ipcRenderer.invoke("keys:restore", password),
   getMessages: (appId) => ipcRenderer.invoke("apps:messages", appId),
-  sendMessage: (appId, text) => ipcRenderer.invoke("apps:send", appId, text),
+  getHelpers: (appId) => ipcRenderer.invoke("helpers:list", appId),
+  getHelperMessages: (appId, workerId) => ipcRenderer.invoke("helpers:messages", appId, workerId),
+  stopHelper: (appId, workerId) => ipcRenderer.invoke("helpers:stop", appId, workerId),
+  sendMessage: (appId, text, images) => ipcRenderer.invoke("apps:send", appId, text, images),
+  getImage: (appId, imageId) => ipcRenderer.invoke("apps:image", appId, imageId),
+  cancelTurn: (appId) => ipcRenderer.invoke("apps:cancel", appId),
+  rebuild: (appId) => ipcRenderer.invoke("apps:rebuild", appId),
+  answerPermission: (appId, requestId, optionId) => ipcRenderer.invoke("apps:permission", appId, requestId, optionId),
+  createApp: (name, prompt, preset) => ipcRenderer.invoke("apps:create", name, prompt, preset),
   setSetting: (key, value) => ipcRenderer.invoke("settings:set", key, value),
   restartCompanion: () => ipcRenderer.invoke("companion:restart"),
   quit: () => ipcRenderer.invoke("app:quit"),

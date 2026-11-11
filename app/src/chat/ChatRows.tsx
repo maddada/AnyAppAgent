@@ -1,5 +1,7 @@
 import { memo, useEffect, useState } from "react";
-import { Animated, Easing, Pressable, View } from "react-native";
+import { Animated, Easing, Modal, Pressable, View, useWindowDimensions } from "react-native";
+import { Image } from "expo-image";
+import { router } from "expo-router";
 import {
   Brain,
   Check,
@@ -9,7 +11,12 @@ import {
   CircleCheck,
   CircleDashed,
   CircleDot,
+  Clock,
   Download,
+  GitMerge,
+  Hand,
+  Pen,
+  Square,
   FilePen,
   FileText,
   Folder,
@@ -17,6 +24,7 @@ import {
   ListTodo,
   Lock,
   Package,
+  RotateCcw,
   Search,
   Smartphone,
   Terminal,
@@ -25,26 +33,32 @@ import {
 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
-import { installApp, launchApp } from "@/lib/installer";
-import type { App, ChatItem, PlanEntry } from "@/lib/protocol";
+import { installApp, launchApp, phoneAbis } from "@/lib/installer";
+import type { App, ChatImage, ChatItem, PlanEntry, WorkerInfo } from "@/lib/protocol";
 import { useStore } from "@/lib/store";
 import { Button } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
 import { easing, elevation, fonts, icon, motion, radius, size, space, typeStyle, useTheme, border } from "@/ui/theme";
+import { buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row } from "@shared/chat/index";
+import { StateLine } from "@/ui/StateLine";
 import { Markdown } from "./Markdown";
-import { duration, seconds, summarizeTools, toolActive, type Row } from "./timeline";
 
 /** COMPONENTS.md: tool detail blocks are indented 28 and show at most 12 lines; the permission badge is 36. */
 const DETAIL_INDENT = 28;
 const DETAIL_MAX_LINES = 12;
 const PERMISSION_BADGE = 36;
 const ROW_LINE = typeStyle("row").lineHeight ?? icon.size.sm;
+/** A sent picture's long edge in the chat (no token: about a third of the phone's width). */
+const PICTURE = 120;
 
 export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App | undefined }) {
   if (row.type === "working") return <WorkingRow label={row.label} />;
   if (row.type === "rebuild") return <RebuildRow app={app} />;
-  if (row.type === "tools") return <ToolGroup items={row.items} />;
+  if (row.type === "tools") return <ToolGroup row={row} />;
+  if (row.type === "helper") return <HelperRow worker={row.worker} />;
+  if (row.type === "stopped") return <StoppedRow label={row.label} />;
+  if (row.type === "task") return <TaskCard label={row.label} text={row.text} />;
   const item = row.item;
   switch (item.kind) {
     case "user":
@@ -76,10 +90,15 @@ function Glyph({ icon: Icon, color }: { icon: LucideIcon; color: string }) {
 
 function UserMessage({ item }: { item: ChatItem }) {
   const t = useTheme();
+  const client = useStore((s) => s.client);
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(false);
+  const [resent, setResent] = useState(false);
+  const note = userNote(item);
   return (
     <View style={{ alignItems: "flex-end" }}>
+      {item.images?.length ? <Pictures appId={item.appId} images={item.images} /> : null}
+      {item.text ? (
       <View
         style={{
           maxWidth: `${size.bubbleMaxWidthPercent}%`,
@@ -106,7 +125,57 @@ function UserMessage({ item }: { item: ChatItem }) {
           {item.text}
         </T>
       </View>
+      ) : null}
       {long ? <Button label={open ? "Show less" : "Show more"} variant="text" small onPress={() => setOpen(!open)} style={{ marginTop: space.xs }} /> : null}
+      {note ? (
+        <View testID={`user-note-${note.kind}`} style={{ flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.xs, paddingHorizontal: space.xs }}>
+          {note.kind === "queued" ? <Spinner color={t.textTertiary} /> : null}
+          <T variant="caption" color="textTertiary">
+            {note.text}
+          </T>
+          {note.kind === "dropped" && client && item.text ? (
+            <Button
+              testID="send-again"
+              label={resent ? "Sent" : "Send again"}
+              variant="text"
+              small
+              disabled={resent}
+              onPress={() => {
+                setResent(true);
+                void client.send(item.appId, { text: item.text ?? "" }).catch(() => setResent(false));
+              }}
+            />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** The pictures sent with a message, above its bubble; a tap shows one full screen. */
+function Pictures({ appId, images }: { appId: string; images: ChatImage[] }) {
+  const t = useTheme();
+  const client = useStore((s) => s.client);
+  const [shown, setShown] = useState<ChatImage | null>(null);
+  const screen = useWindowDimensions();
+  if (!client) return null;
+  const source = (img: ChatImage) => ({ uri: client.imageUrl(appId, img.id), headers: client.authHeaders(), cacheKey: `${appId}/${img.id}` });
+  const one = images.length === 1;
+  return (
+    <View testID="message-pictures" style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: space.xs, marginBottom: space.xs, maxWidth: `${size.bubbleMaxWidthPercent}%` }}>
+      {images.map((img) => {
+        const box = fitWithin(img.width ?? PICTURE, img.height ?? PICTURE, one ? PICTURE * 1.5 : PICTURE);
+        return (
+          <Pressable key={img.id} accessibilityRole="imagebutton" accessibilityLabel="Picture you sent" onPress={() => setShown(img)}>
+            <Image source={source(img)} style={{ width: box.width, height: box.height, borderRadius: radius.badge, backgroundColor: t.surfaceSunken, borderWidth: border.width, borderColor: t.bubbleBorder }} contentFit="cover" />
+          </Pressable>
+        );
+      })}
+      <Modal visible={!!shown} transparent animationType="fade" onRequestClose={() => setShown(null)}>
+        <Pressable accessibilityLabel="Close the picture" onPress={() => setShown(null)} style={{ flex: 1, backgroundColor: t.scrim, alignItems: "center", justifyContent: "center", padding: space.lg }}>
+          {shown ? <Image source={source(shown)} style={{ width: screen.width - space.lg * 2, height: screen.height * 0.8 }} contentFit="contain" /> : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -142,7 +211,6 @@ function ThoughtRow({ item }: { item: ChatItem }) {
   const t = useTheme();
   const live = !!item.streaming;
   const [open, setOpen] = useState(false);
-  const secs = seconds(item);
   return (
     <View>
       <LineRow onPress={item.text ? () => setOpen(!open) : undefined}>
@@ -154,7 +222,7 @@ function ThoughtRow({ item }: { item: ChatItem }) {
           <Glyph icon={open ? ChevronDown : ChevronRight} color={t.textTertiary} />
         )}
         <T variant="row" color="textTertiary">
-          {live ? "Thinking" : secs > 1 ? `Thought for ${duration(secs)}` : "Thought"}
+          {thoughtLabel(item)}
         </T>
       </LineRow>
       {open && item.text ? (
@@ -179,36 +247,12 @@ const TOOL_GLYPHS: Record<string, LucideIcon> = {
   fetch: Globe,
 };
 
-/** Real titles can be whole scripts: the first line here; the rest opens below. */
-function firstLine(title: string) {
-  const line = title.split(/\r?\n/)[0].trim();
-  return line.length < title.trim().length ? `${line} …` : line;
-}
-
-/** A short detail (diff counts, "14 passed") goes on the row; anything longer opens below. */
-function splitDetail(item: ChatItem): { inline?: string; block?: string } {
-  const tool = item.tool;
-  if (!tool) return {};
-  const title = tool.title.trim();
-  // A detail that only restates the title (the same path with other slashes) adds nothing.
-  const norm = (v: string) => v.split("\\").join("/").toLowerCase();
-  const raw = tool.detail?.trim() ?? "";
-  const detail = raw && norm(title).includes(norm(raw)) ? "" : raw;
-  const titleExtra = /\n/.test(title) || title.length > 60 ? title : "";
-  // Only a short result goes on the row ("+48 -6", "14 passed"); a command line or a path never
-  // does: it opens below when the row is tapped.
-  const looksLikeResult = /^[+\-\u2212]\d+(\s+[+\-\u2212]\d+)?$/.test(detail) || /^\d+ (passed|failed|errors?|warnings?)\b/i.test(detail);
-  if (detail && detail !== title && looksLikeResult && detail.length <= 24) return { inline: detail, block: titleExtra || undefined };
-  const block = detail && detail !== title ? detail : titleExtra;
-  return { block: block || undefined };
-}
-
 function ToolRow({ item }: { item: ChatItem }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
   const tool = item.tool;
   if (!tool) return null;
-  const { inline, block } = splitDetail(item);
+  const { inline, block } = toolDetail(tool);
   const failed = tool.status === "failed";
   const titleColor = tool.status === "in_progress" ? "text" : tool.status === "pending" ? "textTertiary" : "textSecondary";
   return (
@@ -217,7 +261,7 @@ function ToolRow({ item }: { item: ChatItem }) {
         <Glyph icon={TOOL_GLYPHS[tool.kind] ?? CircleDot} color={t.textTertiary} />
         <View style={{ flex: 1, flexDirection: "row", alignItems: "baseline", gap: space.sm, overflow: "hidden" }}>
           <T variant="row" color={titleColor} numberOfLines={1} style={{ flexShrink: 1 }}>
-            {firstLine(tool.title)}
+            {plainToolTitle(tool)}
           </T>
           {inline ? (
             <T variant="mono" color={failed ? "problem" : "textTertiary"} numberOfLines={1}>
@@ -259,18 +303,19 @@ function DetailBlock({ text, failed }: { text: string; failed?: boolean }) {
 }
 
 /** A finished run of tool calls folds into one row ("Edited 2 files, ran 3 commands"). */
-function ToolGroup({ items }: { items: ChatItem[] }) {
+function ToolGroup({ row }: { row: Extract<Row, { type: "tools" }> }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
+  const items = row.items;
   // While any of them is still going, show every row (the live frontier stays open).
-  if (items.some(toolActive) || open) {
+  if (row.active || open) {
     return (
       <View>
         {open ? (
           <LineRow onPress={() => setOpen(false)}>
             <Glyph icon={ChevronDown} color={t.textTertiary} />
             <T variant="row" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
-              {summarizeTools(items)}
+              {row.summary}
             </T>
           </LineRow>
         ) : null}
@@ -280,14 +325,13 @@ function ToolGroup({ items }: { items: ChatItem[] }) {
       </View>
     );
   }
-  const failed = items.some((i) => i.tool?.status === "failed");
   return (
     <LineRow onPress={() => setOpen(true)}>
       <Glyph icon={ChevronRight} color={t.textTertiary} />
       <T variant="row" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
-        {summarizeTools(items)}
+        {row.summary}
       </T>
-      {failed ? <Glyph icon={X} color={t.problem} /> : <Glyph icon={Check} color={t.textTertiary} />}
+      {row.failed ? <Glyph icon={X} color={t.problem} /> : <Glyph icon={Check} color={t.textTertiary} />}
     </LineRow>
   );
 }
@@ -325,7 +369,6 @@ export function PlanEntries({ entries }: { entries: PlanEntry[] }) {
 function PlanBox({ item }: { item: ChatItem }) {
   const t = useTheme();
   const entries = item.plan ?? [];
-  const done = entries.filter((e) => e.status === "completed").length;
   return (
     <View style={{ borderWidth: border.width, borderColor: t.border, borderRadius: radius.card, padding: space.md, gap: space.xs, marginHorizontal: space.xs }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs }}>
@@ -333,7 +376,7 @@ function PlanBox({ item }: { item: ChatItem }) {
         <T variant="label" color="textSecondary" style={{ flex: 1 }}>
           Plan
         </T>
-        <T variant="row" color="textTertiary">{`${done} of ${entries.length} done`}</T>
+        <T variant="row" color="textTertiary">{planCount(item)}</T>
       </View>
       <PlanEntries entries={entries} />
     </View>
@@ -346,17 +389,16 @@ function PermissionCard({ item }: { item: ChatItem }) {
   const t = useTheme();
   const client = useStore((s) => s.client);
   const [sending, setSending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const p = item.permission;
   if (!p) return null;
-  const title = p.title.replace(/`/g, "");
-  const chosen = p.options.find((o) => o.optionId === p.selectedOptionId);
-  if (chosen) {
-    const allowed = chosen.kind.startsWith("allow");
+  const view = permissionView(p);
+  if (view.answered) {
     return (
       <LineRow>
         <Glyph icon={Lock} color={t.textTertiary} />
         <T variant="row" color="textSecondary" numberOfLines={2} style={{ flex: 1 }}>
-          {`${allowed ? "You allowed" : "You didn't allow"}: ${title}`}
+          {view.line}
         </T>
       </LineRow>
     );
@@ -364,17 +406,15 @@ function PermissionCard({ item }: { item: ChatItem }) {
   const answer = async (optionId: string) => {
     if (!client) return;
     setSending(optionId);
+    setError(null);
     try {
       await client.answerPermission(item.appId, { requestId: p.requestId, optionId });
-    } catch {
+    } catch (e) {
       setSending(null);
+      setError(e instanceof Error ? e.message : "That didn't reach your PC. Try again.");
     }
   };
-  const reject = p.options.find((o) => o.kind.startsWith("reject"));
-  const once = p.options.find((o) => o.kind === "allow_once") ?? p.options.find((o) => o.kind.startsWith("allow") && o.kind !== "allow_always");
-  const always = p.options.find((o) => o.kind === "allow_always");
-  const others = [always, ...p.options.filter((o) => o !== reject && o !== once && o !== always)].filter((o): o is NonNullable<typeof o> => !!o);
-  const button = (o: NonNullable<typeof once>, variant: "primary" | "quiet", flex: boolean) => (
+  const button = (o: { optionId: string; label: string }, variant: "primary" | "quiet", flex: boolean) => (
     <Button
       key={o.optionId}
       testID={`permission-${o.optionId}`}
@@ -388,23 +428,28 @@ function PermissionCard({ item }: { item: ChatItem }) {
     />
   );
   return (
-    <View style={{ backgroundColor: t.surface, borderRadius: radius.card, borderWidth: border.width, borderColor: t.borderStrong, padding: space.lg, gap: space.md }}>
+    <View testID="permission-card" style={{ backgroundColor: t.surface, borderRadius: radius.card, borderWidth: border.width, borderColor: t.borderStrong, padding: space.lg, gap: space.md }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
         <View style={{ width: PERMISSION_BADGE, height: PERMISSION_BADGE, borderRadius: radius.badge, backgroundColor: t.surfaceSunken, alignItems: "center", justifyContent: "center" }}>
           <Glyph icon={Lock} color={t.textSecondary} />
         </View>
         <View style={{ flex: 1 }}>
-          <T variant="heading">Allow this step?</T>
+          <T variant="heading">{view.heading}</T>
           <T variant="mono" color="textSecondary" selectable>
-            {title}
+            {view.title}
           </T>
         </View>
       </View>
       <View style={{ flexDirection: "row", gap: space.sm }}>
-        {reject ? button(reject, "quiet", true) : null}
-        {once ? button(once, "primary", true) : null}
+        {view.reject ? button(view.reject, "quiet", true) : null}
+        {view.allow ? button(view.allow, "primary", true) : null}
       </View>
-      {others.map((o) => button(o, "quiet", false))}
+      {view.others.map((o) => button(o, "quiet", false))}
+      {error ? (
+        <T variant="caption" color="problem">
+          {error}
+        </T>
+      ) : null}
     </View>
   );
 }
@@ -421,12 +466,26 @@ function Badge({ icon: Icon, fill, color }: { icon: LucideIcon; fill: string; co
 
 function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
   const t = useTheme();
-  const b = item.build;
+  const client = useStore((s) => s.client);
   const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
-  if (!b) return null;
+  const [retrying, setRetrying] = useState(false);
+  // Words and state from shared/chat/build.ts, the same as on the desktop.
+  const card = buildCard(item, app, "phone", pkg?.versionCode ?? null, phoneAbis());
+  if (!card) return null;
 
-  const card = {
+  if (card.state === "older" || !app) {
+    return (
+      <LineRow>
+        <Glyph icon={Package} color={t.textTertiary} />
+        <T variant="row" color="textTertiary">
+          {card.title}
+        </T>
+      </LineRow>
+    );
+  }
+
+  const box = {
     backgroundColor: t.surface,
     borderRadius: radius.card,
     borderWidth: border.width,
@@ -435,56 +494,54 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
     gap: space.lg,
     ...elevation(t.mode, 1),
   } as const;
-  const head = (badge: React.ReactNode, title: string, sub: string) => (
+  const head = (badge: React.ReactNode) => (
     <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
       {badge}
       <View style={{ flex: 1 }}>
-        <T variant="heading">{title}</T>
-        <T variant="row" color="textSecondary">
-          {sub}
+        <T variant="heading">{card.title}</T>
+        <T variant="row" color="textSecondary" selectable={card.state === "failed"}>
+          {card.sub}
         </T>
       </View>
     </View>
   );
 
-  if (b.status === "running") {
+  if (card.state === "running") {
     return (
-      <View testID="build-running" style={card}>
-        {head(<Badge icon={Package} fill={t.surfaceSunken} color={t.textSecondary} />, `Building version ${b.number}`, item.text?.trim() || "Usually about two minutes")}
+      <View testID="build-running" style={box}>
+        {head(<Badge icon={Package} fill={t.surfaceSunken} color={t.textSecondary} />)}
         <ProgressSweep />
       </View>
     );
   }
 
-  if (b.status === "failed") {
+  if (card.state === "failed") {
     return (
-      <View testID="build-failed" style={card}>
-        {head(<Badge icon={CircleAlert} fill={t.problemSoft} color={t.problem} />, `Version ${b.number} didn’t build`, b.error?.trim() || "Ask for a fix in a message below.")}
+      <View testID="build-failed" style={box}>
+        {head(<Badge icon={CircleAlert} fill={t.problemSoft} color={t.problem} />)}
+        {card.canRetry && client ? (
+          <Button
+            testID="build-retry"
+            label={retrying ? "Building" : "Try again"}
+            icon={RotateCcw}
+            variant="quiet"
+            busy={retrying}
+            onPress={() => {
+              setRetrying(true);
+              void client.rebuild(app.id).catch(() => setRetrying(false));
+            }}
+          />
+        ) : null}
       </View>
     );
   }
 
-  // Succeeded. Only the newest build gets the card; older ones are a quiet line.
-  // The companion says "idle" a moment before apk.ready, so app.latestApk can still be the older
-  // build here: a succeeded build at least as new as it is the newest one.
-  const newest = (app?.latestApk?.number ?? 0) <= b.number;
-  if (!app || !newest) {
-    return (
-      <LineRow>
-        <Glyph icon={Package} color={t.textTertiary} />
-        <T variant="row" color="textTertiary">{`Version ${b.number} was ready`}</T>
-      </LineRow>
-    );
-  }
-  // Judge this build by its own number, not by app.latestApk (which may not have caught up yet).
-  const action = pkg && pkg.versionCode >= b.number ? "open" : pkg ? "update" : "install";
   const phase = install?.phase;
   const busy = phase === "waiting" || phase === "downloading" || phase === "checking" || phase === "installing" || phase === "confirm";
-  const installed = action === "open" || phase === "done";
-  const sizeText = b.sizeBytes ? `, ${formatSize(b.sizeBytes)}` : "";
+  const installed = card.installed || phase === "done";
   return (
-    <View testID="build-ready" style={card}>
-      {head(<Badge icon={Package} fill={t.readySoft} color={t.ready} />, "Your app is ready", installed ? `Version ${b.number}. Installed` : `Version ${b.number}${sizeText}`)}
+    <View testID="build-ready" style={box}>
+      {head(<Badge icon={Package} fill={t.readySoft} color={t.ready} />)}
       {phase === "failed" ? (
         <View style={{ gap: space.xs }}>
           <T variant="row" color="problem">
@@ -498,7 +555,7 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
       ) : (
         <Button
           testID="build-install"
-          label={busy ? (phase === "downloading" ? `Downloading ${Math.round((install?.progress ?? 0) * 100)}%` : "Installing") : "Install"}
+          label={busy ? (installLabel(install) ?? "Installing") : "Install"}
           icon={Download}
           busy={busy}
           onPress={() => void installApp(app)}
@@ -506,10 +563,6 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
       )}
     </View>
   );
-}
-
-function formatSize(bytes: number) {
-  return bytes >= 1024 * 1024 ? `${Math.round(bytes / 1024 / 1024)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
 /** Indeterminate progress (COMPONENTS.md 8): a 32% segment sweeps across, looping. */
@@ -568,7 +621,7 @@ function RebuildRow({ app }: { app: App | undefined }) {
   // once things have been quiet for a few seconds.
   const [settled, setSettled] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setSettled(true), 5000);
+    const timer = setTimeout(() => setSettled(true), REBUILD_SETTLE_MS);
     return () => clearTimeout(timer);
   }, []);
   if (!app || !client || !settled) return null;
@@ -590,6 +643,95 @@ function RebuildRow({ app }: { app: App | undefined }) {
         }}
       />
     </LineRow>
+  );
+}
+
+// ---------- helpers (docs/APP-COORDINATOR.md; the approved mockup docs/mockups/worker-chat.html)
+
+const HELPER_ICONS: Record<HelperIcon, LucideIcon> = {
+  clock: Clock,
+  pen: Pen,
+  search: Search,
+  merge: GitMerge,
+  package: Package,
+  check: Check,
+  alert: CircleAlert,
+  square: Square,
+};
+const HELPER_BADGE = 36;
+
+/** One helper in the main chat: its task, a mark and a word, its latest line. Tap: its own chat. */
+export function HelperRow({ worker, selected }: { worker: WorkerInfo; selected?: boolean }) {
+  const t = useTheme();
+  const view = helperView(worker);
+  const Icon = HELPER_ICONS[view.icon];
+  return (
+    <Pressable
+      testID={`helper-row-${worker.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${view.title}, ${view.state.label}. Open this helper's chat.`}
+      onPress={() => router.push({ pathname: "/helper/[appId]/[workerId]", params: { appId: worker.appId, workerId: worker.id } })}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+        paddingVertical: space.md,
+        paddingLeft: space.md,
+        paddingRight: space.sm,
+        borderRadius: radius.card,
+        backgroundColor: pressed || selected ? t.selectedBg : t.surface,
+        borderWidth: border.width,
+        borderColor: selected ? t.borderStrong : t.border,
+        ...(pressed || selected ? {} : elevation(t.mode, 1)),
+      })}
+    >
+      <View style={{ width: HELPER_BADGE, height: HELPER_BADGE, borderRadius: radius.button, backgroundColor: t.surfaceSunken, alignItems: "center", justifyContent: "center" }}>
+        <Icon size={icon.size.button} color={t.textSecondary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+      </View>
+      <View style={{ flex: 1, gap: space.hair }}>
+        <T variant="name" numberOfLines={2}>
+          {view.title}
+        </T>
+        <StateLine kind={view.state.kind} label={view.state.label} role="caption" />
+        {view.latest ? (
+          <T variant="row" color="textSecondary" numberOfLines={1}>
+            {view.latest}
+          </T>
+        ) : null}
+      </View>
+      <ChevronRight size={icon.size.button} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+    </Pressable>
+  );
+}
+
+/** A plain line where the person stopped a turn. */
+function StoppedRow({ label }: { label: string }) {
+  const t = useTheme();
+  return (
+    <LineRow testID="stopped-line">
+      <Square size={icon.size.sm - 2} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+      <T variant="row" color="textTertiary">
+        {label}
+      </T>
+    </LineRow>
+  );
+}
+
+/** In a helper's chat: what the main chat asked it (its task, then follow-ups). */
+function TaskCard({ label, text }: { label: string; text: string }) {
+  const t = useTheme();
+  return (
+    <View testID="helper-task" style={{ borderWidth: border.width, borderStyle: "dashed", borderColor: t.borderStrong, borderRadius: radius.card, paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}>
+        <Hand size={icon.size.sm - 2} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+        <T variant="eyebrow" color="textTertiary">
+          {label}
+        </T>
+      </View>
+      <T variant="callout" color="textSecondary" selectable>
+        {text}
+      </T>
+    </View>
   );
 }
 

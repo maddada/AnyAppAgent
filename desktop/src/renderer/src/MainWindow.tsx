@@ -1,15 +1,18 @@
-// The main window after onboarding: sidebar (Apps, Phones, Setup, Settings), the app list with
-// today's activity, the phone and "add another phone" panels, and each app's chat (Chat.tsx).
+// The main window after onboarding: sidebar (Apps, Phones, Setup, Settings). The Apps page is
+// split: the list of apps on the left, and on the right either the open app's chat (Chat.tsx, the
+// same chat as on the phone) or today's activity with the phone panels. New app works from here
+// too, with the same fields and words as the phone's New app sheet.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronRight, CircleAlert, Cloud, FolderOpen, KeyRound, LayoutGrid, ListChecks, RefreshCw, Settings as Gear, Smartphone, Wrench, X } from "lucide-react";
+import { ChevronDown, CircleAlert, Cloud, Download, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, Wrench } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { CheckState, Snapshot } from "../../shared/types.ts";
-import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
+import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
+import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
 import { ChatView } from "./Chat.tsx";
 import { HexCard } from "./Hex.tsx";
 import type { StepId } from "./Onboarding.tsx";
-import { PairingPanel, TypedCode, useFreshCode } from "./Pairing.tsx";
-import { AppIcon, Icon, QrPlate, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
+import { PairingDialog } from "./Pairing.tsx";
+import { GetPhoneAppDialog } from "./PhoneApp.tsx";
+import { AppIcon, Dialog, Icon, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
 
 const api = window.anyapp;
 type Page = "apps" | "phones" | "setup" | "settings";
@@ -18,6 +21,8 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
   const [page, setPage] = useState<Page>("apps");
   const [openApp, setOpenApp] = useState<string | null>(null);
   const [connect, setConnect] = useState(false);
+  const [newApp, setNewApp] = useState(false);
+  const [getApp, setGetApp] = useState(false);
   useEffect(() => {
     if (connectRequest > 0) setConnect(true);
   }, [connectRequest]);
@@ -27,8 +32,13 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
         setOpenApp(null);
         setPage(p);
       },
-      openApp: (id: string | null) => setOpenApp(id),
+      openApp: (id: string | null) => {
+        setPage("apps");
+        setOpenApp(id);
+      },
       connect: (v: boolean) => setConnect(v),
+      getApp: (v: boolean) => setGetApp(v),
+      newApp: (v: boolean) => setNewApp(v),
     };
   });
   const app = s.apps.find((a) => a.id === openApp);
@@ -47,14 +57,16 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
           {nav.map(([id, of, label]) => (
             <button
               key={id}
-              className={`nav-i${page === id && !app ? " is-active" : ""}`}
+              className={`nav-i${page === id ? " is-active" : ""}`}
+              aria-label={label}
+              title={label}
               onClick={() => {
                 setOpenApp(null);
                 setPage(id);
               }}
             >
               <Icon of={of} size="button" />
-              {label}
+              <span className="nav-label">{label}</span>
               {id === "setup" && attention > 0 && (
                 <span className="nav-count" title={`${attention} need you`}>
                   <Icon of={CircleAlert} px={15} />
@@ -66,43 +78,47 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
         <SideStatus s={s} />
       </aside>
       <main className="dm-main">
-        {app ? (
-          <ChatView
-            app={app}
-            icon={s.icons[app.id]}
-            hex={s.checks.hex}
-            onBack={() => setOpenApp(null)}
-            onSetupHex={() => {
-              setOpenApp(null);
-              setPage("settings");
-            }}
-          />
+        {page === "apps" ? (
+          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} onGetApp={() => setGetApp(true)} openSetup={openSetup} goSetup={() => setPage("setup")} goSettings={() => setPage("settings")} />
         ) : (
           <div className="dm-scroll">
-            {page === "apps" && <AppsPage s={s} onOpen={setOpenApp} onConnect={() => setConnect(true)} openSetup={openSetup} goSetup={() => setPage("setup")} />}
-            {page === "phones" && <PhonesPage s={s} />}
+            {page === "phones" && <PhonesPage s={s} onConnect={() => setConnect(true)} />}
             {page === "setup" && <SetupPage s={s} openSetup={openSetup} />}
             {page === "settings" && <SettingsPage s={s} openSetup={openSetup} />}
           </div>
         )}
       </main>
-      {connect && (
-        <Dialog title="Connect a phone" wide onClose={() => setConnect(false)}>
-          <p className="callout body">
-            No AnyAppAgent on the phone yet?{" "}
-            <button
-              className="btn btn-text"
-              onClick={() => {
-                setConnect(false);
-                openSetup("phone-get");
-              }}
-            >
-              Get the app first
-            </button>
-          </p>
-          <PairingPanel s={s} />
-        </Dialog>
+      {newApp && (
+        <NewAppDialog
+          onClose={() => setNewApp(false)}
+          onMade={(id) => {
+            setNewApp(false);
+            setPage("apps");
+            setOpenApp(id);
+          }}
+        />
       )}
+      {connect && (
+        <PairingDialog
+          s={s}
+          onClose={() => setConnect(false)}
+          intro={
+            <p className="callout body">
+              No AnyAppAgent on the phone yet?{" "}
+              <button
+                className="btn btn-text"
+                onClick={() => {
+                  setConnect(false);
+                  setGetApp(true);
+                }}
+              >
+                Get the app first
+              </button>
+            </p>
+          }
+        />
+      )}
+      {getApp && <GetPhoneAppDialog onClose={() => setGetApp(false)} />}
     </div>
   );
 }
@@ -117,7 +133,7 @@ function SideStatus({ s }: { s: Snapshot }) {
         ? [<span style={{ color: "var(--aa-problem)" }}><Icon of={CircleAlert} px={15} /></span>, "Needs attention", c.message]
         : [<Spinner />, c.phase === "restarting" ? "Restarting" : "Starting", "Getting ready to make apps"];
   return (
-    <div className="side-status caption">
+    <div className="side-status caption" title={`${title}. ${line}`}>
       {mark}
       <div>
         <strong>{title}</strong>
@@ -147,115 +163,252 @@ function activity(s: Snapshot): { time: string; text: string }[] {
     });
 }
 
-function AppsPage({ s, onOpen, onConnect, openSetup, goSetup }: { s: Snapshot; onOpen: (id: string) => void; onConnect: () => void; openSetup: (step: StepId) => void; goSetup: () => void }) {
+function AppsPage({
+  s,
+  open,
+  onOpen,
+  onNewApp,
+  onConnect,
+  onGetApp,
+  openSetup,
+  goSetup,
+  goSettings,
+}: {
+  s: Snapshot;
+  open: string | null;
+  onOpen: (id: string | null) => void;
+  onNewApp: () => void;
+  onConnect: () => void;
+  onGetApp: () => void;
+  openSetup: (step: StepId) => void;
+  goSetup: () => void;
+  goSettings: () => void;
+}) {
   const apps = useMemo(() => [...s.apps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [s.apps]);
   const blocking = setupRows(s).find((r) => r.needsYou && r.blocks);
-  const recent = activity(s);
+  const app = apps.find((a) => a.id === open);
+  const online = s.companion.phase === "running";
+  // A helper's chat is open beside the main chat: in a narrow window the app list folds to icons.
+  const [helperOpen, setHelperOpen] = useState(false);
   return (
-    <>
+    <div className={`apps-split${helperOpen ? " helper-open" : ""}`}>
+      <section className="apps-pane" aria-label="Your apps">
+        <header className="apps-pane-head">
+          <h1 className="title-small">Your apps</h1>
+          <button className="btn btn-primary btn-sm" onClick={onNewApp} disabled={!online} data-testid="new-app">
+            <Icon of={Plus} size="sm" /> New app
+          </button>
+        </header>
+        {blocking && (
+          <div className="card notice apps-notice">
+            <div className="grow">
+              <StateLine state="problem" text={blocking.problemText ?? blocking.sub} />
+            </div>
+            <button className="btn btn-quiet btn-sm" onClick={() => (blocking.step ? openSetup(blocking.step) : goSetup())}>
+              Fix it
+            </button>
+          </div>
+        )}
+        {apps.length === 0 ? (
+          <div className="apps-empty">
+            <strong className="heading">No apps yet</strong>
+            <p className="callout secondary">Describe your first app here or in AnyAppAgent on your phone. This PC makes it, and it appears on your phone, ready to open.</p>
+            <button className="btn btn-primary btn-sm" onClick={onNewApp} disabled={!online}>
+              <Icon of={Plus} size="sm" /> New app
+            </button>
+          </div>
+        ) : (
+          <div className="apps-list">
+            {apps.map((a) => {
+              const st = appState(a);
+              const v = a.latestApk ?? a.latestBuild;
+              return (
+                <button key={a.id} className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined} title={a.name}>
+                  <AppIcon icon={s.icons[a.id]} small />
+                  <div className="arow-main">
+                    <div className="arow-top">
+                      <span className="body arow-name">{a.name}</span>
+                      <span className="arow-meta">{[v ? `v${v.number}` : "", timeAgo(a.updatedAt)].filter(Boolean).join(", ")}</span>
+                    </div>
+                    <StateLine state={st.state} text={st.text} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+      <section className="apps-detail">
+        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} onHelperOpen={setHelperOpen} hex={s.checks.hex} onSetupHex={goSettings} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />}
+      </section>
+    </div>
+  );
+}
+
+/** The right side of the Apps page when no app is open: today's activity and the phones. */
+function Overview({ s, hasApps, onConnect, onGetApp }: { s: Snapshot; hasApps: boolean; onConnect: () => void; onGetApp: () => void }) {
+  const recent = activity(s);
+  const hasPhone = (s.admin?.devices.length ?? 0) > 0;
+  return (
+    <div className="dm-scroll ov">
       <header className="dm-head">
         <div>
-          <h1 className="title">Your apps</h1>
-          <p className="dm-sub callout">{apps.length === 0 ? "Nothing made yet" : `${apps.length} ${apps.length === 1 ? "app" : "apps"}, all made on this PC`}</p>
+          <h2 className="title">{hasApps ? "Pick an app to change it" : "Make your first app"}</h2>
+          <p className="dm-sub callout">{hasApps ? "Its chat opens here. Ask for a change, and the new version goes to your phone." : "Tap New app and say what it should do. This PC makes it."}</p>
         </div>
         <button className="btn btn-quiet" onClick={() => api.openFolder("apps")}>
           <Icon of={FolderOpen} size="button" /> Open apps folder
         </button>
       </header>
-      <div className="dm-cols">
-        <div className="dm-left">
-          {blocking && (
-            <div className="card notice">
-              <div className="grow">
-                <StateLine state="problem" text={blocking.problemText ?? blocking.sub} />
-              </div>
-              <button className="btn btn-quiet btn-sm" onClick={() => (blocking.step ? openSetup(blocking.step) : goSetup())}>
-                Fix it
-              </button>
+      <div className="ov-grid">
+        <div className="panel">
+          <div className="eyebrow">{hasPhone ? "AnyAppAgent for another phone" : "AnyAppAgent for your phone"}</div>
+          <p className="label secondary">Show a code, scan it with the phone's camera, and the phone downloads AnyAppAgent.</p>
+          <button className="btn btn-quiet btn-sm btn-block" onClick={onGetApp} data-testid="show-download-code">
+            <Icon of={Download} size="sm" /> Show download code
+          </button>
+        </div>
+        <AddPhonePanel hasPhone={hasPhone} onShow={onConnect} />
+        {hasPhone && <PhonesPanel s={s} />}
+      </div>
+      <section className="recent ov-recent">
+        <div className="eyebrow">Today</div>
+        {recent.length > 0 ? (
+          recent.map((r, i) => (
+            <div key={i} className="recent-row">
+              <time>{r.time}</time>
+              <span>{r.text}</span>
+            </div>
+          ))
+        ) : (
+          <p className="callout tertiary">Nothing happened today yet.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/** New app from the PC: the same fields and words as the phone's New app sheet. */
+function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId: string) => void }) {
+  const [name, setName] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [advanced, setAdvanced] = useState(false);
+  const [preset, setPreset] = useState<AppPreset>(DEFAULT_PRESET);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ready = name.trim().length > 0 && prompt.trim().length > 0;
+  const chosen = PRESET_CHOICES.find((p) => p.id === preset);
+  const submit = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    setError(null);
+    const r = await api.createApp(name.trim(), prompt.trim(), preset);
+    setBusy(false);
+    if (!r.ok || !r.app) return setError(r.error ?? "That didn't work. Try again.");
+    onMade(r.app.id);
+  };
+  return (
+    <Dialog
+      title="New app"
+      onClose={onClose}
+      actions={
+        <button className="btn btn-primary btn-block" disabled={!ready || busy} onClick={() => void submit()} data-testid="new-app-submit">
+          {busy && <Spinner />} Make it
+        </button>
+      }
+    >
+      <form
+        className="fields"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <label className="fld">
+          <span className="label">Name</span>
+          <input className="field" data-testid="new-app-name" value={name} maxLength={40} placeholder="For example, Prayer Times" autoFocus onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="fld">
+          <span className="label">What should it do?</span>
+          <textarea
+            className="field field-multi"
+            data-testid="new-app-prompt"
+            value={prompt}
+            rows={4}
+            placeholder="Wake me up for each prayer in Ajman, with a reminder before it."
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+          />
+        </label>
+        <div className="advanced">
+          <button type="button" className="advanced-toggle" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)} data-testid="new-app-advanced">
+            <span className="label">Advanced</span>
+            {!advanced && preset !== DEFAULT_PRESET && <span className="caption secondary">{chosen?.title}</span>}
+            <span className={advanced ? "advanced-chevron open" : "advanced-chevron"}>
+              <Icon of={ChevronDown} size="sm" />
+            </span>
+          </button>
+          {advanced && (
+            <div className="preset-choices" role="radiogroup" aria-label="What to make it with">
+              {PRESET_CHOICES.map((p) => (
+                <label key={p.id} className={p.id === preset ? "preset-choice selected" : "preset-choice"} data-testid={`new-app-preset-${p.id}`}>
+                  <input type="radio" name="preset" value={p.id} checked={p.id === preset} onChange={() => setPreset(p.id)} />
+                  <span className="preset-text">
+                    <span className="preset-title">
+                      <span className="row-type">{p.title}</span>
+                      {p.tag && <span className="caption secondary">{p.tag}</span>}
+                    </span>
+                    <span className="caption secondary">{p.line}</span>
+                  </span>
+                </label>
+              ))}
             </div>
           )}
-          {apps.length === 0 ? (
-            <section className="list empty">
-              <strong className="heading">No apps yet</strong>
-              <p className="callout secondary">Make your first one from your phone: open AnyAppAgent and tap New app. It shows up here while this PC makes it.</p>
-            </section>
-          ) : (
-            <section className="list">
-              {apps.map((a) => {
-                const st = appState(a);
-                const v = a.latestApk ?? a.latestBuild;
-                return (
-                  <button key={a.id} className="lrow" onClick={() => onOpen(a.id)}>
-                    <AppIcon icon={s.icons[a.id]} />
-                    <div className="lrow-main">
-                      <div className="heading">{a.name}</div>
-                      <StateLine state={st.state} text={st.text} />
-                    </div>
-                    <div className="lrow-meta">{[v ? `v${v.number}` : "", timeAgo(a.updatedAt)].filter(Boolean).join(", ")}</div>
-                    <span className="lrow-chev">
-                      <Icon of={ChevronRight} size="button" />
-                    </span>
-                  </button>
-                );
-              })}
-            </section>
-          )}
-          {recent.length > 0 && (
-            <section className="recent">
-              <div className="eyebrow">Today</div>
-              {recent.map((r, i) => (
-                <div key={i} className="recent-row">
-                  <time>{r.time}</time>
-                  <span>{r.text}</span>
-                </div>
-              ))}
-            </section>
-          )}
         </div>
-        <aside className="dm-aside">
-          <PhonesPanel s={s} />
-          <AddPhonePanel s={s} onMore={onConnect} />
-        </aside>
-      </div>
-    </>
+        {error && <p className="label problem-text">{error}</p>}
+      </form>
+    </Dialog>
   );
 }
 
 function PhonesPanel({ s }: { s: Snapshot }) {
   const devices = s.admin?.devices ?? [];
   return (
-    <div className="panel">
+    <div className="panel panel-wide">
       <div className="eyebrow">{devices.length > 1 ? "Your phones" : "Your phone"}</div>
       {devices.length === 0 ? (
         <p className="label secondary">No phone connected yet.</p>
       ) : (
-        devices.map((d) => (
-          <div key={d.id} className="phone-row">
-            <Icon of={Smartphone} size="md" />
-            <div>
-              <strong className="body">{d.name}</strong>
-              <span className="label">{d.connected ? "Connected, seen just now" : d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : "Paired"}</span>
-              <span className="label">{viaWords(d.via)}</span>
+        <div className="phone-list">
+          {devices.map((d) => (
+            <div key={d.id} className="phone-row">
+              <Icon of={Smartphone} size="md" />
+              <div>
+                <strong className="body">{d.name}</strong>
+                <span className="label">{d.connected ? "Connected, seen just now" : d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : "Paired"}</span>
+                <span className="label">{viaWords(d.via)}</span>
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
-function AddPhonePanel({ s, onMore }: { s: Snapshot; onMore: () => void }) {
-  useFreshCode(s);
-  const p = s.pairing;
-  const hasPhone = (s.admin?.devices.length ?? 0) > 0;
+/** Only words and a button: the pairing code is a secret and shows only in its popup. */
+function AddPhonePanel({ hasPhone, onShow }: { hasPhone: boolean; onShow: () => void }) {
   return (
-    <div className="panel qr-card">
+    <div className="panel">
       <div className="eyebrow">{hasPhone ? "Add another phone" : "Connect your phone"}</div>
-      {/* The Easy Connect code is long (about 354 characters): give it more room than the standard QR. */}
-      {p.qrSvg ? <QrPlate svg={p.qrSvg} size={p.kind === "easy-connect" ? sizeTokens.qr * 1.6 : sizeTokens.qr} label="Code to connect a phone" /> : <Spinner />}
-      <p className="label secondary">Open AnyAppAgent on the phone and scan this code.</p>
-      <button className="btn btn-quiet btn-sm btn-block" onClick={onMore}>
-        {p.kind === "easy-connect" ? "Use a code instead" : "Bigger code and other ways"}
+      <p className="label secondary">Show a pairing code and scan it with AnyAppAgent on the phone. Keep the code private.</p>
+      <button className="btn btn-quiet btn-sm btn-block" onClick={onShow} data-testid="show-pairing-code">
+        <Icon of={QrCode} size="sm" /> Show pairing code
       </button>
     </div>
   );
@@ -268,13 +421,13 @@ function viaWords(via: string | undefined): string {
   return via === "easy-connect" ? "From anywhere" : "Same Wi-Fi only";
 }
 
-function PhonesPage({ s }: { s: Snapshot }) {
+function PhonesPage({ s, onConnect }: { s: Snapshot; onConnect: () => void }) {
   const devices = s.admin?.devices ?? [];
   const [forget, setForget] = useState<{ id: string; name: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   return (
     <div className="page">
-      <header className="dm-head" style={{ paddingBottom: 0 }}>
+      <header className="dm-head">
         <div>
           <h1 className="title">Phones</h1>
           <p className="dm-sub callout">The phones that can ask this PC for apps.</p>
@@ -300,9 +453,14 @@ function PhonesPage({ s }: { s: Snapshot }) {
         </section>
       )}
       {error && <p className="label problem-text">{error}</p>}
-      <section>
-        <h2 className="heading">{devices.length ? "Connect another phone" : "Connect your phone"}</h2>
-        <PairingPanel s={s} />
+      <section className="connect-row">
+        <div className="grow">
+          <h2 className="heading">{devices.length ? "Connect another phone" : "Connect your phone"}</h2>
+          <p className="label secondary">Show a pairing code and scan it with AnyAppAgent on the phone. Keep the code private: anyone who scans it can use this PC.</p>
+        </div>
+        <button className="btn btn-quiet" onClick={onConnect} data-testid="show-pairing-code">
+          <Icon of={QrCode} size="button" /> Show pairing code
+        </button>
       </section>
       {forget && (
         <Dialog
@@ -409,7 +567,7 @@ function setupRows(s: Snapshot): SetupRow[] {
 function SetupPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) => void }) {
   return (
     <div className="page">
-      <header className="dm-head" style={{ paddingBottom: 0 }}>
+      <header className="dm-head">
         <div>
           <h1 className="title">Setup</h1>
           <p className="dm-sub callout">Everything this PC needs to make apps for your phone. It checks itself.</p>
@@ -421,9 +579,11 @@ function SetupPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) =>
       <section className="list">
         {setupRows(s).map((r) => (
           <div key={r.key} className="srow">
-            <Icon of={r.icon} size="md" />
+            <span className="badge">
+              <Icon of={r.icon} size="md" />
+            </span>
             <div className="srow-main">
-              <span className="body">{r.title}</span>
+              <span className="heading">{r.title}</span>
               <StateLine state={r.state} text={r.sub} />
             </div>
             {r.state !== "ready" && r.state !== "working" && r.step && (
@@ -444,13 +604,136 @@ function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: () =
   return <button className={`switch${on ? " on" : ""}`} role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onChange} />;
 }
 
+/** "Tea Timer", or a plain name for the PC's shared key (docs/DISTRIBUTION.md). */
+function keyName(s: Snapshot, id: string): string {
+  if (id === "shared") return "the shared key (apps made before per-app keys)";
+  return s.admin?.signing?.keys.find((k) => k.id === id)?.appName ?? id;
+}
+
+function listNames(names: string[]): string {
+  return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+function SigningKeysGroup({ s }: { s: Snapshot }) {
+  const signing = s.admin?.signing;
+  const [mode, setMode] = useState<"backup" | "restore" | null>(null);
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; problem?: boolean } | null>(null);
+  if (!signing) return null;
+  const own = signing.keys.filter((k) => k.kind !== "shared").length;
+  const fresh = signing.notBackedUp.filter((id) => id !== "shared" || !signing.lastBackupAt);
+  const last = signing.lastBackupAt ? new Date(signing.lastBackupAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : null;
+  const close = () => {
+    setMode(null);
+    setPw("");
+    setPw2("");
+  };
+  const tooShort = pw.length < 8;
+  const mismatch = mode === "backup" && pw2 !== pw;
+  const go = async () => {
+    if (!mode || tooShort || mismatch) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = mode === "backup" ? await api.backupKeys(pw) : await api.restoreKeys(pw);
+      if ("cancelled" in r) return;
+      if (!r.ok) {
+        setNote({ text: r.error, problem: true });
+        return;
+      }
+      close();
+      if (mode === "backup") {
+        setNote({ text: `Saved ${r.count} ${r.count === 1 ? "key" : "keys"} to ${r.file}. Keep this file and its password somewhere safe, away from this PC.` });
+      } else {
+        const res = r.restored!;
+        const parts: string[] = [];
+        if (res.added.length) parts.push(`Restored ${res.added.length === 1 ? "1 key" : `${res.added.length} keys`}: ${listNames(res.added.map((id) => keyName(s, id)))}.`);
+        if (!res.added.length && !res.conflicts.length) parts.push("Nothing new: this PC already has every key in that backup.");
+        for (const c of res.conflicts) parts.push(`Kept this PC's own key for ${keyName(s, c.id)}: the backup has a different one.`);
+        setNote({ text: parts.join(" "), problem: res.conflicts.length > 0 });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="list">
+      <div className="srow">
+        <div className="srow-main">
+          <span className="body">Signing keys</span>
+          <span className="sub">
+            Each app is signed with a key kept on this PC ({own} {own === 1 ? "app has" : "apps have"} {own === 1 ? "its" : "their"} own). Phones only take updates signed with the same key, so
+            without a backup, losing this PC means your apps can never be updated again.
+          </span>
+          {fresh.length > 0 ? (
+            <span className="sub problem-text">
+              {last ? `Not in the last backup (${last}): ${listNames(fresh.map((id) => keyName(s, id)))}.` : "Not backed up yet."}
+            </span>
+          ) : (
+            last && <span className="sub">Last backup: {last}.</span>
+          )}
+        </div>
+        <div className="row">
+          <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => (setNote(null), setMode(mode === "backup" ? null : "backup"))}>
+            Back up
+          </button>
+          <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => (setNote(null), setMode(mode === "restore" ? null : "restore"))}>
+            Restore
+          </button>
+        </div>
+      </div>
+      {mode && (
+        <form
+          className="srow"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void go();
+          }}
+        >
+          <div className="srow-main">
+            <span className="sub">
+              {mode === "backup"
+                ? "Choose a password for the backup file (at least 8 characters). It is not saved anywhere: without it the file cannot be opened."
+                : "The password you chose when you made the backup. Keys this PC already has are never replaced."}
+            </span>
+            <div className="row wrap">
+              <input className="field field-small" type="password" autoFocus autoComplete="new-password" placeholder="Password" value={pw} onChange={(e) => setPw(e.target.value)} />
+              {mode === "backup" && (
+                <input className="field field-small" type="password" autoComplete="new-password" placeholder="Same password again" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+              )}
+            </div>
+            {mode === "backup" && pw2.length > 0 && mismatch && <span className="sub problem-text">The two passwords are not the same.</span>}
+          </div>
+          <div className="row">
+            <button className="btn btn-quiet btn-sm" type="button" disabled={busy} onClick={close}>
+              Cancel
+            </button>
+            <button className="btn btn-primary btn-sm" type="submit" disabled={busy || tooShort || mismatch}>
+              {busy ? "Working..." : mode === "backup" ? "Choose where to save" : "Choose the backup file"}
+            </button>
+          </div>
+        </form>
+      )}
+      {note && (
+        <div className="srow">
+          <div className="srow-main">
+            <span className={`sub${note.problem ? " problem-text" : ""}`}>{note.text}</span>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) => void }) {
   const c = s.companion;
   const ecOn = !!s.admin && s.admin.easyConnect.state !== "off";
   const [apk, setApk] = useState(s.settings.phoneApkPath);
   return (
     <div className="page">
-      <header className="dm-head" style={{ paddingBottom: 0 }}>
+      <header className="dm-head">
         <h1 className="title">Settings</h1>
       </header>
       <section className="list">
@@ -478,6 +761,7 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
           </button>
         </div>
       </section>
+      <SigningKeysGroup s={s} />
       <section className="settings-group">
         <h2 className="heading">Dictation</h2>
         <p className="callout secondary">Speak your changes in a chat on this PC instead of typing them. It uses Hex, a free app that turns your voice into text on this PC, offline.</p>
@@ -522,7 +806,7 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
             void api.setSetting("phoneApkPath", apk.trim());
           }}
         >
-          <input className="field" style={{ flex: 1 }} value={apk} placeholder="Phone app file (found by itself when empty)" onChange={(e) => setApk(e.target.value)} />
+          <input className="field field-small" style={{ flex: 1 }} value={apk} placeholder="Phone app file (found by itself when empty)" onChange={(e) => setApk(e.target.value)} />
           <button className="btn btn-quiet btn-sm" type="submit" disabled={apk.trim() === s.settings.phoneApkPath}>
             Save
           </button>
@@ -542,29 +826,3 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
     </div>
   );
 }
-
-// ------------------------------------------------------------------ dialog (COMPONENTS.md 4)
-
-export function Dialog({ title, onClose, children, actions, wide }: { title: string; onClose: () => void; children: ReactNode; actions?: ReactNode; wide?: boolean }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`dialog${wide ? " wide" : ""}`} role="dialog" aria-label={title}>
-        <div className="dialog-head">
-          <h2 className="title-small">{title}</h2>
-          <button className="btn btn-icon" onClick={onClose} aria-label="Close">
-            <Icon of={X} size="md" />
-          </button>
-        </div>
-        <div className="body">{children}</div>
-        {actions && <div className="dialog-actions">{actions}</div>}
-      </div>
-    </div>
-  );
-}
-
-export { TypedCode };

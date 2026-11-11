@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Behind the launcher icon picture (only visible if icon.png has transparent parts). -->
+  <color name="ic_launcher_background">#1E2023</color>
+  <!-- The window before the first frame: match AppColors.background in ui/theme/Theme.kt. -->
+  <color name="window_background">#F5F5F2</color>
+</resources>

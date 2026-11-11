@@ -1,13 +1,13 @@
 // Onboarding (COMPONENTS.md 6): step rail on the left, one idea per screen on the right, footer
 // with Back and Skip or Continue. Every step checks itself and fixes itself where it can.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, Check, ChevronLeft, Cloud, Copy, Download, ExternalLink, KeyRound, Monitor, Smartphone, Wrench, X } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, Cloud, Copy, Download, ExternalLink, KeyRound, Monitor, QrCode, Smartphone, Wrench, X } from "lucide-react";
 import type { Snapshot } from "../../shared/types.ts";
-import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
+import { PairingDialog } from "./Pairing.tsx";
+import { Icon, Spinner, Wordmark } from "./ui.tsx";
+import { GetPhoneAppDialog } from "./PhoneApp.tsx";
 import { HEX_SETUP, HexCard } from "./Hex.tsx";
-import { PairingPanel } from "./Pairing.tsx";
-import { Icon, QrPlate, Spinner, Wordmark } from "./ui.tsx";
 
 const api = window.anyapp;
 
@@ -192,7 +192,7 @@ const stepOf = (id: StepId) => `Step ${ORDER.indexOf(id) + 1} of ${RAIL.length}`
 
 function Welcome() {
   const loop: [LucideIcon, string, string][] = [
-    [Smartphone, "You describe it", "On your phone, in your own words."],
+    [Smartphone, "You describe it", "On your phone or on this PC, in your own words."],
     [Monitor, "This PC makes it", "Claude writes the app and this PC builds it."],
     [Download, "It appears on your phone", "Ready to open. Ask for changes any time."],
   ];
@@ -200,10 +200,10 @@ function Welcome() {
     <>
       <div className="eyebrow">Welcome</div>
       <h1 className="hero">Make your own Android apps by describing them</h1>
-      <p className="lede">AnyAppAgent turns your ideas into real apps. You tell it what you want on your phone, and this PC does the rest.</p>
+      <p className="lede">AnyAppAgent turns your ideas into real apps. You tell it what you want, on your phone or right here, and this PC does the rest.</p>
       <div className="loop">
         {loop.map(([of, title, line], i) => (
-          <div key={title} className="row" style={{ flex: 1, alignItems: "stretch" }}>
+          <Fragment key={title}>
             <div className="card loop-step">
               <span className="badge">
                 <Icon of={of} size="md" />
@@ -216,7 +216,7 @@ function Welcome() {
                 <Icon of={ArrowRight} size="sm" />
               </span>
             )}
-          </div>
+          </Fragment>
         ))}
       </div>
       <p className="label secondary" style={{ marginTop: "var(--aa-space-2xl)" }}>
@@ -471,43 +471,27 @@ function GitHubStep({ s }: { s: Snapshot }) {
 }
 
 function PhoneGetStep() {
-  const [info, setInfo] = useState<Awaited<ReturnType<typeof api.phoneDownload>> | null>(null);
+  const [show, setShow] = useState(false);
   useEffect(() => {
     // Start "connect from anywhere" now: its first start takes a few minutes, and this step covers that.
     void api.easyConnectAuto();
-    let alive = true;
-    const load = () => void api.phoneDownload().then((i) => alive && setInfo(i));
-    load();
-    const t = setInterval(load, 5000); // the phone app may still be on its way
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
   }, []);
-  const ready = info?.available && info.qrSvg;
   return (
     <>
-      <Head eyebrow={stepOf("phone-get")} title="Put AnyAppAgent on your phone" lede="Your phone needs the AnyAppAgent app. It comes straight from this PC, not from the Play Store." />
-      {ready ? (
-        <div className="pair">
-          <QrPlate svg={info.qrSvg!} size={sizeTokens.qr * 1.5} label="Download AnyAppAgent" />
-          <How
-            flush
-            items={[
-              ["Point your phone's camera at this code", "Your phone must be on the same Wi-Fi as this PC."],
-              ["Tap the download, then Open", "It takes a moment."],
-              ["Allow installing from this source", "Android asks once because it is not from the Play Store. Then tap Install."],
-            ]}
-          />
-        </div>
-      ) : (
-        <CheckCard
-          state={info ? "todo" : "working"}
-          icon={Smartphone}
-          title="The phone app"
-          status={info ? "It isn't ready on this PC yet. This page shows its code as soon as it is. Already have it? Carry on." : "Getting it ready…"}
-        />
-      )}
+      <Head eyebrow={stepOf("phone-get")} title="Put AnyAppAgent on your phone" lede="Your phone needs the AnyAppAgent app. It downloads from AnyAppAgent's page on GitHub, not from the Play Store." />
+      <div className="code-cta">
+        <button className="btn btn-primary" onClick={() => setShow(true)} data-testid="show-download-code">
+          <Icon of={Download} size="button" /> Show download code
+        </button>
+      </div>
+      <How
+        items={[
+          ["Point your phone's camera at the code", "Tap the link it shows. The download starts."],
+          ["Open the downloaded file", "It takes a moment."],
+          ["Allow installing from this source", "Android asks once because it is not from the Play Store. Then tap Install."],
+        ]}
+      />
+      {show && <GetPhoneAppDialog onClose={() => setShow(false)} />}
     </>
   );
 }
@@ -515,6 +499,7 @@ function PhoneGetStep() {
 function PhonePairStep({ s, onPaired }: { s: Snapshot; onPaired: () => void }) {
   const startCount = useRef(s.checks.phone.pairedCount);
   const [justPaired, setJustPaired] = useState(false);
+  const [show, setShow] = useState(false);
   useEffect(() => {
     if (s.checks.phone.pairedCount > startCount.current && !justPaired) {
       setJustPaired(true);
@@ -525,13 +510,19 @@ function PhonePairStep({ s, onPaired }: { s: Snapshot; onPaired: () => void }) {
   const name = s.admin?.devices.at(-1)?.name;
   return (
     <>
-      <Head eyebrow={stepOf("phone-pair")} title="Connect your phone" lede="Open AnyAppAgent on your phone and scan this code. Your phone and this PC then stay connected." />
+      <Head eyebrow={stepOf("phone-pair")} title="Connect your phone" lede="Show the pairing code here, then scan it with AnyAppAgent on your phone. Your phone and this PC then stay connected." />
       {justPaired ? (
         <CheckCard state="ready" icon={Smartphone} title={name ? `${name} is connected` : "Your phone is connected"} status="Your phone and this PC can make apps together now." />
       ) : (
         <>
           {s.checks.phone.pairedCount > 0 && <CheckCard state="ready" icon={Smartphone} title={s.checks.phone.summary} status="You can connect another phone too, or carry on." />}
-          <PairingPanel s={s} />
+          <div className="code-cta">
+            <button className="btn btn-primary" onClick={() => setShow(true)} data-testid="show-pairing-code">
+              <Icon of={QrCode} size="button" /> Show pairing code
+            </button>
+            <p className="label secondary">Keep the code private: anyone who scans it can use this PC to make apps.</p>
+          </div>
+          {show && <PairingDialog s={s} title="Connect your phone" onClose={() => setShow(false)} />}
         </>
       )}
     </>
@@ -560,13 +551,13 @@ function DoneStep() {
   return (
     <>
       <div className="eyebrow">All set</div>
-      <h1 className="hero">Now pick up your phone</h1>
-      <p className="lede">Everything on this PC is ready. The rest happens on your phone.</p>
+      <h1 className="hero">Now make your first app</h1>
+      <p className="lede">Everything on this PC is ready. Start an app on your phone or right here in this window.</p>
       <How
         items={[
-          ["Open AnyAppAgent", "On your phone."],
-          ["Tap New app and describe it", "In your own words, like “a shopping list I can share with my family”."],
+          ["Tap New app and describe it", "In AnyAppAgent on your phone or here, in your own words, like “a shopping list I can share with my family”."],
           ["Wait a few minutes", "This PC makes it, and it appears on your phone, ready to open."],
+          ["Ask for changes in its chat", "From your phone or from this PC. Each new version goes to your phone by itself."],
         ]}
       />
       <p className="label secondary" style={{ marginTop: "var(--aa-space-2xl)", maxWidth: "var(--aa-size-reading-width)" }}>

@@ -1,13 +1,14 @@
 // AnyAppAgent desktop: runs the companion, onboarding and the main window, sits in the tray.
-import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
-import type { ChatItem } from "../../../shared/protocol.ts";
-import type { Checks, PairingView, PhoneDownload, Settings, Snapshot } from "../shared/types.ts";
+import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
+import type { Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
+import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
 import { AdminClient, lanAddresses } from "./admin-client.ts";
@@ -137,6 +138,8 @@ async function connectAdmin(): Promise<void> {
       broadcast();
     });
     client.on("chat", (item: ChatItem) => win?.webContents.send("chat:item", item));
+    client.on("helper", (worker: WorkerInfo) => win?.webContents.send("helper:updated", worker));
+    client.on("helper-item", (item: ChatItem) => win?.webContents.send("helper:item", item));
     await client.connect();
     companion.markRunning(client.adminRoutes);
     log(`[desktop] companion answering; admin routes: ${client.adminRoutes ? "yes" : "no (fallback)"}`);
@@ -558,6 +561,8 @@ function ipc(): void {
     const { statSync } = await import("node:fs");
     return { available: true, url, qrSvg: await qrSvg(url), sizeBytes: statSync(apk).size };
   });
+  // The phone app from this project's public GitHub release: works on any network, phone camera only.
+  ipcMain.handle("phone:release", async (): Promise<PhoneRelease> => ({ url: PHONE_RELEASE_URL, qrSvg: await qrSvg(PHONE_RELEASE_URL) }));
   // The phone step turns Easy Connect on once (it is off by default and its first start takes a few minutes).
   ipcMain.handle("pairing:easy-auto", async () => {
     if (easyConnectAutoTried || !admin?.adminRoutes || admin.state?.easyConnect.state !== "off") return;
@@ -565,7 +570,11 @@ function ipc(): void {
     log("[desktop] turning Easy Connect on for the phone step");
     await admin.easyConnect(true).catch((e) => log(`[desktop] easy connect: ${(e as Error).message}`));
   });
-  ipcMain.handle("pairing:new", () => admin?.newPairing());
+  // Only the pairing popup asks for a code (it is a secret, never made while nothing shows it).
+  ipcMain.handle("pairing:new", () => {
+    log("[desktop] new pairing code asked for by the pairing popup");
+    return admin?.newPairing();
+  });
   ipcMain.handle("pairing:easy", (_e, enabled: boolean) => admin?.easyConnect(Boolean(enabled)));
   ipcMain.handle("devices:remove", (_e, id: string) => admin?.removeDevice(String(id)));
   ipcMain.handle("hex:install", () => void runHexInstall());
@@ -598,16 +607,70 @@ function ipc(): void {
       return { ok: false, error: f.message, code: f.code };
     }
   });
-  ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
-  ipcMain.handle("apps:send", async (_e, appId: string, text: string) => {
+  // Signing keys (docs/DISTRIBUTION.md): a file dialog here, the work in the companion.
+  const keysFilter = [{ name: "AnyAppAgent key backup", extensions: ["anyappkeys"] }];
+  // Dev and proofs only: ANYAPP_DESKTOP_DIALOG_FILE answers both file dialogs, so a script can drive them.
+  const dialogFile = env.ANYAPP_DESKTOP_DIALOG_FILE;
+  ipcMain.handle("keys:backup", async (_e, password: string): Promise<KeysAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const day = new Date().toISOString().slice(0, 10);
+    const pick = dialogFile ? { canceled: false, filePath: dialogFile } : await dialog.showSaveDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+      title: "Back up signing keys",
+      defaultPath: join(app.getPath("documents"), `AnyAppAgent keys ${day}.anyappkeys`),
+      filters: keysFilter,
+    });
+    if (pick.canceled || !pick.filePath) return { cancelled: true };
     try {
-      if (!admin) throw new Error("AnyAppAgent is still starting.");
-      await admin.send(String(appId), String(text));
-      return { ok: true };
+      const result = await admin.backupKeys(pick.filePath, String(password));
+      return { ok: true, file: result.file, count: result.count };
     } catch (error) {
       return { ok: false, error: (error as Error).message };
     }
   });
+  ipcMain.handle("keys:restore", async (_e, password: string): Promise<KeysAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const pick = dialogFile ? { canceled: false, filePaths: [dialogFile] } : await dialog.showOpenDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+      title: "Restore signing keys",
+      defaultPath: app.getPath("documents"),
+      filters: keysFilter,
+      properties: ["openFile"],
+    });
+    const file = pick.filePaths[0];
+    if (pick.canceled || !file) return { cancelled: true };
+    try {
+      return { ok: true, file, restored: await admin.restoreKeys(file, String(password)) };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
+  ipcMain.handle("helpers:list", (_e, appId: string) => admin?.helpers(String(appId)) ?? []);
+  ipcMain.handle("helpers:messages", (_e, appId: string, workerId: string) => admin?.helperMessages(String(appId), String(workerId)) ?? []);
+  // Chat actions answer { ok, error } with a plain sentence instead of throwing across IPC.
+  const chatAction = (run: (client: AdminClient) => Promise<unknown>) => async () => {
+    try {
+      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      const value = await run(admin);
+      return { ok: true, ...(value && typeof value === "object" ? { app: value } : {}) };
+    } catch (error) {
+      const message = (error as Error).message;
+      return { ok: false, error: /fetch failed|ECONNREFUSED|aborted|timeout/i.test(message) ? "The companion on this PC is not answering. It restarts by itself; try again in a moment." : message };
+    }
+  };
+  ipcMain.handle("apps:send", (_e, appId: string, text: string, images?: ImageUpload[]) =>
+    chatAction((c) => c.send(String(appId), String(text), Array.isArray(images) ? images : []))(),
+  );
+  ipcMain.handle("apps:image", (_e, appId: string, imageId: string) => admin?.image(String(appId), String(imageId)));
+  ipcMain.handle("apps:cancel", (_e, appId: string) => chatAction((c) => c.cancel(String(appId)))());
+  ipcMain.handle("helpers:stop", (_e, appId: string, workerId: string) => chatAction((c) => c.stopHelper(String(appId), String(workerId)))());
+  ipcMain.handle("apps:rebuild", (_e, appId: string) => chatAction((c) => c.rebuild(String(appId)))());
+  ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
+    chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
+  );
+  ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string) =>
+    // Only a known preset passes; anything else is the default (React Native).
+    chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" || preset === "expo-exact" ? preset : undefined))(),
+  );
   ipcMain.handle("settings:set", (_e, key: keyof Settings, value: unknown) => {
     if (key in settings && typeof value === typeof settings[key]) setSetting(key, value as never);
   });
@@ -626,10 +689,11 @@ function ipc(): void {
 
 // ---------------------------------------------------------------- lifecycle
 
-if (!app.requestSingleInstanceLock()) {
+if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
   app.quit();
 } else {
-  app.on("second-instance", () => showWindow());
+  // `AnyAppAgent.exe --quit` asks the running app to quit the normal way (as Quit in the tray does), for updates.
+  app.on("second-instance", (_e, argv) => (argv.includes("--quit") ? app.quit() : showWindow()));
   app.setAppUserModelId("com.anyappagent.desktop");
 
   app.whenReady().then(async () => {

@@ -1,5 +1,6 @@
 package com.anyappagent.nativebridge
 
+import android.app.Activity
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ActivityNotFoundException
@@ -9,7 +10,10 @@ import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -22,9 +26,13 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
 import java.io.FileInputStream
+import java.lang.ref.WeakReference
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+
+/** Request codes for Android's install prompts (startActivityForResult): this + (session id and 0xff). */
+private const val PROMPT_REQUEST_BASE = 0x4100
 
 class InstallException(message: String) : CodedException("ERR_INSTALL", message, null)
 
@@ -42,6 +50,17 @@ class AnyAppNativeModule : Module() {
 
   /** PackageInstaller session id -> the JS promise waiting for its final result. */
   private val pending = ConcurrentHashMap<Int, Promise>()
+
+  /** PackageInstaller session id -> Android's prompt for it, while it waits for the person. */
+  private val prompts = ConcurrentHashMap<Int, Intent>()
+
+  /**
+   * Prompts opened inside AnyAppAgent's own task with startActivityForResult: session id ->
+   * (the activity that opened it, its request code), so finishActivity can close exactly that
+   * prompt when its session ends or times out (an abandoned session's prompt otherwise stayed on
+   * screen and covered the next app's prompt).
+   */
+  private val shownPrompts = ConcurrentHashMap<Int, Pair<WeakReference<Activity>, Int>>()
 
   /** Easy Connect's bridge calls, one at a time, off the JS and main threads. */
   private val easyConnectExecutor = Executors.newSingleThreadExecutor { r -> Thread(r, "anyapp-easyconnect").apply { isDaemon = true } }
@@ -91,6 +110,13 @@ class AnyAppNativeModule : Module() {
       startActivity(intent)
     }
 
+    /** A light tick under the finger (a long press on a tile). Needs no permission. */
+    Function("haptic") {
+      val view = appContext.currentActivity?.window?.decorView ?: return@Function false
+      view.post { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+      true
+    }
+
     Function("openAppSettings") { packageName: String ->
       val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -105,6 +131,31 @@ class AnyAppNativeModule : Module() {
     }
 
     // ---------- installing
+
+    /**
+     * Shows Android's install prompt again for a session still waiting for the person (Android
+     * blocks it when AnyAppAgent is not in front, and another prompt can cover it). True when one
+     * was opened. Called when AnyAppAgent comes back to the front.
+     */
+    Function("reopenInstallPrompt") {
+      val sessionId = pending.keys.firstOrNull { prompts.containsKey(it) } ?: return@Function false
+      val confirm = prompts[sessionId] ?: return@Function false
+      // On the main thread, in order: close the copy that may be open, then open it again
+      // (never two copies of the same prompt).
+      mainHandler.post {
+        try {
+          shownPrompts.remove(sessionId)?.let { (ref, requestCode) -> ref.get()?.finishActivity(requestCode) }
+          showPrompt(sessionId, confirm)
+        } catch (_: Exception) {
+        }
+      }
+      true
+    }
+
+    /** The ABIs this phone runs, best first (Build.SUPPORTED_ABIS), to pick the smallest APK. */
+    Function("supportedAbis") {
+      Build.SUPPORTED_ABIS.toList()
+    }
 
     Function("canInstallPackages") {
       if (Build.VERSION.SDK_INT >= 26) context.packageManager.canRequestPackageInstalls() else true
@@ -139,10 +190,15 @@ class AnyAppNativeModule : Module() {
      * "cancelled", "conflict" (signed differently from the installed app), "incompatible",
      * "storage", "blocked", "invalid" or "failed". While the user is asked to confirm,
      * an "onInstallStatus" event with status "pendingUserAction" is sent.
+     *
+     * [answerWithinMs]: how long to wait for Android's final answer after the commit (a
+     * confirmation nobody sees, for example one Android blocked while AnyAppAgent was in the
+     * background, used to keep the install queue waiting for good). Past it the session is
+     * abandoned and the promise resolves with status "timeout".
      */
-    AsyncFunction("install") { path: String, promise: Promise ->
+    AsyncFunction("install") { path: String, answerWithinMs: Double, promise: Promise ->
       try {
-        startInstall(path, promise)
+        startInstall(path, promise, debugInstallTimeoutMs() ?: answerWithinMs.toLong())
       } catch (e: CodedException) {
         promise.reject(e)
       } catch (e: Exception) {
@@ -201,7 +257,15 @@ class AnyAppNativeModule : Module() {
 
     // ---------- keep the connection alive while the PC works
 
+    /** Is the keep-alive service running in the foreground (so this process will not be frozen)? */
+    Function("keepAliveRunning") {
+      KeepAliveService.running
+    }
+
     Function("startKeepAlive") { text: String, color: String? ->
+      // Already running: change its text in place. A new start from the background is refused
+      // by Android, and it is not needed.
+      if (KeepAliveService.update(context, text, color)) return@Function true
       val intent = Intent(context, KeepAliveService::class.java)
         .putExtra(KeepAliveService.EXTRA_TEXT, text)
         .putExtra(KeepAliveService.EXTRA_COLOR, color)
@@ -268,7 +332,17 @@ class AnyAppNativeModule : Module() {
     }
   }
 
-  private fun startInstall(path: String, promise: Promise) {
+  private val mainHandler = Handler(Looper.getMainLooper())
+
+  /** Development only: `adb shell setprop debug.anyapp.install.timeout_s 20` shortens the wait. */
+  private fun debugInstallTimeoutMs(): Long? = try {
+    val p = Runtime.getRuntime().exec(arrayOf("getprop", "debug.anyapp.install.timeout_s"))
+    p.inputStream.bufferedReader().readText().trim().toLongOrNull()?.takeIf { it > 0 }?.times(1000)
+  } catch (_: Exception) {
+    null
+  }
+
+  private fun startInstall(path: String, promise: Promise, answerWithinMs: Long) {
     val file = toFile(path)
     if (!file.exists()) throw InstallException("The downloaded file is missing.")
     val installer = context.packageManager.packageInstaller
@@ -305,6 +379,17 @@ class AnyAppNativeModule : Module() {
         val pendingIntent = PendingIntent.getBroadcast(context, sessionId, callback, flags)
         session.commit(pendingIntent.intentSender)
       }
+      if (answerWithinMs > 0) {
+        mainHandler.postDelayed({
+          val waiting = pending.remove(sessionId) ?: return@postDelayed
+          closePrompt(sessionId)
+          try {
+            installer.abandonSession(sessionId)
+          } catch (_: Exception) {
+          }
+          waiting.resolve(mapOf("status" to "timeout", "message" to "No answer from Android within ${answerWithinMs / 1000} s", "packageName" to null))
+        }, answerWithinMs)
+      }
     } catch (e: Exception) {
       pending.remove(sessionId)
       try {
@@ -312,6 +397,34 @@ class AnyAppNativeModule : Module() {
       } catch (_: Exception) {
       }
       throw InstallException("Couldn't start the install: ${e.message}")
+    }
+  }
+
+  /**
+   * Opens Android's prompt for a session. From an activity it opens in AnyAppAgent's own task (no
+   * NEW_TASK) with startActivityForResult, so [closePrompt] can finish it; without one, in its own task.
+   */
+  private fun showPrompt(sessionId: Int, confirm: Intent) {
+    val activity = appContext.currentActivity
+    if (activity == null) {
+      context.startActivity(confirm)
+      return
+    }
+    val inOurTask = Intent(confirm).apply { flags = flags and Intent.FLAG_ACTIVITY_NEW_TASK.inv() }
+    val requestCode = PROMPT_REQUEST_BASE + (sessionId and 0xff)
+    activity.startActivityForResult(inOurTask, requestCode)
+    shownPrompts[sessionId] = WeakReference(activity) to requestCode
+  }
+
+  /** Closes the prompt this module opened for a session, if it is still on screen. */
+  private fun closePrompt(sessionId: Int) {
+    prompts.remove(sessionId)
+    val (ref, requestCode) = shownPrompts.remove(sessionId) ?: return
+    mainHandler.post {
+      try {
+        ref.get()?.finishActivity(requestCode)
+      } catch (_: Exception) {
+      }
     }
   }
 
@@ -329,9 +442,9 @@ class AnyAppNativeModule : Module() {
   private fun onInstallEvent(sessionId: Int, status: String, message: String?, packageName: String?, confirm: Intent?) {
     if (status == "pendingUserAction") {
       if (confirm != null) {
-        val activity = appContext.currentActivity
+        prompts[sessionId] = confirm
         try {
-          if (activity != null) activity.startActivity(confirm) else context.startActivity(confirm)
+          showPrompt(sessionId, confirm)
         } catch (e: Exception) {
           pending.remove(sessionId)?.resolve(mapOf("status" to "failed", "message" to "The installer did not open."))
           return
@@ -340,6 +453,7 @@ class AnyAppNativeModule : Module() {
       sendEvent("onInstallStatus", mapOf("sessionId" to sessionId, "status" to status, "packageName" to packageName))
       return
     }
+    closePrompt(sessionId)
     sendEvent("onInstallStatus", mapOf("sessionId" to sessionId, "status" to status, "message" to message, "packageName" to packageName))
     pending.remove(sessionId)?.resolve(mapOf("status" to status, "message" to message, "packageName" to packageName))
   }

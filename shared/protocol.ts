@@ -17,13 +17,31 @@ export interface BuildInfo {
   sizeBytes?: number; // set when succeeded
   sha256?: string; // set when succeeded
   error?: string; // short, human readable, set when failed
+  // Added for smaller downloads: the same build as one APK per phone processor type (ABI), each
+  // much smaller than the full APK (sizeBytes/sha256 above), which holds every ABI. Set when
+  // succeeded and the PC built them; absent from older PCs and from apps without native code.
+  variants?: ApkVariant[];
 }
+
+// One APK of a build for one processor type: what GET /api/apps/:id/apk?abi=<abi> serves.
+export interface ApkVariant {
+  abi: string; // an Android ABI name: "arm64-v8a" (phones), "x86_64" (the emulator)
+  sizeBytes: number;
+  sha256: string;
+}
+
+// What an app is made from (chosen under "Advanced" in the New app sheet):
+//   "react-native": Expo / React Native (the default; can come to iPhone later)
+//   "kotlin": native Android (Kotlin, Jetpack Compose; smaller, faster, Android only)
+//   "expo-exact": Expo Exact, alpha (Contract + TypeScript; one app for Android, iPhone, Mac, web)
+export type AppPreset = "react-native" | "kotlin" | "expo-exact";
 
 export interface App {
   id: string;
   name: string; // what the user typed, shown under the icon
   slug: string;
   packageName: string; // Android application id, e.g. com.anyapp.prayeralarm
+  preset?: AppPreset; // absent on apps made before presets existed: those are "react-native"
   status: AppStatus;
   error?: string;
   iconVersion: number; // bumps whenever the icon file changes (cache key for GET /icon)
@@ -31,6 +49,9 @@ export interface App {
   latestApk?: BuildInfo; // newest succeeded build: what GET /apk serves
   repoUrl?: string; // GitHub repository, when one was created
   lastMessagePreview?: string;
+  // With helpers (docs/APP-COORDINATOR.md): status is "working" while the main chat OR any helper works.
+  replying?: boolean; // the main chat itself is answering now (its Stop applies); absent from older PCs
+  activeHelpers?: number; // helpers waiting, working or building now; set (0 or more) only when the chat uses helpers
   createdAt: string;
   updatedAt: string;
 }
@@ -43,7 +64,9 @@ export type ChatItemKind =
   | "plan" // the agent's todo list
   | "permission" // the agent asks to be allowed something
   | "build" // an APK build started by the server
-  | "error"; // something failed outside the agent's own text
+  | "error" // something failed outside the agent's own text
+  | "worker" // one row per worker in the app's main chat (ChatItem.worker); upserted as it moves
+  | "stopped"; // a plain "Stopped" line where the person stopped a turn (main chat or a helper's chat)
 
 export interface ToolCallInfo {
   title: string; // "Edit App.tsx", "Run npm install"
@@ -75,8 +98,44 @@ export interface ChatItem {
   plan?: PlanEntry[];
   permission?: PermissionInfo;
   build?: BuildInfo;
+  // On a user item (added for the chat on the PC): true while the message waits for the agent's
+  // current turn (and its build) to end; set back to false when the agent gets it.
+  queued?: boolean;
+  // On a user item: true when Stop removed it from the queue, so it never reached the agent.
+  dropped?: boolean;
+  // On a user item: the pictures sent with it (GET /api/apps/:id/images/:imageId serves each one).
+  images?: ChatImage[];
+  worker?: WorkerInfo; // on a "worker" row: the worker it stands for (tap opens its chat)
+  workerId?: string; // set on the items of a worker's own chat; never on the main chat
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------- Workers ("helpers" in everything the person sees). Each app's main chat is a coordinator: it
+// answers at once and hands every real piece of work (a change, a fix, a look into something) to a worker,
+// another Claude Code session for the same app. Each worker shows as one "worker" row in the main chat and
+// has its own chat, read only.
+// See docs/APP-COORDINATOR.md.
+
+export type WorkerState =
+  | "waiting" // its change waits for another change to land in the app first
+  | "working" // in a turn
+  | "building" // its change is being built into a new version
+  | "done" // finished; its report went to the coordinator
+  | "failed" // stopped by an error, or its change did not build
+  | "stopped"; // the person (or the coordinator) stopped it
+
+export interface WorkerInfo {
+  id: string;
+  appId: string;
+  title: string; // its task in a few words, e.g. "Make the button green"
+  state: WorkerState;
+  latest?: string; // its latest line: what it is doing now, or its result once finished
+  changesApp: boolean; // false: it only looks into something and changes no files
+  buildNumber?: number; // the build its change produced, when it built
+  createdAt: string;
+  updatedAt: string;
+  finishedAt?: string; // when it last went done, failed or stopped
 }
 
 // ---------- HTTP (JSON). Everything except /api/health and /api/pair needs
@@ -130,16 +189,40 @@ export interface EasyConnectPairRequest {
 export interface CreateAppRequest {
   name: string;
   prompt: string; // what the app should do: becomes the first message to the agent
+  preset?: AppPreset; // default "react-native"; an unknown value is refused with 400
 }
 
 // GET /api/apps/:id/icon -> image/png (the app's launcher icon; a generated placeholder until it has one)
 // GET /api/apps/:id/apk -> application/vnd.android.package-archive (latestApk; supports Range; 404 if none)
+//   ?abi=<abi> (added): the APK of latestApk.variants for that ABI; an ABI the build has no variant for
+//   gets the full APK; 404 when the variant is listed but no longer on the PC. ETag is the served
+//   file's sha256 in quotes, and If-Range with that ETag resumes a cut download (a different
+//   ETag gets the whole file with 200, so a newer build never mixes into a resumed one).
 
 // GET /api/apps/:id/messages?afterSeq=<n> -> ChatItem[] ordered by seq
 // POST /api/apps/:id/messages -> 202 (the user's ChatItem arrives over the socket)
 export interface SendMessageRequest {
-  text: string;
+  text: string; // may be "" when images are sent
+  images?: ImageUpload[]; // pictures sent with the message (limits: shared/chat/images.ts)
 }
+
+// A picture as it is sent: already downscaled on the device to at most 1568 px on the long edge.
+export interface ImageUpload {
+  mimeType: string; // image/png, image/jpeg, image/webp or image/gif
+  data: string; // base64, without a data: prefix
+  width?: number;
+  height?: number;
+}
+
+// A picture as the chat shows it.
+export interface ChatImage {
+  id: string;
+  mimeType: string;
+  width?: number;
+  height?: number;
+}
+
+// GET /api/apps/:id/images/:imageId -> the picture's bytes (image/*), for a ChatItem's images
 
 // POST /api/apps/:id/cancel -> 202 (stops the agent's current turn)
 // POST /api/apps/:id/build -> 202 (builds again without a new prompt)
@@ -148,6 +231,13 @@ export interface PermissionAnswerRequest {
   requestId: string;
   optionId: string;
 }
+
+// Workers (see "Workers" above):
+// GET /api/apps/:id/workers -> WorkerInfo[] (newest last)
+// GET /api/apps/:id/workers/:workerId/messages?afterSeq=<n> -> ChatItem[] of that worker's chat, ordered by seq
+//   (seq counts per worker chat; every item has workerId set). A worker's chat is read only: the person
+//   talks to it through the main chat.
+// POST /api/apps/:id/workers/:workerId/cancel -> 202 (stops that worker; the main chat's cancel never does)
 
 // ---------- WebSocket: GET /ws?token=<token>. Server to app only; JSON text frames.
 // The app may send the text frame "ping" every few seconds: writing is how a phone notices a dead
@@ -158,7 +248,9 @@ export type ServerEvent =
   | { type: "app.updated"; app: App } // also sent for a new app
   | { type: "app.deleted"; appId: string }
   | { type: "chat.item"; item: ChatItem } // upsert by item.id
-  | { type: "apk.ready"; app: App }; // a new APK can be downloaded and installed now
+  | { type: "apk.ready"; app: App } // a new APK can be downloaded and installed now
+  | { type: "worker.updated"; worker: WorkerInfo } // a worker started or changed (its main-chat row also arrives as chat.item)
+  | { type: "worker.item"; item: ChatItem }; // upsert into the chat of worker item.workerId (never the main chat)
 
 // ---------- Desktop app (desktop/, Electron) to companion. The desktop app starts the companion
 // as a child process with the env var ANYAPP_ADMIN_TOKEN=<random secret>. That token is accepted
@@ -196,6 +288,41 @@ export interface AdminState {
   };
   easyConnect: EasyConnectState;
   devices: PairedDevice[];
+  signing?: SigningKeysState; // absent with the fake builder (added for docs/DISTRIBUTION.md)
+}
+
+// ---------- Signing keys (docs/DISTRIBUTION.md, "Signing"). Nothing here ever holds a password or
+// a private key; certificates are public.
+export interface SigningKeysState {
+  keys: SigningKeyInfo[];
+  lastBackupAt: string | null; // ISO time of the last backup made on this PC, null if never
+  notBackedUp: string[]; // ids of keys made since the last backup (all of them if never)
+}
+export interface SigningKeyInfo {
+  id: string; // "shared" (the PC's key for apps made before per-app keys) or an app's package id
+  kind: "shared" | "own" | "moved"; // moved: rotated from the shared key (Android 9+ refuses the shared key for it)
+  certSha256: string;
+  appName?: string; // the app with this package id, when the companion knows it
+}
+// POST /api/admin/keys/backup  KeysBackupRequest  -> KeysBackupResult (writes one encrypted file)
+// POST /api/admin/keys/restore KeysRestoreRequest -> KeysRestoreResult (adds the keys this PC lacks)
+export interface KeysBackupRequest {
+  file: string; // absolute path on the PC, chosen in a save dialog
+  password: string; // at least 8 characters; never stored or logged
+}
+export interface KeysBackupResult {
+  file: string;
+  count: number;
+  createdAt: string;
+}
+export interface KeysRestoreRequest {
+  file: string;
+  password: string;
+}
+export interface KeysRestoreResult {
+  added: string[]; // key ids written to this PC
+  same: string[]; // already here with the same certificate
+  conflicts: { id: string; reason: string }[]; // here with a different certificate: kept, never overwritten
 }
 
 // POST /api/admin/pairing/new -> AdminState (a fresh 6-digit code and, when on, a fresh Easy Connect code)

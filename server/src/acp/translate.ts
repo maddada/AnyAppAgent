@@ -8,7 +8,7 @@ import type { ChatItem, PlanEntry, ToolCallInfo } from "../../../shared/protocol
 import { isJsonObject, readString, type JsonObject } from "./acp-client.ts";
 
 export type ChatDraft = Pick<ChatItem, "id" | "kind"> &
-  Partial<Pick<ChatItem, "text" | "streaming" | "tool" | "plan" | "permission">>;
+  Partial<Pick<ChatItem, "text" | "streaming" | "tool" | "plan" | "permission" | "queued" | "dropped" | "images">>;
 
 const TOOL_KINDS = new Set(["read", "edit", "delete", "move", "search", "execute", "think", "fetch", "switch_mode", "other"]);
 const DETAIL_MAX = 400;
@@ -192,6 +192,11 @@ export class ChatTranslator {
     const closed: ChatDraft = { id: this.assistant.id, kind: "assistant", text: this.assistant.text, streaming: false };
     this.assistant = undefined;
     return [closed];
+  }
+
+  /** Closes the open assistant and thought text, as a tool call does (for tool calls not shown). */
+  closeStreams(): ChatDraft[] {
+    return [...this.closeThought(), ...this.closeAssistant()];
   }
 
   translate(update: unknown): ChatDraft[] {

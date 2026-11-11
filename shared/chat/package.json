@@ -1,0 +1,10 @@
+{
+  "name": "@anyappagent/chat",
+  "private": true,
+  "type": "module",
+  "description": "AnyAppAgent chat core shared by the Android app and the desktop app: rows, tool titles, markdown blocks, build card, state line, composer.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "test": "node --test \"test/*.test.ts\""
+  }
+}

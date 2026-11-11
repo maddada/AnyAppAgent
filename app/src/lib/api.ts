@@ -1,6 +1,7 @@
 import type {
   App,
   ChatItem,
+  WorkerInfo,
   CreateAppRequest,
   EasyConnectPairRequest,
   ErrorBody,
@@ -100,14 +101,25 @@ export class Client {
   deleteApp = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}`, "DELETE");
   messages = (id: string, afterSeq?: number) =>
     this.call<ChatItem[]>(`/api/apps/${encodeURIComponent(id)}/messages${afterSeq != null ? `?afterSeq=${afterSeq}` : ""}`);
-  send = (id: string, body: SendMessageRequest) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/messages`, "POST", body);
+  // Pictures make a message bigger: give it longer than the usual 10 s on a slow connection.
+  send = (id: string, body: SendMessageRequest) =>
+    request<void>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/messages`, { method: "POST", body, token: this.token, timeoutMs: body.images?.length ? 120000 : 20000 });
   cancel = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/cancel`, "POST", {});
   rebuild = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/build`, "POST", {});
   answerPermission = (id: string, body: PermissionAnswerRequest) =>
     this.call<void>(`/api/apps/${encodeURIComponent(id)}/permission`, "POST", body);
 
+  // Helpers (the wire calls them workers): their list, a helper's own chat (read only), its Stop.
+  helpers = (id: string) => this.call<WorkerInfo[]>(`/api/apps/${encodeURIComponent(id)}/workers`);
+  helperMessages = (id: string, workerId: string) =>
+    this.call<ChatItem[]>(`/api/apps/${encodeURIComponent(id)}/workers/${encodeURIComponent(workerId)}/messages`);
+  stopHelper = (id: string, workerId: string) =>
+    this.call<void>(`/api/apps/${encodeURIComponent(id)}/workers/${encodeURIComponent(workerId)}/cancel`, "POST", {});
+
+  imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;
-  apkUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/apk`;
+  /** With `abi`, the smaller APK made for that processor type (when the build has one). */
+  apkUrl = (id: string, abi?: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/apk${abi ? `?abi=${encodeURIComponent(abi)}` : ""}`;
   socketUrl = () => `${this.baseUrl.replace(/^http/i, "ws")}/ws?token=${encodeURIComponent(this.token)}`;
   authHeaders = () => ({ Authorization: `Bearer ${this.token}` });
 }

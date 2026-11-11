@@ -14,21 +14,29 @@ import {
   setState,
   upsertApp,
   upsertChatItems,
+  upsertHelperItems,
+  upsertHelpers,
+  replaceHelperChat,
 } from "./store";
 import { loadPairing, loadPrefs, savePairing, savePrefs, type Pairing, type Prefs } from "./storage";
-import { autoInstallIfNew, onApkReady, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
+import { autoInstallIfNew, installerHooks, onApkReady, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
 import { updateKeepAlive } from "./keepalive";
 
 // ---------- startup, pairing
 
 export async function boot() {
   const [pairing, prefs] = await Promise.all([loadPairing(), loadPrefs()]);
-  setState({ prefs, ready: true });
+  setState({ prefs });
+  // Pairing first, then ready: a cold start straight into a screen that needs the pairing (the
+  // anyappagent://settings link apps open for "AI for your apps") must never render without it.
   if (pairing) applyPairing(pairing);
+  setState({ ready: true });
   AppState.addEventListener("change", (state) => {
     if (state === "active") onForeground();
   });
   bootedAt = Date.now();
+  // A download that stalled or dropped has the link checked (and the tunnel rebuilt) before it resumes.
+  installerHooks.linkTrouble = () => reconnectNow();
   startUnpairRetries();
   AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
 }
@@ -588,6 +596,12 @@ function handleEvent(event: ServerEvent) {
       updateKeepAlive();
       void onApkReady(event.app);
       break;
+    case "worker.updated":
+      upsertHelpers(event.worker.appId, [event.worker]);
+      break;
+    case "worker.item":
+      if (event.item.workerId) upsertHelperItems(event.item.workerId, [event.item]);
+      break;
   }
 }
 
@@ -627,4 +641,20 @@ export async function loadChat(appId: string): Promise<void> {
   }
   replaceChat(appId, items);
   setState((s) => ({ chatLoaded: { ...s.chatLoaded, [appId]: true } }));
+  // Helpers come with the chat (an older PC has none: an empty list).
+  void client.helpers(appId).then((list) => upsertHelpers(appId, list), () => {});
+}
+
+/** A helper's own chat (read only): its history, then the socket keeps it current. */
+export async function loadHelperChat(appId: string, workerId: string): Promise<void> {
+  const client = getState().client;
+  if (!client) return;
+  let items: ChatItem[];
+  try {
+    items = await client.helperMessages(appId, workerId);
+  } catch (e) {
+    if (e instanceof ApiError && e.unauthorized) onAuthLost();
+    throw e;
+  }
+  replaceHelperChat(workerId, items);
 }

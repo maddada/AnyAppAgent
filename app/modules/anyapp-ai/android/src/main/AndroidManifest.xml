@@ -1,0 +1,23 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+  <application>
+    <!--
+      "AI for your apps": apps made with AnyAppAgent bind to this service to talk to the AI with
+      the key kept here. It is exported without a permission on purpose: every message is checked
+      against the sender's signing certificate (AiTrust.kt), because the apps are signed with the
+      PC's key, not AnyAppAgent's, so an Android signature permission cannot express "apps made
+      by AnyAppAgent". The key itself never leaves this process.
+    -->
+    <service
+        android:name="com.anyappagent.ai.AiProxyService"
+        android:exported="true"
+        tools:ignore="ExportedService">
+      <intent-filter>
+        <action android:name="com.anyappagent.action.AI" />
+      </intent-filter>
+    </service>
+  </application>
+</manifest>

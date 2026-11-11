@@ -1,0 +1,63 @@
+diff --git a/scripts/agent-android.mjs b/scripts/agent-android.mjs
+index 50cef7a9..50fedfdb 100644
+--- a/scripts/agent-android.mjs
++++ b/scripts/agent-android.mjs
+@@ -69,14 +69,17 @@ export function androidToolchainEnv(env = process.env) {
+     if (!versions.length) throw new Error(`no Android NDK: install one with the SDK manager (ndk;27.1.12297006), or set ANDROID_NDK_HOME (looked in ${root})`);
+     ndk = resolve(root, versions.at(-1));
+   }
+-  const bin = resolve(ndk, 'toolchains/llvm/prebuilt', process.platform === 'darwin' ? 'darwin-x86_64' : 'linux-x86_64', 'bin');
+-  const cc = resolve(bin, `aarch64-linux-android${API}-clang`);
++  const win = process.platform === 'win32';
++  const host = process.platform === 'darwin' ? 'darwin-x86_64' : win ? 'windows-x86_64' : 'linux-x86_64';
++  const bin = resolve(ndk, 'toolchains/llvm/prebuilt', host, 'bin');
++  const cc = resolve(bin, `aarch64-linux-android${API}-clang${win ? '.cmd' : ''}`);
+   if (!existsSync(cc)) throw new Error(`the NDK at ${ndk} has no ${basename(cc)}`);
+   // The pinned bundle is named only against a developer's HERMES_LEAN_SYS_DIR: hermes-lean-sys checks a bundle it finds
+   // itself against the pin's digest, and takes a named one as it is.
+   const hermes = env.HERMES_LEAN_SYS_DIR_aarch64_linux_android || hermesAndroidBundle() || (env.HERMES_LEAN_SYS_DIR === undefined ? null : androidHermesDir(env));
+   return { ...cargoEnvironment(env), ANDROID_NDK_HOME: ndk, CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: cc, CC_aarch64_linux_android: cc,
+-    CXX_aarch64_linux_android: `${cc}++`, AR_aarch64_linux_android: resolve(bin, 'llvm-ar'),
++    CXX_aarch64_linux_android: resolve(bin, `aarch64-linux-android${API}-clang++${win ? '.cmd' : ''}`),
++    AR_aarch64_linux_android: resolve(bin, `llvm-ar${win ? '.exe' : ''}`),
+     // One C++ runtime, static, as the Hermes bundle links it (ANDROID_STL=c++_static):
+     // the cc crate's Android default, c++_shared, needs libc++_shared.so beside the binary.
+     CXXSTDLIB_aarch64_linux_android: 'c++_static',
+@@ -402,7 +405,13 @@ function buildApk(app, env, profile, writeLocks = false) {
+   if (!graph) return null;
+   let gradle;
+   try {
+-    gradle = spawnSync(resolve(READER, 'gradlew'), [':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
++    // Windows has no POSIX shell for gradlew, and Bun will not spawn a .bat without one: run the wrapper jar with the JDK.
++    const [command, ...prefix] = process.platform === 'win32'
++      ? [resolve(env.JAVA_HOME ?? '', 'bin', 'java.exe'), '-Xmx64m', '-Xms64m', '-Dorg.gradle.appname=gradlew', '-jar', resolve(READER, 'gradle/wrapper/gradle-wrapper.jar')]
++      : [resolve(READER, 'gradlew')];
++    // EXACT_GRADLE_ARGS: extra Gradle arguments from the environment (for example an --init-script), split on spaces.
++    const extra = (env.EXACT_GRADLE_ARGS ?? '').split(' ').filter(Boolean);
++    gradle = spawnSync(command, [...prefix, ...extra, ':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
+       `-PexactDevelopment=${development ? '1' : '0'}`,
+       `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
+       ...(gpu ? [`-PgpuModule=${basename(gpu)}`] : []), ...compose, ...extensionArgs(app, out, config), ...graph.args], { cwd: READER, env: { ...env, ANDROID_HOME: androidSdk(env) }, stdio: 'inherit' });
+@@ -410,6 +419,7 @@ function buildApk(app, env, profile, writeLocks = false) {
+   } finally {
+     graph.done();
+   }
++  if (gradle.error) console.error(`could not start Gradle: ${gradle.error.message}`);
+   if (gradle.status !== 0) return null;
+   const apk = readerApk(app);
+   writeFileSync(resolve(dirname(apk), 'exact-build.json'), JSON.stringify({ started, library: built(crate), workspace: app.workspace ?? app.dir,
+diff --git a/scripts/filesystem.mjs b/scripts/filesystem.mjs
+index 3a9437c1..2d3d6e06 100644
+--- a/scripts/filesystem.mjs
++++ b/scripts/filesystem.mjs
+@@ -262,7 +262,9 @@ function decode(response) {
+   error.code = filesystemErrorCode(response.errno);
+   throw error;
+ }
+-const request = (input) => ({ ...input, token: randomBytes(24).toString('hex') });
++// Rust's canonicalize spells Windows paths verbatim (\\?\C:\...); the helper takes C:\...
++const plainDrivePath = (value) => process.platform === 'win32' && typeof value === 'string' ? value.replace(/^\\\\\?\\(?=[A-Za-z]:)/, '') : value;
++const request = (input) => ({ ...input, ...(input.root !== undefined ? { root: plainDrivePath(input.root) } : {}), token: randomBytes(24).toString('hex') });
+ export function filesystem(input) {
+   // A game asset tree includes every GPU texture family; base64 also adds a
+   // third to the on-disk size. A 210 MiB native bundle exceeds a 256 MiB reply.

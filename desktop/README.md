@@ -25,6 +25,7 @@ Useful environment variables (all optional):
 | `ANYAPP_DESKTOP_USERDATA` | A separate settings folder (a fresh onboarding) for tests. |
 | `ANYAPP_HOST_APK` | The phone app's APK, if not set in Settings, Advanced, and not in `../app/dist/AnyAppAgent.apk`. |
 | `ANYAPP_DESKTOP_THEME=light/dark` | Force a theme. |
+| `ANYAPP_DESKTOP_DIALOG_FILE` | Dev and proofs only: the file the key backup and restore dialogs answer with, so a script can drive them. |
 | `ANYAPP_DESKTOP_SIMULATE` | Dev only, for screenshots: `claude=needed/signing-in,github=needed/code,tools=needed/installing,phone=none,hex=notInstalled/installing/notRunning`. |
 | `ANYAPP_DESKTOP_SHOTS=<folder>` | Dev only: walk every screen in light and dark, save PNGs, quit. `ANYAPP_DESKTOP_SHOTS_SET=flow/states/real`. |
 

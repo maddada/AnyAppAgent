@@ -2,10 +2,13 @@
 // app imports it from one place. Type-only: nothing from outside app/ reaches the bundle.
 export type {
   App,
+  AppPreset,
   AppStatus,
   BuildInfo,
   ChatItem,
   ChatItemKind,
+  ChatImage,
+  ImageUpload,
   CreateAppRequest,
   EasyConnectPairRequest,
   ErrorBody,
@@ -18,4 +21,5 @@ export type {
   SendMessageRequest,
   ServerEvent,
   ToolCallInfo,
+  WorkerInfo,
 } from "@shared/protocol";

@@ -1,9 +1,11 @@
 // The app manager: creating apps, one Claude Code session per app, a build after every turn,
 // Git/GitHub, and the chat timeline. Every change goes out as a ServerEvent.
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { App, AppStatus, BuildInfo, ServerEvent } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
+import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
+import type { PromptImage } from "./acp/claude-session.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { AcpAgentRequestResponder } from "./acp/agent-connection.ts";
@@ -16,6 +18,10 @@ import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
 import { appPlaybook, buildFixPrompt } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
+import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
+import { isWorkerToolCall, workerToolsMcpServer } from "./worker-http.ts";
+import { WorkerManager, type BuildChangeOutcome } from "./workers.ts";
+import { isJsonObject } from "./acp/acp-client.ts";
 
 export class HttpError extends Error {
   readonly status: number;
@@ -25,7 +31,20 @@ export class HttpError extends Error {
   }
 }
 
-type Job = { kind: "prompt"; text: string } | { kind: "build" };
+// itemId: the user's chat item for a prompt the user sent, marked `queued` while it waits.
+// A report carries finished helpers' reports to the coordinator (never dropped by Stop).
+type Job =
+  | { kind: "prompt"; text: string; itemId?: string; images?: PromptImage[] }
+  | { kind: "build" }
+  | { kind: "report"; workerId: string; text: string };
+
+interface BuildCycleOptions {
+  /** Sends a build failure to an agent; resolves with the stop reason. Default: the app's main session. */
+  fix?(prompt: string): Promise<string>;
+  cancelled?(): boolean;
+  /** The commit message summary. Default: the main chat's last message. */
+  summary?: string;
+}
 
 interface PendingPermission {
   responder: AcpAgentRequestResponder;
@@ -38,13 +57,24 @@ interface Runtime {
   starting?: Promise<ClaudeSession>;
   queue: Job[];
   running: boolean;
+  /** While the app is being created: jobs wait until the first prompt is in front of them. */
+  held: boolean;
   cancelRequested: boolean;
   permissions: Map<string, PendingPermission>;
+  /** ACP tool call ids of the coordinator's own worker tools: their worker rows stand for them. */
+  hiddenTools: Set<string>;
+  /** True while a prompt to the app's own session runs. */
+  turnActive: boolean;
 }
 
 interface ReadyRecord extends AppRecord {
   ready?: boolean;
+  /** The coordinator playbook version this app's session was given (docs/APP-COORDINATOR.md). */
+  coordinatorPlaybook?: number;
 }
+
+/** The presets the phone may ask for (shared/protocol.ts AppPreset). */
+export const PRESETS: readonly AppPreset[] = ["react-native", "kotlin", "expo-exact"];
 
 const JAVA_KEYWORDS = new Set(
   "abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null var record yield".split(
@@ -70,6 +100,17 @@ export function withoutEmDashes(text: string): string {
   return text.replace(/\s*\u{2014}\s*/gu, ", ");
 }
 
+/** What a build cut off by a restart of the companion says (it is built again by itself). */
+const INTERRUPTED_BUILD = "The PC restarted during this build, so it is building again.";
+
+/** An ABI name as Android spells it (arm64-v8a, x86_64): safe inside a file name. */
+const SAFE_ABI = /^[a-z0-9_-]{1,20}$/;
+
+/** build-6.apk (every ABI) or build-6-arm64-v8a.apk (one ABI). */
+export function apkFileName(number: number, abi?: string): string {
+  return abi ? `build-${number}-${abi}.apk` : `build-${number}.apk`;
+}
+
 function shorten(text: string, max: number): string {
   const flat = withoutEmDashes(text).replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
@@ -87,8 +128,12 @@ export class AppManager {
   private readonly broadcast: (event: ServerEvent) => void;
   private readonly log: (...parts: unknown[]) => void;
   private readonly runtimes = new Map<string, Runtime>();
+  /** Apps whose build was cut off by the last stop of the companion (recover -> startWork). */
+  private readonly interruptedBuilds = new Set<string>();
   /** A plain sentence when the builder cannot run on this PC (no Android toolchain), else null. */
   private readonly checkToolchain: () => string | null;
+  /** Each app's workers, when its main chat is a coordinator (config.coordinator). */
+  readonly workers: WorkerManager | undefined;
 
   constructor(deps: {
     store: Store;
@@ -104,6 +149,34 @@ export class AppManager {
     this.broadcast = deps.broadcast;
     this.log = deps.log;
     this.checkToolchain = deps.checkToolchain ?? (() => null);
+    this.workers = this.config.coordinator
+      ? new WorkerManager({
+          config: this.config,
+          stateDir: this.store.stateDir,
+          log: this.log,
+          broadcast: this.broadcast,
+          record: (appId) => this.store.find(appId),
+          emitMain: (record, draft) => this.emitItem(record, draft),
+          buildChange: (record, opts) => this.buildCycle(record, opts),
+          report: (record, workerId, text) => this.enqueue(record, { kind: "report", workerId, text }),
+          activityChanged: (record) => this.activityChanged(record),
+        })
+      : undefined;
+  }
+
+  /** After the server listens: workers that were running when it stopped carry on. */
+  startWork(): void {
+    const ready = this.store.apps().filter((r) => (r as ReadyRecord).ready);
+    // A helper that was building builds again by itself (workers.resume); a build of the main
+    // chat (or one no helper owns any more) is queued here.
+    const helperBuilds = this.workers?.resume(ready.map((r) => r.app.id)) ?? new Set<string>();
+    for (const record of ready) {
+      this.activityChanged(record);
+      if (!this.interruptedBuilds.delete(record.app.id) || helperBuilds.has(record.app.id)) continue;
+      this.log(`[${record.app.slug}] the PC restarted during build ${record.app.latestBuild?.number}; building again`);
+      this.enqueue(record, { kind: "build" });
+    }
+    this.interruptedBuilds.clear();
   }
 
   // ---------- startup / shutdown
@@ -115,6 +188,8 @@ export class AppManager {
       const chat = this.store.chat(app.id);
       for (const item of chat.all()) {
         if (item.streaming) chat.upsert({ id: item.id, kind: item.kind, streaming: false });
+        // A message that waited in the queue when the companion stopped never reached the agent.
+        if (item.queued) chat.upsert({ id: item.id, kind: item.kind, queued: false, dropped: true });
         if (item.tool && (item.tool.status === "pending" || item.tool.status === "in_progress")) {
           chat.upsert({ id: item.id, kind: "tool", tool: { ...item.tool, status: "failed" } });
         }
@@ -122,15 +197,18 @@ export class AppManager {
           chat.upsert({
             id: item.id,
             kind: "build",
-            build: { ...item.build, status: "failed", finishedAt: nowIso(), error: "The PC companion restarted during this build." },
+            build: { ...item.build, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD },
           });
         }
         if (item.permission && item.permission.selectedOptionId === undefined) {
           chat.upsert({ id: item.id, kind: "permission", permission: { ...item.permission, selectedOptionId: "cancelled" } });
         }
       }
+      delete app.replying;
       if (app.latestBuild?.status === "running") {
-        app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: "The PC companion restarted during this build." };
+        app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD };
+        // Built again by itself once the server listens (startWork), not left for the person to notice.
+        if ((record as ReadyRecord).ready) this.interruptedBuilds.add(app.id);
       }
       if (app.status === "creating" && !(record as ReadyRecord).ready) {
         app.status = "error";
@@ -144,6 +222,7 @@ export class AppManager {
 
   async shutdown(): Promise<void> {
     await Promise.all([...this.runtimes.values()].map((rt) => rt.session?.stop()));
+    await this.workers?.shutdown();
     this.store.flush();
   }
 
@@ -162,12 +241,22 @@ export class AppManager {
     return this.store.chat(id).list(afterSeq);
   }
 
-  apkFile(id: string): { path: string; app: App } | null {
+  /**
+   * The APK GET /apk serves: the variant for `abi` when the build has one (smaller), else the full
+   * APK. `missing` when the variant is listed but its file is gone, so the phone never gets a file
+   * whose checksum differs from the one it was told.
+   */
+  apkFile(id: string, abi?: string): { path: string; app: App; build: BuildInfo; abi?: string; sha256?: string } | { missing: true } | null {
     const record = this.record(id);
     const apk = record.app.latestApk;
     if (!apk) return null;
-    const path = join(this.store.apkDir(id), `build-${apk.number}.apk`);
-    return existsSync(path) ? { path, app: record.app } : null;
+    const variant = abi ? apk.variants?.find((v) => v.abi === abi) : undefined;
+    if (variant) {
+      const path = join(this.store.apkDir(id), apkFileName(apk.number, variant.abi));
+      return existsSync(path) ? { path, app: record.app, build: apk, abi: variant.abi, sha256: variant.sha256 } : { missing: true };
+    }
+    const path = join(this.store.apkDir(id), apkFileName(apk.number));
+    return existsSync(path) ? { path, app: record.app, build: apk, ...(apk.sha256 ? { sha256: apk.sha256 } : {}) } : null;
   }
 
   icon(id: string): { path: string } | { png: Buffer } {
@@ -195,8 +284,11 @@ export class AppManager {
         translator: new ChatTranslator({ cwd: record.dir, newId: () => randomUUID() }),
         queue: [],
         running: false,
+        held: false,
         cancelRequested: false,
         permissions: new Map(),
+        hiddenTools: new Set(),
+        turnActive: false,
       };
       this.runtimes.set(id, rt);
     }
@@ -205,7 +297,7 @@ export class AppManager {
 
   // ---------- events
 
-  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo }): void {
+  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo }): void {
     const item = this.store.chat(record.app.id).upsert(draft);
     this.broadcast({ type: "chat.item", item });
   }
@@ -215,22 +307,46 @@ export class AppManager {
   }
 
   private touch(record: AppRecord): void {
+    // Set (0 or more) only when the app's chat hands work to helpers: clients read it as "helpers mode".
+    if (this.workers && record.app.activeHelpers === undefined) record.app.activeHelpers = this.workers.activeCount(record.app.id);
     record.app.updatedAt = nowIso();
     this.store.save();
     this.broadcast({ type: "app.updated", app: record.app });
   }
 
   private setStatus(record: AppRecord, status: AppStatus, error?: string): void {
+    // With workers, the app is idle only when the main chat and every worker are.
+    if (status === "idle" && this.busy(record)) status = "working";
     record.app.status = status;
     if (error === undefined) delete record.app.error;
     else record.app.error = error;
     this.touch(record);
   }
 
+  private busy(record: AppRecord): boolean {
+    return this.runtime(record.app.id).turnActive || (this.workers?.busy(record.app.id) ?? false);
+  }
+
+  /** A worker started or settled: "working" while anything runs, "idle" after (an error stays shown). */
+  private activityChanged(record: AppRecord): void {
+    const status = record.app.status;
+    if (record.deleted) return;
+    const helpers = this.workers?.activeCount(record.app.id);
+    if (helpers !== undefined && helpers !== record.app.activeHelpers) {
+      record.app.activeHelpers = helpers;
+      this.touch(record);
+    }
+    if (status === "creating" || status === "building") return;
+    const busy = this.busy(record);
+    if (busy && status !== "working") this.setStatus(record, "working");
+    else if (!busy && status === "working") this.setStatus(record, "idle");
+  }
+
   // ---------- commands
 
-  create(name: string, prompt: string): App {
+  create(name: string, prompt: string, preset: unknown = "react-native"): App {
     const cleanName = name.trim().replace(/\s+/g, " ");
+    if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native, Kotlin or Expo Exact.");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
     if (prompt.trim() === "") throw new HttpError(400, "Say what the app should do.");
     const base = slugify(cleanName);
@@ -244,6 +360,7 @@ export class AppManager {
       name: cleanName,
       slug,
       packageName: `com.anyapp.${slug}`,
+      preset: preset as AppPreset,
       status: "creating",
       iconVersion: 1,
       lastMessagePreview: shorten(prompt, 140),
@@ -252,6 +369,7 @@ export class AppManager {
     };
     const record: ReadyRecord = { app, dir: join(this.config.appsDir, slug) };
     this.store.add(record);
+    this.runtime(app.id).held = true;
     this.broadcast({ type: "app.updated", app });
     this.emitItem(record, { id: randomUUID(), kind: "user", text: prompt.trim() });
     this.finishCreate(record, prompt.trim()).catch((error: unknown) => {
@@ -265,7 +383,7 @@ export class AppManager {
     try {
       mkdirSync(this.config.appsDir, { recursive: true });
       this.log(`[${app.slug}] creating ${dir} with the ${this.builder.kind} builder`);
-      await this.builder.createApp({ dir, name: app.name, slug: app.slug, packageName: app.packageName, onLog: () => {} });
+      await this.builder.createApp({ dir, name: app.name, slug: app.slug, packageName: app.packageName, preset: app.preset ?? "react-native", onLog: () => {} });
       await git.initRepo(dir, `Create ${app.name}`);
       record.iconStamp = this.iconStamp(record);
       record.ready = true;
@@ -274,6 +392,8 @@ export class AppManager {
       this.log(`[${app.slug}] creation failed:`, (error as Error).message);
       this.errorItem(record, `The app could not be created: ${firstLine((error as Error).message)}`);
       this.setStatus(record, "error", "The app could not be created on the PC.");
+      this.dropQueue(record);
+      this.runtime(app.id).held = false;
       return;
     }
     if (record.deleted) return;
@@ -289,29 +409,74 @@ export class AppManager {
     } else {
       this.log(`[${app.slug}] GitHub is turned off (ANYAPP_GITHUB=off)`);
     }
-    this.enqueue(record, { kind: "prompt", text: prompt });
+    // The first prompt goes in front of anything the user sent while the app was being set up.
+    const rt = this.runtime(app.id);
+    rt.queue.unshift({ kind: "prompt", text: prompt });
+    rt.held = false;
+    if (!rt.running) void this.drain(record);
   }
 
-  sendMessage(id: string, text: string): void {
+  sendMessage(id: string, text: string, uploads: ImageUpload[] = []): void {
     const record = this.record(id);
-    if (text.trim() === "") throw new HttpError(400, "The message is empty.");
+    if (text.trim() === "" && uploads.length === 0) throw new HttpError(400, "The message is empty.");
+    const problem = checkImages(uploads.map((u) => ({ mimeType: String(u?.mimeType ?? ""), data: String(u?.data ?? "") })));
+    if (problem) throw new HttpError(400, problem);
     if (!record.ready && record.app.status !== "creating") throw new HttpError(409, "This app could not be created. Make a new one.");
-    this.emitItem(record, { id: randomUUID(), kind: "user", text: text.trim() });
-    record.app.lastMessagePreview = shorten(text, 140);
+    const rt = this.runtime(record.app.id);
+    // Sent while the agent (or the build after it) is busy: it waits its turn, and says so.
+    const queued = rt.running || rt.held || rt.queue.length > 0;
+    const itemId = randomUUID();
+    // Pictures are saved on the PC (as bb saves attachments) and go to the agent as ACP image blocks.
+    const saved = uploads.map((u) => this.saveImage(record.app.id, u));
+    const images: ChatImage[] = saved.map(({ chat }) => chat);
+    this.emitItem(record, { id: itemId, kind: "user", text: text.trim(), ...(images.length ? { images } : {}), ...(queued ? { queued: true } : {}) });
+    record.app.lastMessagePreview = text.trim() ? shorten(text, 140) : picturesLabel(images.length);
     this.touch(record);
-    this.enqueue(record, { kind: "prompt", text: text.trim() });
+    this.enqueue(record, { kind: "prompt", text: text.trim(), itemId, images: saved.map(({ prompt }) => prompt) });
+  }
+
+  private imagesDir(appId: string): string {
+    return join(this.store.stateDir, "images", appId);
+  }
+
+  private saveImage(appId: string, upload: ImageUpload): { chat: ChatImage; prompt: PromptImage } {
+    const id = randomUUID();
+    const dir = this.imagesDir(appId);
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, `${id}.${imageExtension(upload.mimeType)}`);
+    writeFileSync(path, Buffer.from(upload.data, "base64"));
+    const size = typeof upload.width === "number" && typeof upload.height === "number" ? { width: Math.round(upload.width), height: Math.round(upload.height) } : {};
+    return { chat: { id, mimeType: upload.mimeType, ...size }, prompt: { path, mimeType: upload.mimeType } };
+  }
+
+  /** A picture sent in this app's chat, for GET /api/apps/:id/images/:imageId. */
+  imageFile(appId: string, imageId: string): { path: string; mimeType: string } | null {
+    this.record(appId);
+    if (!/^[a-zA-Z0-9-]+$/.test(imageId)) return null;
+    for (const mimeType of IMAGE_TYPES) {
+      const path = join(this.imagesDir(appId), `${imageId}.${imageExtension(mimeType)}`);
+      if (existsSync(path)) return { path, mimeType };
+    }
+    return null;
   }
 
   rebuild(id: string): void {
     const record = this.record(id);
     if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
+    if (this.workers) {
+      this.workers.rebuild(id, record.app.latestBuild?.error);
+      return;
+    }
     this.enqueue(record, { kind: "build" });
   }
 
+  /** Stop (ACP session/cancel, as bb does): ends the current turn and drops what waits behind it. */
   cancel(id: string): void {
     const record = this.record(id);
     const rt = this.runtime(record.app.id);
-    rt.queue.length = 0;
+    // Only the main chat's own turn stops, and the person's queued messages are dropped; helpers keep
+    // working (each has its own Stop) and their reports still reach the main chat.
+    this.dropQueue(record);
     if (!rt.running) return;
     rt.cancelRequested = true;
     for (const [requestId, pending] of rt.permissions) {
@@ -342,6 +507,7 @@ export class AppManager {
       await rt.session?.stop();
       this.runtimes.delete(id);
     }
+    await this.workers?.forget(id);
     record.deleted = true;
     this.store.save();
     this.broadcast({ type: "app.deleted", appId: id });
@@ -353,18 +519,34 @@ export class AppManager {
     if (record.deleted) return;
     const rt = this.runtime(record.app.id);
     rt.queue.push(job);
-    if (!rt.running) void this.drain(record);
+    if (!rt.running && !rt.held) void this.drain(record);
+  }
+
+  /** Empties the queue; the user's waiting messages are marked as not sent. */
+  private dropQueue(record: AppRecord): void {
+    const rt = this.runtime(record.app.id);
+    // Helpers' reports stay queued: Stop is about the person's own messages.
+    const dropped = rt.queue.filter((job) => job.kind !== "report");
+    rt.queue = rt.queue.filter((job) => job.kind === "report");
+    for (const job of dropped) {
+      if (job.kind === "prompt" && job.itemId) this.emitItem(record, { id: job.itemId, kind: "user", queued: false, dropped: true });
+    }
   }
 
   private async drain(record: AppRecord): Promise<void> {
     const rt = this.runtime(record.app.id);
     rt.running = true;
+    this.setReplying(record, true);
     try {
       while (rt.queue.length > 0 && !record.deleted) {
         const job = rt.queue.shift()!;
         rt.cancelRequested = false;
+        if (job.kind === "prompt" && job.itemId && this.store.chat(record.app.id).get(job.itemId)?.queued) {
+          this.emitItem(record, { id: job.itemId, kind: "user", queued: false });
+        }
         try {
-          if (job.kind === "prompt") await this.userTurn(record, job.text);
+          if (job.kind === "prompt") await this.userTurn(record, job.text, job.images ?? []);
+          else if (job.kind === "report") await this.reportTurn(record, job);
           else await this.buildCycle(record);
         } catch (error) {
           if (record.deleted) break;
@@ -375,12 +557,38 @@ export class AppManager {
       }
     } finally {
       rt.running = false;
+      this.setReplying(record, false);
     }
   }
 
-  private async userTurn(record: AppRecord, text: string): Promise<void> {
+  /** The main chat itself is answering (its Stop applies), as opposed to helpers working. */
+  private setReplying(record: AppRecord, replying: boolean): void {
+    if (record.deleted || (record.app.replying ?? false) === replying) return;
+    record.app.replying = replying;
+    this.touch(record);
+  }
+
+  /** Worker reports go to the coordinator as one message (every report waiting in the queue). */
+  private async reportTurn(record: AppRecord, first: Job & { kind: "report" }): Promise<void> {
+    const rt = this.runtime(record.app.id);
+    const jobs = [first, ...rt.queue.filter((job): job is Job & { kind: "report" } => job.kind === "report")];
+    rt.queue = rt.queue.filter((job) => job.kind !== "report");
+    const stop = await this.agentTurn(record, reportPrompt(jobs.map((job) => job.text)));
+    this.workers?.reported(record.app.id, jobs.map((job) => job.workerId));
+    if (stop !== "cancelled") this.setStatus(record, "idle");
+  }
+
+  private async userTurn(record: AppRecord, text: string, images: PromptImage[] = []): Promise<void> {
+    if (this.workers) {
+      // The coordinator only talks and starts workers; builds follow workers' changes. Pictures go to
+      // it as image blocks, and their paths on this PC too, so it can hand them to a helper's brief.
+      const paths = images.length > 0 ? `\n\n(The pictures are saved on this PC at: ${images.map((i) => i.path).join(", ")}. A helper can open them by path.)` : "";
+      await this.agentTurn(record, `${text}${paths}`, images);
+      this.setStatus(record, "idle");
+      return;
+    }
     const before = await git.treeSnapshot(record.dir, (m) => this.log(`[${record.app.slug}] ${m}`));
-    const stopReason = await this.agentTurn(record, text);
+    const stopReason = await this.agentTurn(record, text, images);
     if (stopReason === "cancelled" || this.runtime(record.app.id).cancelRequested) {
       this.setStatus(record, "idle");
       return;
@@ -399,12 +607,34 @@ export class AppManager {
     if (rt.session?.alive) return rt.session;
     if (rt.starting) return rt.starting;
     const slug = record.app.slug;
+    const ready = record as ReadyRecord;
+    const appInfo = { name: record.app.name, packageName: record.app.packageName, dir: record.dir, preset: record.app.preset };
+    const coordinated = this.workers
+      ? {
+          instructions: coordinatorPlaybook(appInfo),
+          // An app made before workers resumes its session and gets the new playbook once.
+          instructionsOnResume: (ready.coordinatorPlaybook ?? 0) < COORDINATOR_PLAYBOOK_VERSION,
+          mcpServers: [workerToolsMcpServer(this.config.port, record.app.id, this.workers.toolsToken)],
+        }
+      : undefined;
     const session = new ClaudeSession({
       cwd: record.dir,
       ...(record.sessionId ? { resumeSessionId: record.sessionId } : {}),
-      instructions: appPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: record.dir }),
+      instructions: appPlaybook(appInfo),
+      ...coordinated,
       launch: claudeLaunchSpec(this.config.acpLaunch),
+      askPermissions: this.config.askPermissions,
       onUpdate: (update) => {
+        if (coordinated && isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
+          const toolCallId = String(update["toolCallId"] ?? "");
+          if (rt.hiddenTools.has(toolCallId)) return;
+          if (isWorkerToolCall(update)) {
+            // Not shown (the worker row stands for it), but it ends the text before it, like any tool call.
+            rt.hiddenTools.add(toolCallId);
+            for (const draft of rt.translator.closeStreams()) this.emitItem(record, draft);
+            return;
+          }
+        }
         for (const draft of rt.translator.translate(update)) this.emitItem(record, draft);
       },
       onPermission: (ask) => this.handlePermission(record, ask),
@@ -419,6 +649,7 @@ export class AppManager {
         rt.session = session;
         rt.starting = undefined;
         record.sessionId = session.sessionId;
+        if (coordinated) ready.coordinatorPlaybook = COORDINATOR_PLAYBOOK_VERSION;
         this.store.save();
         this.log(`[${slug}] Claude Code session ${session.sessionId} ${session.resumed ? "resumed" : "started"} (mode ${session.modeId ?? "?"})`);
         return session;
@@ -442,7 +673,7 @@ export class AppManager {
       title: request.title ?? toolTitle ?? "The agent asks for permission",
       options: request.options.map((o) => ({ optionId: o.optionId, label: o.name, kind: o.kind })),
     };
-    const allow = pickAllowOption(request.options);
+    const allow = this.config.askPermissions ? undefined : pickAllowOption(request.options);
     if (allow) {
       responder.result({ outcome: { outcome: "selected", optionId: allow } });
       this.emitItem(record, { id: itemId, kind: "permission", permission: { ...permission, selectedOptionId: allow } });
@@ -453,20 +684,23 @@ export class AppManager {
   }
 
   /** One prompt to the agent; resolves with the ACP stop reason ("error" when it broke). */
-  private async agentTurn(record: AppRecord, text: string): Promise<string> {
+  private async agentTurn(record: AppRecord, text: string, images: PromptImage[] = []): Promise<string> {
     this.setStatus(record, "working");
     const rt = this.runtime(record.app.id);
     const session = await this.ensureSession(record);
     rt.translator.startTurn();
     let stopReason = "error";
     try {
-      stopReason = await session.prompt(text);
+      rt.turnActive = true;
+      stopReason = await session.prompt(text, images);
     } catch (error) {
       this.log(`[${record.app.slug}] prompt failed:`, (error as Error).message);
       this.errorItem(record, `The agent stopped unexpectedly: ${firstLine((error as Error).message, 200)}`);
     } finally {
+      rt.turnActive = false;
       for (const draft of rt.translator.finishTurn(stopReason)) this.emitItem(record, draft);
     }
+    if (stopReason === "cancelled") this.emitItem(record, { id: randomUUID(), kind: "stopped", text: "Stopped" });
     if (rt.translator.lastTurnText.trim() !== "") record.app.lastMessagePreview = shorten(rt.translator.lastTurnText, 140);
     this.checkIcon(record);
     this.touch(record);
@@ -481,8 +715,10 @@ export class AppManager {
    * happening in plain words, says "Found a small problem, fixing it" while the agent repairs a
    * failed build, and only turns into "The app didn't build" when every try failed.
    */
-  private async buildCycle(record: AppRecord): Promise<void> {
+  private async buildCycle(record: AppRecord, opts: BuildCycleOptions = {}): Promise<BuildChangeOutcome> {
     const rt = this.runtime(record.app.id);
+    const isCancelled = opts.cancelled ?? (() => rt.cancelRequested);
+    const fixTurn = opts.fix ?? ((prompt: string) => this.agentTurn(record, prompt));
     const max = this.config.maxBuildFixes;
     const rowId = randomUUID();
     const toolchainProblem = this.checkToolchain();
@@ -490,13 +726,13 @@ export class AppManager {
       const build: BuildInfo = { number: (record.app.latestBuild?.number ?? 0) + 1, status: "failed", startedAt: nowIso(), finishedAt: nowIso(), error: toolchainProblem };
       this.emitItem(record, { id: rowId, kind: "build", build, text: "" });
       this.setStatus(record, "error", toolchainProblem);
-      return;
+      return { ok: false, error: toolchainProblem };
     }
     let environmentProblem: string | undefined;
     const outcome = await runBuildCycle<{ build: BuildInfo }>({
       maxFixes: max,
       build: () => this.buildOnce(record, rowId),
-      cancelled: () => rt.cancelRequested || environmentProblem !== undefined,
+      cancelled: () => isCancelled() || environmentProblem !== undefined,
       fix: async (error, attempt) => {
         if (isEnvironmentFailure(error)) {
           environmentProblem = error;
@@ -510,14 +746,14 @@ export class AppManager {
           text: `Found a small problem. Fixing it, then building again (${attempt} of ${max})`,
         });
         this.log(`[${record.app.slug}] build ${failed.number} failed; fix attempt ${attempt} of ${max}`);
-        const stop = await this.agentTurn(record, buildFixPrompt({ buildNumber: failed.number, attempt, maxAttempts: max, error }));
+        const stop = await fixTurn(buildFixPrompt({ buildNumber: failed.number, attempt, maxAttempts: max, error, preset: record.app.preset }));
         return stop !== "cancelled";
       },
     });
     if (outcome.outcome === "succeeded") {
       const { build } = outcome.result;
       try {
-        const summary = (record.app.lastMessagePreview ?? "update").split(/(?<=[.!?])\s/)[0];
+        const summary = opts.summary ?? (record.app.lastMessagePreview ?? "update").split(/(?<=[.!?])\s/)[0];
         await git.commitAll(record.dir, `Build ${build.number}: ${shorten(summary, 72)}`);
       } catch (error) {
         this.log(`[${record.app.slug}] commit failed:`, (error as Error).message);
@@ -532,7 +768,7 @@ export class AppManager {
       this.setStatus(record, "idle");
       this.broadcast({ type: "apk.ready", app: record.app });
       this.log(`[${record.app.slug}] APK ${build.number} ready (${build.sizeBytes} bytes)`);
-      return;
+      return { ok: true, number: build.number };
     }
     const failed = record.app.latestBuild!;
     let plain: string;
@@ -547,6 +783,7 @@ export class AppManager {
     record.app.latestBuild = { ...failed, status: "failed", error: plain };
     this.emitItem(record, { id: rowId, kind: "build", build: record.app.latestBuild, text: "" });
     this.setStatus(record, "error", plain);
+    return { ok: false, error: plain, ...(outcome.outcome === "cancelled" ? { cancelled: true } : {}) };
   }
 
   private async buildOnce(record: AppRecord, rowId: string): Promise<BuildAttempt<{ build: BuildInfo }>> {
@@ -574,8 +811,14 @@ export class AppManager {
       const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog });
       const apkDir = this.store.apkDir(app.id);
       mkdirSync(apkDir, { recursive: true });
-      const target = join(apkDir, `build-${number}.apk`);
+      const target = join(apkDir, apkFileName(number));
       copyFileSync(result.apkPath, target);
+      const variants: ApkVariant[] = [];
+      for (const v of result.variants ?? []) {
+        if (!SAFE_ABI.test(v.abi)) continue;
+        copyFileSync(v.apkPath, join(apkDir, apkFileName(number, v.abi)));
+        variants.push({ abi: v.abi, sizeBytes: v.sizeBytes, sha256: v.sha256 });
+      }
       this.pruneApks(apkDir, number);
       build = {
         ...build,
@@ -583,6 +826,7 @@ export class AppManager {
         finishedAt: nowIso(),
         sizeBytes: statSync(target).size,
         sha256: result.sha256,
+        ...(variants.length > 0 ? { variants } : {}),
       };
       app.latestBuild = build;
       this.log(`[${app.slug}] build ${number} took ${Math.round((Date.now() - started) / 1000)} s`);
@@ -603,7 +847,7 @@ export class AppManager {
 
   private pruneApks(apkDir: string, keepFrom: number): void {
     for (const file of readdirSync(apkDir)) {
-      const match = file.match(/^build-(\d+)\.apk$/);
+      const match = file.match(/^build-(\d+)(?:-[a-z0-9_-]+)?\.apk$/);
       if (match && Number(match[1]) < keepFrom - 2) rmSync(join(apkDir, file), { force: true });
     }
   }

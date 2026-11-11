@@ -3,13 +3,15 @@ import { FlatList, Pressable, RefreshControl, TextInput, View, useWindowDimensio
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Download, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
+import { ChevronDown, Download, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
-import { actionLabel, describeApp } from "@/lib/describe";
+import { actionLabel, describeApp, tileState } from "@/lib/describe";
+import { installLabel } from "@shared/chat/index";
 import { installApp, installFromLink, launchApp } from "@/lib/installer";
-import type { App } from "@/lib/protocol";
+import type { App, AppPreset } from "@/lib/protocol";
+import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
-import { appAction, removeApp, sortedApps, useStore } from "@/lib/store";
+import { appAction, getState, removeApp, sortedApps, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
@@ -22,6 +24,8 @@ const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
 /** COMPONENTS.md 3 and 4: the New app plus is 28, the sheet head icon 56 (no icon-size token for either). */
 const NEW_TILE_PLUS = 28;
 const SHEET_ICON = 56;
+/** Large text settings grow the tile names and the home hint up to this, then they shrink to fit. */
+const TILE_TEXT_MAX_SCALE = 1.6;
 
 type Tile = { kind: "new" } | { kind: "app"; app: App };
 
@@ -48,13 +52,31 @@ function AppGrid() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const apps = useStore((s) => s.apps);
-  const appsLoaded = useStore((s) => s.appsLoaded);
   const [selected, setSelected] = useState<{ id: string; manage: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
 
   // The user's apps first, newest first; the New app slot closes the grid (as in the renders).
   const tiles: Tile[] = useMemo(() => [...sortedApps(apps).map((app) => ({ kind: "app" as const, app })), { kind: "new" }], [apps]);
   const tileWidth = (width - size.screenGutter * 2 - size.gridGap) / 2;
+  const hasApps = tiles.length > 1;
+
+  /**
+   * One tap: open the app when it is on this phone. Not on it yet but built: start the install
+   * (the tile says "Tap to install", then shows the download). Anything else (busy installing,
+   * failed, no version yet, can't be launched): the options sheet, which says why and what to do.
+   */
+  const tapApp = (app: App) => {
+    const s = getState();
+    const install = s.installs[app.id];
+    const pkg = s.packages[app.packageName];
+    const busy = !!install && ["waiting", "downloading", "checking", "installing", "confirm"].includes(install.phase);
+    if (pkg && launchApp(app)) return;
+    if (!pkg && !busy && install?.phase !== "failed" && appAction(app, pkg) === "install") {
+      void installApp(app);
+      return;
+    }
+    setSelected({ id: app.id, manage: false });
+  };
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }}>
@@ -63,22 +85,39 @@ function AppGrid() {
         keyExtractor={(item) => (item.kind === "new" ? "new" : item.app.id)}
         numColumns={2}
         columnWrapperStyle={{ gap: size.gridGap }}
-        contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: insets.bottom + space["2xl"] }}
+        contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: hasApps ? space["2xl"] : insets.bottom + space["2xl"] }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={reconnectNow} colors={[t.text]} progressBackgroundColor={t.surface} />}
         ListHeaderComponent={<Header />}
         renderItem={({ item }) =>
           item.kind === "new" ? (
-            <NewTile width={tileWidth} empty={appsLoaded && tiles.length === 1} onPress={() => setCreating(true)} />
+            <NewTile width={tileWidth} onPress={() => setCreating(true)} />
           ) : (
             <AppTile
               app={item.app}
               width={tileWidth}
-              onPress={() => setSelected({ id: item.app.id, manage: false })}
-              onLongPress={() => setSelected({ id: item.app.id, manage: true })}
+              onPress={() => tapApp(item.app)}
+              onLongPress={() => {
+                AnyAppNative?.haptic?.();
+                setSelected({ id: item.app.id, manage: false });
+              }}
             />
           )
         }
       />
+      {hasApps ? (
+        <T
+          testID="home-hint"
+          variant="caption"
+          color="textTertiary"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.4}
+          maxFontSizeMultiplier={TILE_TEXT_MAX_SCALE}
+          style={{ textAlign: "center", paddingHorizontal: size.screenGutter, paddingTop: space.xs, paddingBottom: insets.bottom + space.sm }}
+        >
+          Hold to see options or prompt
+        </T>
+      ) : null}
       <AppSheet selection={selected} onClose={() => setSelected(null)} />
       <NewAppSheet visible={creating} onClose={() => setCreating(false)} />
     </View>
@@ -128,11 +167,8 @@ function Header() {
 function TileStateLine({ app }: { app: App }) {
   const pkg = useStore((s) => s.packages[app.packageName]);
   const install = useStore((s) => s.installs[app.id]);
-  const state = describeApp(app, pkg, install);
-  if (!state) return null;
-  // On a tile the idle line is short; the sheet says the full sentence.
-  const label = state.kind === "idle" && pkg ? `Version ${pkg.versionCode}` : state.label;
-  return <StateLine kind={state.kind} label={label} />;
+  const line = tileState(app, pkg, install);
+  return <StateLine kind={line.kind} label={line.label} fit />;
 }
 
 /** Tiles: scale to 0.98 while pressed (COMPONENTS.md 3). */
@@ -143,6 +179,7 @@ function PressScale({
   style,
   testID,
   label,
+  hint,
 }: {
   onPress: () => void;
   onLongPress?: () => void;
@@ -150,12 +187,19 @@ function PressScale({
   style: object;
   testID?: string;
   label: string;
+  hint?: string;
 }) {
   const [pressed, setPressed] = useState(false);
   return (
     <Pressable
       testID={testID}
+      accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={hint}
+      accessibilityActions={onLongPress ? [{ name: "longpress", label: "Options" }] : undefined}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === "longpress") onLongPress?.();
+      }}
       onPress={onPress}
       onLongPress={onLongPress}
       onPressIn={() => setPressed(true)}
@@ -169,10 +213,14 @@ function PressScale({
 
 function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number; onPress: () => void; onLongPress: () => void }) {
   const t = useTheme();
+  const pkg = useStore((s) => s.packages[app.packageName]);
+  const line = tileState(app, pkg, useStore((s) => s.installs[app.id]));
+  const label = pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
   return (
     <PressScale
       testID={`app-tile-${app.slug}`}
-      label={app.name}
+      label={label}
+      hint="Hold for options and its chat"
       onPress={onPress}
       onLongPress={onLongPress}
       style={{
@@ -188,7 +236,15 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
       }}
     >
       <AppIcon app={app} size={size.appIcon} />
-      <T variant="name" numberOfLines={2} style={{ marginTop: space.md, textAlign: look.tileTextAlign }}>
+      <T
+        variant="name"
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
+        maxFontSizeMultiplier={TILE_TEXT_MAX_SCALE}
+        // Android shrinks the letters, not the fixed line height: let the line follow the letters.
+        style={{ marginTop: space.md, textAlign: look.tileTextAlign, lineHeight: undefined }}
+      >
         {app.name}
       </T>
       <View style={{ flex: 1, minHeight: space.xs }} />
@@ -197,7 +253,7 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
   );
 }
 
-function NewTile({ width, empty, onPress }: { width: number; empty: boolean; onPress: () => void }) {
+function NewTile({ width, onPress }: { width: number; onPress: () => void }) {
   const t = useTheme();
   return (
     <PressScale
@@ -223,8 +279,8 @@ function NewTile({ width, empty, onPress }: { width: number; empty: boolean; onP
         New app
       </T>
       <View style={{ flex: 1, minHeight: space.xs }} />
-      <T variant="label" color="textSecondary">
-        {empty ? "Describe your idea, your PC makes it" : "Describe your idea"}
+      <T variant="label" color="textSecondary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+        Describe your idea
       </T>
     </PressScale>
   );
@@ -311,11 +367,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                   <Button
                     testID="app-primary"
                     label={
-                      installing
-                        ? install?.phase === "downloading"
-                          ? `Downloading ${Math.round((install.progress ?? 0) * 100)}%`
-                          : "Installing"
-                        : actionLabel(action, shown.latestApk?.number)
+                      installing ? (installLabel(install) ?? "Installing") : actionLabel(action, shown.latestApk?.number)
                     }
                     icon={Download}
                     busy={installing}
@@ -371,6 +423,8 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   const client = useStore((s) => s.client);
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [advanced, setAdvanced] = useState(false);
+  const [preset, setPreset] = useState<AppPreset>("react-native");
   const promptRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -381,10 +435,13 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
     setBusy(true);
     setError(null);
     try {
-      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim() });
+      // The default is left out of the request, so an older PC companion still accepts it.
+      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim(), ...(preset !== "react-native" ? { preset } : {}) });
       useStore.setState((s) => ({ apps: { ...s.apps, [app.id]: app } }));
       setName("");
       setPrompt("");
+      setAdvanced(false);
+      setPreset("react-native");
       onClose();
       void askForNotificationsOnce();
       router.push(`/chat/${app.id}`);
@@ -411,6 +468,7 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         multiline
         containerStyle={{ marginTop: space.lg }}
       />
+      <Advanced open={advanced} onToggle={() => setAdvanced(!advanced)} preset={preset} onPreset={setPreset} />
       {error ? (
         <T variant="caption" color="problem" style={{ marginTop: space.sm }}>
           {error}
@@ -423,6 +481,94 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         </T>
       ) : null}
     </Sheet>
+  );
+}
+
+/** "Advanced", closed by default: which kind of app to make. */
+function Advanced({ open, onToggle, preset, onPreset }: { open: boolean; onToggle: () => void; preset: AppPreset; onPreset: (p: AppPreset) => void }) {
+  const t = useTheme();
+  const chosen = PRESETS.find((p) => p.id === preset);
+  return (
+    <View style={{ marginTop: space.lg }}>
+      <Pressable
+        testID="new-app-advanced"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={onToggle}
+        style={{ flexDirection: "row", alignItems: "center", gap: space.xs, minHeight: size.touch }}
+      >
+        <T variant="label" style={{ flex: 1 }}>
+          Advanced
+        </T>
+        {!open && preset !== "react-native" ? (
+          <T variant="caption" color="textSecondary">
+            {chosen?.title}
+          </T>
+        ) : null}
+        <View style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}>
+          <ChevronDown size={icon.size.sm} color={t.textSecondary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+        </View>
+      </Pressable>
+      {open ? (
+        <View accessibilityRole="radiogroup" style={{ gap: space.sm, marginTop: space.xs }}>
+          {PRESETS.map((p) => (
+            <PresetCard key={p.id} preset={p} selected={p.id === preset} onPress={() => onPreset(p.id)} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PresetCard({ preset, selected, onPress }: { preset: PresetChoice; selected: boolean; onPress: () => void }) {
+  const t = useTheme();
+  const dot = 20;
+  return (
+    <Pressable
+      testID={`new-app-preset-${preset.id}`}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${preset.title}. ${preset.line}`}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        gap: space.md,
+        // The thicker selected line eats into the padding, so the content never moves.
+        padding: space.md - (selected ? border.focusWidth - border.width : 0),
+        borderRadius: radius.card,
+        borderWidth: selected ? border.focusWidth : border.width,
+        borderColor: selected ? t.accent : t.border,
+        backgroundColor: pressed ? t.selectedBg : t.fieldBg,
+      })}
+    >
+      <View
+        style={{
+          width: dot,
+          height: dot,
+          marginTop: 2,
+          borderRadius: dot / 2,
+          borderWidth: border.focusWidth,
+          borderColor: selected ? t.accent : t.borderStrong,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {selected ? <View style={{ width: dot / 2, height: dot / 2, borderRadius: dot / 4, backgroundColor: t.accent }} /> : null}
+      </View>
+      <View style={{ flex: 1, gap: space.xs }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          <T variant="row">{preset.title}</T>
+          {preset.tag ? (
+            <T variant="caption" color="textSecondary">
+              {preset.tag}
+            </T>
+          ) : null}
+        </View>
+        <T variant="caption" color="textSecondary">
+          {preset.line}
+        </T>
+      </View>
+    </Pressable>
   );
 }
 

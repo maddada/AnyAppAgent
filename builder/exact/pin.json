@@ -1,0 +1,7 @@
+{
+  "repo": "https://github.com/expo/exact.git",
+  "commit": "c3eb81b7e03e238980d4de5315d27a3235b55cf3",
+  "bun": "1.4.2",
+  "patch": "windows.patch",
+  "why": "Expo Exact does not build Android on a Windows host yet. windows.patch carries the fixes reported upstream (expo/exact issues 147, 148, 149, 150; the line-ending one is handled by cloning with core.autocrlf=false) plus EXACT_GRADLE_ARGS, so the builder can pass its init script (shared signing key, versionCode). Drop the patch and move the pin once upstream has them."
+}

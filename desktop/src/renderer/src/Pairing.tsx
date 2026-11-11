@@ -1,11 +1,15 @@
 // Pairing: the Easy Connect QR when the companion says it is ready (works from anywhere), otherwise
 // the same-network QR with the address and 6-digit code for typing. While Easy Connect starts (a
 // few minutes the first time), the same-network QR works and its progress shows underneath.
-import { useEffect, useRef, useState } from "react";
+//
+// The pairing QR and code are secrets (whoever scans them gets a phone onto this PC), so they only
+// ever show in the pairing popup (PairingDialog), and opening that popup is the only thing that
+// makes a code: nothing renews one in the background while nothing shows it.
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Copy, Globe, RefreshCw, Wifi } from "lucide-react";
 import type { Snapshot } from "../../shared/types.ts";
 import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
-import { Icon, QrPlate, Spinner } from "./ui.tsx";
+import { Dialog, Icon, QrPlate, Spinner } from "./ui.tsx";
 
 const api = window.anyapp;
 
@@ -47,17 +51,31 @@ export function TypedCode({ s }: { s: Snapshot }) {
   );
 }
 
-/** Asks for a fresh code when Easy Connect is on but its one-time code was used or expired. */
-export function useFreshCode(s: Snapshot): void {
-  const asked = useRef(false);
-  const needs = s.pairing.needsNewCode;
+/**
+ * Makes a fresh code once when the pairing popup opens (both the Easy Connect code and the 6-digit
+ * one), and once more if Easy Connect finishes starting while the popup is open. A code that is
+ * used or runs out while the popup is open is not replaced by itself: the popup says so and offers
+ * a new one. True once the fresh code has arrived.
+ */
+function useCodeWhileOpen(s: Snapshot): boolean {
+  const [fresh, setFresh] = useState(false);
+  const made = useRef(false);
   useEffect(() => {
-    if (needs && !asked.current) {
-      asked.current = true;
-      void api.newPairingCode();
-    }
-    if (!needs) asked.current = false;
-  }, [needs]);
+    if (made.current) return; // StrictMode runs effects twice; one popup, one code
+    made.current = true;
+    void api
+      .newPairingCode()
+      .catch(() => undefined)
+      .finally(() => setFresh(true));
+  }, []);
+  const ec = s.pairing.easyConnect;
+  const needs = !!s.pairing.needsNewCode;
+  const was = useRef(ec);
+  useEffect(() => {
+    if (fresh && was.current !== "ready" && ec === "ready" && needs) void api.newPairingCode();
+    was.current = ec;
+  }, [fresh, ec, needs]);
+  return fresh;
 }
 
 function CopyLink({ link }: { link: string }) {
@@ -77,12 +95,23 @@ function CopyLink({ link }: { link: string }) {
   );
 }
 
-/** The full pairing block: big QR on the left, words on the right. */
-export function PairingPanel({ s }: { s: Snapshot }) {
+/** The full pairing block: big QR on the left, words on the right. Only inside PairingDialog. */
+function PairingPanel({ s }: { s: Snapshot }) {
   const p = s.pairing;
   const [typeInstead, setTypeInstead] = useState(false);
-  useFreshCode(s);
-  if (p.kind === "none" || !p.qrSvg) {
+  const fresh = useCodeWhileOpen(s);
+  if (fresh && p.needsNewCode) {
+    // The code shown here was used by a phone or ran out (5 minutes): never fall back to another.
+    return (
+      <div className="pair-spent">
+        <p className="callout secondary">This code was used or ran out. Codes work once, for 5 minutes.</p>
+        <button className="btn btn-quiet btn-sm" onClick={() => api.newPairingCode()}>
+          <Icon of={RefreshCw} size="sm" /> Show a new code
+        </button>
+      </div>
+    );
+  }
+  if (!fresh || p.kind === "none" || !p.qrSvg) {
     return (
       <div className="row secondary" style={{ marginTop: "var(--aa-space-3xl)" }}>
         <Spinner /> {s.companion.phase === "failed" ? s.companion.message : "Getting a connection code ready…"}
@@ -145,5 +174,16 @@ export function PairingPanel({ s }: { s: Snapshot }) {
         )}
       </div>
     </>
+  );
+}
+
+/** The pairing popup: the only place the pairing QR and code show. `intro` goes above the code. */
+export function PairingDialog({ s, onClose, title = "Connect a phone", intro }: { s: Snapshot; onClose: () => void; title?: string; intro?: ReactNode }) {
+  return (
+    <Dialog title={title} wide onClose={onClose}>
+      {intro}
+      <PairingPanel s={s} />
+      <p className="caption tertiary pair-private">Keep this code private: anyone who scans it can use this PC to make apps. Close this when you are done.</p>
+    </Dialog>
   );
 }

@@ -21,11 +21,14 @@ src/components/          Screen (safe area + scroll), Card, Button: reuse them
 src/lib/storage.ts       persistent JSON storage + usePersistentState hook
 src/lib/notifications.ts notification permission, notify now, exact scheduled reminders
 src/lib/alarms.ts        exact alarms with sound + spoken text, work while the app is closed
+src/lib/ai.ts            AI (chat, streaming, tools, agents) through AnyAppAgent's key
+src/components/AiSetupNotice.tsx  the "AI is not set up" card with a button to AnyAppAgent
 src/theme.ts             colours (light + dark), spacing, radius, font sizes
 assets/icon.png          THE launcher icon (1024x1024 PNG); also the splash and starter image
 assets/sounds/           sound files for alarms and in-app playback (adhan.mp3, beep.wav, …)
 scripts/make-icon.mjs    makes assets/icon.png from a colour and a glyph or letter
 modules/alarms/          native (Kotlin) code behind src/lib/alarms.ts
+modules/ai/              native (Kotlin) code behind src/lib/ai.ts (leave it)
 app.json                 app config (name, permissions, plugins)
 ```
 
@@ -45,7 +48,8 @@ app.json                 app config (name, permissions, plugins)
 - Never use `npm install <pkg>`: use `npx expo install <pkg>` (picks the version that matches SDK
   58). Prefer what is already installed (below): every new native library makes the next build
   slower and riskier.
-- Never put secrets or keys in the app.
+- Never put secrets or keys in the app. For AI, use `src/lib/ai.ts` (below): never ask the person
+  for an API key and never call an AI provider with `fetch`.
 
 You may change `expo.name` (the name under the icon) when the user asks to rename the app.
 
@@ -242,6 +246,69 @@ DateTimePickerAndroid.open({
   onChange: (event, date) => { if (event.type === 'set' && date) setTime(date); },
 });
 ```
+
+### AI: chat, streaming, tools and agents (Claude or OpenRouter, through AnyAppAgent)
+
+Use this whenever the person asks for anything AI: a chat, summaries, smart suggestions, reading a
+photo, an assistant that does things in the app. The person adds their AI key once in AnyAppAgent's
+Settings; this app never sees the key. AnyAppAgent sends the requests, shows usage per app and can
+switch AI off for this app. Nothing to install or declare.
+
+```tsx
+import { useAiStatus, ask, chat, runAgent, imagePart, AiError, aiProblemText, type AiMessage, type AiTool } from '@/lib/ai';
+import { AiSetupNotice } from '@/components/AiSetupNotice';
+
+// 1. Show the setup card while AI is not ready (no key yet, or AI switched off for this app).
+const { status } = useAiStatus();                 // refreshes when the app comes back to the front
+<AiSetupNotice status={status} />                  // renders nothing when AI is ready
+
+// 2. One question
+const answer = await ask('Suggest a name for a cat', { system: 'Answer in one line.' });
+
+// 3. A conversation, streamed: show text as it arrives
+const [messages, setMessages] = useState<AiMessage[]>([]);
+const next: AiMessage[] = [...messages, { role: 'user', content: input }];
+const reply = await chat({ messages: next, system: 'You are a friendly cooking helper.', onText: (t) => setLive((s) => s + t) });
+setMessages([...next, reply.message]);            // always append reply.message, not just the text
+
+// 4. An agent with tools: the AI calls your functions until it is done
+const addItem: AiTool<{ name: string; qty?: number }> = {
+  name: 'add_item',
+  description: 'Add an item to the shopping list',
+  parameters: { type: 'object', properties: { name: { type: 'string' }, qty: { type: 'number' } }, required: ['name'] },
+  run: async ({ name, qty }) => { addToList(name, qty ?? 1); return 'added'; },
+};
+const result = await runAgent({
+  prompt: 'Add what I need for pancakes',
+  system: 'You manage the shopping list. Use the tools.',
+  tools: [addItem],
+  maxSteps: 6,                                    // AI turns before it stops (default 8)
+  onText: (t) => setLive((s) => s + t),
+  onToolCall: (c) => setStep(`Adding ${String(c.input.name)}`),
+});
+result.text; result.messages;                      // the final answer; the whole conversation to keep
+
+// 5. Images in: base64 (no data: prefix), in a user message
+await chat({ messages: [{ role: 'user', content: [imagePart(base64, 'image/jpeg'), { type: 'text', text: 'What plant is this?' }] }] });
+
+// Errors: every call can throw AiError
+try { await ask('Hi'); } catch (e) {
+  if (e instanceof AiError) setProblem(e.needsSetup ? e.code : aiProblemText(e.code)); // e.code e.g. 'not_set_up', 'busy'
+}
+```
+
+- Always handle "not ready": show `<AiSetupNotice status={status} />` (or `code={err.code}` after an
+  `AiError` with `needsSetup`) where the AI feature would be, and keep the rest of the app working
+  without AI. Its button opens AnyAppAgent's settings. Never show a key field in this app.
+- Stream long answers with `onText`; pass `signal` (an `AbortController`'s) to let the person stop.
+- Keep tools small and safe: the AI decides when to call them, so never give it a tool that deletes
+  or spends without the person confirming in the UI.
+- Limits set by AnyAppAgent: about 30 AI calls a minute and 3 at once per app (`AiError` code
+  `limit`), answers up to `maxTokens` (default 8192). An agent step is one call.
+- Images: to let the person pick or take a photo, install `expo-image-picker`
+  (`npx expo install expo-image-picker`, then `launchImageLibraryAsync({ base64: true, quality: 0.6 })`)
+  and pass `asset.base64`. Keep images small (quality 0.6 or a resize), a few MB at most.
+- Save conversations with `usePersistentState` if the person should find them again.
 
 ### Other things already installed
 
