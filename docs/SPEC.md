@@ -275,7 +275,7 @@ The user picked "Like this, but mine" (Q15) and "Send it in WhatsApp" (Q39) from
   `<App name>.apk`. Only that file is shared, never the signing key. On a phone the installed APK is
   the arm64 build (or the universal one when that was installed).
 - **The diary during an install**: when the agent reads an app's diary (`read_diary`) while that
-  app is being installed, the phone waits for the install (up to 60 s) before it asks the app; the
-  PC waits 80 s in all (was 25 s).
+  app is being installed, the phone waits for the install (up to 42 s, then says it is still
+  installing so the agent tries again) before it asks the app; the PC waits 56 s in all (was 25 s; Claude Code gives up on a tool call after about 60 s).
 
 Protocol (additive): `CreateAppRequest.images`, `CreateAppRequest.sharedIn`, `SendMessageRequest.sharedIn`.

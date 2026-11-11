@@ -9,7 +9,7 @@ together around an app's history and health. This file is what was decided and b
 - **A version is a build that succeeded.** The PC records each one when it is built
   (`<state>/versions/<appId>.json`: number, commit, what changed, when). Builds made before this
   feature are read from the app's Git history (commits `Build N: ...`).
-- **Go back** (phone: the chat's Versions button; PC: the History button in the chat header) to
+- **Go back** (phone: Versions in the chat's menu; PC: the History button in the chat header) to
   any earlier version: the PC puts that version's files back with one new commit
   (`Back to version 2`), never rewriting history, and builds it as a **new version with a higher
   number**, so it installs over the current app and the app's data stays (Android refuses an older
@@ -95,7 +95,9 @@ The card: "Apps keep a small private log of what they did ("Asr alarm set for 15
   receiver answers only to its installer (action `com.anyappagent.action.DIARY`, extras
   `requestId`, `diary` = JSON array of `{at, text}`, `sender` as above); AnyAppAgent posts it to
   the PC (`POST /api/apps/:id/diary`). While that app is being installed, the phone first waits
-  for the install (up to 60 s). No phone connected, or no answer within 80 s: the tool says so in
+  for the install (up to 42 s; still installing then: the tool says so and the agent tries again).
+  No phone connected, or no answer within 56 s (the agent's tool call
+  gives up at about 60 s): the tool says so in
   a sentence, and the chat line says so too.
 
 Protocol (additive): `ChatItemKind` `crash` and `diary`, `ChatItem.crash`, `ChatItem.diary`,

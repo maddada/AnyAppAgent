@@ -111,6 +111,8 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   shareApk?(packageName: string, appName: string, title: string): Promise<boolean>;
   /** Android's save screen for the same file ("Save to Files"): true when saved, false when cancelled. */
   saveApk?(packageName: string, appName: string): Promise<boolean>;
+  /** Resolves after `ms`, also while AnyAppAgent is behind another screen (JS timers wait for it to return). */
+  delay?(ms: number): Promise<void>;
   /** Starts the keep-alive foreground service (only allowed in front), or changes its text when it runs. */
   startKeepAlive(text: string, color: string | null): boolean;
   /** True while the keep-alive service runs in the foreground: this process is not frozen. */

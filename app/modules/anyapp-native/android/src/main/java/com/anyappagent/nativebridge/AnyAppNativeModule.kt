@@ -394,6 +394,11 @@ class AnyAppNativeModule : Module() {
       }
     }
 
+    /** A timer that also runs while AnyAppAgent is in the background (Android's install prompt in front). */
+    AsyncFunction("delay") { ms: Double, promise: Promise ->
+      Handler(Looper.getMainLooper()).postDelayed({ promise.resolve(null) }, ms.toLong().coerceIn(0L, 10L * 60 * 1000))
+    }
+
     // ---------- crash reports and diaries from the apps (docs/VERSIONS.md)
 
     /** JSON [{packageName, report}] of the crashes waiting to go to the PC; they are forgotten here. */

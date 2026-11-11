@@ -41,7 +41,11 @@ object ShareFiles {
     val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim()?.takeIf { it.isNotEmpty() }
     val uris = LinkedHashSet<Uri>()
     streams(intent).forEach { uris.add(it) }
-    intent.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) } }
+    // A link's share (text/plain) often carries the page's preview image in its ClipData, only for
+    // the share sheet to show: that is not something the person shared, so it is left out.
+    if (intent.type?.startsWith("image/") == true) {
+      intent.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) } }
+    }
 
     val dir = File(context.cacheDir, "shared-in")
     dir.mkdirs()

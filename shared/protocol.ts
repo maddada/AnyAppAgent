@@ -321,7 +321,7 @@ export interface DiaryReadInfo {
 export interface DiaryAnswer {
   requestId: string;
   entries?: DiaryEntry[]; // oldest first, at most 300
-  problem?: "not_installed" | "no_answer" | "not_supported"; // the app is not on this phone / did not answer / is too old to keep a diary
+  problem?: "not_installed" | "no_answer" | "not_supported" | "installing"; // the app is not on this phone / did not answer / is too old to keep a diary / (added) is still being installed after the phone waited for it
 }
 
 // ---------- HTTP (JSON). Everything except /api/health and /api/pair needs

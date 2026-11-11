@@ -205,6 +205,19 @@ describe("the diary", () => {
     }
   });
 
+  it("tells the agent to try again when the app is still being installed", async () => {
+    const { apps, events, done } = setup();
+    try {
+      const reading = apps.history.readDiary("app-1");
+      const ask = events.find((e) => e.type === "diary.request") as { requestId: string };
+      apps.diaryAnswer("app-1", { requestId: ask.requestId, problem: "installing" });
+      expect(await reading).toMatch(/still being installed.*read_diary again/s);
+      expect(apps.messages("app-1", 0).find((i) => i.kind === "diary")?.diary).toEqual({ ok: false, entries: 0, problem: "the app is still being installed on your phone" });
+    } finally {
+      done();
+    }
+  });
+
   it("says so when no phone is connected", async () => {
     const { apps, setPhones, done } = setup();
     try {

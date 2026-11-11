@@ -182,7 +182,6 @@ function Header({ app }: { app: App | undefined }) {
         </T>
         {state ? <StateLine kind={state.kind} label={state.label} role="caption" /> : null}
       </View>
-      {app?.latestApk ? <IconButton testID="chat-versions" icon={History} label="Versions" color={t.textSecondary} onPress={() => router.push(`/versions/${app.id}`)} /> : null}
       {app ? <TodoButton app={app} /> : null}
       {app && action !== "notReady" && !installing ? (
         <Button
@@ -198,7 +197,10 @@ function Header({ app }: { app: App | undefined }) {
   );
 }
 
-/** The chat's menu: Send app (the APK through the share sheet) and Share with others (GitHub). */
+/**
+ * The chat's menu (the header had no room left for the app's name): Versions, Send app (the APK
+ * through the share sheet) and Share with others (GitHub).
+ */
 function MenuButton({ app }: { app: App }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
@@ -222,6 +224,18 @@ function MenuButton({ app }: { app: App }) {
           <SendAppPanel app={app} onDone={close} onCancel={() => setSending(false)} />
         ) : (
           <View style={{ gap: space.sm }}>
+            {app.latestApk ? (
+              <Button
+                testID="chat-versions"
+                label="Versions"
+                icon={History}
+                variant="quiet"
+                onPress={() => {
+                  close();
+                  router.push(`/versions/${app.id}`);
+                }}
+              />
+            ) : null}
             {sendable ? <Button testID="chat-menu-send" label="Send app" icon={Send} variant="quiet" onPress={() => setSending(true)} /> : null}
             {app.latestApk ? (
               <Button
