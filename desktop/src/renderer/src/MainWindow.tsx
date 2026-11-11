@@ -3,9 +3,10 @@
 // same chat as on the phone) or today's activity with the phone panels. New app works from here
 // too, with the same fields and words as the phone's New app sheet.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { CircleAlert, Cloud, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, RefreshCw, Settings as Gear, Smartphone, Wrench, X } from "lucide-react";
+import { ChevronDown, CircleAlert, Cloud, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, RefreshCw, Settings as Gear, Smartphone, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { CheckState, Snapshot } from "../../shared/types.ts";
+import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
+import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
 import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
 import { ChatView } from "./Chat.tsx";
 import type { StepId } from "./Onboarding.tsx";
@@ -274,14 +275,17 @@ function Overview({ s, hasApps, onConnect }: { s: Snapshot; hasApps: boolean; on
 function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId: string) => void }) {
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [advanced, setAdvanced] = useState(false);
+  const [preset, setPreset] = useState<AppPreset>(DEFAULT_PRESET);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = name.trim().length > 0 && prompt.trim().length > 0;
+  const chosen = PRESET_CHOICES.find((p) => p.id === preset);
   const submit = async () => {
     if (!ready || busy) return;
     setBusy(true);
     setError(null);
-    const r = await api.createApp(name.trim(), prompt.trim());
+    const r = await api.createApp(name.trim(), prompt.trim(), preset);
     setBusy(false);
     if (!r.ok || !r.app) return setError(r.error ?? "That didn't work. Try again.");
     onMade(r.app.id);
@@ -324,6 +328,31 @@ function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId
             }}
           />
         </label>
+        <div className="advanced">
+          <button type="button" className="advanced-toggle" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)} data-testid="new-app-advanced">
+            <span className="label">Advanced</span>
+            {!advanced && preset !== DEFAULT_PRESET && <span className="caption secondary">{chosen?.title}</span>}
+            <span className={advanced ? "advanced-chevron open" : "advanced-chevron"}>
+              <Icon of={ChevronDown} size="sm" />
+            </span>
+          </button>
+          {advanced && (
+            <div className="preset-choices" role="radiogroup" aria-label="What to make it with">
+              {PRESET_CHOICES.map((p) => (
+                <label key={p.id} className={p.id === preset ? "preset-choice selected" : "preset-choice"} data-testid={`new-app-preset-${p.id}`}>
+                  <input type="radio" name="preset" value={p.id} checked={p.id === preset} onChange={() => setPreset(p.id)} />
+                  <span className="preset-text">
+                    <span className="preset-title">
+                      <span className="row-type">{p.title}</span>
+                      {p.tag && <span className="caption secondary">{p.tag}</span>}
+                    </span>
+                    <span className="caption secondary">{p.line}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
         {error && <p className="label problem-text">{error}</p>}
       </form>
     </Dialog>

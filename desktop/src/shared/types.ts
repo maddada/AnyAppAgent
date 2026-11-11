@@ -1,8 +1,8 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, ChatImage, ChatItem, ImageUpload } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload } from "../../../shared/protocol.ts";
 
-export type { AdminState, App, ChatImage, ChatItem, ImageUpload };
+export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload };
 
 /** One self-check in the setup checklist. */
 export type CheckState = "checking" | "done" | "needed" | "working" | "skipped" | "problem";
@@ -188,8 +188,8 @@ export interface AnyAppBridge {
   /** Builds the app again (Try again on a failed build). */
   rebuild(appId: string): Promise<ActionResult>;
   answerPermission(appId: string, requestId: string, optionId: string): Promise<ActionResult>;
-  /** New app from this PC: the same as the phone's New app sheet. */
-  createApp(name: string, prompt: string): Promise<ActionResult & { app?: App }>;
+  /** New app from this PC: the same as the phone's New app sheet (preset: Advanced, default React Native). */
+  createApp(name: string, prompt: string, preset?: AppPreset): Promise<ActionResult & { app?: App }>;
 
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>;
   restartCompanion(): Promise<void>;

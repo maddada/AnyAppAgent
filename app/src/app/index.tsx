@@ -8,6 +8,7 @@ import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp } from "@/lib/describe";
 import { installApp, installFromLink, launchApp } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
+import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
 import { appAction, removeApp, sortedApps, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
@@ -367,21 +368,6 @@ export function InstallFailure({ app, message, conflict }: { app: App; message?:
 
 // ---------- New app
 
-/** What an app can be made from (Advanced). The same wording goes on the PC's New app sheet. */
-const PRESETS: { id: AppPreset; title: string; tag?: string; line: string }[] = [
-  {
-    id: "react-native",
-    title: "React Native",
-    tag: "Default",
-    line: "Can come to iPhone later, and can get quick updates without a new install later on. Apps are bigger (about 55 MB).",
-  },
-  {
-    id: "kotlin",
-    title: "Kotlin",
-    line: "Fully native Android, smaller and faster apps (a few MB). Android only.",
-  },
-];
-
 function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const client = useStore((s) => s.client);
   const [name, setName] = useState("");
@@ -475,7 +461,7 @@ function Advanced({ open, onToggle, preset, onPreset }: { open: boolean; onToggl
       {open ? (
         <View accessibilityRole="radiogroup" style={{ gap: space.sm, marginTop: space.xs }}>
           {PRESETS.map((p) => (
-            <PresetChoice key={p.id} preset={p} selected={p.id === preset} onPress={() => onPreset(p.id)} />
+            <PresetCard key={p.id} preset={p} selected={p.id === preset} onPress={() => onPreset(p.id)} />
           ))}
         </View>
       ) : null}
@@ -483,7 +469,7 @@ function Advanced({ open, onToggle, preset, onPreset }: { open: boolean; onToggl
   );
 }
 
-function PresetChoice({ preset, selected, onPress }: { preset: (typeof PRESETS)[number]; selected: boolean; onPress: () => void }) {
+function PresetCard({ preset, selected, onPress }: { preset: PresetChoice; selected: boolean; onPress: () => void }) {
   const t = useTheme();
   const dot = 20;
   return (
