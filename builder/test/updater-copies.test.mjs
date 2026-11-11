@@ -13,7 +13,7 @@ const rn = path.join(repo, 'template', 'modules', 'updates', 'android', 'src', '
 
 test('the updater core is the same in both templates', () => {
   const names = fs.readdirSync(kotlin).sort();
-  assert.deepEqual(names, ['AppUpdater.kt', 'HostLink.kt', 'InstallReceiver.kt', 'Ota.kt', 'ReadyPopup.kt', 'UpdateActivity.kt', 'UpdateJob.kt']);
+  assert.deepEqual(names, ['AppUpdater.kt', 'ChangeSheet.kt', 'ChangeThisApp.kt', 'HostLink.kt', 'InstallReceiver.kt', 'Ota.kt', 'ReadyPopup.kt', 'UpdateActivity.kt', 'UpdateJob.kt']);
   assert.deepEqual(fs.readdirSync(rn).sort(), names);
   for (const n of names) {
     const a = fs.readFileSync(path.join(kotlin, n), 'utf8').replace(/\r\n/g, '\n');
@@ -27,6 +27,6 @@ test('both templates keep the feed strings through resource shrinking', () => {
     path.join(repo, 'template-kotlin', 'app', 'src', 'main', 'res', 'raw', 'anyapp_keep.xml'),
     path.join(repo, 'template', 'modules', 'updates', 'android', 'src', 'main', 'res', 'raw', 'anyapp_keep.xml'),
   ]) {
-    assert.match(fs.readFileSync(f, 'utf8'), /tools:keep="@string\/anyapp_update_feed,@string\/anyapp_update_testing_feed,@string\/anyapp_runtime"/);
+    assert.match(fs.readFileSync(f, 'utf8'), /tools:keep="@string\/anyapp_update_feed,@string\/anyapp_update_testing_feed,@string\/anyapp_runtime,@string\/anyapp_change_owner,@string\/anyapp_change_others"/);
   }
 });

@@ -19,7 +19,7 @@ const RES = path.join('app', 'src', 'main', 'res');
 const ICON_STAMP = path.join('build', '.anyapp-icon');
 
 /** Android string resource escaping (strings.xml). */
-function xmlString(s) {
+export function xmlString(s) {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

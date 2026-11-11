@@ -17,6 +17,8 @@ import {
   upsertChatItems,
   upsertHelperItems,
   setTodos,
+  setSuggestions,
+  useStore,
   upsertHelpers,
   replaceHelperChat,
 } from "./store";
@@ -43,6 +45,22 @@ export async function boot() {
   startUnpairRetries();
   AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
   AnyAppNative?.addListener("onAppReport", (e) => onAppReport(e.packageName));
+  // "Change this app" (docs/CHANGE-THIS-APP.md): apps ask AnyAppAgent whether they are this
+  // person's own, so their row shows even when hidden from others. Kept in step with the app list.
+  let ownKey = "";
+  const syncOwn = (apps: Record<string, { packageName: string }>) => {
+    const list = Object.values(apps).map((a) => a.packageName).sort();
+    const key = list.join(",");
+    if (key === ownKey) return;
+    ownKey = key;
+    try {
+      AnyAppNative?.setOwnApps?.(list);
+    } catch {
+      // an older native module: the rows follow the owner's switch only
+    }
+  };
+  syncOwn(getState().apps);
+  useStore.subscribe((s) => syncOwn(s.apps));
 }
 
 function applyPairing(pairing: Pairing, client?: Client) {
@@ -615,6 +633,9 @@ function handleEvent(event: ServerEvent) {
       break;
     case "diary.request":
       void answerDiaryRequest(event);
+      break;
+    case "suggestions.updated":
+      setSuggestions(event.appId, event.suggestions);
       break;
   }
 }

@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,7 +37,7 @@ private val steps = listOf(
 
 /** The starter screen. Replace it with the app's real first screen. */
 @Composable
-fun HomeScreen() {
+fun HomeScreen(onOpenSettings: () -> Unit = {}) {
   val colors = AppTheme.colors
   val context = LocalContext.current
   val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "1.0"
@@ -74,6 +75,7 @@ fun HomeScreen() {
     HorizontalDivider(thickness = 1.dp, color = colors.border)
 
     Spacer(Modifier.height(Spacing.xxl))
+    QuietButton("Settings", onClick = onOpenSettings, modifier = Modifier.testTag("open-settings"))
     Text("Version $version", style = AppType.small.merge(AppType.numeric), color = colors.textFaint)
   }
 }

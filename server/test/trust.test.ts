@@ -101,7 +101,7 @@ describe("keep my apps healthy", () => {
     const reasons = behindReasons(old, undefined, t);
     expect(reasons).toHaveLength(2);
     expect(reasons[0]).toMatch(/older Expo \(SDK 57; the newest is 58\)/);
-    expect(reasons[1]).toBe("Missing or older built-in parts: updates inside the app and shake to give feedback.");
+    expect(reasons[1]).toBe("Missing or older built-in parts: updates and Change this app inside the app and shake to give feedback.");
     expect(reasons.join(" ")).not.toMatch(/—/);
   });
 

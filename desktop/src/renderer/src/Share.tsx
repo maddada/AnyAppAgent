@@ -32,6 +32,14 @@ export function ShareDialog({ app, onClose }: { app: App; onClose: () => void })
   const [channel, setChannel] = useState<"stable" | "testing">("stable");
   const [qr, setQr] = useState<string | null>(null);
   const [stats, setStats] = useState<ReleaseStats[] | null>(null);
+  // "Change this app" (docs/CHANGE-THIS-APP.md)
+  const showToOthers = app.change?.showToOthers !== false;
+  const [owner, setOwner] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  useEffect(() => {
+    void api.getOwnerName().then(setOwner);
+  }, []);
 
   const newest = app.latestApk?.number;
   const published = releases.find((r) => r.channel === channel && r.build === newest && !r.pulledBack);
@@ -69,8 +77,8 @@ export function ShareDialog({ app, onClose }: { app: App; onClose: () => void })
             <span className="body">Share with others</span>
             <span className="sub">
               {shared
-                ? "Anyone with the link can install it and gets your new versions. Your code stays private."
-                : "Makes a public page on GitHub that holds only the app's name, icon and the versions you publish. Your code stays in its private repository."}
+                ? "Anyone with the link can install it and gets your new versions. Each version you publish also carries its code, so others can make their own version."
+                : "Makes a public page on GitHub with the app's name, icon and the versions you publish. Each published version also carries its code; your chat, the app's notes about you, keys and .env files never go."}
             </span>
           </div>
           {busy === "share" ? <Spinner /> : <SwitchRow on={shared} busy={busy !== null} onChange={() => void run("share", () => api.shareApp(app.id, !shared), shared ? "Not shared any more. People who have it keep it, but get no new versions." : undefined)} />}
@@ -93,6 +101,67 @@ export function ShareDialog({ app, onClose }: { app: App; onClose: () => void })
             {qr && <QrPlate svg={qr} size={132} label={`QR code for ${app.name}`} />}
           </div>
         )}
+        <div className="srow">
+          <div className="srow-main">
+            <span className="body">Show "Change this app" to others</span>
+            <span className="sub">
+              {showToOthers
+                ? "Everyone with the app sees the row in its settings: they can suggest a change to you, or make their own version. From the next version."
+                : "Off: only your phone shows the row. From the next version."}
+            </span>
+          </div>
+          {busy === "change" ? (
+            <Spinner />
+          ) : (
+            <button
+              className={`switch${showToOthers ? " on" : ""}`}
+              role="switch"
+              aria-checked={showToOthers}
+              aria-label="Show Change this app to others"
+              disabled={busy !== null}
+              onClick={() => void run("change", () => api.setChange(app.id, { showToOthers: !showToOthers }))}
+              data-testid="change-switch"
+            />
+          )}
+        </div>
+        <div className="srow">
+          <div className="srow-main">
+            <span className="body">Your name in your apps</span>
+            <span className="sub">"Made by {owner || "you"}" and "Suggest a change to {owner || "you"}". The same for every app, from its next version.</span>
+            {editingName ? (
+              <div className="row wrap">
+                <input className="field" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} maxLength={40} data-testid="owner-name" />
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void run("name", async () => {
+                      const r = await api.setChange(app.id, { ownerName: nameDraft });
+                      if (r.ok) {
+                        setEditingName(false);
+                        setOwner(await api.getOwnerName());
+                      }
+                      return r;
+                    })
+                  }
+                >
+                  Save
+                </button>
+              </div>
+            ) : null}
+          </div>
+          {!editingName && (
+            <button
+              className="btn btn-quiet btn-sm"
+              onClick={() => {
+                setNameDraft(owner);
+                setEditingName(true);
+              }}
+            >
+              Change
+            </button>
+          )}
+        </div>
       </section>
 
       {shared && (

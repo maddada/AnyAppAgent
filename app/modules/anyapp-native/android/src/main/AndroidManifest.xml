@@ -49,6 +49,21 @@
       </intent-filter>
     </service>
 
+    <!-- "Change this app" (docs/CHANGE-THIS-APP.md): apps made with AnyAppAgent find the AnyAppAgent
+         that knows anyappagent://change by this action (older copies do not have it). -->
+    <activity
+        android:name="com.anyappagent.nativebridge.ChangeLinkActivity"
+        android:exported="true"
+        android:excludeFromRecents="true"
+        android:noHistory="true"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar">
+      <intent-filter>
+        <action android:name="com.anyappagent.action.CHANGE" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:scheme="anyappagent" android:host="change" />
+      </intent-filter>
+    </activity>
+
     <service
         android:name="com.anyappagent.nativebridge.KeepAliveService"
         android:exported="false"

@@ -11,6 +11,10 @@ import { join } from "node:path";
 import WebSocket from "ws";
 import type {
   AdminEvent,
+  ChangeSettingsRequest,
+  FileSuggestionResponse,
+  OwnerInfo,
+  Suggestion,
   AdminState,
   App,
   AppPreset,
@@ -335,6 +339,31 @@ export class AdminClient extends EventEmitter {
 
   releases(appId: string): Promise<ReleaseStats[]> {
     return this.request<ReleaseStats[]>("GET", `/api/apps/${encodeURIComponent(appId)}/releases`, undefined, 60_000);
+  }
+
+  // "Change this app" (docs/CHANGE-THIS-APP.md): suggestions from others, who sees the row, the owner's name.
+  suggestions(appId: string): Promise<Suggestion[]> {
+    return this.request<Suggestion[]>("GET", `/api/apps/${encodeURIComponent(appId)}/suggestions`);
+  }
+
+  fileSuggestion(text: string): Promise<FileSuggestionResponse> {
+    return this.request<FileSuggestionResponse>("POST", "/api/suggestions", { text });
+  }
+
+  openSuggestion(appId: string, suggestionId: string): Promise<Suggestion> {
+    return this.request<Suggestion>("POST", `/api/apps/${encodeURIComponent(appId)}/suggestions/${encodeURIComponent(suggestionId)}/open`, {});
+  }
+
+  removeSuggestion(appId: string, suggestionId: string): Promise<void> {
+    return this.request("DELETE", `/api/apps/${encodeURIComponent(appId)}/suggestions/${encodeURIComponent(suggestionId)}`);
+  }
+
+  setChange(appId: string, body: ChangeSettingsRequest): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/change`, body);
+  }
+
+  ownerName(): Promise<OwnerInfo> {
+    return this.request<OwnerInfo>("GET", "/api/owner");
   }
 
   /** "Update it" on an app that is behind: the companion sends its agent the update message. */

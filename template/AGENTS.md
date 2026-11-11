@@ -17,6 +17,7 @@ for this exact SDK: https://docs.expo.dev/versions/v58.0.0/ (or the `.d.ts` file
 index.ts                 entry point (leave it)
 src/App.tsx              root: navigation (register screens here), theme, one-time setup
 src/screens/             one file per screen; HomeScreen.tsx is the starter screen: replace it
+                         (keep a way to reach SettingsScreen.tsx, which ends with "This app")
 src/components/          Screen (safe area + scroll), Card, Button: reuse them
 src/lib/storage.ts       persistent JSON storage + usePersistentState hook
 src/lib/notifications.ts notification permission, notify now, exact scheduled reminders
@@ -130,16 +131,16 @@ changes**: only JavaScript.
 ### Screens and navigation
 
 ```tsx
-// src/screens/SettingsScreen.tsx
+// src/screens/HistoryScreen.tsx
 import { useNavigation } from '@react-navigation/native';
-export function SettingsScreen() { /* … */ }
+export function HistoryScreen() { /* … */ }
 
 // src/App.tsx: register it in RootStack.screens
-Settings: { screen: SettingsScreen, options: { title: 'Settings' } },
+History: { screen: HistoryScreen, options: { title: 'History' } },
 
 // anywhere: navigate (typed from RootStack)
 const navigation = useNavigation();
-navigation.navigate('Settings');
+navigation.navigate('History');
 ```
 
 Screens with `headerShown: false` draw their own title; others get a native header. Bottom tabs
@@ -356,6 +357,22 @@ import { openFeedback } from '../../modules/feedback';
 ```
 
 It does not open while a full-screen alarm shows.
+
+### Change this app (built in, keep it)
+
+Every app made with AnyAppAgent has a **Settings screen with a "This app" group** whose first row
+is **Change this app** (`src/components/ChangeThisApp.tsx`: `ThisAppSection`, or `ChangeThisAppRow`
+alone in a settings list of your own design; the starter screen is `src/screens/SettingsScreen.tsx`).
+The row opens AnyAppAgent at this app: the person who made it lands in this app's chat, anyone else
+can suggest a change or make their own version; without AnyAppAgent it shows an explanation drawn
+by the app. It hides itself on other people's phones when the owner turned it off in AnyAppAgent.
+
+- **Never remove the row, the Settings screen, or a way to reach Settings** from the main screen
+  (a "Settings" button, a gear, or a tab). When you redesign the app or replace the starter
+  screens, keep `ThisAppSection` (or `ChangeThisAppRow`) last in the app's settings and restyle
+  nothing else about it.
+- The native part is `com.anyapp.updates.ChangeThisApp` and `ChangeSheet` in `modules/updates`
+  (the same code in every AnyAppAgent app): never edit them.
 
 ### Updates for people the app is shared with (built in, nothing to do)
 

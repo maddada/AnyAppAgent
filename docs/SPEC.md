@@ -116,7 +116,13 @@ buildApk({ dir, buildNumber, onLog? }) -> Promise<{ apkPath, sizeBytes, sha256, 
     its own with GET /api/apps/:id/apk?abi=<abi> (shared/protocol.ts BuildInfo.variants).
 getIconPath({ dir }) -> string | null
     Absolute path of the app's launcher icon PNG, or null.
+adoptApp({ src, dir, name, slug, packageName, onLog? }) -> Promise<{ preset }>
+    "Make my own version" (docs/CHANGE-THIS-APP.md): a separate app from another app's code, with
+    its own name, package id and signing key. React Native and Kotlin.
 ```
+
+buildApk also takes `changeOwner` and `changeOthers` (the "Change this app" values written into
+the build).
 
 and a CLI for humans and tests: `node builder/cli.mjs create <dir> --name "<name>"` and
 `node builder/cli.mjs build <dir> --build-number <n>`.
@@ -274,3 +280,20 @@ The user picked "Never lose your apps", "Usage meter" and "Keep my apps healthy"
 - **Keep my apps healthy**: an app behind the newest template (older Expo SDK or Android target,
   missing or older built-in parts) gets a yellow "!" on its icon and "Update it", which sends its
   agent the update message; a reminder once a month while any app is behind.
+
+## Change this app (added 2026-11-12)
+
+The user picked, on `C:\aa\ideas\change-this-app.html`: Suggest a change by share text (Q240), code
+in each public release (Q241), clones (Q242: "I will have my app, and they will have the same app,
+but their own version of it ... everything is separate. I can ask my agent to copy from someone
+else"), and the explanation in the app, then GitHub (Q243).
+
+- Every app's Settings ends with "This app": **Change this app**, its version, "Made by <owner>
+  with AnyAppAgent". The owner lands in the app's chat; anyone else can suggest a change (a text
+  through the share menu, filed into the owner's "From others" inbox) or, with a paired PC, make
+  their own version (a separate app from the published code). Without AnyAppAgent the app explains
+  itself and links to AnyAppAgent's latest release.
+- Shared apps' releases carry their code (`<slug>-source.zip`, without the app's notes about the
+  owner, `.env` files or keys). "Show Change this app to others" in the Share dialog.
+- `anyapp copy` lets any app's agent take something from another app, only on request.
+- Details, the link, the message format and the protocol additions: `docs/CHANGE-THIS-APP.md`.

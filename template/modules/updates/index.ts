@@ -10,6 +10,9 @@ type Native = {
   isOn(): boolean;
   channel(): string;
   setChannel(channel: string): void;
+  changeVisible(): Promise<boolean>;
+  changeOwner(): string;
+  openChange(screen: string | null): void;
 };
 
 const native = requireNativeModule<Native>('AnyappUpdates');
@@ -43,4 +46,21 @@ export function getUpdateChannel(): 'stable' | 'testing' {
 /** "testing" also offers test versions the owner published for testing. */
 export function setUpdateChannel(channel: 'stable' | 'testing'): void {
   native.setChannel(channel);
+}
+
+// ---------- "Change this app" (built in: src/components/ChangeThisApp.tsx is the row; keep it)
+
+/** Whether the "Change this app" row shows on this phone: always for the owner, else unless they hid it. */
+export function changeVisible(): Promise<boolean> {
+  return native.changeVisible();
+}
+
+/** The owner's name as the PC wrote it into this build ("" when unknown). */
+export function changeOwner(): string {
+  return native.changeOwner();
+}
+
+/** Opens AnyAppAgent at this app (or, without AnyAppAgent, the explanation sheet). */
+export function openChange(screen?: string): void {
+  native.openChange(screen ?? null);
 }

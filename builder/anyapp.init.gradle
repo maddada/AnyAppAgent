@@ -5,6 +5,8 @@
 //   - sets versionCode to the build number (-PanyappVersionCode=<n>),
 //   - with -PanyappUpdateFeed=<url> (and -PanyappUpdateTestingFeed): the shared app's update feeds
 //     as string resources anyapp_update_feed / anyapp_update_testing_feed (AppUpdater reads them),
+//   - with -PanyappChangeOwner / -PanyappChangeOthers: "Change this app" (anyapp_change_owner,
+//     anyapp_change_others string resources),
 //   - skips the release lint check (slow, and not useful for side-loaded apps),
 //   - with -PanyappAbiSplits=<abi,abi>: also one APK per ABI next to the full one, so a phone
 //     downloads only its own native code (about a third of the full APK),
@@ -33,6 +35,18 @@ gradle.allprojects { p ->
         android.buildFeatures.resValues = true
         android.defaultConfig.resValue('string', 'anyapp_update_feed', feed)
         android.defaultConfig.resValue('string', 'anyapp_update_testing_feed', p.findProperty('anyappUpdateTestingFeed')?.toString()?.trim() ?: '')
+      }
+      // "Change this app" (docs/CHANGE-THIS-APP.md): the owner's name for the explanation sheet, and
+      // "0" when only the owner's phone shows the row (com.anyapp.updates.ChangeThisApp reads them).
+      def changeOwner = p.findProperty('anyappChangeOwner')?.toString()?.trim()
+      if (changeOwner) {
+        android.buildFeatures.resValues = true
+        android.defaultConfig.resValue('string', 'anyapp_change_owner', changeOwner)
+      }
+      def changeOthers = p.findProperty('anyappChangeOthers')?.toString()?.trim()
+      if (changeOthers) {
+        android.buildFeatures.resValues = true
+        android.defaultConfig.resValue('string', 'anyapp_change_others', changeOthers)
       }
       // The fast lane (docs/FAST-LANE.md): the native fingerprint of this build, so the app accepts
       // only quick updates made for exactly this native code (com.anyapp.updates.Ota).

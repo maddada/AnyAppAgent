@@ -29,6 +29,7 @@ export default function ShareScreen() {
 
   const sharing = app?.sharing;
   const shared = Boolean(sharing?.shared);
+  const showToOthers = app?.change?.showToOthers !== false;
   const releases = sharing?.releases ?? [];
   const newest = app?.latestApk?.number;
   const published = releases.some((r) => r.channel === channel && r.build === newest && !r.pulledBack);
@@ -82,8 +83,8 @@ export default function ShareScreen() {
             <T variant="body">Share with others</T>
             <T variant="caption" color="textSecondary">
               {shared
-                ? "Anyone with the link can install it and gets your new versions. Your code stays private."
-                : "Makes a public page on GitHub with only the app's name, icon and the versions you publish. Your code stays private."}
+                ? "Anyone with the link can install it and gets your new versions. Each version you publish also carries its code, so others can make their own version."
+                : "Makes a public page on GitHub with the app's name, icon and the versions you publish. Each version also carries its code (never your chat, the app's notes about you, keys or .env files)."}
             </T>
           </View>
           <Switch
@@ -99,6 +100,28 @@ export default function ShareScreen() {
           />
         </View>
         {busy === "share" ? <StateLine kind="working" label="Setting it up on GitHub..." role="caption" /> : null}
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+          <View style={{ flex: 1, gap: space.xs }}>
+            <T variant="body">{"Show \"Change this app\" to others"}</T>
+            <T variant="caption" color="textSecondary">
+              {showToOthers
+                ? "Anyone with the app can suggest a change to you, or make their own version. From the next version."
+                : "Off: only your phone shows the row. From the next version."}
+            </T>
+          </View>
+          <Switch
+            testID="change-switch"
+            accessibilityLabel="Show Change this app to others"
+            value={showToOthers}
+            disabled={disabled}
+            onValueChange={(on) => {
+              if (client) void run("change", () => client.setShowToOthers(appId, on));
+            }}
+            trackColor={{ false: t.borderStrong, true: t.accent }}
+            thumbColor={t.dark ? t.text : t.surface}
+          />
+        </View>
 
         {shared && sharing ? (
           <View style={{ gap: space.sm }}>

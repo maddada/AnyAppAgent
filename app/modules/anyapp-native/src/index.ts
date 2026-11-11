@@ -66,6 +66,8 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   supportedAbis?(): string[];
   /** Apps followed from a share link: AnyAppAgent handles their updates (docs/DISTRIBUTION.md stage 5). */
   setFollowedApps?(packageNames: string[]): void;
+  /** The person's own apps (this PC's list): their "Change this app" row always shows (docs/CHANGE-THIS-APP.md). */
+  setOwnApps?(packageNames: string[]): void;
   handlesUpdatesOf?(packageName: string): boolean;
   installWithIntent(path: string): boolean;
 

@@ -34,6 +34,7 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
   if (set === "qr") return qrSet(win, js, shot, log).catch((e) => log(`[shots] qr set failed: ${(e as Error).message}`));
   if (set === "pages") return pagesSet(win, js, shot, log).catch((e) => log(`[shots] pages set failed: ${(e as Error).message}`));
   if (set === "history") return historySet(js, shot, log).catch((e) => log(`[shots] history set failed: ${(e as Error).message}`));
+  if (set === "change") return changeSet(js, shot, log).catch((e) => log(`[shots] change set failed: ${(e as Error).message}`));
   if (set === "real") {
     // Against the real companion: a phone pairs (an outside script plays the phone), then an app is
     // created through the companion and must show up in the main window.
@@ -367,4 +368,41 @@ async function qrSet(win: BrowserWindow, js: Js, shot: (name: string) => Promise
   const since = tail.map((l) => l.includes("Easy Connect code expired")).lastIndexOf(true);
   const renewed = tail.slice(since + 1).filter((l) => /new pairing code asked for|allowListLiftedForPairing/.test(l));
   log(`[shots] last code ran out: ${since >= 0 ? "yes (logged)" : "not in the log tail"}; codes made or renewed since then with no popup open: ${renewed.length}${renewed.length ? ` (${renewed.join(" | ")})` : ""}`);
+}
+
+/**
+ * "Change this app" (docs/CHANGE-THIS-APP.md): the app's Share dialog with "Show Change this app to
+ * others" and the owner's name, and the From others inbox, light and dark. With
+ * ANYAPP_DESKTOP_SHOTS_PASTE set, that text is pasted into From others and added first.
+ */
+async function changeSet(js: (code: string) => Promise<unknown>, shot: (name: string) => Promise<void>, log: (l: string) => void): Promise<void> {
+  await js(`window.anyapp.setSetting("onboardingDone", true); window.__app.setup(null)`);
+  await wait(600);
+  const wanted = process.env.ANYAPP_DESKTOP_SHOTS_APP ?? "Prayer Times";
+  const appId = (await js(`window.anyapp.getSnapshot().then((s) => s.apps.find((a) => a.name === ${JSON.stringify(wanted)})?.id ?? null)`)) as string | null;
+  if (!appId) return log(`[shots] no app named ${wanted}`);
+  const click = (sel: string) => js(`document.querySelector(${JSON.stringify(sel)})?.click()`);
+  const paste = process.env.ANYAPP_DESKTOP_SHOTS_PASTE;
+  if (paste) {
+    const r = (await js(`window.anyapp.fileSuggestion(${JSON.stringify(paste)})`)) as { ok: boolean; error?: string };
+    log(`[shots] pasted a suggestion: ${r.ok ? "filed" : r.error}`);
+  }
+  for (const theme of ["light", "dark"] as const) {
+    nativeTheme.themeSource = theme;
+    await wait(400);
+    await js(`window.__main.openApp(${JSON.stringify(appId)})`);
+    await wait(1500);
+    await shot(`${theme}-change-1-chat-header`);
+    await click('[data-testid="share"]');
+    await wait(1500);
+    await shot(`${theme}-change-2-share-dialog`);
+    await js(`document.querySelector('.dialog-head .btn-icon')?.click()`);
+    await wait(400);
+    await click('[data-testid="from-others"]');
+    await wait(1500);
+    await shot(`${theme}-change-3-from-others`);
+    await click('[data-testid="suggestion-open"]');
+    await wait(1000);
+    await shot(`${theme}-change-4-open-in-chat`);
+  }
 }

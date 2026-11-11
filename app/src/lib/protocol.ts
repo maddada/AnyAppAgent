@@ -40,4 +40,9 @@ export type {
   AppUsage,
   TokenUsage,
   UsageState,
+  Suggestion,
+  FileSuggestionResponse,
+  CloneRequest,
+  OwnerInfo,
+  AppOrigin,
 } from "@shared/protocol";

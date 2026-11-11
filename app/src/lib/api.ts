@@ -19,6 +19,10 @@ import type {
   CrashInfo,
   CrashReport,
   DiaryAnswer,
+  Suggestion,
+  FileSuggestionResponse,
+  CloneRequest,
+  OwnerInfo,
 } from "./protocol";
 
 /** An error with a sentence that can be shown to the user as is. */
@@ -158,6 +162,16 @@ export class Client {
   pullBack = (id: string, build: number) =>
     request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/pullback`, { method: "POST", body: { build }, token: this.token, timeoutMs: 300000 });
   releases = (id: string) => request<ReleaseStats[]>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/releases`, { token: this.token, timeoutMs: 60000 });
+
+  // "Change this app" (docs/CHANGE-THIS-APP.md): suggestions from others, who sees the row, own versions.
+  fileSuggestion = (text: string) => this.call<FileSuggestionResponse>("/api/suggestions", "POST", { text });
+  suggestions = (id: string) => this.call<Suggestion[]>(`/api/apps/${encodeURIComponent(id)}/suggestions`);
+  openSuggestion = (id: string, sid: string) => this.call<Suggestion>(`/api/apps/${encodeURIComponent(id)}/suggestions/${encodeURIComponent(sid)}/open`, "POST", {});
+  removeSuggestion = (id: string, sid: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/suggestions/${encodeURIComponent(sid)}`, "DELETE");
+  setShowToOthers = (id: string, showToOthers: boolean) => this.call<App>(`/api/apps/${encodeURIComponent(id)}/change`, "POST", { showToOthers });
+  owner = () => this.call<OwnerInfo>("/api/owner");
+  // The PC downloads the version's code from GitHub first: give it a minute.
+  clone = (body: CloneRequest) => request<App>(this.baseUrl, "/api/clones", { method: "POST", body, token: this.token, timeoutMs: 120000 });
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;

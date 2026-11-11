@@ -10,8 +10,20 @@
     <intent>
       <action android:name="com.anyappagent.action.UPDATES" />
     </intent>
+    <intent>
+      <action android:name="com.anyappagent.action.CHANGE" />
+      <data android:scheme="anyappagent" />
+    </intent>
   </queries>
   <application>
+    <!-- "Change this app" when AnyAppAgent is not on the phone (com.anyapp.updates.ChangeSheet): keep it. -->
+    <activity
+      android:name="com.anyapp.updates.ChangeSheet"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:configChanges="uiMode|orientation|screenSize|keyboardHidden"
+      android:windowSoftInputMode="adjustResize"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     <activity
       android:name="com.anyapp.updates.UpdateActivity"
       android:exported="false"

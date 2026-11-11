@@ -3,7 +3,7 @@ import type { PackageInfo } from "anyapp-native";
 import { appAction as sharedAppAction, Drafts, mergeHelpers, mergeItems, replaceHistory } from "@shared/chat/index";
 import type { Attachment } from "@/chat/attachments";
 import { Client } from "./api";
-import type { App, CareState, ChatItem, TodoItem, WorkerInfo } from "./protocol";
+import type { App, CareState, ChatItem, Suggestion, TodoItem, WorkerInfo } from "./protocol";
 import { defaultPrefs, type Pairing, type Prefs } from "./storage";
 
 export type Connection = "offline" | "connecting" | "online";
@@ -40,6 +40,7 @@ export interface State {
   helperChats: Record<string, ChatItem[]>; // workerId -> that helper's own chat, sorted by seq
   helperChatLoaded: Record<string, boolean>;
   todos: Record<string, TodoItem[]>; // appId -> the person's own to-do list (loaded when opened)
+  suggestions: Record<string, Suggestion[]>; // appId -> "From others" (docs/CHANGE-THIS-APP.md), loaded when opened
   packages: Record<string, PackageInfo | null>; // packageName -> installed info
   installs: Record<string, InstallProgress>; // appId -> install in progress or last result
   needInstallPermission: string | null; // appId waiting for "install unknown apps"
@@ -64,6 +65,7 @@ export const useStore = create<State>(() => ({
   helperChats: {},
   helperChatLoaded: {},
   todos: {},
+  suggestions: {},
   care: null,
   packages: {},
   installs: {},
@@ -135,6 +137,10 @@ export function replaceHelperChat(workerId: string, items: ChatItem[]) {
 
 export function setTodos(appId: string, todos: TodoItem[]) {
   setState((s) => ({ todos: { ...s.todos, [appId]: todos } }));
+}
+
+export function setSuggestions(appId: string, list: Suggestion[]) {
+  setState((s) => ({ suggestions: { ...s.suggestions, [appId]: list } }));
 }
 
 /** What the user typed but did not send yet, per app, kept while they move between apps. */

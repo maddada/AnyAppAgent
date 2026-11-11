@@ -98,7 +98,10 @@ async function ensureOurs() {
     if (isOurs(f)) return;
     console.error(`(someone else's window is in front: ${f}; bringing ${PACKAGE} back)`);
     try {
-      adb("shell", "am", "start", "-n", `${PACKAGE}/.MainActivity`);
+      // The launcher activity as Android resolves it: a copy built under another package keeps
+      // the first copy's class name (com.anyappagent.change2/com.anyappagent.change.MainActivity).
+      const launcher = adb("shell", "cmd", "package", "resolve-activity", "--brief", PACKAGE).toString("utf8").trim().split(/\r?\n/).pop() ?? "";
+      adb("shell", "am", "start", "-n", launcher.includes("/") ? launcher : `${PACKAGE}/.MainActivity`);
     } catch {
       break; // not installed: nothing to bring back
     }

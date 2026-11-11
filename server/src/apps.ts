@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppPreset, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, ChangeSettingsRequest, CloneRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
 import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, type VersionRecord } from "./history.ts";
 import { MEMORY_FILE } from "./playbook.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
@@ -36,6 +36,10 @@ import { addUsage, UsageMeter } from "./usage.ts";
 import { appHealth, HealthReminders, keepHealthyMessage, Templates } from "./health.ts";
 import { Backups } from "./backup.ts";
 import { REPO_DIR } from "./config.ts";
+import { ownerName, setOwnerName, Suggestions } from "./change.ts";
+import { parseSuggestion } from "../../shared/chat/suggestions.ts";
+import { downloadSource, extractZip, findReleaseSource, makeSourceZip, repoFromText, SourceError } from "./release-source.ts";
+import { cloneNote } from "./playbook.ts";
 
 export { HttpError } from "./http-error.ts";
 import { HttpError } from "./http-error.ts";
@@ -177,6 +181,10 @@ export class AppManager {
   private readonly reminders: HealthReminders;
   /** "Never lose your apps" (backup.ts). */
   readonly backups: Backups;
+  /** "Change this app": suggestions from other people, per app (docs/CHANGE-THIS-APP.md). */
+  readonly suggestions: Suggestions;
+  /** Downloads of shared apps' code (Make my own version); tests pass a fake. */
+  private readonly fetchImpl: typeof fetch;
   private careTimer: NodeJS.Timeout | undefined;
   private healthTimer: NodeJS.Timeout | undefined;
   private lastCare = "";
@@ -193,7 +201,9 @@ export class AppManager {
     phonesConnected?: () => number;
     /** Where template/ and template-kotlin/ are (health.ts); default: this repository. */
     repoDir?: string;
+    fetch?: typeof fetch;
   }) {
+    this.fetchImpl = deps.fetch ?? fetch;
     this.phonesConnected = deps.phonesConnected ?? (() => 0);
     this.github = deps.github ?? realGithub;
     this.store = deps.store;
@@ -217,6 +227,7 @@ export class AppManager {
       deliver: (appId, text) => this.sendMessage(appId, text),
     });
     this.todoLists = new TodoLists(this.store.stateDir);
+    this.suggestions = new Suggestions(this.store.stateDir);
     this.history = new History({
       stateDir: this.store.stateDir,
       log: this.log,
@@ -520,12 +531,13 @@ export class AppManager {
   }
 
   /** prompt: the person's words (the overview draft); agentPrompt: what the agent gets (with the PC's plan-first line). */
-  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt, itemId?: string): Promise<void> {
+  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt, itemId?: string, make?: (dir: string) => Promise<void>): Promise<void> {
     const { app, dir } = record;
     try {
       mkdirSync(this.config.appsDir, { recursive: true });
       this.log(`[${app.slug}] creating ${dir} with the ${this.builder.kind} builder`);
-      await this.builder.createApp({ dir, name: app.name, slug: app.slug, packageName: app.packageName, preset: app.preset ?? "react-native", onLog: () => {} });
+      if (make) await make(dir);
+      else await this.builder.createApp({ dir, name: app.name, slug: app.slug, packageName: app.packageName, preset: app.preset ?? "react-native", onLog: () => {} });
       // A first overview.md (what the person asked for), so other apps' agents see it at once; this
       // app's agent rewrites it on its first turn and keeps it up to date.
       if (!existsSync(join(dir, OVERVIEW_FILE))) writeFileSync(join(dir, OVERVIEW_FILE), firstOverview(app.name, prompt));
@@ -823,6 +835,13 @@ export class AppManager {
           apks,
           currentSigner: () => this.currentSigner(record),
           notesBetween: (after, upTo) => this.buildSummaries(record, after, upTo),
+          // Every published version carries its code (docs/CHANGE-THIS-APP.md), from the commit it was built from.
+          sourceZip: async (out) => {
+            if (!existsSync(join(record.dir, ".git"))) return null;
+            const commit = (await this.history.versions(record.app.id, record.dir)).find((v) => v.build === build?.number)?.commit ?? "HEAD";
+            const { hits } = await makeSourceZip(record.dir, commit, out);
+            return { path: out, hits };
+          },
           log: this.log,
         });
         record.app.sharing = { ...record.app.sharing!, releases };
@@ -1099,6 +1118,147 @@ export class AppManager {
     if (item?.permission) {
       this.emitItem(record, { id: item.id, kind: "permission", permission: { ...item.permission, selectedOptionId: optionId } });
     }
+  }
+
+  // ---------- "Change this app" (docs/CHANGE-THIS-APP.md)
+
+  /** Files a shared or pasted suggestion under its app (by the package its last line names). */
+  fileSuggestion(text: string): FileSuggestionResponse {
+    const parsed = parseSuggestion(text);
+    if (!parsed) throw new HttpError(400, "That is not a suggestion for one of your apps. It needs its last line, which starts with anyapp-suggestion.");
+    const record = this.store.apps().find((r) => r.app.packageName === parsed.packageName);
+    if (!record) throw new HttpError(404, `This suggestion is for ${parsed.appName ? `"${parsed.appName}"` : parsed.packageName}, which is not one of the apps on this PC.`);
+    const { suggestion, added } = this.suggestions.add(record.app.id, parsed);
+    if (added) {
+      this.log(`[${record.app.slug}] a suggestion${parsed.from ? ` from ${parsed.from.slice(0, 40)}` : ""} was filed`);
+      this.suggestionsChanged(record);
+    }
+    return { app: record.app, suggestion };
+  }
+
+  suggestionList(id: string): Suggestion[] {
+    return this.suggestions.list(this.record(id).app.id);
+  }
+
+  openSuggestion(id: string, suggestionId: string): Suggestion {
+    const record = this.record(id);
+    const s = this.suggestions.open(record.app.id, suggestionId);
+    if (!s) throw new HttpError(404, "That suggestion is not here any more.");
+    this.suggestionsChanged(record);
+    return s;
+  }
+
+  removeSuggestion(id: string, suggestionId: string): void {
+    const record = this.record(id);
+    if (this.suggestions.remove(record.app.id, suggestionId)) this.suggestionsChanged(record);
+  }
+
+  private suggestionsChanged(record: AppRecord): void {
+    const waiting = this.suggestions.waiting(record.app.id);
+    if (waiting > 0) record.app.fromOthers = waiting;
+    else delete record.app.fromOthers;
+    this.broadcast({ type: "suggestions.updated", appId: record.app.id, suggestions: this.suggestions.list(record.app.id) });
+    this.touch(record);
+  }
+
+  /** "Show Change this app to others" and the owner's name. Both reach phones with the next version. */
+  setChange(id: string, req: Partial<ChangeSettingsRequest>): App {
+    const record = this.record(id);
+    if (typeof req.showToOthers === "boolean") record.app.change = { ...record.app.change, showToOthers: req.showToOthers };
+    if (typeof req.ownerName === "string") setOwnerName(this.store.stateDir, req.ownerName);
+    this.touch(record);
+    return record.app;
+  }
+
+  /** The name the apps show for their owner (this PC's person). */
+  ownerName(): string {
+    return ownerName(this.store.stateDir);
+  }
+
+  /**
+   * "Make my own version" of someone's shared app: its published code becomes a separate app here
+   * (new name, package, signing key and repo), then it is built like a new app.
+   */
+  async cloneFrom(req: CloneRequest): Promise<App> {
+    const adopt = this.builder.adoptApp;
+    if (!adopt) throw new HttpError(409, "This PC cannot make own versions of apps.");
+    const repo = typeof req.repo === "string" ? repoFromText(req.repo) : null;
+    if (!repo) throw new HttpError(400, "That is not the releases page of an app made with AnyAppAgent.");
+    const cleanName = String(req.name ?? "").trim().replace(/\s+/g, " ");
+    if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give your version a name of up to 50 characters.");
+    const firstChange = typeof req.firstChange === "string" ? req.firstChange.trim().slice(0, 4000) : "";
+    let source;
+    let zip: Buffer;
+    try {
+      source = await findReleaseSource(repo, typeof req.build === "number" && req.build > 0 ? req.build : undefined, this.fetchImpl);
+      zip = await downloadSource(source, this.fetchImpl);
+    } catch (error) {
+      if (error instanceof SourceError) throw new HttpError(error.status, error.message);
+      throw error;
+    }
+    const originalName = (typeof req.originalName === "string" && req.originalName.trim().slice(0, 80)) || source.packageName || repo;
+    const owner = typeof req.owner === "string" && req.owner.trim() ? req.owner.trim().slice(0, 60) : repo.split("/")[0]!;
+    if (source.packageName && this.store.apps().some((r) => r.app.packageName === source.packageName)) {
+      throw new HttpError(409, `${originalName} is already one of your apps on this PC: change it in its own chat.`);
+    }
+    const said = firstChange || `Make my own version of ${originalName}.`;
+    const app = this.newRecordApp(cleanName, said);
+    const origin = {
+      name: originalName,
+      packageName: source.packageName ?? "",
+      owner,
+      repo,
+      version: source.version,
+      ...(source.build ? { build: source.build } : {}),
+    };
+    app.madeFrom = origin;
+    const record: ReadyRecord = { app, dir: join(this.config.appsDir, app.slug) };
+    this.store.add(record);
+    this.runtime(app.id).held = true;
+    this.broadcast({ type: "app.updated", app });
+    const itemId = randomUUID();
+    this.emitItem(record, { id: itemId, kind: "user", text: said });
+    const agentPrompt = `${cloneNote(origin, cleanName)}\n\n${firstChange || "Build it as it is for now: change only what makes it this person's own app (its name where the app shows it)."}`;
+    const scratch = join(this.store.stateDir, "scratch", `clone-${app.id}`);
+    this.log(`[${app.slug}] making an own version of ${repo} ${source.tag}`);
+    this.finishCreate(record, said, agentPrompt, itemId, async (dir) => {
+      rmSync(scratch, { recursive: true, force: true });
+      mkdirSync(scratch, { recursive: true });
+      try {
+        extractZip(zip, scratch);
+        const made = await adopt({ src: scratch, dir, name: cleanName, slug: app.slug, packageName: app.packageName, onLog: () => {} });
+        app.preset = made.preset;
+        const overview = join(dir, OVERVIEW_FILE);
+        const before = existsSync(overview) ? readFileSync(overview, "utf8") : "";
+        writeFileSync(overview, `<!-- ${cleanName}: an own version of ${owner}'s ${originalName} ${source.version}, made from its published code. A separate app. -->\n${before}`);
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    }).catch((error: unknown) => {
+      if (!record.deleted) this.log(`[${app.slug}] own version stopped:`, (error as Error).message);
+    });
+    return app;
+  }
+
+  /** A new app's record: unique slug and package id, "creating". */
+  private newRecordApp(cleanName: string, preview: string): App {
+    const base = slugify(cleanName);
+    const taken = (slug: string) => this.store.allRecords().some((r) => r.app.slug === slug) || existsSync(join(this.config.appsDir, slug));
+    let slug = base;
+    for (let n = 2; taken(slug); n++) slug = `${base}${n}`;
+    const now = nowIso();
+    return {
+      id: randomUUID(),
+      name: cleanName,
+      slug,
+      packageName: `com.anyapp.${slug}`,
+      preset: "react-native",
+      status: "creating",
+      iconVersion: 1,
+      lastMessagePreview: shorten(preview, 140),
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
   async delete(id: string): Promise<void> {
@@ -1469,7 +1629,9 @@ ${overviewNudge()}` : note;
     try {
       // A shared app's builds carry its update feeds, so its own updater can find new versions.
       const feeds = app.sharing ? { updateFeed: app.sharing.feedUrl, updateTestingFeed: testingFeedUrl(app.sharing.releasesRepoUrl) } : {};
-      const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog, ...feeds });
+      // "Change this app": the owner's name for the app's explanation sheet, and who sees the row.
+      const change = { changeOwner: ownerName(this.store.stateDir), ...(app.change?.showToOthers === false ? { changeOthers: false } : {}) };
+      const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog, ...feeds, ...change });
       const apkDir = this.store.apkDir(app.id);
       mkdirSync(apkDir, { recursive: true });
       const target = join(apkDir, apkFileName(number));

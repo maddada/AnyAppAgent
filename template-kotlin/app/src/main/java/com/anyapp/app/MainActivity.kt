@@ -12,6 +12,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.anyapp.app.ui.HomeScreen
+import com.anyapp.app.ui.SettingsScreen
 import com.anyapp.app.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -25,7 +26,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** The app's screens: add one entry per screen, and a branch for it in [App]. */
-enum class Route { Home }
+enum class Route { Home, Settings }
 
 /** A tiny back stack. `nav.go(Route.Settings)` opens a screen, `nav.back()` (or the back gesture) closes it. */
 class Nav(start: List<Route>) {
@@ -46,6 +47,8 @@ fun App() {
   val nav = rememberSaveable(saver = Nav.saver) { Nav(listOf(Route.Home)) }
   BackHandler(enabled = nav.canGoBack) { nav.back() }
   when (nav.current) {
-    Route.Home -> HomeScreen()
+    Route.Home -> HomeScreen(onOpenSettings = { nav.go(Route.Settings) })
+    // Every app keeps a Settings screen with the "This app" group (Change this app): see AGENTS.md.
+    Route.Settings -> SettingsScreen()
   }
 }

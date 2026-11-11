@@ -160,6 +160,11 @@ class AnyAppNativeModule : Module() {
 
     /** The ABIs this phone runs, best first (Build.SUPPORTED_ABIS), to pick the smallest APK. */
     // AnyAppAgent first (docs/DISTRIBUTION.md stage 5): apps followed from a share link.
+    // "Change this app" (docs/CHANGE-THIS-APP.md): the person's own apps, so their row always shows.
+    Function("setOwnApps") { packageNames: List<String> ->
+      UpdatesProvider.setOwn(context, packageNames)
+    }
+
     Function("setFollowedApps") { packageNames: List<String> ->
       UpdatesProvider.setFollowed(context, packageNames)
     }

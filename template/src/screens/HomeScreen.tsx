@@ -1,5 +1,6 @@
+import { useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Screen } from '@/components/Screen';
 import { radius, spacing, type, useColors } from '@/theme';
@@ -16,6 +17,7 @@ const steps = [
 /** The starter screen. Replace it with the app's real first screen. */
 export function HomeScreen() {
   const colors = useColors();
+  const navigation = useNavigation();
   return (
     <Screen style={styles.page}>
       <Image source={require('../../assets/icon.png')} style={[styles.icon, { borderColor: colors.border }]} />
@@ -40,6 +42,9 @@ export function HomeScreen() {
       </View>
 
       <View style={styles.spacer} />
+      <Pressable accessibilityRole="button" testID="open-settings" onPress={() => navigation.navigate('Settings')} style={styles.settings}>
+        <Text style={[type.bodyStrong, { color: colors.accent }]}>Settings</Text>
+      </Pressable>
       <Text style={[type.small, type.numeric, { color: colors.textFaint }]}>Version {version}</Text>
     </Screen>
   );
@@ -62,4 +67,5 @@ const styles = StyleSheet.create({
   number: { width: 20 },
   rowText: { flex: 1, gap: 2 },
   spacer: { flex: 1, minHeight: spacing.xxl },
+  settings: { paddingVertical: spacing.md, marginBottom: spacing.sm, alignSelf: 'flex-start' },
 });

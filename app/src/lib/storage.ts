@@ -26,6 +26,8 @@ export interface Prefs {
   unfinishedInstalls: Record<string, { build: number; retried: boolean }>;
   /** The name this phone pairs under, chosen once and reused (the PC recognises it by name). */
   deviceName?: string;
+  /** The person's own name for suggestions they send and own versions they make (docs/CHANGE-THIS-APP.md). */
+  yourName?: string;
   /**
    * Disconnects the PC has not heard about yet (same network, the PC was off or the network
    * dropped the request): sent again in the background until the PC answers.

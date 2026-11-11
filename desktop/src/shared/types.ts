@@ -1,6 +1,6 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, AppVersion, BackupRestoreResult, BackupState, CareState, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, AppVersion, BackupRestoreResult, BackupState, CareState, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, Suggestion, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
 export type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, PageInfo, TodoItem, WorkerInfo };
 
@@ -264,6 +264,16 @@ export interface AnyAppBridge {
   pullBack(appId: string, build: number): Promise<ActionResult & { app?: App }>;
   /** Downloads per published version, from GitHub. */
   releaseStats(appId: string): Promise<ActionResult & { stats: ReleaseStats[] }>;
+  // "Change this app" (docs/CHANGE-THIS-APP.md)
+  /** The app's "From others" inbox, newest first. */
+  getSuggestions(appId: string): Promise<ActionResult & { suggestions: Suggestion[] }>;
+  /** Files a pasted suggestion message under its app; appId says which. */
+  fileSuggestion(text: string): Promise<ActionResult & { appId?: string }>;
+  openSuggestion(appId: string, suggestionId: string): Promise<ActionResult>;
+  removeSuggestion(appId: string, suggestionId: string): Promise<ActionResult>;
+  /** "Show Change this app to others", and the name every app shows for its owner. */
+  setChange(appId: string, body: { showToOthers?: boolean; ownerName?: string }): Promise<ActionResult & { app?: App }>;
+  getOwnerName(): Promise<string>;
   /** A QR code (SVG) for a link. */
   qr(text: string): Promise<string>;
   answerPermission(appId: string, requestId: string, optionId: string): Promise<ActionResult>;

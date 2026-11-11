@@ -16,7 +16,7 @@ import { nowIso, readJson, writeJsonAtomic } from "./fs-util.ts";
 
 /** The template's own parts every app keeps as they are (template/AGENTS.md), in plain words. */
 export const BUILT_IN_PARTS: { dir: string; words: string }[] = [
-  { dir: "updates", words: "updates inside the app" },
+  { dir: "updates", words: "updates and Change this app inside the app" },
   { dir: "feedback", words: "shake to give feedback" },
   { dir: "ai", words: "AI for your apps" },
 ];
@@ -157,7 +157,7 @@ export function keepHealthyMessage(health: AppHealth, preset: AppPreset | undefi
   const templateDir = kotlin ? templates.kotlinDir : templates.reactNativeDir;
   const how = kotlin
     ? `Move it to the Android versions in its app/build.gradle.kts and gradle/libs.versions.toml.`
-    : `Copy the missing or older built-in parts from its modules folder exactly as they are, wire them in the way its AGENTS.md says, and move to the Expo SDK and the dependency versions in its package.json (npx expo install --fix after changing expo).`;
+    : `Copy the missing or older built-in parts from its modules folder exactly as they are, wire them in the way its AGENTS.md says (also the Change this app row: src/components/ChangeThisApp.tsx, kept last in the app's Settings, with a way to reach Settings), and move to the Expo SDK and the dependency versions in its package.json (npx expo install --fix after changing expo).`;
   return [
     "Keep this app healthy: bring it up to date with the newest AnyAppAgent template. Keep everything it does, its look and its saved data exactly as they are.",
     "",

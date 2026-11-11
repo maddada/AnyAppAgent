@@ -94,3 +94,18 @@ export function getIconPath(args: { dir: string }): string | null {
   const path = join(args.dir, "assets", "icon.png");
   return existsSync(path) ? path : null;
 }
+
+/** "Make my own version": copies the source and renames it (React Native shape only). */
+export async function adoptApp(args: { src: string; dir: string; name: string; slug: string; packageName: string }): Promise<{ preset: "react-native" }> {
+  const { cpSync, readdirSync } = await import("node:fs");
+  if (existsSync(args.dir) && readdirSync(args.dir).length > 0) throw new Error(`${args.dir} already exists and is not empty`);
+  const appJson = join(args.src, "app.json");
+  if (!existsSync(appJson)) throw new Error("This is not an app made with AnyAppAgent (no app.json or anyapp.json).");
+  cpSync(args.src, args.dir, { recursive: true });
+  const meta = JSON.parse(readFileSync(join(args.dir, "app.json"), "utf8")) as { expo: { name: string; slug: string; android?: { package?: string } } };
+  meta.expo.name = args.name;
+  meta.expo.slug = args.slug;
+  meta.expo.android = { ...meta.expo.android, package: args.packageName };
+  writeFileSync(join(args.dir, "app.json"), JSON.stringify(meta, null, 2));
+  return { preset: "react-native" };
+}

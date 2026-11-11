@@ -40,6 +40,8 @@ export default function RootLayout() {
             <Stack.Screen name="todo/[id]" />
             <Stack.Screen name="versions/[id]" />
             <Stack.Screen name="share/[id]" />
+            <Stack.Screen name="change" options={{ animation: "slide_from_bottom" }} />
+            <Stack.Screen name="suggestions/[id]" />
             <Stack.Screen name="settings" />
             <Stack.Screen name="pair" options={{ animation: "none" }} />
           </Stack>

@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindow
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, Download, ListTodo, MessageCircle, Plus, Settings, Share2, Smartphone } from "lucide-react-native";
+import { ChevronDown, Download, Inbox, ListTodo, MessageCircle, Plus, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, tileState } from "@/lib/describe";
 import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/chat/index";
@@ -362,6 +362,13 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
     onClose();
     router.push(`/share/${shown.id}`);
   };
+  // "From others" (docs/CHANGE-THIS-APP.md): suggestions people sent about this app.
+  const doOthers = () => {
+    if (!shown) return;
+    onClose();
+    router.push(`/suggestions/${shown.id}`);
+  };
+  const othersLabel = shown?.fromOthers ? `From others (${shown.fromOthers})` : "From others";
 
   return (
     <Sheet visible={!!selection && !!app} onClose={onClose}>
@@ -435,6 +442,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                 <Button testID="app-change" label="Change it" icon={MessageCircle} onPress={doChange} />
               )}
               <Button testID="app-todo" label={todoLabel} icon={ListTodo} variant="quiet" onPress={doTodo} />
+              <Button testID="app-others" label={othersLabel} icon={Inbox} variant="quiet" onPress={doOthers} />
               {shown.latestApk ? <Button testID="app-share" label={shown.sharing?.shared ? "Shared" : "Share"} icon={Share2} variant="quiet" onPress={doShare} /> : null}
               {pkg && action === "update" ? (
                 <T variant="caption" color="textSecondary" style={{ textAlign: "center", marginTop: space.xs }}>

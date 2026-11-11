@@ -19,6 +19,8 @@ const loading = new Map<string, Promise<void>>();
 let wired = false;
 
 export const drafts = new Drafts<Attachment>();
+/** Fires "set" (detail: appId) when a draft is set from outside the composer (Open in chat). */
+export const draftSet = new EventTarget();
 
 function set(appId: string, entry: Entry) {
   entries.set(appId, entry);

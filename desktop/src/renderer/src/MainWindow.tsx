@@ -12,6 +12,7 @@ import { HexCard } from "./Hex.tsx";
 import type { StepId } from "./Onboarding.tsx";
 import { PairingDialog } from "./Pairing.tsx";
 import { ShareButton, ShareDialog } from "./Share.tsx";
+import { FromOthersButton, FromOthersDialog } from "./FromOthers.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
 import { AppIcon, Dialog, Icon, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
 import { BackupGroup, HealthBadge, ReminderCard, UsageGroup } from "./Trust.tsx";
@@ -195,6 +196,7 @@ function AppsPage({
   // A helper's chat is open beside the main chat: in a narrow window the app list folds to icons.
   const [helperOpen, setHelperOpen] = useState(false);
   const [sharing, setSharing] = useState<string | null>(null);
+  const [others, setOthers] = useState<string | null>(null);
   return (
     <div className={`apps-split${helperOpen ? " helper-open" : ""}`}>
       <section className="apps-pane" aria-label="Your apps">
@@ -257,13 +259,28 @@ function AppsPage({
             onHelperOpen={setHelperOpen}
             hex={s.checks.hex}
             onSetupHex={goSettings}
-            headerExtra={<ShareButton app={app} online={online} onOpen={() => setSharing(app.id)} />}
+            headerExtra={
+              <>
+                <FromOthersButton app={app} online={online} onOpen={() => setOthers(app.id)} />
+                <ShareButton app={app} online={online} onOpen={() => setSharing(app.id)} />
+              </>
+            }
             care={s.care}
           />
         ) : (
           <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />
         )}
         {app && sharing === app.id && <ShareDialog app={app} onClose={() => setSharing(null)} />}
+        {app && others === app.id && (
+          <FromOthersDialog
+            app={app}
+            onClose={() => setOthers(null)}
+            onOpenApp={(id) => {
+              onOpen(id);
+              setOthers(id);
+            }}
+          />
+        )}
       </section>
     </div>
   );

@@ -83,6 +83,8 @@ try {
       buildNumber: Number(flags['build-number']),
       ...(flags['update-feed'] ? { updateFeed: flags['update-feed'] } : {}),
       ...(flags['update-testing-feed'] ? { updateTestingFeed: flags['update-testing-feed'] } : {}),
+      ...(flags['change-owner'] ? { changeOwner: flags['change-owner'] } : {}),
+      ...(flags['change-others'] === 'off' ? { changeOthers: false } : {}),
       onLog: flags.quiet ? undefined : log,
     });
     console.log(JSON.stringify(result, null, 2));

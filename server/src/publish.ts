@@ -1,13 +1,14 @@
 // Publishing a version of a shared app as a GitHub release, and pulling one back
 // (docs/DISTRIBUTION.md, "The release format"). The APKs published are the ones the PC already
 // built and the owner already ran: nothing is built again here.
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { App, BuildInfo, PublishedRelease, PublishRequest } from "../../shared/protocol.ts";
 import { HttpError } from "./http-error.ts";
 import { scanApk } from "./apk-scan.ts";
-import { describeSecrets, findSecrets } from "./secrets.ts";
+import { describeSecrets, findSecrets, type SecretHit } from "./secrets.ts";
+import { SOURCE_ZIP_SUFFIX, sha256File } from "./release-source.ts";
 import { releasesReadme } from "./sharing.ts";
 
 export const TESTING_TAG = "testing";
@@ -36,6 +37,12 @@ export interface PublishDeps {
   currentSigner(): Promise<string | null>;
   /** Default notes: what changed in the builds after `afterBuild` up to `build`. */
   notesBetween(afterBuild: number, build: number): Promise<string>;
+  /**
+   * "Change this app" (docs/CHANGE-THIS-APP.md): the code of this version as <slug>-source.zip
+   * (written into `dir`), so others can make their own version. Null: no code goes with it.
+   * Secrets found in it refuse the publish.
+   */
+  sourceZip?(dir: string): Promise<{ path: string; hits: SecretHit[] } | null>;
   log(...parts: unknown[]): void;
 }
 
@@ -57,6 +64,8 @@ export interface UpdateJson {
   apks: { abi: string; name: string; size: number; sha256: string }[];
   signer: string;
   blocked: number[];
+  // Added with "Change this app": the version's code on the same release (absent before).
+  source?: { name: string; size: number; sha256: string };
 }
 
 export function repoOf(app: App): string {
@@ -97,6 +106,18 @@ export async function publishVersion(app: App, build: BuildInfo | undefined, req
   const notes = (req.notes?.trim() || (await deps.notesBetween(lastPublished, build.number)) || "Small improvements.").slice(0, 4000);
   hits.push(...findSecrets(notes, "the release notes"));
   if (hits.length) throw new HttpError(400, describeSecrets(hits, "published"));
+  const dir = mkdtempSync(join(tmpdir(), "anyapp-publish-"));
+  let source: { path: string; hits: SecretHit[] } | null = null;
+  try {
+    source = deps.sourceZip ? await deps.sourceZip(join(dir, `${app.slug}${SOURCE_ZIP_SUFFIX}`)) : null;
+  } catch (error) {
+    rmSync(dir, { recursive: true, force: true });
+    throw new HttpError(500, `The version's code could not be packed: ${(error as Error).message.split(/\r?\n/)[0].slice(0, 200)}`);
+  }
+  if (source && source.hits.length) {
+    rmSync(dir, { recursive: true, force: true });
+    throw new HttpError(400, `${describeSecrets(source.hits, "published")} Every published version carries its code, so others can make their own version.`);
+  }
 
   const full = repoOf(app);
   const version = nextVersion(releases, channel, build.number);
@@ -113,11 +134,12 @@ export async function publishVersion(app: App, build: BuildInfo | undefined, req
     apks: deps.apks.map((a) => ({ abi: a.abi, name: assetName(app.slug, a.abi), size: a.size, sha256: a.sha256 })),
     signer: signer ?? build.signerSha256 ?? "",
     blocked: releases.filter((r) => r.pulledBack).map((r) => r.build),
+    ...(source ? { source: { name: `${app.slug}${SOURCE_ZIP_SUFFIX}`, size: statSync(source.path).size, sha256: sha256File(source.path) } } : {}),
   };
 
-  const dir = mkdtempSync(join(tmpdir(), "anyapp-publish-"));
   try {
     const files: string[] = [];
+    if (source) files.push(source.path);
     for (const a of deps.apks) {
       const target = join(dir, assetName(app.slug, a.abi));
       copyFileSync(a.path, target);
@@ -146,7 +168,7 @@ export async function publishVersion(app: App, build: BuildInfo | undefined, req
     rmSync(dir, { recursive: true, force: true });
   }
   deps.log(`[${app.slug}] published ${version} (build ${build.number}, ${channel}) to ${full}`);
-  const release: PublishedRelease = { version, build: build.number, channel, tag, url: `https://github.com/${full}/releases/tag/${tag}`, notes, publishedAt };
+  const release: PublishedRelease = { version, build: build.number, channel, tag, url: `https://github.com/${full}/releases/tag/${tag}`, notes, publishedAt, ...(source ? { source: true } : {}) };
   return [release, ...releases.filter((r) => !(r.channel === "testing" && channel === "testing"))];
 }
 

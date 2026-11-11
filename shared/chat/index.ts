@@ -14,3 +14,4 @@ export * from "./helpers.ts";
 export * from "./pages.ts";
 export * from "./trust.ts";
 export * from "./history.ts";
+export * from "./suggestions.ts";

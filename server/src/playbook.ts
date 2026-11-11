@@ -100,7 +100,23 @@ another kind (React Native, Kotlin, Expo Exact) can still give you its logic, te
 - \`anyapp path <app>\`: its folder, so you can read its code.
 ${use}
 Other apps are read only: read and copy from their folders, never change, build, commit or run
-anything in them.`;
+anything in them.
+- \`anyapp copy <app>\`: when the person asks to take something from another app ("copy the
+  Qibla screen from Ahmad's Prayer Times"), this fetches that app's code into a fresh scratch folder
+  and prints it: one of their own apps (its committed code), or someone's shared app by its releases
+  page (\`anyapp copy owner/anyapp-<slug>-releases\`, or its GitHub link; the latest published
+  version, \`--build <n>\` for another). The copy is read only: take what was asked for into this
+  app, adapted to its names and look. Nothing flows between apps by itself, so copy only on request.`;
+}
+
+/** The first message of an own version made from someone's shared app ("Make my own version"). */
+export function cloneNote(origin: { name: string; owner?: string; version?: string; repo?: string }, newName: string): string {
+  return `(From the PC, not from the person: this app, "${newName}", is the person's own version of
+${origin.owner ? `${origin.owner}'s ` : ""}"${origin.name}"${origin.version ? ` ${origin.version}` : ""}, made from its published code${origin.repo ? ` (${origin.repo})` : ""}.
+It is a separate app now: its own name, package, signing key and repository. Nothing comes from the
+original by itself; if the person later wants something from a newer version of it, use
+\`anyapp copy ${origin.repo ?? "<releases repo>"}\`. Where the app shows its own name, show "${newName}".
+Keep the "Change this app" row in its settings. Write ${OVERVIEW_FILE} for this version in this turn.)`;
 }
 
 /** Added to the person's message (they do not see it) while the app has no overview.md of the agent's own. */

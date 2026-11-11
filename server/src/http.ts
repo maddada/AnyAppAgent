@@ -6,6 +6,10 @@ import { hostname } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
 import type {
   AddTodoRequest,
+  ChangeSettingsRequest,
+  CloneRequest,
+  FileSuggestionRequest,
+  OwnerInfo,
   AdminEvent,
   AdminState,
   BackupRestoreRequest,
@@ -355,6 +359,32 @@ export function startHttpServer(deps: {
       }
       return sendError(res, 405, "Method not allowed.");
     }
+    // "Change this app" (docs/CHANGE-THIS-APP.md): suggestions, the owner's name, own versions.
+    if (path === "/api/suggestions") {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      const body = await readBody<FileSuggestionRequest>(req, 64 * 1024);
+      return sendJson(res, 201, apps.fileSuggestion(str(body.text, "text")));
+    }
+    if (path === "/api/owner") {
+      if (method === "GET") return sendJson(res, 200, { name: apps.ownerName() } satisfies OwnerInfo);
+      return sendError(res, 405, "Method not allowed.");
+    }
+    if (path === "/api/clones") {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      return sendJson(res, 201, await apps.cloneFrom(await readBody<CloneRequest>(req, 64 * 1024)));
+    }
+    const suggestion = /^\/api\/apps\/([^/]+)\/suggestions(?:\/([0-9a-f-]{36})(\/open)?)?$/.exec(path);
+    if (suggestion) {
+      const appId = decodeURIComponent(suggestion[1]!);
+      if (!suggestion[2] && method === "GET") return sendJson(res, 200, apps.suggestionList(appId));
+      if (suggestion[2] && suggestion[3] && method === "POST") return sendJson(res, 200, apps.openSuggestion(appId, suggestion[2]));
+      if (suggestion[2] && !suggestion[3] && method === "DELETE") {
+        apps.removeSuggestion(appId, suggestion[2]);
+        res.writeHead(204);
+        return void res.end();
+      }
+      return sendError(res, 405, "Method not allowed.");
+    }
     // A picture sent in the chat: GET /api/apps/:id/images/:imageId
     const image = /^\/api\/apps\/([^/]+)\/images\/([a-zA-Z0-9-]+)$/.exec(path);
     if (image && (method === "GET" || method === "HEAD")) {
@@ -495,6 +525,11 @@ export function startHttpServer(deps: {
       const body = await readBody<Partial<ShareRequest>>(req);
       if (typeof body.shared !== "boolean") throw new HttpError(400, '"shared" must be true or false.');
       return sendJson(res, 200, await apps.setShared(id, body.shared));
+    } else if (method === "POST" && action === "change") {
+      const body = await readBody<ChangeSettingsRequest>(req);
+      if (body.showToOthers !== undefined && typeof body.showToOthers !== "boolean") throw new HttpError(400, '"showToOthers" must be true or false.');
+      if (body.ownerName !== undefined && typeof body.ownerName !== "string") throw new HttpError(400, '"ownerName" must be text.');
+      return sendJson(res, 200, apps.setChange(id, body));
     } else if (method === "POST" && action === "publish") {
       const body = await readBody<Partial<PublishRequest>>(req);
       if (body.notes !== undefined && typeof body.notes !== "string") throw new HttpError(400, '"notes" must be text.');

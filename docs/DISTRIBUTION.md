@@ -142,6 +142,9 @@ So sharing makes a second repo:
   `README.md` (what the app does, a screenshot, an Install link to the latest APK) and the
   releases. No code and no history from the private repo. (An APK can be unpacked, so this keeps
   the source private, not how the app works.)
+  **Changed by "Change this app" (2026-11-12, Q241):** every version published since then also
+  carries that version's code as `<slug>-source.zip` (no history, without the app's notes about the
+  owner, `.env` files or keys), so others can make their own version: `docs/CHANGE-THIS-APP.md`.
 - Before anything goes public, the files that go there are scanned for secrets (keys, tokens,
   `.env` content). A hit blocks the switch and names the file.
 - The private repo stays private. "Make code public" is a separate, rarer switch (with a scan of

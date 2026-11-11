@@ -25,8 +25,10 @@ export interface BuildResult {
 export interface Builder {
   kind: "real" | "fake";
   createApp(args: { dir: string; name: string; slug: string; packageName: string; preset?: AppPreset; onLog?: (line: string) => void }): Promise<void>;
-  buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void; updateFeed?: string; updateTestingFeed?: string; fast?: boolean }): Promise<BuildResult>;
+  buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void; updateFeed?: string; updateTestingFeed?: string; changeOwner?: string; changeOthers?: boolean; fast?: boolean }): Promise<BuildResult>;
   getIconPath(args: { dir: string }): string | null;
+  /** "Make my own version" (docs/CHANGE-THIS-APP.md): a separate app from another app's code. */
+  adoptApp?(args: { src: string; dir: string; name: string; slug: string; packageName: string; onLog?: (line: string) => void }): Promise<{ preset: AppPreset }>;
   // Signing keys (docs/DISTRIBUTION.md): only the real builder has them.
   keys?: {
     list(): Promise<{ keys: { id: string; kind: "shared" | "own" | "moved"; certSha256: string }[]; lastBackupAt: string | null; notBackedUp: string[] }>;
@@ -73,6 +75,7 @@ export async function loadBuilder(choice: "auto" | "real" | "fake"): Promise<Bui
     createApp: (args) => mod.createApp(args),
     buildApk: (args) => mod.buildApk(args),
     getIconPath: (args) => mod.getIconPath(args),
+    ...(typeof mod.adoptApp === "function" ? { adoptApp: (args: Parameters<NonNullable<Builder["adoptApp"]>>[0]) => mod.adoptApp!(args) } : {}),
     ...(mod.listSigningKeys && mod.backupSigningKeys && mod.restoreSigningKeys && mod.appSigningKind && mod.moveAppToOwnKey
       ? {
           keys: {

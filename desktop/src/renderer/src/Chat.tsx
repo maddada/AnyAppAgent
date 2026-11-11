@@ -12,7 +12,7 @@ import { DICTATE_HOTKEY, HOLD_MS, insertAt, isDictateHotkey, useDictation } from
 import {
   answerLines, buildCard, crashCard, DIARY_PRIVACY, diaryLine, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
 } from "../../../../shared/chat/index.ts";
-import { drafts, useChat } from "./chatStore.ts";
+import { drafts, draftSet, useChat } from "./chatStore.ts";
 import { useHelperChat, useHelpers } from "./helperStore.ts";
 import { Markdown } from "./Markdown.tsx";
 import { imageFiles, prepare, sentPicture, type Attachment } from "./pictures.ts";
@@ -248,6 +248,16 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
+  // "Open in chat" on a suggestion from others (FromOthers.tsx) fills this composer.
+  useEffect(() => {
+    const onSet = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== app.id) return;
+      setTextState(drafts.get(app.id));
+      requestAnimationFrame(() => box.current?.focus());
+    };
+    draftSet.addEventListener("set", onSet);
+    return () => draftSet.removeEventListener("set", onSet);
+  }, [app.id]);
   const state = composerState(app, text, { sending, stopping, online, images: attached.length });
   // A stop lasts until the main chat's turn really ends (with helpers the app can stay "working"
   // while only helpers work: they keep going, and the main chat's Stop is done).

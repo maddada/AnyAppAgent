@@ -17,9 +17,9 @@ import { CommandError, killTree, npmCommand, run } from './lib/exec.mjs';
 import { checkSigning, signWithLineage } from './lib/apksign.mjs';
 import { ensureAppKey, signingFor } from './lib/keystore.mjs';
 import { renameWithRetry, tryLock } from './lib/lock.mjs';
-import { fillKotlinPlaceholders, KOTLIN_ICON, syncKotlinIcon } from './lib/kotlin.mjs';
+import { fillKotlinPlaceholders, KOTLIN_ICON, syncKotlinIcon, xmlString } from './lib/kotlin.mjs';
 import { createExactApp, ensureExact, exactDirFor, exactEnv, extractExactError, runExactAndroidBuild } from './lib/exact.mjs';
-import { checkPreset, presetOf, readAppMeta, readKotlinMeta } from './lib/presets.mjs';
+import { checkPreset, KOTLIN_META, presetOf, readAppMeta, readKotlinMeta, skipFor } from './lib/presets.mjs';
 import { claimSpare, refillSparesInBackground } from './lib/spare.mjs';
 import { DEPS_STAMP, depsHash, makeAppTree, templateHash } from './lib/template.mjs';
 import { GRADLE_JS_RES, assetsHash, exportBundle, fastLaneOn, makeOtaPackage, nativeFingerprint, readLast, swapBundle, writeLast } from './lib/fastlane.mjs';
@@ -81,6 +81,71 @@ export async function createApp({ dir, name, slug, packageName, preset, onLog = 
   refillSparesInBackground(dir, preset);
 }
 
+/** The Gradle properties of "Change this app"; only what differs from the template's defaults. */
+export function changeValues({ changeOwner, changeOthers } = {}) {
+  const out = {};
+  // Plain letters, digits, spaces, dots and dashes: the value lands in a string resource.
+  const owner = String(changeOwner ?? '').normalize('NFC').replace(/[^\p{L}\p{N} .-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (owner) out.ORG_GRADLE_PROJECT_anyappChangeOwner = owner;
+  if (changeOthers === false) out.ORG_GRADLE_PROJECT_anyappChangeOthers = '0';
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// adoptApp: "Make my own version" (docs/CHANGE-THIS-APP.md)
+
+/**
+ * Makes a separate app from another app's code (a shared app's published source): copies `src`
+ * into `dir` without build output, gives it its own name, slug and package id, and its own signing
+ * key. Nothing links the two apps afterwards. React Native and Kotlin apps; Expo Exact apps cannot
+ * be copied yet (their app is made by `exact new`, which this does not redo).
+ */
+export async function adoptApp({ src, dir, name, slug, packageName, onLog = noop }) {
+  if (!src || !path.isAbsolute(src) || !dir || !path.isAbsolute(dir)) throw new Error('adoptApp: src and dir must be absolute paths');
+  if (!name || !String(name).trim()) throw new Error('adoptApp: name is required');
+  if (!SLUG_RE.test(slug ?? '')) throw new Error(`adoptApp: slug "${slug}" must be lowercase letters, digits and dashes`);
+  if (!PACKAGE_RE.test(packageName ?? '')) throw new Error(`adoptApp: packageName "${packageName}" is not a valid Android package id`);
+  src = path.resolve(src);
+  dir = path.resolve(dir);
+  const preset = presetOf(src);
+  if (!preset) throw new Error('This is not an app made with AnyAppAgent (no app.json or anyapp.json).');
+  if (preset === 'expo-exact') throw new Error('Expo Exact apps cannot be copied into an own version yet.');
+  if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) throw new Error(`adoptApp: ${dir} already exists and is not empty`);
+  await ensureAppKey(androidEnv().javaHome, packageName, onLog);
+  const skip = skipFor(preset);
+  const tmp = `${dir}.tmp-${process.pid}`;
+  await fsp.rm(tmp, { recursive: true, force: true });
+  await fsp.cp(src, tmp, {
+    recursive: true,
+    filter: (from) => {
+      const rel = path.relative(src, from);
+      if (rel === '') return true;
+      if (skip.has(rel)) return false;
+      // Never carry signing keys or secrets files into the new app, whatever the source held.
+      return !/(^|[\\/])(\.env(\..*)?|.*\.(p12|jks|keystore))$/i.test(rel);
+    },
+  });
+  const fields = { name: String(name).trim(), slug, packageName };
+  if (preset === 'kotlin') await renameKotlinApp(tmp, fields);
+  else await fillPlaceholders(tmp, fields);
+  if (fs.existsSync(dir)) await fsp.rmdir(dir);
+  await renameWithRetry(tmp, dir);
+  onLog(`Made ${dir} (${preset}) from ${src} as ${packageName}.`);
+  return { preset };
+}
+
+async function renameKotlinApp(dir, { name, slug, packageName }) {
+  const metaPath = path.join(dir, KOTLIN_META);
+  const meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'));
+  meta.slug = slug;
+  meta.package = packageName;
+  await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');
+  const stringsPath = path.join(dir, 'app', 'src', 'main', 'res', 'values', 'strings.xml');
+  const xml = await fsp.readFile(stringsPath, 'utf8');
+  const escaped = xmlString(name);
+  await fsp.writeFile(stringsPath, xml.replace(/(<string name="app_name">)[\s\S]*?(<\/string>)/, (_, a, b) => `${a}${escaped}${b}`));
+}
+
 async function fillPlaceholders(dir, { name, slug, packageName }) {
   const appJsonPath = path.join(dir, 'app.json');
   const appJson = JSON.parse(await fsp.readFile(appJsonPath, 'utf8'));
@@ -131,7 +196,7 @@ class BuildError extends Error {}
 
 const building = new Map();
 
-export async function buildApk({ dir, buildNumber, onLog = noop, updateFeed, updateTestingFeed, fast = true }) {
+export async function buildApk({ dir, buildNumber, onLog = noop, updateFeed, updateTestingFeed, changeOwner, changeOthers, fast = true }) {
   if (!dir || !path.isAbsolute(dir)) throw new Error('buildApk: dir must be an absolute path');
   dir = path.resolve(dir);
   const n = Number(buildNumber);
@@ -147,6 +212,9 @@ export async function buildApk({ dir, buildNumber, onLog = noop, updateFeed, upd
     }
     feeds[`ORG_GRADLE_PROJECT_${name}`] = url;
   }
+  // "Change this app" (docs/CHANGE-THIS-APP.md): the owner's name for the explanation sheet, and
+  // whether other people see the row. Part of the native fingerprint, so a change is a full build.
+  Object.assign(feeds, changeValues({ changeOwner, changeOthers }));
 
   const key = dir.toLowerCase();
   if (building.has(key)) throw new Error(`buildApk: a build of ${dir} is already running`);

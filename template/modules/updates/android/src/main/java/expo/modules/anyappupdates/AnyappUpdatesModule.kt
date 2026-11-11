@@ -2,6 +2,7 @@ package expo.modules.anyappupdates
 
 import android.content.Intent
 import com.anyapp.updates.AppUpdater
+import com.anyapp.updates.ChangeThisApp
 import com.anyapp.updates.UpdateActivity
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -40,5 +41,14 @@ class AnyappUpdatesModule : Module() {
     Function("isOn") { AppUpdater.isOn(ctx) }
     Function("channel") { AppUpdater.channel(ctx) }
     Function("setChannel") { channel: String -> AppUpdater.setChannel(ctx, channel) }
+
+    // "Change this app" (AnyAppAgent docs/CHANGE-THIS-APP.md): whether the row shows here (the
+    // owner's phone always; others unless the owner hid it), and its tap.
+    AsyncFunction("changeVisible") { ChangeThisApp.visible(ctx) }
+    Function("changeOwner") { ChangeThisApp.owner(ctx) }
+    Function("openChange") { screen: String? ->
+      val activity = appContext.currentActivity ?: throw IllegalStateException("no activity")
+      ChangeThisApp.open(activity, screen)
+    }
   }
 }

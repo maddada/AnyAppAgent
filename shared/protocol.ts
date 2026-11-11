@@ -93,6 +93,11 @@ export interface App {
   // Added with "Keep my apps healthy" (see "Health"): set only when the app is behind the newest
   // template (older Expo, older Android target, missing built-in parts). Absent when up to date.
   health?: AppHealth;
+  // Added with "Change this app" (docs/CHANGE-THIS-APP.md): who sees the row in the app's settings,
+  // suggestions from other people waiting, and where an own version came from. Absent from older PCs.
+  change?: AppChangeSettings;
+  fromOthers?: number; // suggestions not opened yet (see "Change this app"); absent when none
+  madeFrom?: AppOrigin; // set on an app made with "Make my own version" from someone's shared app
   createdAt: string;
   updatedAt: string;
 }
@@ -119,6 +124,9 @@ export interface PublishedRelease {
   notes: string;
   publishedAt: string;
   pulledBack?: boolean; // stable only: no longer offered (Pull back)
+  // Added with "Change this app": the release also holds <slug>-source.zip, that version's code
+  // (docs/CHANGE-THIS-APP.md, "What the code zip leaves out"). Absent on releases made before.
+  source?: boolean;
 }
 // POST /api/apps/:id/publish PublishRequest -> App (publishes the newest build; 409 when the app is
 // not shared or has no build, 409 + a new build when the newest build was signed by another key,
@@ -477,7 +485,8 @@ export type ServerEvent =
   | { type: "worker.item"; item: ChatItem } // upsert into the chat of worker item.workerId (never the main chat)
   | { type: "todos.updated"; appId: string; todos: TodoItem[] } // added: the app's whole to-do list after a change
   | { type: "care.updated"; care: CareState } // added: the usage meter, the health reminder or the backup changed
-  | { type: "diary.request"; appId: string; packageName: string; requestId: string }; // added: send this app's diary (POST /diary)
+  | { type: "diary.request"; appId: string; packageName: string; requestId: string } // added: send this app's diary (POST /diary)
+  | { type: "suggestions.updated"; appId: string; suggestions: Suggestion[] }; // added: the app's "From others" inbox after a change
 
 // ---------- Desktop app (desktop/, Electron) to companion. The desktop app starts the companion
 // as a child process with the env var ANYAPP_ADMIN_TOKEN=<random secret>. That token is accepted
@@ -650,4 +659,71 @@ export interface BackupRestoreResult {
   apps: { id: string; name: string; outcome: "restored" | "here" | "failed"; reason?: string }[];
   keys: KeysRestoreResult | null; // null with the fake builder
   rebuilding: number; // apps building again now, so phones update them in place
+}
+
+// ---------- Change this app (docs/CHANGE-THIS-APP.md)
+// Every app has a "Change this app" row in its settings. It opens AnyAppAgent on the phone with
+// anyappagent://change?package=&name=&owner=&repo=&build=&version=&screen= (shared/chat/suggestions.ts).
+
+export interface AppChangeSettings {
+  showToOthers: boolean; // false: only the owner's phone shows the row (from the next version)
+}
+
+// Where an own version came from (Make my own version). Nothing flows between the two apps.
+export interface AppOrigin {
+  name: string; // the original app's name
+  packageName: string;
+  owner?: string; // its owner, as they are named in the app
+  repo?: string; // owner/anyapp-<slug>-releases
+  version?: string; // the published version the code came from ("1.4")
+  build?: number;
+}
+
+// A suggestion someone sent the owner as text ("Suggest a change"), filed under the app.
+export interface Suggestion {
+  id: string;
+  appId: string;
+  from?: string; // the name they gave
+  text: string;
+  build?: number; // the version on their phone
+  receivedAt: string; // ISO 8601
+  opened?: boolean; // the owner tapped Open in chat
+}
+
+// POST /api/suggestions FileSuggestionRequest -> FileSuggestionResponse (201). The text is a
+// shared or pasted suggestion message; 400 when it is not one, 404 when its app is not on this PC.
+// The same message filed twice is kept once.
+export interface FileSuggestionRequest {
+  text: string;
+}
+export interface FileSuggestionResponse {
+  app: App;
+  suggestion: Suggestion;
+}
+// GET /api/apps/:id/suggestions -> Suggestion[] (newest first)
+// POST /api/apps/:id/suggestions/:suggestionId/open -> Suggestion (marks it opened)
+// DELETE /api/apps/:id/suggestions/:suggestionId -> 204
+
+// POST /api/apps/:id/change ChangeSettingsRequest -> App
+export interface ChangeSettingsRequest {
+  showToOthers?: boolean;
+  ownerName?: string; // the name every app shows for its owner (one for this PC)
+}
+// GET /api/owner -> OwnerInfo (the name the apps show: "Made by Mohamad", "Suggest a change to Mohamad")
+export interface OwnerInfo {
+  name: string;
+}
+
+// POST /api/clones CloneRequest -> App (201): "Make my own version" of someone's shared app. The PC
+// downloads the code of that published version (<slug>-source.zip on its releases repo), makes a
+// separate app from it (new name, package, signing key and repo), and starts it like a new app:
+// the first change goes to its agent, or it is built as it is. 404 when the version has no code
+// (published before code was included), 502 when GitHub cannot be reached.
+export interface CloneRequest {
+  repo: string; // owner/anyapp-<slug>-releases
+  build?: number; // the version on the phone; default the latest published one
+  name: string; // the new app's name
+  firstChange?: string;
+  originalName?: string; // for the chat and the new app's notes
+  owner?: string;
 }

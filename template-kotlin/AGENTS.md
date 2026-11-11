@@ -17,7 +17,8 @@ library sources under `%USERPROFILE%\.gradle\caches`), not memory.
 ```
 app/src/main/java/com/anyapp/app/
   MainActivity.kt          the activity, the theme and the screen switch (Route, Nav): add screens here
-  ui/HomeScreen.kt         the starter screen: replace it
+  ui/HomeScreen.kt         the starter screen: replace it (keep a way to reach Settings)
+  ui/ThisApp.kt            Settings and its "This app" group with Change this app (keep it)
   ui/Components.kt         Screen (safe area + scroll), Card, PrimaryButton, QuietButton: reuse them
   ui/theme/Theme.kt        colours (light + dark), type scale, spacing, radius: the app's look
   data/Store.kt            persistent storage: rememberStored(...) and Store.get/put
@@ -321,6 +322,22 @@ try { load() } catch (e: Exception) { CrashCatcher.reportError(context, e, scree
 ```
 
 Keep `AnyApp.kt`, its `android:name` in the manifest and the `DiaryRequestReceiver` entry.
+
+### Change this app (built in, keep it)
+
+Every app made with AnyAppAgent has a **Settings screen with a "This app" group** whose first row
+is **Change this app** (`ui/ThisApp.kt`: `ThisAppSection()`, or `ChangeThisAppRow()` alone in a settings list of your
+own design; the starter screen is `SettingsScreen()` in the same file, `Route.Settings` in `MainActivity`).
+The row opens AnyAppAgent at this app: the person who made it lands in this app's chat, anyone else
+can suggest a change or make their own version; without AnyAppAgent it shows an explanation drawn
+by the app. It hides itself on other people's phones when the owner turned it off in AnyAppAgent.
+
+- **Never remove the row, the Settings screen, or a way to reach Settings** from the main screen
+  (a "Settings" button, a gear, or a tab). When you redesign the app or replace the starter
+  screens, keep `ThisAppSection` (or `ChangeThisAppRow`) last in the app's settings and restyle
+  nothing else about it.
+- The native part is `com.anyapp.updates.ChangeThisApp` and `ChangeSheet` in
+  `com/anyapp/updates/` with its `ChangeSheet` activity in `AndroidManifest.xml` (the same code in every AnyAppAgent app): never edit them.
 
 ### Updates for people the app is shared with (built in, nothing to do)
 

@@ -730,6 +730,40 @@ function ipc(): void {
     }
   });
   ipcMain.handle("qr", (_e, text: string) => qrSvg(String(text)));
+  // "Change this app" (docs/CHANGE-THIS-APP.md).
+  ipcMain.handle("suggestions:list", async (_e, appId: string) => {
+    try {
+      return { ok: true, suggestions: (await admin?.suggestions(String(appId))) ?? [] };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message, suggestions: [] };
+    }
+  });
+  ipcMain.handle("suggestions:file", async (_e, text: string) => {
+    try {
+      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      const r = await admin.fileSuggestion(String(text ?? ""));
+      return { ok: true, appId: r.app.id };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("suggestions:open", (_e, appId: string, id: string) => chatAction((c) => c.openSuggestion(String(appId), String(id)).then(() => undefined))());
+  ipcMain.handle("suggestions:remove", (_e, appId: string, id: string) => chatAction((c) => c.removeSuggestion(String(appId), String(id)))());
+  ipcMain.handle("apps:change", (_e, appId: string, body: { showToOthers?: unknown; ownerName?: unknown }) =>
+    chatAction((c) =>
+      c.setChange(String(appId), {
+        ...(typeof body?.showToOthers === "boolean" ? { showToOthers: body.showToOthers } : {}),
+        ...(typeof body?.ownerName === "string" ? { ownerName: body.ownerName } : {}),
+      }),
+    )(),
+  );
+  ipcMain.handle("owner:name", async () => {
+    try {
+      return (await admin?.ownerName())?.name ?? "";
+    } catch {
+      return "";
+    }
+  });
   ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
     chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
   );

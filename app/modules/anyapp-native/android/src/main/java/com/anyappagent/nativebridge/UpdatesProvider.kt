@@ -30,11 +30,15 @@ import java.util.concurrent.ConcurrentHashMap
  *   a new APK to the app's Reload popup instead of replacing the app under the person's finger.
  * - `report/<pkg>` (update, running=<build> and/or bad=<build>): the version the app runs now, or a
  *   quick update it refused or rolled back.
+ * - `owns/<pkg>` (query): 1 when the app is one of this person's own (it is in the paired PC's app
+ *   list), so its "Change this app" row shows even when the owner hid it from others
+ *   (docs/CHANGE-THIS-APP.md).
  */
 class UpdatesProvider : ContentProvider() {
   companion object {
     private const val PREFS = "anyapp_updates_host"
     private const val FOLLOWED = "followed"
+    private const val OWN = "own"
     const val READY_ACTION = "com.anyapp.updates.READY"
 
     /** Package -> (on screen, when it said so). Kept in memory: a restart forgets it (not on screen). */
@@ -58,6 +62,13 @@ class UpdatesProvider : ContentProvider() {
     fun setFollowed(ctx: Context, packages: Collection<String>) {
       prefs(ctx).edit().putStringSet(FOLLOWED, packages.toSet()).apply()
     }
+
+    /** The packages of the person's own apps (the paired PC's list), set by the JavaScript side. */
+    fun setOwn(ctx: Context, packages: Collection<String>) {
+      prefs(ctx).edit().putStringSet(OWN, packages.toSet()).apply()
+    }
+
+    fun owns(ctx: Context, pkg: String): Boolean = pkg in (prefs(ctx).getStringSet(OWN, emptySet()) ?: emptySet())
 
     fun handles(ctx: Context, pkg: String): Boolean = installedByUs(ctx, pkg) || pkg in followed(ctx)
 
@@ -186,6 +197,11 @@ class UpdatesProvider : ContentProvider() {
         val pkg = segments[1]
         val answer = if (callingPackage == pkg && handles(ctx, pkg)) 1 else 0
         MatrixCursor(arrayOf("handles")).apply { addRow(arrayOf(answer)) }
+      }
+      "owns" -> {
+        val pkg = segments[1]
+        val answer = if (callingPackage == pkg && owns(ctx, pkg)) 1 else 0
+        MatrixCursor(arrayOf("owns")).apply { addRow(arrayOf(answer)) }
       }
       "ready" -> {
         val cursor = MatrixCursor(arrayOf("kind", "build"))

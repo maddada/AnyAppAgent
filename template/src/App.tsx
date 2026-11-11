@@ -9,12 +9,14 @@ import { CrashBoundary } from '@/components/CrashBoundary';
 import { installCrashCatcher, setCurrentScreen } from '@/lib/crash';
 import { setupNotifications } from '@/lib/notifications';
 import { HomeScreen } from '@/screens/HomeScreen';
+import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useColors, useIsDark } from '@/theme';
 
 const RootStack = createNativeStackNavigator({
   screens: {
     Home: { screen: HomeScreen, options: { headerShown: false } },
-    // Settings: { screen: SettingsScreen, options: { title: 'Settings' } },
+    // Every app keeps a Settings screen with the "This app" group (Change this app): see AGENTS.md.
+    Settings: { screen: SettingsScreen, options: { headerShown: false } },
   },
 });
 

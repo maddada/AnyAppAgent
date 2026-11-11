@@ -33,6 +33,10 @@
     <intent>
       <action android:name="com.anyappagent.action.UPDATES" />
     </intent>
+    <intent>
+      <action android:name="com.anyappagent.action.CHANGE" />
+      <data android:scheme="anyappagent" />
+    </intent>
   </queries>
 
   <application
@@ -63,6 +67,14 @@
         <action android:name="com.anyapp.action.DIARY_REQUEST" />
       </intent-filter>
     </receiver>
+    <!-- "Change this app" when AnyAppAgent is not on the phone (com.anyapp.updates.ChangeSheet): keep it. -->
+    <activity
+      android:name="com.anyapp.updates.ChangeSheet"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:configChanges="uiMode|orientation|screenSize|keyboardHidden"
+      android:windowSoftInputMode="adjustResize"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     <!-- Updates for people the app is shared with (com.anyapp.updates): keep these. -->
     <activity
       android:name="com.anyapp.updates.UpdateActivity"
