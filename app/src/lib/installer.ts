@@ -87,7 +87,9 @@ export async function autoInstallIfNew(app: App) {
   // download. Without it, a notification asks for the tap instead.
   if (AppState.currentState !== "active" && !keptAlive()) {
     pendingFromBackground.add(app.id);
-    AnyAppNative.notify(notificationId(app.id), `${app.name} has an update`, "Tap to install.", `anyappagent://?install=${encodeURIComponent(app.id)}`, notificationTint);
+    // What changed (docs/VERSIONS.md) says what the update is, in the person's words.
+    const changed = build.changes?.changed;
+    AnyAppNative.notify(notificationId(app.id), `${app.name} has an update`, changed ? `${changed} Tap to install.` : "Tap to install.", `anyappagent://?install=${encodeURIComponent(app.id)}`, notificationTint);
     return;
   }
   void installApp(app);

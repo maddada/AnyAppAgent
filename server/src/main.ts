@@ -37,11 +37,13 @@ export async function main(): Promise<void> {
   const easyConnect = new EasyConnect({ stateDir: config.stateDir, port: config.port, auth, log });
 
   let broadcast: (event: ServerEvent) => void = () => {};
+  let phonesConnected: () => number = () => 0;
   const apps = new AppManager({
     store,
     builder,
     config,
     broadcast: (event) => broadcast(event),
+    phonesConnected: () => phonesConnected(),
     log,
     checkToolchain: () => (builder.kind === "real" && !toolchain ? TOOLCHAIN_MISSING : null),
   });
@@ -58,6 +60,7 @@ export async function main(): Promise<void> {
     signing,
     ...(process.env.ANYAPP_HOST_APK ? { hostApkPath: process.env.ANYAPP_HOST_APK } : {}),
   });
+  phonesConnected = () => http.phonesConnected();
   broadcast = (event) => {
     // A new app gets its own signing key: show it (and that it is not backed up yet) on the PC.
     if (event.type === "app.updated") signing.refreshSoon();

@@ -2,6 +2,13 @@
 // app imports it from one place. Type-only: nothing from outside app/ reaches the bundle.
 export type {
   App,
+  AppVersion,
+  ChangeNotes,
+  CrashInfo,
+  CrashReport,
+  DiaryAnswer,
+  DiaryEntry,
+  DiaryReadInfo,
   AppPreset,
   AppStatus,
   BuildInfo,

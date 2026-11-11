@@ -36,6 +36,10 @@ type Events = {
   onInstallStatus: (event: InstallStatusEvent) => void;
   /** The phone's network changed (debounced 750 ms). */
   onNetworkChanged: () => void;
+  /** An app made with AnyAppAgent crashed (docs/VERSIONS.md): takeWaitingCrashes() has its report. */
+  onAppCrash: (event: { packageName: string }) => void;
+  /** An app answered requestDiary: `diary` is a JSON array of { at, text }. */
+  onAppDiary: (event: { packageName: string; requestId: string; diary: string }) => void;
 };
 
 declare class AnyAppNativeModule extends NativeModule<Events> {
@@ -61,6 +65,10 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   /** `color`: the accent from the shared theme tokens (the small icon's tint). */
   notify(id: number, title: string, body: string, url: string | null, color: string | null): boolean;
   cancelNotification(id: number): void;
+  /** JSON [{ packageName, report }] of crashes waiting to go to the PC (forgotten once read). Missing on older builds. */
+  takeWaitingCrashes?(): string;
+  /** Asks an app for its diary (answer: onAppDiary); false when the app is not on this phone. */
+  requestDiary?(packageName: string, requestId: string): boolean;
   /** Starts the keep-alive foreground service (only allowed in front), or changes its text when it runs. */
   startKeepAlive(text: string, color: string | null): boolean;
   /** True while the keep-alive service runs in the foreground: this process is not frozen. */

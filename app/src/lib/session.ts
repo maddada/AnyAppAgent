@@ -1,3 +1,4 @@
+import { answerDiaryRequest, sendCrashes, startReports } from "./reports";
 import { AppState, PermissionsAndroid, Platform } from "react-native";
 import * as Device from "expo-device";
 import { AnyAppNative } from "anyapp-native";
@@ -26,6 +27,7 @@ import { updateKeepAlive } from "./keepalive";
 // ---------- startup, pairing
 
 export async function boot() {
+  startReports();
   const [pairing, prefs] = await Promise.all([loadPairing(), loadPrefs()]);
   setState({ prefs });
   // Pairing first, then ready: a cold start straight into a screen that needs the pairing (the
@@ -572,6 +574,7 @@ function onNetworkChanged() {
 
 function onForeground() {
   refreshPackages();
+  void sendCrashes();
   reconnectNow();
   void resumePendingInstall();
 }
@@ -606,6 +609,9 @@ function handleEvent(event: ServerEvent) {
     case "todos.updated":
       setTodos(event.appId, event.todos);
       break;
+    case "diary.request":
+      void answerDiaryRequest(event);
+      break;
   }
 }
 
@@ -620,6 +626,7 @@ async function resync() {
     updateKeepAlive();
     resumeUnfinishedInstalls();
     for (const app of apps) void autoInstallIfNew(app);
+    void sendCrashes();
     void resumePendingInstall();
     const { chatLoaded } = getState();
     await Promise.all(Object.keys(chatLoaded).filter((id) => chatLoaded[id] && apps.some((a) => a.id === id)).map((id) => loadChat(id)));

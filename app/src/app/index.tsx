@@ -32,7 +32,8 @@ type Tile = { kind: "new" } | { kind: "app"; app: App };
 export default function Home() {
   const pairing = useStore((s) => s.pairing);
   const authLost = useStore((s) => s.authLost);
-  const params = useLocalSearchParams<{ install?: string }>();
+  const params = useLocalSearchParams<{ install?: string; crash?: string }>();
+  const apps = useStore((s) => s.apps);
 
   // Tapped "ready to install" notification: anyappagent://?install=<appId>
   useEffect(() => {
@@ -41,6 +42,15 @@ export default function Home() {
       router.setParams({ install: undefined });
     }
   }, [params.install]);
+
+  // Tapped "<app> crashed. Fix it?" (docs/VERSIONS.md): anyappagent://?crash=<package name> opens its chat.
+  useEffect(() => {
+    if (!params.crash) return;
+    const app = Object.values(apps).find((a) => a.packageName === params.crash);
+    if (!app) return;
+    router.setParams({ crash: undefined });
+    router.push(`/chat/${app.id}`);
+  }, [params.crash, apps]);
 
   if (!pairing) return <Redirect href="/connect" />;
   if (authLost) return <AuthLost />;

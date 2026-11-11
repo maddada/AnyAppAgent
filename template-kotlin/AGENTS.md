@@ -27,6 +27,10 @@ app/src/main/java/com/anyapp/app/
   ai/Ai.kt                 AI (chat, streaming, tools, agents) through AnyAppAgent's key
   ai/AiSetupNotice.kt      the "AI is not set up" card with a button to AnyAppAgent
   ai/AiTypes.kt            AiMessage, AiPart, AiTool, AiError ... (AI.md: the wire format, leave it)
+  diary/Diary.kt           the app's diary: Diary.note(context, "...") (see "The diary")
+  diary/CrashCatcher.kt    sends crashes to AnyAppAgent (see "Crashes"; leave it)
+  diary/DiaryRequestReceiver.kt  answers AnyAppAgent's request for the diary (leave it)
+  AnyApp.kt                the Application class: installs the crash catcher at start (keep it)
 app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service
 app/src/main/res/values/strings.xml   app_name: the name under the icon
 app/src/main/res/raw/      sound files for alarms (adhan.mp3, beep.ogg, ...)
@@ -273,6 +277,42 @@ try { Ai.ask(context, "Hi") } catch (e: AiError) {
   (`android.util.Base64.NO_WRAP`). Keep images small, a few MB at most.
 - Save conversations with `Store` (as JSON: `AiMessage.toJson()`) if the person should find them again.
 - The wire format under `Ai` is in `AI.md`; app code never needs it.
+
+### The diary
+
+The app keeps a small private diary on the phone of what it did, so "why didn't it ring?" gets a
+real answer instead of a guess. When the person says something did not work, read it with your
+`read_diary` tool (MCP server `app`) before you change code.
+
+```kotlin
+import com.anyapp.app.diary.Diary
+
+Diary.note(context, "Reminder set for 08:00")       // one line, at most 200 characters; never throws
+Diary.note(context, "Prayer times loaded for 7 days")
+Diary.note(context, "Could not load prayer times: no internet, used yesterday's")
+```
+
+- Write a note for every background action and important event: something scheduled, cancelled,
+  rung, skipped, loaded, failed, a permission missing. Say what happened and why, in plain words.
+  The alarms already write theirs (set, rang, not exact), and crashes are noted by themselves.
+- **Never personal content**: no names, messages, places, health data, or anything the person
+  typed. "Reminder set for 08:00" is fine; the reminder's own text is not.
+- It stays in the app's private storage (the newest 300 notes) and leaves the phone only to the
+  person's own PC, through AnyAppAgent, when you ask for it.
+
+### Crashes
+
+Crashes are caught by themselves (`AnyApp.kt` installs the catcher when the app starts): AnyAppAgent
+on the phone shows "<app> crashed. Fix it?", and a tap sends you the error, its stack, the version
+and the latest diary notes. For an exception you catch but still want to hear about:
+
+```kotlin
+import com.anyapp.app.diary.CrashCatcher
+
+try { load() } catch (e: Exception) { CrashCatcher.reportError(context, e, screen = "Settings"); showProblem() }
+```
+
+Keep `AnyApp.kt`, its `android:name` in the manifest and the `DiaryRequestReceiver` entry.
 
 ### Also at hand (Android itself, no library)
 

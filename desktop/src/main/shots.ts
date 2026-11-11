@@ -33,6 +33,7 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
   const steps = ["welcome", "claude", "tools", "github", "phone-get", "phone-pair", "done"];
   if (set === "qr") return qrSet(win, js, shot, log).catch((e) => log(`[shots] qr set failed: ${(e as Error).message}`));
   if (set === "pages") return pagesSet(win, js, shot, log).catch((e) => log(`[shots] pages set failed: ${(e as Error).message}`));
+  if (set === "history") return historySet(js, shot, log).catch((e) => log(`[shots] history set failed: ${(e as Error).message}`));
   if (set === "real") {
     // Against the real companion: a phone pairs (an outside script plays the phone), then an app is
     // created through the companion and must show up in the main window.
@@ -185,6 +186,90 @@ async function pagesSet(win: BrowserWindow, js: (code: string) => Promise<unknow
     await shot(`${theme}-pages-3-new-app-ask-more`);
     await js(`window.__main.newApp(false)`);
     await wait(300);
+  }
+}
+
+/**
+ * The "history" set (docs/VERSIONS.md): the chat with What changed, a crash card and the diary line,
+ * then the Versions panel and its Go back question. Against the fake companion with FAKE_HISTORY=1
+ * or a real companion with an app that has versions.
+ */
+async function historySet(js: (code: string) => Promise<unknown>, shot: (name: string) => Promise<void>, log: (l: string) => void): Promise<void> {
+  await js(`window.anyapp.setSetting("onboardingDone", true); window.__app.setup(null)`);
+  await wait(600);
+  const wanted = process.env.ANYAPP_DESKTOP_SHOTS_APP ?? "Tea Timer";
+  const appId = (await js(`window.anyapp.getSnapshot().then((s) => s.apps.find((a) => a.name === ${JSON.stringify(wanted)})?.id ?? null)`)) as string | null;
+  if (!appId) return log(`[shots] no app named ${wanted}`);
+  const click = (sel: string) => js(`document.querySelector(${JSON.stringify(sel)})?.click()`);
+  for (const theme of ["light", "dark"] as const) {
+    nativeTheme.themeSource = theme;
+    await wait(400);
+    await js(`window.__main.openApp(${JSON.stringify(appId)})`);
+    await wait(1500);
+    await js(`(() => { const el = document.querySelector('[data-testid="chat-scroll"]'); if (el) el.scrollTop = el.scrollHeight; })()`);
+    await shot(`${theme}-history-1-chat`);
+    await js(`document.querySelector('[data-testid="build-ready"]')?.scrollIntoView({ block: "center" })`);
+    await shot(`${theme}-history-2-what-changed`);
+    // The newest crash card and diary line, when the chat has them (the real proof does).
+    for (const [testid, name] of [["crash-card", "crash"], ["diary-row", "diary"]] as const) {
+      const found = await js(`(() => { const all = document.querySelectorAll('[data-testid="${testid}"]'); const el = all[all.length - 1]; if (!el) return false; el.scrollIntoView({ block: "center" }); return true; })()`);
+      if (found) await shot(`${theme}-history-2-${name}`);
+    }
+    await click('[data-testid="versions-toggle"]');
+    await wait(1200);
+    await shot(`${theme}-history-3-versions`);
+    await click('[data-testid="versions-restore"]');
+    await wait(400);
+    await shot(`${theme}-history-4-go-back-question`);
+    await click('[data-testid="versions-close"]');
+    await wait(300);
+  }
+  // Proof only (ANYAPP_DESKTOP_SHOTS_FIX=1): tap "Fix it" on the newest crash card, then stay open
+  // until the fixed version is built, and take the chat again.
+  if (process.env.ANYAPP_DESKTOP_SHOTS_FIX === "1") {
+    nativeTheme.themeSource = "light";
+    const newest = () => js(`window.anyapp.getSnapshot().then((s) => s.apps.find((a) => a.id === ${JSON.stringify(appId)})?.latestApk?.number ?? 0)`) as Promise<number>;
+    const before = await newest();
+    await js(`window.__main.openApp(${JSON.stringify(appId)})`);
+    await wait(1500);
+    // ANYAPP_DESKTOP_SHOTS_SAY: a follow-up typed into the composer and sent with Enter, instead of Fix it.
+    const say = process.env.ANYAPP_DESKTOP_SHOTS_SAY;
+    const found = say
+      ? await js(`(() => {
+          const box = document.querySelector('[data-testid="composer-input"]');
+          if (!box) return false;
+          const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+          box.focus(); set.call(box, ${JSON.stringify(say)}); box.dispatchEvent(new Event("input", { bubbles: true }));
+          box.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+          return true;
+        })()`)
+      : await js(`(() => { const all = document.querySelectorAll('[data-testid="crash-fix"]'); const el = all[all.length - 1]; if (!el) return false; el.scrollIntoView({ block: "center" }); el.click(); return true; })()`);
+    log(`[shots] crash fix ${found ? "tapped" : "not found"}`);
+    await wait(4000);
+    await shot("light-history-5-fix-sent");
+    const end = Date.now() + 30 * 60_000;
+    // ANYAPP_DESKTOP_SHOTS_UNTIL=diary: wait for the agent's reply after it read the app's diary, not a new version.
+    if (process.env.ANYAPP_DESKTOP_SHOTS_UNTIL === "diary") {
+      const state = () =>
+        js(`window.anyapp.getSnapshot().then((s) => { const a = s.apps.find((x) => x.id === ${JSON.stringify(appId)}); return { replying: !!a?.replying, diary: document.querySelectorAll('[data-testid="diary-row"]').length }; })`) as Promise<{ replying: boolean; diary: number }>;
+      const diaryBefore = (await state()).diary;
+      while (found && Date.now() < end) {
+        const s = await state();
+        if (s.diary > diaryBefore && !s.replying) break;
+        await wait(3000);
+      }
+    } else {
+      while (found && Date.now() < end && (await newest()) <= before) await wait(5000);
+    }
+    await wait(3000);
+    for (const theme of ["light", "dark"] as const) {
+      nativeTheme.themeSource = theme;
+      await wait(600);
+      await js(`(() => { const el = document.querySelector('[data-testid="chat-scroll"]'); if (el) el.scrollTop = el.scrollHeight; })()`);
+      await shot(`${theme}-history-6-fixed`);
+      await js(`(() => { const all = document.querySelectorAll('[data-testid="build-ready"]'); const el = all[all.length - 1]; el?.scrollIntoView({ block: "center" }); })()`);
+      await shot(`${theme}-history-7-fixed-what-changed`);
+    }
   }
 }
 

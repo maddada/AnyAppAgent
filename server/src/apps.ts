@@ -3,7 +3,9 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, PageInfo, PublishRequest, ReleaseStats, ServerEvent, TodoItem, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, AppStatus, AppVersion, BuildInfo, ChangeNotes, ChatImage, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PublishRequest, ReleaseStats, ServerEvent, TodoItem, WorkerInfo } from "../../shared/protocol.ts";
+import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, type VersionRecord } from "./history.ts";
+import { MEMORY_FILE } from "./playbook.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import { answersPreview, parsePageAnswers } from "../../shared/chat/pages.ts";
 import { isPageToolCall, Pages } from "./pages.ts";
@@ -39,6 +41,7 @@ import { HttpError } from "./http-error.ts";
 type Job =
   | { kind: "prompt"; text: string; itemId?: string; images?: PromptImage[] }
   | { kind: "build" }
+  | { kind: "restore"; to: VersionRecord }
   | { kind: "report"; workerId: string; text: string };
 
 interface BuildCycleOptions {
@@ -47,6 +50,10 @@ interface BuildCycleOptions {
   cancelled?(): boolean;
   /** The commit message summary. Default: the main chat's last message. */
   summary?: string;
+  /** Whose describe_change notes this build carries: a helper's id, else the main chat's. */
+  notesKey?: string;
+  /** A go-back (Versions): its own notes, no fix turns, and the version it went back to. */
+  restore?: { from: number; notes: ChangeNotes; before: string };
 }
 
 interface PendingPermission {
@@ -72,6 +79,8 @@ interface Runtime {
 
 interface ReadyRecord extends AppRecord {
   ready?: boolean;
+  /** Told to the agent with the person's next message, not shown to them (after a go-back). */
+  agentNote?: string;
   /** The coordinator playbook version this app's session was given (docs/APP-COORDINATOR.md). */
   coordinatorPlaybook?: number;
 }
@@ -144,6 +153,9 @@ export class AppManager {
   readonly pages: Pages;
   /** The person's own to-do list per app; never given to the agent. */
   private readonly todoLists: TodoLists;
+  /** Versions, What changed notes, crash reports and the diary (docs/VERSIONS.md). */
+  readonly history: History;
+  private readonly phonesConnected: () => number;
 
   constructor(deps: {
     store: Store;
@@ -153,7 +165,10 @@ export class AppManager {
     log: (...parts: unknown[]) => void;
     checkToolchain?: () => string | null;
     github?: GithubApi;
+    /** How many phones have a live socket now (diary requests need one). */
+    phonesConnected?: () => number;
   }) {
+    this.phonesConnected = deps.phonesConnected ?? (() => 0);
     this.github = deps.github ?? realGithub;
     this.store = deps.store;
     this.builder = deps.builder;
@@ -176,6 +191,21 @@ export class AppManager {
       deliver: (appId, text) => this.sendMessage(appId, text),
     });
     this.todoLists = new TodoLists(this.store.stateDir);
+    this.history = new History({
+      stateDir: this.store.stateDir,
+      log: this.log,
+      appExists: (appId) => Boolean(this.store.find(appId)),
+      askPhoneForDiary: (appId, requestId) => {
+        const record = this.store.find(appId);
+        if (!record || this.phonesConnected() === 0) return false;
+        this.broadcast({ type: "diary.request", appId, packageName: record.app.packageName, requestId });
+        return true;
+      },
+      diaryRead: (appId, info) => {
+        const record = this.store.find(appId);
+        if (record) this.emitItem(record, { id: randomUUID(), kind: "diary", diary: info });
+      },
+    });
     this.workers = this.config.coordinator
       ? new WorkerManager({
           config: this.config,
@@ -188,7 +218,8 @@ export class AppManager {
           report: (record, workerId, text) => this.enqueue(record, { kind: "report", workerId, text }),
           activityChanged: (record) => this.activityChanged(record),
           pageTools: (appId, from) => this.pages.mcpServer(this.config.port, appId, from),
-          hiddenTool: isPageToolCall,
+          appTools: (appId, workerId) => this.history.mcpServer(this.config.port, appId, workerId),
+          hiddenTool: (update) => isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update),
         })
       : undefined;
   }
@@ -334,7 +365,7 @@ export class AppManager {
 
   // ---------- events
 
-  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo; page?: PageInfo }): void {
+  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo; page?: PageInfo; crash?: CrashInfo; diary?: DiaryReadInfo }): void {
     const item = this.store.chat(record.app.id).upsert(draft);
     this.broadcast({ type: "chat.item", item });
   }
@@ -512,7 +543,7 @@ export class AppManager {
     this.broadcast({ type: "app.updated", app: record.app });
   }
 
-  sendMessage(id: string, text: string, uploads: ImageUpload[] = []): void {
+  sendMessage(id: string, text: string, uploads: ImageUpload[] = [], agentExtra = ""): void {
     const record = this.record(id);
     if (text.trim() === "" && uploads.length === 0) throw new HttpError(400, "The message is empty.");
     const problem = checkImages(uploads.map((u) => ({ mimeType: String(u?.mimeType ?? ""), data: String(u?.data ?? "") })));
@@ -531,7 +562,8 @@ export class AppManager {
     const answers = parsePageAnswers(text);
     record.app.lastMessagePreview = answers ? shorten(answersPreview(answers), 140) : text.trim() ? shorten(text, 140) : picturesLabel(images.length);
     this.touch(record);
-    this.enqueue(record, { kind: "prompt", text: text.trim(), itemId, images: saved.map(({ prompt }) => prompt) });
+    const agentText = agentExtra ? `${text.trim()}\n\n${agentExtra}` : text.trim();
+    this.enqueue(record, { kind: "prompt", text: agentText, itemId, images: saved.map(({ prompt }) => prompt) });
   }
 
   private imagesDir(appId: string): string {
@@ -725,6 +757,154 @@ export class AppManager {
     return path ? readFileSync(path) : placeholderIconPng(record.app.name);
   }
 
+  // ---------- versions, undo, crashes and the diary (docs/VERSIONS.md)
+
+  /** Every version, newest first. */
+  async versions(id: string): Promise<AppVersion[]> {
+    const record = this.record(id);
+    const list = await this.history.versions(id, record.dir);
+    const current = record.app.latestApk?.number;
+    return list
+      .map((v) => ({
+        build: v.build,
+        title: v.title,
+        ...(v.changes ? { changes: v.changes } : {}),
+        createdAt: v.createdAt,
+        ...(v.restoredFrom ? { restoredFrom: v.restoredFrom } : {}),
+        current: v.build === current,
+        canRestore: Boolean(v.commit) && v.build !== current,
+      }))
+      .reverse();
+  }
+
+  /** Why the app cannot go back right now, or null. */
+  private goBackBlocked(record: ReadyRecord): string | null {
+    const rt = this.runtime(record.app.id);
+    if (!record.ready) return "Wait until the app is made.";
+    if (record.app.status === "building" || record.app.status === "creating") return "Wait until the new version is built.";
+    if (rt.running || rt.queue.length > 0 || this.busy(record)) return "Wait until the agent has finished.";
+    return null;
+  }
+
+  /** Goes back to an earlier version: its code is built again as a new version (202). */
+  async restore(id: string, build: number): Promise<App> {
+    const record = this.record(id);
+    const blocked = this.goBackBlocked(record);
+    if (blocked) throw new HttpError(409, blocked);
+    const to = (await this.history.versions(id, record.dir)).find((v) => v.build === build);
+    if (!to) throw new HttpError(404, `There is no version ${build}.`);
+    if (!to.commit) throw new HttpError(409, "The PC does not have the code of that version any more.");
+    if (record.app.latestApk?.number === build) throw new HttpError(409, `Version ${build} is already the newest.`);
+    this.startGoBack(record, to);
+    return record.app;
+  }
+
+  /** Undo: back to the version before the newest one. */
+  async undo(id: string): Promise<App> {
+    const record = this.record(id);
+    const list = await this.versions(id);
+    const at = list.findIndex((v) => v.current);
+    const target = at >= 0 ? list[at + 1] : undefined;
+    if (!target || !target.canRestore) throw new HttpError(409, "There is no earlier version to go back to.");
+    return this.restore(id, target.build);
+  }
+
+  private startGoBack(record: ReadyRecord, to: VersionRecord): void {
+    if (!this.workers) {
+      this.enqueue(record, { kind: "restore", to });
+      return;
+    }
+    // With helpers, builds follow landings: a go-back takes the landing slot so it never overlaps one.
+    this.setStatus(record, "building");
+    void this.workers
+      .withLandingSlot(record.app.id, "go-back", () => this.goBack(record, to))
+      .catch((error: unknown) => {
+        this.log(`[${record.app.slug}] going back failed:`, (error as Error).message);
+        this.errorItem(record, `Could not go back to version ${to.build}: ${firstLine((error as Error).message, 160)}`);
+        this.setStatus(record, "idle");
+      });
+  }
+
+  /** Puts the files of version `to` back (one new commit) and builds them as a new version. */
+  private async goBack(record: ReadyRecord, to: VersionRecord): Promise<void> {
+    if (record.deleted) return;
+    const from = record.app.latestApk?.number;
+    let before: string;
+    try {
+      const restored = await git.restoreTree(record.dir, to.commit!, `Back to version ${to.build}`, [MEMORY_FILE, OVERVIEW_FILE]);
+      before = restored.before;
+    } catch (error) {
+      this.errorItem(record, `Could not go back to version ${to.build}: ${firstLine((error as Error).message, 160)}`);
+      this.setStatus(record, "idle");
+      return;
+    }
+    this.log(`[${record.app.slug}] going back to version ${to.build} (${to.commit?.slice(0, 7)})`);
+    const notes: ChangeNotes = {
+      // Its own first sentence, so the line never ends cut off mid-word.
+      changed: `Back to version ${to.build}, as it was on ${this.dayLabel(to.createdAt)}: ${shorten(to.title.split(/(?<=[.!?])\s/)[0], 160)}`,
+      goodToKnow: "Nothing is lost: the newer versions stay in Versions, so you can go back to them.",
+    };
+    const outcome = await this.buildCycle(record, { summary: `Back to version ${to.build}`, restore: { from: to.build, notes, before } });
+    if (outcome.ok) {
+      (record as ReadyRecord).agentNote = `(A note from the PC, not from the person: they went back to version ${to.build} with the Versions screen, so the app's files are now as they were in version ${to.build} (commit ${to.commit?.slice(0, 12)}), built as version ${outcome.number}.${from ? ` What versions after ${to.build} up to ${from} added is undone in the files but still in Git history: \`git log\` shows every "Build N" and "Back to version N" commit, and \`git show <commit>:<file>\` shows an old file, if they want something from those versions back.` : ""} ${MEMORY_FILE} and ${OVERVIEW_FILE} were kept as they were.)`;
+      this.store.save();
+    }
+  }
+
+  private dayLabel(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "an earlier day";
+    return d.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).replace(",", "");
+  }
+
+  /** A crash report from the phone (Crash catcher): a "crash" card in the main chat, deduplicated. */
+  reportCrash(id: string, body: unknown): CrashInfo {
+    const record = this.record(id);
+    const report = cleanCrashReport(body);
+    if (!report) throw new HttpError(400, "That crash report is not complete.");
+    const saved = this.history.saveReport(id, report);
+    const chat = this.store.chat(id);
+    const existing = [...chat.all()].reverse().find((i) => i.kind === "crash" && i.crash && History.sameCrash(i.crash, report));
+    const crash: CrashInfo = existing?.crash
+      ? { ...existing.crash, count: existing.crash.count + 1, lastAt: report.at, ...(report.versionCode ? { versionCode: report.versionCode } : {}) }
+      : {
+          id: saved.id,
+          appId: id,
+          kind: report.kind,
+          message: firstLine(report.message, 300),
+          ...(report.screen ? { screen: report.screen } : {}),
+          ...(report.versionCode ? { versionCode: report.versionCode } : {}),
+          count: 1,
+          firstAt: report.at,
+          lastAt: report.at,
+        };
+    const ready = record as ReadyRecord & { lastCrashReport?: Record<string, string> };
+    ready.lastCrashReport = { ...(ready.lastCrashReport ?? {}), [crash.id]: saved.id };
+    this.emitItem(record, { id: existing?.id ?? `crash-${crash.id}`, kind: "crash", text: `${record.app.name} ${report.kind === "crash" ? "crashed" : "ran into an error"}`, crash });
+    this.log(`[${record.app.slug}] ${report.kind} on the phone: ${firstLine(report.message, 160)}`);
+    this.store.save();
+    return crash;
+  }
+
+  /** "Fix it" on a crash card: the person's message "Fix the crash", with the whole report for the agent. */
+  fixCrash(id: string, crashId: string): void {
+    const record = this.record(id) as ReadyRecord & { lastCrashReport?: Record<string, string> };
+    const item = this.store.chat(id).all().find((i) => i.kind === "crash" && i.crash?.id === crashId);
+    if (!item?.crash) throw new HttpError(404, "That crash is not in this chat.");
+    if (item.crash.fixAskedAt) throw new HttpError(409, "The agent already has this crash.");
+    const report = this.history.report(id, record.lastCrashReport?.[crashId] ?? crashId);
+    if (!report) throw new HttpError(404, "The PC does not have this crash's report any more.");
+    const text = `Fix the crash: ${shorten(item.crash.message, 120)}`;
+    this.sendMessage(id, text, [], crashFixPrompt(record.app.name, report));
+    this.emitItem(record, { id: item.id, kind: "crash", crash: { ...item.crash, fixAskedAt: nowIso() } });
+  }
+
+  /** The phone's answer to diary.request. */
+  diaryAnswer(id: string, body: unknown): void {
+    this.record(id);
+    if (!this.history.diaryAnswer(id, body as DiaryAnswer)) throw new HttpError(404, "Nobody is waiting for that diary any more.");
+  }
+
   rebuild(id: string): void {
     const record = this.record(id);
     if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
@@ -812,6 +992,7 @@ export class AppManager {
         try {
           if (job.kind === "prompt") await this.userTurn(record, job.text, job.images ?? []);
           else if (job.kind === "report") await this.reportTurn(record, job);
+          else if (job.kind === "restore") await this.goBack(record, job.to);
           else await this.buildCycle(record);
         } catch (error) {
           if (record.deleted) break;
@@ -878,9 +1059,16 @@ export class AppManager {
 
   /** Added to the person's prompt (not shown to them) while the app has no overview.md of the agent's own. */
   private overviewNote(record: AppRecord): string {
-    return overviewNeedsAgent(record.dir) ? `
+    const ready = record as ReadyRecord;
+    let note = "";
+    if (ready.agentNote) {
+      note = `\n\n${ready.agentNote}`;
+      delete ready.agentNote;
+      this.store.save();
+    }
+    return overviewNeedsAgent(record.dir) ? `${note}
 
-${overviewNudge()}` : "";
+${overviewNudge()}` : note;
   }
 
     private async ensureSession(record: AppRecord): Promise<ClaudeSession> {
@@ -895,7 +1083,7 @@ ${overviewNudge()}` : "";
           instructions: coordinatorPlaybook(appInfo),
           // An app made before workers resumes its session and gets the new playbook once.
           instructionsOnResume: (ready.coordinatorPlaybook ?? 0) < COORDINATOR_PLAYBOOK_VERSION,
-          mcpServers: [workerToolsMcpServer(this.config.port, record.app.id, this.workers.toolsToken), this.pages.mcpServer(this.config.port, record.app.id)],
+          mcpServers: [workerToolsMcpServer(this.config.port, record.app.id, this.workers.toolsToken), this.pages.mcpServer(this.config.port, record.app.id), this.history.mcpServer(this.config.port, record.app.id)],
         }
       : undefined;
     const session = new ClaudeSession({
@@ -903,7 +1091,7 @@ ${overviewNudge()}` : "";
       env: appsCliEnv(this.store.stateDir, record.app.id),
       ...(record.sessionId ? { resumeSessionId: record.sessionId } : {}),
       instructions: appPlaybook(appInfo),
-      mcpServers: [this.pages.mcpServer(this.config.port, record.app.id)],
+      mcpServers: [this.pages.mcpServer(this.config.port, record.app.id), this.history.mcpServer(this.config.port, record.app.id)],
       ...coordinated,
       launch: claudeLaunchSpec(this.config.acpLaunch),
       askPermissions: this.config.askPermissions,
@@ -912,7 +1100,7 @@ ${overviewNudge()}` : "";
           const toolCallId = String(update["toolCallId"] ?? "");
           if (rt.hiddenTools.has(toolCallId)) return;
           // The page tools are never shown (the page's card stands for them); with helpers, neither are the worker tools.
-          if (isPageToolCall(update) || (coordinated && isWorkerToolCall(update))) {
+          if (isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update) || (coordinated && isWorkerToolCall(update))) {
             // Not shown (the worker row stands for it), but it ends the text before it, like any tool call.
             rt.hiddenTools.add(toolCallId);
             for (const draft of rt.translator.closeStreams()) this.emitItem(record, draft);
@@ -1015,9 +1203,10 @@ ${overviewNudge()}` : "";
     let environmentProblem: string | undefined;
     const outcome = await runBuildCycle<{ build: BuildInfo }>({
       maxFixes: max,
-      build: () => this.buildOnce(record, rowId),
+      build: () => this.buildOnce(record, rowId, opts.restore?.from),
       cancelled: () => isCancelled() || environmentProblem !== undefined,
       fix: async (error, attempt) => {
+        if (opts.restore) return false;
         if (isEnvironmentFailure(error)) {
           environmentProblem = error;
           return false;
@@ -1034,14 +1223,32 @@ ${overviewNudge()}` : "";
         return stop !== "cancelled";
       },
     });
+    const agentNotes = this.history.takeNotes(record.app.id, opts.notesKey);
     if (outcome.outcome === "succeeded") {
       const { build } = outcome.result;
+      const summary = opts.summary ?? (record.app.lastMessagePreview ?? "update").split(/(?<=[.!?])\s/)[0];
       try {
-        const summary = opts.summary ?? (record.app.lastMessagePreview ?? "update").split(/(?<=[.!?])\s/)[0];
         await git.commitAll(record.dir, `Build ${build.number}: ${shorten(summary, 72)}`);
       } catch (error) {
         this.log(`[${record.app.slug}] commit failed:`, (error as Error).message);
       }
+      // What changed (docs/VERSIONS.md): the agent's describe_change notes, else the PC's one line.
+      // The same code as the version before (built again after a restart, or Try again): say so.
+      const commit = await git.headCommit(record.dir);
+      const previous = this.history.recorded(record.app.id).at(-1);
+      const unchanged = !opts.restore && !agentNotes && Boolean(commit) && previous?.commit === commit;
+      build.changes = opts.restore?.notes ?? agentNotes ?? (unchanged ? { changed: "Built again, nothing changed in the app." } : { changed: shorten(summary, 160) });
+      if (opts.restore) build.restoredFrom = opts.restore.from;
+      record.app.latestBuild = build;
+      this.emitItem(record, { id: rowId, kind: "build", build, text: "The new version is ready" });
+      this.history.record(record.app.id, {
+        build: build.number,
+        ...(commit ? { commit } : {}),
+        title: build.changes.changed,
+        changes: build.changes,
+        createdAt: build.finishedAt ?? nowIso(),
+        ...(opts.restore ? { restoredFrom: opts.restore.from } : {}),
+      });
       const pushError = await git.push(record.dir);
       if (pushError) {
         this.log(`[${record.app.slug}] push failed: ${pushError}`);
@@ -1060,6 +1267,9 @@ ${overviewNudge()}` : "";
     if (environmentProblem !== undefined) {
       this.log(`[${record.app.slug}] build environment problem: ${firstLine(environmentProblem.replace(/^Build #\d+ failed\.\s*/, ""))}`);
       plain = "The PC could not build the app just now. Tap Try again in a moment.";
+    } else if (opts.restore) {
+      plain = `Version ${opts.restore.from} did not build again on this PC, so your app stays as it was.`;
+      if (!(await git.resetKeep(record.dir, opts.restore.before))) this.log(`[${record.app.slug}] could not take the go-back out again`);
     } else if (outcome.outcome === "cancelled") {
       plain = "You stopped the fix. Tap Try again to build again.";
     } else {
@@ -1071,10 +1281,10 @@ ${overviewNudge()}` : "";
     return { ok: false, error: plain, ...(outcome.outcome === "cancelled" ? { cancelled: true } : {}) };
   }
 
-  private async buildOnce(record: AppRecord, rowId: string): Promise<BuildAttempt<{ build: BuildInfo }>> {
+  private async buildOnce(record: AppRecord, rowId: string, restoredFrom?: number): Promise<BuildAttempt<{ build: BuildInfo }>> {
     const app = record.app;
     const number = (app.latestBuild?.number ?? 0) + 1;
-    let build: BuildInfo = { number, status: "running", startedAt: nowIso() };
+    let build: BuildInfo = { number, status: "running", startedAt: nowIso(), ...(restoredFrom ? { restoredFrom } : {}) };
     app.latestBuild = build;
     this.setStatus(record, "building");
     const progress = new BuildProgress(!existsSync(join(record.dir, "android", "app", "build")));
@@ -1163,4 +1373,24 @@ ${overviewNudge()}` : "";
     record.app.iconVersion += 1;
     this.store.save();
   }
+}
+
+/** A crash report from a phone, checked and trimmed (null when it lacks the message). */
+export function cleanCrashReport(body: unknown): CrashReport | null {
+  if (!body || typeof body !== "object") return null;
+  const b = body as Record<string, unknown>;
+  const message = typeof b["message"] === "string" ? withoutEmDashes(b["message"]).trim().slice(0, 2000) : "";
+  if (!message) return null;
+  const kind = b["kind"] === "error" ? "error" : "crash";
+  const at = typeof b["at"] === "string" && !Number.isNaN(Date.parse(b["at"])) ? new Date(b["at"]).toISOString() : nowIso();
+  const stack = typeof b["stack"] === "string" ? b["stack"].slice(0, 16 * 1024) : undefined;
+  const screen = typeof b["screen"] === "string" ? b["screen"].trim().slice(0, 80) : undefined;
+  const versionCode = typeof b["versionCode"] === "number" && Number.isInteger(b["versionCode"]) ? b["versionCode"] : undefined;
+  const diary = Array.isArray(b["diary"])
+    ? (b["diary"] as unknown[])
+        .slice(-50)
+        .filter((e): e is { at: string; text: string } => !!e && typeof (e as { text?: unknown }).text === "string")
+        .map((e) => ({ at: String(e.at ?? "").slice(0, 40), text: e.text.slice(0, 200) }))
+    : undefined;
+  return { kind, message, at, ...(stack ? { stack } : {}), ...(screen ? { screen } : {}), ...(versionCode ? { versionCode } : {}), ...(diary?.length ? { diary } : {}) };
 }

@@ -14,6 +14,7 @@ import type {
   AdminState,
   App,
   AppPreset,
+  AppVersion,
   ChatItem,
   ImageUpload,
   KeysBackupRequest,
@@ -302,6 +303,28 @@ export class AdminClient extends EventEmitter {
 
   answerPermission(appId: string, requestId: string, optionId: string): Promise<void> {
     return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/permission`, { requestId, optionId });
+  }
+
+  // ---------- versions, undo and crashes (docs/VERSIONS.md)
+
+  /** Every version of the app, newest first (an older companion has no such route: an empty list). */
+  versions(appId: string): Promise<AppVersion[]> {
+    return this.request<AppVersion[]>("GET", `/api/apps/${encodeURIComponent(appId)}/versions`);
+  }
+
+  /** Builds an earlier version again as a new version, so it installs over the current one. */
+  restoreVersion(appId: string, build: number): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(String(build))}/restore`, {});
+  }
+
+  /** Goes back to the version before the newest one. */
+  undo(appId: string): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/undo`, {});
+  }
+
+  /** "Fix it" on a crash card: the crash goes to the app's chat as the person's message. */
+  fixCrash(appId: string, crashId: string): Promise<void> {
+    return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/crashes/${encodeURIComponent(crashId)}/fix`, {});
   }
 
   // ---------- the person's to-do list for an app (shared/protocol.ts "To-do")

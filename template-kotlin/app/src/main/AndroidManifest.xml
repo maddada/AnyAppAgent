@@ -26,6 +26,7 @@
   </queries>
 
   <application
+    android:name=".AnyApp"
     android:allowBackup="true"
     android:icon="@mipmap/ic_launcher"
     android:roundIcon="@mipmap/ic_launcher"
@@ -42,6 +43,16 @@
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
     </activity>
+
+    <!-- The diary (com.anyapp.app.diary): AnyAppAgent asks for it; the answer goes only to the
+         app that installed this one. Keep it. -->
+    <receiver
+      android:name=".diary.DiaryRequestReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="com.anyapp.action.DIARY_REQUEST" />
+      </intent-filter>
+    </receiver>
 
     <!-- Alarms (com.anyapp.app.alarms): keep these. -->
     <receiver

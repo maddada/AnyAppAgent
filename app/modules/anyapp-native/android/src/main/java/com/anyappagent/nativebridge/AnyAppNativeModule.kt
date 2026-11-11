@@ -72,9 +72,11 @@ class AnyAppNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("AnyAppNative")
 
-    Events("onInstallStatus", "onNetworkChanged")
+    Events("onInstallStatus", "onNetworkChanged", "onAppCrash", "onAppDiary")
 
     OnCreate {
+      AppReports.onCrash = { pkg -> sendEvent("onAppCrash", mapOf("packageName" to pkg)) }
+      AppReports.onDiary = { pkg, requestId, diary -> sendEvent("onAppDiary", mapOf("packageName" to pkg, "requestId" to requestId, "diary" to diary)) }
       InstallEvents.listener = { sessionId, status, message, packageName, confirm -> onInstallEvent(sessionId, status, message, packageName, confirm) }
       networkObserver = NetworkObserver(context) { sendEvent("onNetworkChanged", mapOf<String, Any>()) }.also { it.start() }
       // Easy Connect: the interface lister and the client key, before JS can ask for a tunnel.
@@ -92,6 +94,8 @@ class AnyAppNativeModule : Module() {
       networkObserver?.stop()
       networkObserver = null
       InstallEvents.listener = null
+      AppReports.onCrash = null
+      AppReports.onDiary = null
     }
 
     // ---------- other apps
@@ -248,6 +252,18 @@ class AnyAppNativeModule : Module() {
       } catch (_: SecurityException) {
         false
       }
+    }
+
+    // ---------- crash reports and diaries from the apps (docs/VERSIONS.md)
+
+    /** JSON [{packageName, report}] of the crashes waiting to go to the PC; they are forgotten here. */
+    Function("takeWaitingCrashes") {
+      AppReports.takeWaiting(context)
+    }
+
+    /** Asks the app for its diary; the answer arrives as onAppDiary. False when it is not installed. */
+    Function("requestDiary") { packageName: String, requestId: String ->
+      AppReports.requestDiary(context, packageName, requestId)
     }
 
     Function("cancelNotification") { id: Int ->

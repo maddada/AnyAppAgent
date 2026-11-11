@@ -13,9 +13,11 @@ class AlarmReceiver : BroadcastReceiver() {
     val alarm = AlarmStore.get(context, id)
     if (alarm == null) {
       Log.w(AlarmScheduler.TAG, "Alarm $id fired but was cancelled")
+      AlarmDiary.note(context, "An alarm went off after it was cancelled, so it stayed silent")
       return
     }
     Log.i(AlarmScheduler.TAG, "Alarm fired: $id (${alarm.title})")
+    AlarmDiary.note(context, "${alarm.title} alarm rang")
 
     val next = alarm.nextOccurrence(System.currentTimeMillis())
     if (next != null) AlarmScheduler.schedule(context, next) else AlarmStore.remove(context, id)
@@ -37,6 +39,7 @@ class AlarmReceiver : BroadcastReceiver() {
         // Exact alarms are allowed to start foreground services from the background, so this
         // should not happen; fall back to a notification with sound.
         Log.e(AlarmScheduler.TAG, "Could not start alarm playback", e)
+        AlarmDiary.note(context, "${alarm.title} alarm could not play its sound, so it showed a notification")
         AlarmNotifications.post(context, alarm, quiet = false)
       }
     }

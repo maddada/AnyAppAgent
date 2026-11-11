@@ -31,10 +31,12 @@ object AlarmScheduler {
       // setAlarmClock is never deferred by Doze or battery savers.
       am.setAlarmClock(AlarmManager.AlarmClockInfo(alarm.at, launchPendingIntent(c)), operation)
       Log.i(TAG, "Scheduled exact alarm ${alarm.id} at ${alarm.at}")
+      AlarmDiary.note(c, "${alarm.title} alarm set for ${AlarmDiary.time(alarm.at)}")
       true
     } else {
       am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarm.at, operation)
       Log.w(TAG, "Exact alarms not allowed; scheduled ${alarm.id} inexactly")
+      AlarmDiary.note(c, "${alarm.title} alarm set for ${AlarmDiary.time(alarm.at)}, but it may ring late: exact alarms are not allowed")
       false
     }
   }

@@ -12,6 +12,10 @@ import type {
   PermissionAnswerRequest,
   SendMessageRequest,
   TodoItem,
+  AppVersion,
+  CrashInfo,
+  CrashReport,
+  DiaryAnswer,
 } from "./protocol";
 
 /** An error with a sentence that can be shown to the user as is. */
@@ -130,6 +134,14 @@ export class Client {
   /** Sends the item's text to the app's chat as a message, then ticks it off. */
   sendTodo = (id: string, todoId: string) =>
     this.call<TodoItem>(`/api/apps/${encodeURIComponent(id)}/todos/${encodeURIComponent(todoId)}/send`, "POST", {});
+
+  // Versions and undo, crashes, the diary (docs/VERSIONS.md)
+  versions = (id: string) => this.call<AppVersion[]>(`/api/apps/${encodeURIComponent(id)}/versions`);
+  restoreVersion = (id: string, build: number) => this.call<App>(`/api/apps/${encodeURIComponent(id)}/versions/${build}/restore`, "POST", {});
+  undo = (id: string) => this.call<App>(`/api/apps/${encodeURIComponent(id)}/undo`, "POST", {});
+  reportCrash = (id: string, report: CrashReport) => this.call<CrashInfo>(`/api/apps/${encodeURIComponent(id)}/crashes`, "POST", report);
+  fixCrash = (id: string, crashId: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/crashes/${encodeURIComponent(crashId)}/fix`, "POST", {});
+  diaryAnswer = (id: string, answer: DiaryAnswer) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/diary`, "POST", answer);
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;

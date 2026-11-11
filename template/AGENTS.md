@@ -22,6 +22,9 @@ src/lib/storage.ts       persistent JSON storage + usePersistentState hook
 src/lib/notifications.ts notification permission, notify now, exact scheduled reminders
 src/lib/alarms.ts        exact alarms with sound + spoken text, work while the app is closed
 src/lib/ai.ts            AI (chat, streaming, tools, agents) through AnyAppAgent's key
+src/lib/diary.ts         the app's diary: short private notes of what the app did (see "The diary")
+src/lib/crash.ts         crash catcher: crashes reach AnyAppAgent, which offers a fix (see "Crashes")
+src/components/CrashBoundary.tsx  "Something went wrong" screen instead of a blank one (leave it)
 src/components/AiSetupNotice.tsx  the "AI is not set up" card with a button to AnyAppAgent
 src/theme.ts             colours (light + dark), spacing, radius, font sizes
 assets/icon.png          THE launcher icon (1024x1024 PNG); also the splash and starter image
@@ -29,6 +32,7 @@ assets/sounds/           sound files for alarms and in-app playback (adhan.mp3, 
 scripts/make-icon.mjs    makes assets/icon.png from a colour and a glyph or letter
 modules/alarms/          native (Kotlin) code behind src/lib/alarms.ts
 modules/ai/              native (Kotlin) code behind src/lib/ai.ts (leave it)
+modules/diary/           native (Kotlin) code behind src/lib/diary.ts and src/lib/crash.ts (leave it)
 app.json                 app config (name, permissions, plugins)
 overview.md              what the person wants the app to do (see below)
 ```
@@ -324,6 +328,44 @@ try { await ask('Hi'); } catch (e) {
   (`npx expo install expo-image-picker`, then `launchImageLibraryAsync({ base64: true, quality: 0.6 })`)
   and pass `asset.base64`. Keep images small (quality 0.6 or a resize), a few MB at most.
 - Save conversations with `usePersistentState` if the person should find them again.
+
+### The diary (what the app did, for fixing things later)
+
+The app keeps a small private diary on the phone. When the person says something did not work
+("why didn't it ring?"), you read it with the `read_diary` tool (MCP server `app`) instead of
+guessing. So write a note for every background action and every event that matters later:
+
+```tsx
+import { diary } from '@/lib/diary';
+
+diary('Prayer times loaded for Ajman: 6 times');
+diary('Fajr alarm set for 05:12');           // the alarms write "set" and "rang" notes by themselves
+diary('Location not allowed, used the saved city');
+diary('Could not load the weather: offline');
+```
+
+- One short line each (at most 200 characters); the newest 300 notes are kept.
+- **Never personal content**: no names, messages, places the person typed, health data, or
+  anything they wrote. Write what the app did and why ("Reminder set for 08:00", "List saved: 12
+  items"), not what it contains. The diary goes only to the person's own PC, and only when you
+  ask for it; never copy it into the app, a page or GitHub.
+- Crashes and caught errors are written to it by themselves.
+
+### Crashes
+
+Crashes are caught by themselves (`src/lib/crash.ts`, `modules/diary`, `src/components/CrashBoundary.tsx`,
+set up in `src/App.tsx`: leave that in place). AnyAppAgent shows the person "<app> crashed. Fix
+it?" and a tap sends you the report (message, stack, screen, version, the latest diary notes) as
+"Fix the crash". The stack comes from the release bundle, so match it to the code by the error
+message and the screen. An error you catch but want to hear about: `reportError(error)` from
+`@/lib/crash`.
+
+### What changed
+
+Before you end a turn that changed the app, call the `describe_change` tool (MCP server `app`)
+with what changed in the person's words, what to try, and anything to know. It shows on the new
+version's card on their phone. Every version is a commit in Git ("Build N: ..."); the person can go
+back to any version with Versions in their chat, so never rewrite Git history.
 
 ### Other things already installed
 

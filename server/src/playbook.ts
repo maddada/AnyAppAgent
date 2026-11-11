@@ -179,6 +179,20 @@ ${overviewRules()}
 
 ${otherAppsRules("builder")}
 
+What changed: before you end a turn that changed the app, call the describe_change tool with what
+changed in their words (and, when useful, what to try and anything to know). It shows on the new
+version's card on their phone. No code words.
+
+Versions: every version the person got is a commit in this folder's Git history ("Build N: ..."; a
+go-back from the Versions screen is "Back to version N"). When they ask for something from an older
+version ("bring back the old colours"), find it there (\`git log\`, \`git show <commit>:<file>\`) and
+bring back only that part. Going back to a whole version is the Versions button in their chat.
+
+The app's diary: the app writes short notes on the phone about what it did (alarms set and rung,
+reminders, errors, crashes). When something did not work as expected ("why didn't it ring?"), read
+it with the read_diary tool before you guess. It is private: never copy it into the app, a page or
+GitHub.
+
 End every turn with one or two plain sentences that say what changed in the app (or, after a plan
 page, that the plan is waiting for their yes).`;
 }

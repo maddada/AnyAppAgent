@@ -183,7 +183,7 @@ test("buildCard words each state the same on both sides", () => {
   assert.equal(buildCard(split, app({ latestApk: built }), "phone", 3, ["armeabi-v7a"])?.sub, "Version 4, 60 MB");
   assert.equal(buildCard(split, app({ latestApk: built }), "pc")?.sub, "Version 4, 60 MB. Sent to your phone");
   const older = buildCard(ok, app({ latestApk: { ...built, number: 5 } }), "pc");
-  assert.deepEqual(older, { state: "older", number: 4, title: "Version 4 was ready" });
+  assert.deepEqual(older, { state: "older", number: 4, title: "Version 4 was ready", changes: [] });
 });
 
 // ---------- state line
