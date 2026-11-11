@@ -42,6 +42,8 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   getPackageInfo(packageName: string): PackageInfo | null;
   getPackagesInfo(packageNames: string[]): Record<string, PackageInfo | null>;
   launch(packageName: string): boolean;
+  /** A light haptic tick (long press). Optional: an older native build has none. */
+  haptic?(): boolean;
   openAppSettings(packageName: string): boolean;
   requestUninstall(packageName: string): boolean;
   canInstallPackages(): boolean;
