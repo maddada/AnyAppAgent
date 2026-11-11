@@ -146,6 +146,14 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .typed .k { color: var(--aa-text-secondary); font-size: var(--aa-type-label-size); line-height: var(--aa-type-mono-line); }
 .typed .v { font-family: var(--aa-font-mono); font-size: var(--aa-type-mono-size); line-height: var(--aa-type-mono-line); color: var(--aa-text); }
 .ec-progress { padding: var(--aa-space-md) var(--aa-space-lg); display: flex; flex-direction: column; gap: var(--aa-space-sm); }
+/* The pairing and download popups: the only places a QR or a pairing code shows. */
+.dialog .pair { margin-top: var(--aa-space-lg); flex-wrap: wrap; }
+.dialog .get-phone { margin-top: var(--aa-space-md); }
+.pair-spent { display: flex; flex-direction: column; align-items: flex-start; gap: var(--aa-space-md); margin-top: var(--aa-space-lg); }
+.pair-private { margin-top: var(--aa-space-lg); }
+.code-cta { display: flex; flex-direction: column; align-items: flex-start; gap: var(--aa-space-sm); margin-top: var(--aa-space-xl); }
+.connect-row { display: flex; align-items: center; gap: var(--aa-space-xl); padding: var(--aa-space-lg); border-radius: var(--aa-radius-card); background: var(--aa-surface); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border); }
+.connect-row .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-xs); }
 
 /* ---------- main window */
 .dm { height: 100%; display: flex; }

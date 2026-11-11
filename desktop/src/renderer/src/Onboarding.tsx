@@ -2,12 +2,11 @@
 // with Back and Skip or Continue. Every step checks itself and fixes itself where it can.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, Check, ChevronLeft, Cloud, Copy, Download, ExternalLink, KeyRound, Monitor, Smartphone, Wrench, X } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, Cloud, Copy, Download, ExternalLink, KeyRound, Monitor, QrCode, Smartphone, Wrench, X } from "lucide-react";
 import type { Snapshot } from "../../shared/types.ts";
-import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
-import { PairingPanel } from "./Pairing.tsx";
-import { Icon, QrPlate, Spinner, Wordmark } from "./ui.tsx";
-import { GetPhoneApp } from "./PhoneApp.tsx";
+import { PairingDialog } from "./Pairing.tsx";
+import { Icon, Spinner, Wordmark } from "./ui.tsx";
+import { GetPhoneAppDialog } from "./PhoneApp.tsx";
 
 const api = window.anyapp;
 
@@ -462,6 +461,7 @@ function GitHubStep({ s }: { s: Snapshot }) {
 }
 
 function PhoneGetStep() {
+  const [show, setShow] = useState(false);
   useEffect(() => {
     // Start "connect from anywhere" now: its first start takes a few minutes, and this step covers that.
     void api.easyConnectAuto();
@@ -469,17 +469,19 @@ function PhoneGetStep() {
   return (
     <>
       <Head eyebrow={stepOf("phone-get")} title="Put AnyAppAgent on your phone" lede="Your phone needs the AnyAppAgent app. It downloads from AnyAppAgent's page on GitHub, not from the Play Store." />
-      <div className="pair">
-        <GetPhoneApp big />
-        <How
-          flush
-          items={[
-            ["Point your phone's camera at this code", "Tap the link it shows. The download starts."],
-            ["Open the downloaded file", "It takes a moment."],
-            ["Allow installing from this source", "Android asks once because it is not from the Play Store. Then tap Install."],
-          ]}
-        />
+      <div className="code-cta">
+        <button className="btn btn-primary" onClick={() => setShow(true)} data-testid="show-download-code">
+          <Icon of={Download} size="button" /> Show download code
+        </button>
       </div>
+      <How
+        items={[
+          ["Point your phone's camera at the code", "Tap the link it shows. The download starts."],
+          ["Open the downloaded file", "It takes a moment."],
+          ["Allow installing from this source", "Android asks once because it is not from the Play Store. Then tap Install."],
+        ]}
+      />
+      {show && <GetPhoneAppDialog onClose={() => setShow(false)} />}
     </>
   );
 }
@@ -487,6 +489,7 @@ function PhoneGetStep() {
 function PhonePairStep({ s, onPaired }: { s: Snapshot; onPaired: () => void }) {
   const startCount = useRef(s.checks.phone.pairedCount);
   const [justPaired, setJustPaired] = useState(false);
+  const [show, setShow] = useState(false);
   useEffect(() => {
     if (s.checks.phone.pairedCount > startCount.current && !justPaired) {
       setJustPaired(true);
@@ -497,13 +500,19 @@ function PhonePairStep({ s, onPaired }: { s: Snapshot; onPaired: () => void }) {
   const name = s.admin?.devices.at(-1)?.name;
   return (
     <>
-      <Head eyebrow={stepOf("phone-pair")} title="Connect your phone" lede="Open AnyAppAgent on your phone and scan this code. Your phone and this PC then stay connected." />
+      <Head eyebrow={stepOf("phone-pair")} title="Connect your phone" lede="Show the pairing code here, then scan it with AnyAppAgent on your phone. Your phone and this PC then stay connected." />
       {justPaired ? (
         <CheckCard state="ready" icon={Smartphone} title={name ? `${name} is connected` : "Your phone is connected"} status="Your phone and this PC can make apps together now." />
       ) : (
         <>
           {s.checks.phone.pairedCount > 0 && <CheckCard state="ready" icon={Smartphone} title={s.checks.phone.summary} status="You can connect another phone too, or carry on." />}
-          <PairingPanel s={s} />
+          <div className="code-cta">
+            <button className="btn btn-primary" onClick={() => setShow(true)} data-testid="show-pairing-code">
+              <Icon of={QrCode} size="button" /> Show pairing code
+            </button>
+            <p className="label secondary">Keep the code private: anyone who scans it can use this PC to make apps.</p>
+          </div>
+          {show && <PairingDialog s={s} title="Connect your phone" onClose={() => setShow(false)} />}
         </>
       )}
     </>

@@ -1,10 +1,11 @@
 // Getting AnyAppAgent itself onto the phone: a QR code for the phone app on this project's public
 // GitHub release (works on any network, with only the phone's camera). The same-Wi-Fi download
-// from this PC stays as a fallback for when the release cannot be reached.
+// from this PC stays as a fallback for when the release cannot be reached. The QR shows only in its
+// popup (GetPhoneAppDialog), never straight on a screen.
 import { useEffect, useState } from "react";
 import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
 import type { PhoneDownload, PhoneRelease } from "../../shared/types.ts";
-import { QrPlate, Spinner } from "./ui.tsx";
+import { Dialog, QrPlate, Spinner } from "./ui.tsx";
 
 const api = window.anyapp;
 
@@ -53,5 +54,14 @@ export function GetPhoneApp({ big }: { big?: boolean }) {
         </button>
       )}
     </div>
+  );
+}
+
+/** The download popup: the only place the phone app's QR shows. */
+export function GetPhoneAppDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Dialog title="Get AnyAppAgent on a phone" onClose={onClose}>
+      <GetPhoneApp big />
+    </Dialog>
   );
 }

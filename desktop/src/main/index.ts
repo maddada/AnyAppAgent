@@ -507,7 +507,11 @@ function ipc(): void {
     log("[desktop] turning Easy Connect on for the phone step");
     await admin.easyConnect(true).catch((e) => log(`[desktop] easy connect: ${(e as Error).message}`));
   });
-  ipcMain.handle("pairing:new", () => admin?.newPairing());
+  // Only the pairing popup asks for a code (it is a secret, never made while nothing shows it).
+  ipcMain.handle("pairing:new", () => {
+    log("[desktop] new pairing code asked for by the pairing popup");
+    return admin?.newPairing();
+  });
   ipcMain.handle("pairing:easy", (_e, enabled: boolean) => admin?.easyConnect(Boolean(enabled)));
   ipcMain.handle("devices:remove", (_e, id: string) => admin?.removeDevice(String(id)));
   ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
