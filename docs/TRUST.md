@@ -133,6 +133,33 @@ types `TokenUsage`, `AppUsage`, `PlanLimit`, `UsageState`, `AppHealth`, `HealthR
 `POST /api/apps/:id/keep-healthy`, `POST /api/admin/backup`, `POST /api/admin/backup/run`,
 `POST /api/admin/backup/restore`.
 
-## Proof
+## Proof (2026-11-11 and 12)
 
-See "Proof (2026-11-11)" below.
+My own dev desktop app and companion on port 8795, `ANYAPP_GITHUB=off`, state folders
+`C:\aa\t\trust\A-state` and `B-state` (each also its `ANYAPP_HOME`, so its own keystore), my own
+phone app copy `com.anyappagent.trust` on `emulator-5560`. Screenshots: `C:\aa\e2e\trust\`.
+
+| Step | Result |
+| ---- | ------ |
+| PC A: New app "Trust Tally" (Kotlin), plan, "Yes, build it", then "Show the word Today ..." | Real Claude turns with helpers; builds 1 and 2; the phone installed both (v2 over v1); count tapped to 3 |
+| Usage under each message | 33k, 46k, 27k tokens (later 49k for the update); Settings: November 106k, Trust Tally 3 changes, about 35k each |
+| The plan | Claude reported a weekly limit with no percentage: shown as "Weekly limit: Claude says there is room, resets at Sun 14:00", no made-up percentage. On the fresh PC B nothing was reported yet: "Claude has not shared ..." |
+| Heads-up | "Redesign every screen ..." on the phone shows "A big job" with this app's average; not sent |
+| Back up my apps (Settings: password twice, folder) | `recovery.json` + one `.anyappbackup` (1 MB: 1 app, 2 keys). The password, the app key's store password and the app's name are in no file and no log |
+| Stop A; start PC B on an empty state folder; Restore with a wrong password | "Wrong password, or the backup was changed." |
+| Restore with the right password | "Brought back 1 app: Trust Tally"; the app's Git history (10 commits) in `B-apps\trusttally`; its key in B's keystore with the same certificate; build 3 made by itself |
+| Phone, paired with B | Trust Tally updated to version 3 by itself: `firstInstallTime` still 23:52:44 (v1 from PC A), same signature, count still 3, "Today" shown |
+| App made behind (its `targetSdk` lowered to 34, as an app from an older template) | Yellow sign on the PC row and the phone tile, "Needs an update", the monthly reminder on both, the notice above its chat |
+| "Update it" on the phone (heads-up, then Update it) | The update message in the chat as the person's own; a helper moved it to API 36; full build 4 installed in place (`targetSdk=36`, count kept); the sign and the reminder went away by themselves |
+| "Got it" on the reminder (PC) | Put away until 2026-12-11 |
+| The health check on the PC's real apps in `C:\aa\apps`, read only | All five are behind: made before the template's updates, feedback and AI parts (`health-check-real-apps.txt`); a fresh template copy is not |
+
+Not proven on the device: tapping the yellow sign itself (it now opens the app's sheet, built after
+the run above); the emulator kept showing "Android System isn't responding" at that point. The
+dark phone sheet shot is missing for the same reason.
+
+Tests: `server` 105 (11 new in `test/trust.test.ts`: usage parsing, plan limits, month rollover,
+behind reasons, the reminder, the encryption, backup and restore through Git bundles, a missing
+folder), `shared/chat` 58 (5 new), `builder/test/keys.test.mjs` 3 (real keytool, after the
+export/import split), `shared/theme` 8 (new contrast pairs), `desktop` 58 and typecheck, `app`
+typecheck and lint.
