@@ -3,6 +3,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { AppPreset } from "../../shared/protocol.ts";
 import { REPO_DIR } from "./config.ts";
 import * as fake from "./fake-builder.ts";
 
@@ -14,7 +15,7 @@ export interface BuildResult {
 
 export interface Builder {
   kind: "real" | "fake";
-  createApp(args: { dir: string; name: string; slug: string; packageName: string; onLog?: (line: string) => void }): Promise<void>;
+  createApp(args: { dir: string; name: string; slug: string; packageName: string; preset?: AppPreset; onLog?: (line: string) => void }): Promise<void>;
   buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void }): Promise<BuildResult>;
   getIconPath(args: { dir: string }): string | null;
 }

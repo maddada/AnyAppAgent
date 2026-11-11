@@ -268,7 +268,7 @@ export function startHttpServer(deps: {
       if (method === "GET") return sendJson(res, 200, apps.list());
       if (method === "POST") {
         const body = await readBody<CreateAppRequest>(req);
-        return sendJson(res, 201, apps.create(str(body.name, "name"), str(body.prompt, "prompt")));
+        return sendJson(res, 201, apps.create(str(body.name, "name"), str(body.prompt, "prompt"), body.preset));
       }
       return sendError(res, 405, "Method not allowed.");
     }

@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { networkInterfaces, hostname } from "node:os";
 import { join } from "node:path";
 import WebSocket from "ws";
-import type { AdminEvent, AdminState, App, ChatItem, ImageUpload, PairedDevice, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminEvent, AdminState, App, AppPreset, ChatItem, ImageUpload, PairedDevice, WorkerInfo } from "../../../shared/protocol.ts";
 
 const VIRTUAL_ADAPTER = /vethernet|wsl|hyper-v|virtualbox|vmware|tailscale|zerotier|docker|loopback|vpn/i;
 
@@ -287,8 +287,9 @@ export class AdminClient extends EventEmitter {
   }
 
   /** A new app, made from this PC: the same route and fields as the phone's New app sheet. */
-  async createApp(name: string, prompt: string): Promise<App> {
-    const app = await this.request<App>("POST", "/api/apps", { name, prompt });
+  async createApp(name: string, prompt: string, preset?: AppPreset): Promise<App> {
+    // The default is left out, so an older companion still accepts the request.
+    const app = await this.request<App>("POST", "/api/apps", { name, prompt, ...(preset && preset !== "react-native" ? { preset } : {}) });
     if (!this.apps.some((a) => a.id === app.id)) {
       this.apps.push(app);
       this.emit("apps", this.apps);

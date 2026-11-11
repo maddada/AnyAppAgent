@@ -1,4 +1,5 @@
-// The template, its installed dependencies (cached once per lockfile), and making a full app tree.
+// The templates, the React Native template's installed dependencies (cached once per lockfile),
+// and making a full app tree for either preset.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -7,29 +8,30 @@ import path from 'node:path';
 import { BUILDER_VERSION, CACHE_DIR, TEMPLATE_DIR } from './env.mjs';
 import { npmCommand, run } from './exec.mjs';
 import { withFileLock } from './lock.mjs';
-
-/** Folders of the template that are never copied (generated or installed). */
-const SKIP = new Set(['node_modules', 'build', 'android', 'ios', '.expo', 'dist', '.git']);
+import { checkPreset, skipFor, templateDirFor } from './presets.mjs';
 
 export const DEPS_STAMP = path.join('node_modules', '.anyapp-deps');
 
-function listTemplateFiles(root = TEMPLATE_DIR, rel = '') {
+function listTemplateFiles(root = TEMPLATE_DIR, skip = skipFor('react-native'), rel = '') {
   const out = [];
   for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) {
-    if (SKIP.has(e.name) && rel === '') continue;
     const r = path.join(rel, e.name);
-    if (e.isDirectory()) out.push(...listTemplateFiles(root, r));
+    if (skip.has(r)) continue;
+    if (e.isDirectory()) out.push(...listTemplateFiles(root, skip, r));
     else if (e.isFile()) out.push(r);
   }
   return out.sort();
 }
 
-/** Changes whenever any template source file (not node_modules) or the builder changes. */
-export function templateHash() {
+/** Changes whenever any source file of the preset's template (not node_modules) or the builder changes. */
+export function templateHash(preset = 'react-native') {
+  const root = templateDirFor(preset);
   const h = crypto.createHash('sha256').update(`builder:${BUILDER_VERSION}\n`);
-  for (const f of listTemplateFiles()) {
+  // The React Native hash is computed exactly as before, so existing spares stay valid.
+  if (checkPreset(preset) !== 'react-native') h.update(`preset:${preset}\n`);
+  for (const f of listTemplateFiles(root, skipFor(preset))) {
     h.update(f.replace(/\\/g, '/') + '\n');
-    h.update(fs.readFileSync(path.join(TEMPLATE_DIR, f)));
+    h.update(fs.readFileSync(path.join(root, f)));
   }
   return h.digest('hex').slice(0, 16);
 }
@@ -101,8 +103,26 @@ export async function copyTree(src, dest) {
   await fsp.cp(src, dest, { recursive: true, verbatimSymlinks: true });
 }
 
-/** Writes a complete, installed app tree (template sources + node_modules) into dest. */
-export async function makeAppTree(dest, log = () => {}) {
+/** Copies the preset's template sources (no installed or generated files) into dest. */
+async function copyTemplateFiles(dest, preset) {
+  const root = templateDirFor(preset);
+  await fsp.mkdir(dest, { recursive: true });
+  for (const f of listTemplateFiles(root, skipFor(preset))) {
+    const to = path.join(dest, f);
+    await fsp.mkdir(path.dirname(to), { recursive: true });
+    await fsp.copyFile(path.join(root, f), to);
+  }
+}
+
+/**
+ * Writes a complete app tree into dest: for react-native the template sources + node_modules,
+ * for kotlin the template sources (Gradle downloads into its own shared, locked cache).
+ */
+export async function makeAppTree(dest, log = () => {}, preset = 'react-native') {
+  if (checkPreset(preset) === 'kotlin') {
+    await copyTemplateFiles(dest, preset);
+    return;
+  }
   const deps = await ensureDepsCache(log);
   await fsp.mkdir(dest, { recursive: true });
   for (const f of listTemplateFiles()) {

@@ -12,6 +12,7 @@ import { ClaudeSession, claudeLaunchSpec, pickAllowOption } from "./acp/claude-s
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { Config } from "./config.ts";
 import { workerPlaybook } from "./coordinator-playbook.ts";
+import { checkCommand } from "./playbook.ts";
 import { nowIso, readJson, writeJsonAtomic } from "./fs-util.ts";
 import { existsSync } from "node:fs";
 import {
@@ -65,9 +66,9 @@ type Ended = { state: WorkerState; build?: string };
 /** How often a helper may try to combine its change with ones that landed first. */
 const MAX_CONFLICT_TRIES = 3;
 
-function conflictPrompt(base: string, files: string[]): string {
+function conflictPrompt(base: string, files: string[], check: string): string {
   return `Your change could not be added to the app yet: while you worked, another helper's change landed and touches the same parts of ${files.join(", ")}.
-In your folder (your own copy of the app), run \`git merge ${base}\` to bring in the app's latest version, then resolve every conflict so that both changes work together: keep the other change and add yours on top. Remove every conflict marker, then run \`npm run check\`. Do not commit: the PC saves your work and tries to add it again when you end your turn.
+In your folder (your own copy of the app), run \`git merge ${base}\` to bring in the app's latest version, then resolve every conflict so that both changes work together: keep the other change and add yours on top. Remove every conflict marker, then run \`${check}\`. Do not commit: the PC saves your work and tries to add it again when you end your turn.
 End with one plain sentence on how you combined the two changes.`;
 }
 
@@ -336,7 +337,7 @@ export class WorkerManager {
     const session = new ClaudeSession({
       cwd,
       ...(w.sessionId ? { resumeSessionId: w.sessionId } : {}),
-      instructions: workerPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: cwd }, w.info),
+      instructions: workerPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: cwd, preset: record.app.preset }, w.info),
       launch: claudeLaunchSpec(this.host.config.acpLaunch),
       onUpdate: (update) => {
         for (const draft of rt.translator.translate(update)) {
@@ -490,7 +491,7 @@ export class WorkerManager {
           }
           this.setState(record, w, "working", "Fitting its change together with another one");
           const base = await appBranch(record.dir);
-          const stop = await this.turn(record, w, rt, conflictPrompt(base, land.conflict), "Another change landed first and touches the same files. Combine both.");
+          const stop = await this.turn(record, w, rt, conflictPrompt(base, land.conflict, checkCommand(record.app.preset)), "Another change landed first and touches the same files. Combine both.");
           if (rt.stopRequested || stop === "cancelled") return { state: "stopped" };
           if (stop === "error") return { state: "failed" };
           w.conflictsResolved = (w.conflictsResolved ?? 0) + 1;
@@ -543,7 +544,7 @@ export class WorkerManager {
       title: "Build the app again",
       changesApp: true,
       forceBuild: true,
-      brief: `The person tapped Try again because the app did not build${lastError ? ` (${lastError})` : ""}. Look at the app, make sure \`npm run check\` passes, and fix anything you find. The PC builds the app when you end your turn; if that build fails, its output comes back to you.`,
+      brief: `The person tapped Try again because the app did not build${lastError ? ` (${lastError})` : ""}. Look at the app, make sure \`${checkCommand(this.host.record(appId)?.app.preset)}\` passes, and fix anything you find. The PC builds the app when you end your turn; if that build fails, its output comes back to you.`,
     });
   }
 

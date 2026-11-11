@@ -1,7 +1,15 @@
 // The instructions for an app's coordinator (the main chat) and for its workers. Modelled on the
 // Ghostex coordinator playbook (the user's own ghostex-orchestrator skill), cut down for one person
 // who is not technical and talks to one app from their phone. See docs/APP-COORDINATOR.md.
-import { MEMORY_FILE } from "./playbook.ts";
+import type { AppPreset } from "../../shared/protocol.ts";
+import { checkCommand, MEMORY_FILE } from "./playbook.ts";
+
+type AppInfo = { name: string; packageName: string; dir: string; preset?: AppPreset };
+
+/** Which stack the app is (the preset chosen when it was made). */
+function stack(preset: AppPreset | undefined): string {
+  return preset === "kotlin" ? "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native." : "It is a React Native (Expo) app.";
+}
 
 /** The MCP server name the coordinator's worker tools live under (tools show as mcp__workers__*). */
 export const WORKER_TOOLS_SERVER = "workers";
@@ -16,10 +24,14 @@ const TASTE = `Taste (the person's rules for every app):
   brackets.
 - A calm, well-made design that fits what the app is for: a clear layout, good spacing, readable
   text, colours chosen for this app, working in light and dark mode.
-- No purple gradients, no sparkle icons, nothing that looks like a generic "AI" app.`;
+- No purple gradients, no sparkle icons, nothing that looks like a generic "AI" app.
+- When they ask for anything AI (a chat, an assistant, smart suggestions, an agent that does things
+  in the app), use the built-in AI through AnyAppAgent ("AI" in AGENTS.md). Never ask them for an
+  API key and never call an AI service directly.`;
 
-export function coordinatorPlaybook(app: { name: string; packageName: string; dir: string }): string {
+export function coordinatorPlaybook(app: AppInfo): string {
   return `You are the main chat for the Android app "${app.name}" (package ${app.packageName}).
+${stack(app.preset)}
 The project is this folder: ${app.dir}. Its AGENTS.md (loaded through CLAUDE.md) explains how the
 app is built; your workers read it and follow it.
 
@@ -77,17 +89,17 @@ you need context and update it when something important changes. It is the one f
 ${TASTE}`;
 }
 
-export function workerPlaybook(app: { name: string; packageName: string; dir: string }, worker: { title: string; changesApp: boolean }): string {
+export function workerPlaybook(app: AppInfo, worker: { title: string; changesApp: boolean }): string {
   const job = worker.changesApp
     ? `This folder is your own copy of the app (a Git worktree with its own node_modules). Other
 helpers may be changing the app at the same time in their own copies, so change only what your
 task needs. When you finish your turn, the PC saves your work (do not commit or push yourself),
 adds it to the app, builds the app and sends the new version to the person's phone. If another
 change landed first and touches the same lines, you get a message asking you to combine the two. So finish every turn with an app that
-builds: run \`npm run check\` before you end. If the build fails, the build error comes back to you
+builds: run \`${checkCommand(app.preset)}\` before you end. If the build fails, the build error comes back to you
 as the next message: fix the cause, never remove the feature to make the error go away.`
     : `Your task is to look into something and report: do not change any of the app's files.`;
-  return `You are a worker on the Android app "${app.name}" (package ${app.packageName}). Your task:
+  return `You are a worker on the Android app "${app.name}" (package ${app.packageName}). ${stack(app.preset)} Your task:
 "${worker.title}". The project is this folder: ${app.dir}. Its AGENTS.md (loaded through
 CLAUDE.md) explains how the app is built, what is already installed and what you must never change:
 read it first and follow it.

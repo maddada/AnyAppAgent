@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { App, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
+import type { App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import type { PromptImage } from "./acp/claude-session.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
@@ -72,6 +72,9 @@ interface ReadyRecord extends AppRecord {
   /** The coordinator playbook version this app's session was given (docs/APP-COORDINATOR.md). */
   coordinatorPlaybook?: number;
 }
+
+/** The presets the phone may ask for (shared/protocol.ts AppPreset). */
+export const PRESETS: readonly AppPreset[] = ["react-native", "kotlin"];
 
 const JAVA_KEYWORDS = new Set(
   "abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null var record yield".split(
@@ -308,8 +311,9 @@ export class AppManager {
 
   // ---------- commands
 
-  create(name: string, prompt: string): App {
+  create(name: string, prompt: string, preset: unknown = "react-native"): App {
     const cleanName = name.trim().replace(/\s+/g, " ");
+    if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native or Kotlin.");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
     if (prompt.trim() === "") throw new HttpError(400, "Say what the app should do.");
     const base = slugify(cleanName);
@@ -323,6 +327,7 @@ export class AppManager {
       name: cleanName,
       slug,
       packageName: `com.anyapp.${slug}`,
+      preset: preset as AppPreset,
       status: "creating",
       iconVersion: 1,
       lastMessagePreview: shorten(prompt, 140),
@@ -345,7 +350,7 @@ export class AppManager {
     try {
       mkdirSync(this.config.appsDir, { recursive: true });
       this.log(`[${app.slug}] creating ${dir} with the ${this.builder.kind} builder`);
-      await this.builder.createApp({ dir, name: app.name, slug: app.slug, packageName: app.packageName, onLog: () => {} });
+      await this.builder.createApp({ dir, name: app.name, slug: app.slug, packageName: app.packageName, preset: app.preset ?? "react-native", onLog: () => {} });
       await git.initRepo(dir, `Create ${app.name}`);
       record.iconStamp = this.iconStamp(record);
       record.ready = true;
@@ -570,7 +575,7 @@ export class AppManager {
     if (rt.starting) return rt.starting;
     const slug = record.app.slug;
     const ready = record as ReadyRecord;
-    const appInfo = { name: record.app.name, packageName: record.app.packageName, dir: record.dir };
+    const appInfo = { name: record.app.name, packageName: record.app.packageName, dir: record.dir, preset: record.app.preset };
     const coordinated = this.workers
       ? {
           instructions: coordinatorPlaybook(appInfo),
@@ -708,7 +713,7 @@ export class AppManager {
           text: `Found a small problem. Fixing it, then building again (${attempt} of ${max})`,
         });
         this.log(`[${record.app.slug}] build ${failed.number} failed; fix attempt ${attempt} of ${max}`);
-        const stop = await fixTurn(buildFixPrompt({ buildNumber: failed.number, attempt, maxAttempts: max, error }));
+        const stop = await fixTurn(buildFixPrompt({ buildNumber: failed.number, attempt, maxAttempts: max, error, preset: record.app.preset }));
         return stop !== "cancelled";
       },
     });

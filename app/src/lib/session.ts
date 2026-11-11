@@ -26,8 +26,11 @@ import { updateKeepAlive } from "./keepalive";
 
 export async function boot() {
   const [pairing, prefs] = await Promise.all([loadPairing(), loadPrefs()]);
-  setState({ prefs, ready: true });
+  setState({ prefs });
+  // Pairing first, then ready: a cold start straight into a screen that needs the pairing (the
+  // anyappagent://settings link apps open for "AI for your apps") must never render without it.
   if (pairing) applyPairing(pairing);
+  setState({ ready: true });
   AppState.addEventListener("change", (state) => {
     if (state === "active") onForeground();
   });

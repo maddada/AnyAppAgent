@@ -19,11 +19,17 @@ export interface BuildInfo {
   error?: string; // short, human readable, set when failed
 }
 
+// What an app is made from (chosen under "Advanced" in the New app sheet):
+//   "react-native": Expo / React Native (the default; can come to iPhone later)
+//   "kotlin": native Android (Kotlin, Jetpack Compose; smaller, faster, Android only)
+export type AppPreset = "react-native" | "kotlin";
+
 export interface App {
   id: string;
   name: string; // what the user typed, shown under the icon
   slug: string;
   packageName: string; // Android application id, e.g. com.anyapp.prayeralarm
+  preset?: AppPreset; // absent on apps made before presets existed: those are "react-native"
   status: AppStatus;
   error?: string;
   iconVersion: number; // bumps whenever the icon file changes (cache key for GET /icon)
@@ -171,6 +177,7 @@ export interface EasyConnectPairRequest {
 export interface CreateAppRequest {
   name: string;
   prompt: string; // what the app should do: becomes the first message to the agent
+  preset?: AppPreset; // default "react-native"; an unknown value is refused with 400
 }
 
 // GET /api/apps/:id/icon -> image/png (the app's launcher icon; a generated placeholder until it has one)

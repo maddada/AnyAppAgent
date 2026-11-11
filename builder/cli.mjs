@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // CLI for humans and tests.
-//   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>]
+//   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin]
 //   node builder/cli.mjs build <dir> --build-number <n> [--quiet]
 //   node builder/cli.mjs icon <dir>
-//   node builder/cli.mjs warm [<spareRootDir>]     (install the deps cache and make a spare app folder)
+//   node builder/cli.mjs warm [<spareRootDir>] [--preset react-native|kotlin]
+//        (react-native: the deps cache and a spare; kotlin: a spare and one warm-up build for Gradle's caches)
 import path from 'node:path';
 
 import { buildApk, createApp, getIconPath } from './index.mjs';
@@ -13,10 +14,10 @@ import { refillSpares, spareRootFor } from './lib/spare.mjs';
 function usage(msg) {
   if (msg) console.error(`error: ${msg}\n`);
   console.error(`usage:
-  node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>]
+  node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin]
   node builder/cli.mjs build <dir> --build-number <n> [--quiet]
   node builder/cli.mjs icon <dir>
-  node builder/cli.mjs warm [<dir-on-the-apps-volume>]`);
+  node builder/cli.mjs warm [<dir-on-the-apps-volume>] [--preset react-native|kotlin]`);
   process.exit(2);
 }
 
@@ -68,8 +69,9 @@ try {
     const slug = flags.slug ?? slugify(flags.name);
     const packageName = flags.package ?? packageFor(slug);
     const t0 = Date.now();
-    await createApp({ dir, name: flags.name, slug, packageName, onLog: log });
-    console.log(JSON.stringify({ dir, name: flags.name, slug, packageName, ms: Date.now() - t0 }, null, 2));
+    const preset = flags.preset ?? 'react-native';
+    await createApp({ dir, name: flags.name, slug, packageName, preset, onLog: log });
+    console.log(JSON.stringify({ dir, name: flags.name, slug, packageName, preset, ms: Date.now() - t0 }, null, 2));
   } else if (cmd === 'build') {
     if (!dirArg || !flags['build-number']) usage('build needs <dir> and --build-number');
     const result = await buildApk({
@@ -83,10 +85,13 @@ try {
     console.log(getIconPath({ dir: path.resolve(dirArg) }) ?? 'null');
   } else if (cmd === 'warm') {
     const t0 = Date.now();
-    const deps = await ensureDepsCache(log);
-    log(`Deps cache: ${deps.dir}`);
-    const root = spareRootFor(path.resolve(dirArg ?? 'C:\\aa\\apps\\x'));
-    await refillSpares(root, log);
+    const preset = flags.preset ?? 'react-native';
+    if (preset === 'react-native') {
+      const deps = await ensureDepsCache(log);
+      log(`Deps cache: ${deps.dir}`);
+    }
+    const root = spareRootFor(path.resolve(dirArg ?? 'C:\\aa\\apps\\x'), preset);
+    await refillSpares(root, log, preset);
     log(`Warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   } else {
     usage(cmd ? `unknown command "${cmd}"` : undefined);

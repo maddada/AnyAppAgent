@@ -534,7 +534,10 @@ function ipc(): void {
   ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
     chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
   );
-  ipcMain.handle("apps:create", (_e, name: string, prompt: string) => chatAction((c) => c.createApp(String(name), String(prompt)))());
+  ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string) =>
+    // Only a known preset passes; anything else is the default (React Native).
+    chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" ? "kotlin" : undefined))(),
+  );
   ipcMain.handle("settings:set", (_e, key: keyof Settings, value: unknown) => {
     if (key in settings && typeof value === typeof settings[key]) setSetting(key, value as never);
   });

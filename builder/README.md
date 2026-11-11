@@ -26,7 +26,8 @@ node builder/cli.mjs warm                                       # deps cache + a
 
 ## Tests
 
-`npm test` (in `builder/`) runs `test/isolation.test.mjs`: it creates an app, checks that none of
+`npm test` (in `builder/`) runs `test/kotlin.test.mjs` (the Kotlin preset, below; set
+`ANYAPP_SKIP_BUILD_TESTS=1` to skip its two real builds) and `test/isolation.test.mjs`: it creates an app, checks that none of
 its ~34,000 `node_modules` files is a hard link or shares a file with the dependency cache or
 `template/node_modules`, patches a file in the app's `node_modules`, runs `npm install left-pad`
 in the app, and checks that the shared copies are byte-for-byte unchanged. App folders are made
@@ -100,6 +101,52 @@ Measured on this PC (24 cores, Expo SDK 58, two ABIs):
 | Failing build, Metro or Kotlin error | ~29 s |
 
 `ANYAPP_GRADLE_ARGS` adds Gradle arguments (e.g. `--profile`).
+
+## The Kotlin preset
+
+`createApp({ ..., preset: 'kotlin' })` makes a native Android app (Kotlin, Jetpack Compose,
+Material 3) from `../template-kotlin` (override: `ANYAPP_KOTLIN_TEMPLATE_DIR`). With no `preset`
+(or `'react-native'`) everything above is unchanged. `buildApk` and `getIconPath` tell the two
+apart by the folder: a Kotlin app has `anyapp.json` (`{ preset, slug, package }`), a React Native
+app has `app.json`.
+
+Why a separate folder beside `template/` (and not `templates/kotlin/`): `template/` stays where
+every caller, test, script and the other threads expect it, and nothing about the React Native
+path moves. The two templates share no files.
+
+How a Kotlin app is made and built:
+
+- `createApp` copies the template's sources (about 40 files, no `node_modules`), writes slug and
+  package into `anyapp.json` and the name into `app/src/main/res/values/strings.xml`. The Kotlin
+  package of the code is always `com.anyapp.app`; only `applicationId` (read from `anyapp.json`
+  by `app/build.gradle.kts`) differs per app, so a new app's compiled classes come from Gradle's
+  build cache.
+- `buildApk`: makes the launcher icon sizes (`res/mipmap-*/ic_launcher_foreground.png`, 108 dp)
+  from the 1024 px `icon.png` when it changed (`lib/png.mjs`, no dependencies), then runs
+  `app:assembleRelease` with the same wrapper launch, init script (shared key, `versionCode`),
+  JVM settings and `--build-cache` as React Native apps, so both kinds share one warm Gradle
+  daemon. No npm, TypeScript or prebuild step. R8 shrinking stays on (it is what makes the APK
+  small). It also refuses an APK whose package id is not the one in `anyapp.json`.
+- Spares: `C:\aa\.spare\kotlin\spare-<id>` (one, like React Native). Copying is instant anyway;
+  the refill's real job is `warmKotlin`: once per Kotlin template version it builds a throwaway
+  app so Gradle's dependency cache and local build cache (`%USERPROFILE%\.gradle`, shared and
+  locked by Gradle itself, safe for concurrent builds) hold everything a new app needs. Each app
+  keeps its own `.gradle/` and `build/` folders, so apps never share build output.
+  `node builder/cli.mjs warm --preset kotlin` does the same by hand.
+
+Measured on this PC (24 cores, emulator and other threads' builds running):
+
+| Step | Time |
+| --- | --- |
+| `createApp` (copy) | 0.1 to 0.3 s |
+| First build of the very first Kotlin app (downloads Compose, AGP for Kotlin) | 143 s |
+| First build of a new Kotlin app (warm caches) | 20 s |
+| Rebuild after a code change | 22 s |
+| APK (starter, R8, both ABIs since it has no native code) | 0.93 MB (React Native starter: about 57 MB) |
+
+`test/kotlin.test.mjs` covers creating (placeholders, XML escaping of the name), the icon path,
+an unknown preset, the PNG code, two real builds (versionCode, size, icon sizes remade from a new
+`icon.png`, the same signing certificate) and the package id guard.
 
 Error messages are cut to what an agent needs: TypeScript errors, the Metro error (file, line,
 code frame), Kotlin/Java compiler errors and Gradle's "What went wrong", npm `ERESOLVE`s, or
