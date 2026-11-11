@@ -201,6 +201,11 @@ export class WorkerManager {
     return this.chat(appId, workerId).list(afterSeq);
   }
 
+  /** How many workers of the app wait, work or build now. */
+  activeCount(appId: string): number {
+    return this.workers(appId).records.filter((w) => ACTIVE.has(w.info.state)).length;
+  }
+
   /** True while any worker of the app waits, works or builds. */
   busy(appId: string): boolean {
     return this.workers(appId).records.some((w) => ACTIVE.has(w.info.state));
@@ -446,6 +451,7 @@ export class WorkerManager {
     const latest =
       ended.state === "stopped" ? "Stopped" : ended.state === "failed" ? (oneLine(ended.build ?? "", 120) || "It ran into a problem") : oneLine(w.lastText ?? "", 160) || "Done";
     this.setState(record, w, ended.state, latest);
+    if (ended.state === "stopped") this.emitWorkerItem(appId, workerId, { id: randomUUID(), kind: "stopped", text: "Stopped" });
     const verb = ended.state === "done" ? "finished" : ended.state === "stopped" ? "was stopped" : "ran into a problem";
     const report = [
       `Worker ${w.info.id} "${w.info.title}" ${verb}.`,

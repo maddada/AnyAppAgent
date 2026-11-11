@@ -150,7 +150,9 @@ export class AppManager {
 
   /** After the server listens: workers that were running when it stopped carry on. */
   startWork(): void {
-    this.workers?.resume(this.store.apps().filter((r) => (r as ReadyRecord).ready).map((r) => r.app.id));
+    const ready = this.store.apps().filter((r) => (r as ReadyRecord).ready);
+    this.workers?.resume(ready.map((r) => r.app.id));
+    for (const record of ready) this.activityChanged(record);
   }
 
   // ---------- startup / shutdown
@@ -178,6 +180,7 @@ export class AppManager {
           chat.upsert({ id: item.id, kind: "permission", permission: { ...item.permission, selectedOptionId: "cancelled" } });
         }
       }
+      delete app.replying;
       if (app.latestBuild?.status === "running") {
         app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: "The PC companion restarted during this build." };
       }
@@ -268,6 +271,8 @@ export class AppManager {
   }
 
   private touch(record: AppRecord): void {
+    // Set (0 or more) only when the app's chat hands work to helpers: clients read it as "helpers mode".
+    if (this.workers && record.app.activeHelpers === undefined) record.app.activeHelpers = this.workers.activeCount(record.app.id);
     record.app.updatedAt = nowIso();
     this.store.save();
     this.broadcast({ type: "app.updated", app: record.app });
@@ -289,7 +294,13 @@ export class AppManager {
   /** A worker started or settled: "working" while anything runs, "idle" after (an error stays shown). */
   private activityChanged(record: AppRecord): void {
     const status = record.app.status;
-    if (record.deleted || status === "creating" || status === "building") return;
+    if (record.deleted) return;
+    const helpers = this.workers?.activeCount(record.app.id);
+    if (helpers !== undefined && helpers !== record.app.activeHelpers) {
+      record.app.activeHelpers = helpers;
+      this.touch(record);
+    }
+    if (status === "creating" || status === "building") return;
     const busy = this.busy(record);
     if (busy && status !== "working") this.setStatus(record, "working");
     else if (!busy && status === "working") this.setStatus(record, "idle");
@@ -487,6 +498,7 @@ export class AppManager {
   private async drain(record: AppRecord): Promise<void> {
     const rt = this.runtime(record.app.id);
     rt.running = true;
+    this.setReplying(record, true);
     try {
       while (rt.queue.length > 0 && !record.deleted) {
         const job = rt.queue.shift()!;
@@ -507,7 +519,15 @@ export class AppManager {
       }
     } finally {
       rt.running = false;
+      this.setReplying(record, false);
     }
+  }
+
+  /** The main chat itself is answering (its Stop applies), as opposed to helpers working. */
+  private setReplying(record: AppRecord, replying: boolean): void {
+    if (record.deleted || (record.app.replying ?? false) === replying) return;
+    record.app.replying = replying;
+    this.touch(record);
   }
 
   /** Worker reports go to the coordinator as one message (every report waiting in the queue). */
@@ -642,6 +662,7 @@ export class AppManager {
       rt.turnActive = false;
       for (const draft of rt.translator.finishTurn(stopReason)) this.emitItem(record, draft);
     }
+    if (stopReason === "cancelled") this.emitItem(record, { id: randomUUID(), kind: "stopped", text: "Stopped" });
     if (rt.translator.lastTurnText.trim() !== "") record.app.lastMessagePreview = shorten(rt.translator.lastTurnText, 140);
     this.checkIcon(record);
     this.touch(record);

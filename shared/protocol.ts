@@ -31,6 +31,9 @@ export interface App {
   latestApk?: BuildInfo; // newest succeeded build: what GET /apk serves
   repoUrl?: string; // GitHub repository, when one was created
   lastMessagePreview?: string;
+  // With helpers (docs/APP-COORDINATOR.md): status is "working" while the main chat OR any helper works.
+  replying?: boolean; // the main chat itself is answering now (its Stop applies); absent from older PCs
+  activeHelpers?: number; // helpers waiting, working or building now; set (0 or more) only when the chat uses helpers
   createdAt: string;
   updatedAt: string;
 }
@@ -44,7 +47,8 @@ export type ChatItemKind =
   | "permission" // the agent asks to be allowed something
   | "build" // an APK build started by the server
   | "error" // something failed outside the agent's own text
-  | "worker"; // one row per worker in the app's main chat (ChatItem.worker); upserted as it moves
+  | "worker" // one row per worker in the app's main chat (ChatItem.worker); upserted as it moves
+  | "stopped"; // a plain "Stopped" line where the person stopped a turn (main chat or a helper's chat)
 
 export interface ToolCallInfo {
   title: string; // "Edit App.tsx", "Run npm install"

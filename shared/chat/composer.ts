@@ -15,7 +15,15 @@ export interface ComposerState {
 
 /** The agent (or the build after it) is busy: a message sent now waits its turn. */
 export function isBusy(app: App | undefined): boolean {
+  // With helpers, only the main chat's own reply makes a message wait (helpers never block it).
+  if (typeof app?.activeHelpers === "number" && typeof app.replying === "boolean") return app.replying || app.status === "creating";
   return app?.status === "working" || app?.status === "building" || app?.status === "creating";
+}
+
+/** The main chat's Stop applies: it is answering (with helpers), or the agent works (without). */
+function replying(app: App | undefined): boolean {
+  if (typeof app?.activeHelpers === "number" && typeof app.replying === "boolean") return app.replying;
+  return app?.status === "working";
 }
 
 /**
@@ -31,7 +39,7 @@ export function composerState(
   const hasText = text.trim().length > 0 || (opts.images ?? 0) > 0;
   const online = opts.online ?? true;
   const placeholder = app?.status === "creating" ? "Your app is being set up…" : "Ask for a change";
-  if (app?.status === "working" && !hasText) {
+  if (replying(app) && !hasText) {
     return { button: "stop", enabled: online && !opts.stopping, label: opts.stopping ? "Stopping" : "Stop", placeholder };
   }
   const queue = hasText && isBusy(app);

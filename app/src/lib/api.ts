@@ -1,6 +1,7 @@
 import type {
   App,
   ChatItem,
+  WorkerInfo,
   CreateAppRequest,
   EasyConnectPairRequest,
   ErrorBody,
@@ -107,6 +108,13 @@ export class Client {
   rebuild = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/build`, "POST", {});
   answerPermission = (id: string, body: PermissionAnswerRequest) =>
     this.call<void>(`/api/apps/${encodeURIComponent(id)}/permission`, "POST", body);
+
+  // Helpers (the wire calls them workers): their list, a helper's own chat (read only), its Stop.
+  helpers = (id: string) => this.call<WorkerInfo[]>(`/api/apps/${encodeURIComponent(id)}/workers`);
+  helperMessages = (id: string, workerId: string) =>
+    this.call<ChatItem[]>(`/api/apps/${encodeURIComponent(id)}/workers/${encodeURIComponent(workerId)}/messages`);
+  stopHelper = (id: string, workerId: string) =>
+    this.call<void>(`/api/apps/${encodeURIComponent(id)}/workers/${encodeURIComponent(workerId)}/cancel`, "POST", {});
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;

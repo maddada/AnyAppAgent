@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from "react";
 import { Animated, Easing, Modal, Pressable, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
+import { router } from "expo-router";
 import {
   Brain,
   Check,
@@ -10,7 +11,12 @@ import {
   CircleCheck,
   CircleDashed,
   CircleDot,
+  Clock,
   Download,
+  GitMerge,
+  Hand,
+  Pen,
+  Square,
   FilePen,
   FileText,
   Folder,
@@ -28,13 +34,14 @@ import {
 import type { LucideIcon } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { installApp, launchApp } from "@/lib/installer";
-import type { App, ChatImage, ChatItem, PlanEntry } from "@/lib/protocol";
+import type { App, ChatImage, ChatItem, PlanEntry, WorkerInfo } from "@/lib/protocol";
 import { useStore } from "@/lib/store";
 import { Button } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
 import { easing, elevation, fonts, icon, motion, radius, size, space, typeStyle, useTheme, border } from "@/ui/theme";
-import { buildCard, fitWithin, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type Row } from "@shared/chat/index";
+import { buildCard, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row } from "@shared/chat/index";
+import { StateLine } from "@/ui/StateLine";
 import { Markdown } from "./Markdown";
 
 /** COMPONENTS.md: tool detail blocks are indented 28 and show at most 12 lines; the permission badge is 36. */
@@ -49,6 +56,9 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
   if (row.type === "working") return <WorkingRow label={row.label} />;
   if (row.type === "rebuild") return <RebuildRow app={app} />;
   if (row.type === "tools") return <ToolGroup row={row} />;
+  if (row.type === "helper") return <HelperRow worker={row.worker} />;
+  if (row.type === "stopped") return <StoppedRow label={row.label} />;
+  if (row.type === "task") return <TaskCard label={row.label} text={row.text} />;
   const item = row.item;
   switch (item.kind) {
     case "user":
@@ -633,6 +643,95 @@ function RebuildRow({ app }: { app: App | undefined }) {
         }}
       />
     </LineRow>
+  );
+}
+
+// ---------- helpers (docs/APP-COORDINATOR.md; the approved mockup docs/mockups/worker-chat.html)
+
+const HELPER_ICONS: Record<HelperIcon, LucideIcon> = {
+  clock: Clock,
+  pen: Pen,
+  search: Search,
+  merge: GitMerge,
+  package: Package,
+  check: Check,
+  alert: CircleAlert,
+  square: Square,
+};
+const HELPER_BADGE = 36;
+
+/** One helper in the main chat: its task, a mark and a word, its latest line. Tap: its own chat. */
+export function HelperRow({ worker, selected }: { worker: WorkerInfo; selected?: boolean }) {
+  const t = useTheme();
+  const view = helperView(worker);
+  const Icon = HELPER_ICONS[view.icon];
+  return (
+    <Pressable
+      testID={`helper-row-${worker.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${view.title}, ${view.state.label}. Open this helper's chat.`}
+      onPress={() => router.push({ pathname: "/helper/[appId]/[workerId]", params: { appId: worker.appId, workerId: worker.id } })}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.md,
+        paddingVertical: space.md,
+        paddingLeft: space.md,
+        paddingRight: space.sm,
+        borderRadius: radius.card,
+        backgroundColor: pressed || selected ? t.selectedBg : t.surface,
+        borderWidth: border.width,
+        borderColor: selected ? t.borderStrong : t.border,
+        ...(pressed || selected ? {} : elevation(t.mode, 1)),
+      })}
+    >
+      <View style={{ width: HELPER_BADGE, height: HELPER_BADGE, borderRadius: radius.button, backgroundColor: t.surfaceSunken, alignItems: "center", justifyContent: "center" }}>
+        <Icon size={icon.size.button} color={t.textSecondary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+      </View>
+      <View style={{ flex: 1, gap: space.hair }}>
+        <T variant="name" numberOfLines={2}>
+          {view.title}
+        </T>
+        <StateLine kind={view.state.kind} label={view.state.label} role="caption" />
+        {view.latest ? (
+          <T variant="row" color="textSecondary" numberOfLines={1}>
+            {view.latest}
+          </T>
+        ) : null}
+      </View>
+      <ChevronRight size={icon.size.button} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+    </Pressable>
+  );
+}
+
+/** A plain line where the person stopped a turn. */
+function StoppedRow({ label }: { label: string }) {
+  const t = useTheme();
+  return (
+    <LineRow testID="stopped-line">
+      <Square size={icon.size.sm - 2} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+      <T variant="row" color="textTertiary">
+        {label}
+      </T>
+    </LineRow>
+  );
+}
+
+/** In a helper's chat: what the main chat asked it (its task, then follow-ups). */
+function TaskCard({ label, text }: { label: string; text: string }) {
+  const t = useTheme();
+  return (
+    <View testID="helper-task" style={{ borderWidth: border.width, borderStyle: "dashed", borderColor: t.borderStrong, borderRadius: radius.card, paddingVertical: space.md, paddingHorizontal: space.lg, gap: space.xs }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}>
+        <Hand size={icon.size.sm - 2} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+        <T variant="eyebrow" color="textTertiary">
+          {label}
+        </T>
+      </View>
+      <T variant="callout" color="textSecondary" selectable>
+        {text}
+      </T>
+    </View>
   );
 }
 

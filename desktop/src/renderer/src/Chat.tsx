@@ -2,16 +2,17 @@
 // words and actions as the phone's chat. Everything that is not drawing (rows, tool titles,
 // markdown, build card, state line, send/queue/stop, drafts, following new items) comes from the
 // shared chat core in shared/chat; this file only draws it as DOM.
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, FilePen, FileText, Folder, Globe, ImagePlus, ListTodo, Lock, Package, RotateCcw, Search, Square, Terminal, Trash, X,
+  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FilePen, FileText, Folder, GitMerge, Globe, Hand, ImagePlus, ListTodo, Lock, MessageSquare, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
 } from "lucide-react";
-import type { App, ChatImage, ChatItem } from "../../shared/types.ts";
+import type { App, ChatImage, ChatItem, WorkerInfo } from "../../shared/types.ts";
 import {
-  buildCard, buildRows, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, IMAGE_TYPES, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type Row,
+  buildCard, buildRows, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
 } from "../../../../shared/chat/index.ts";
 import { drafts, useChat } from "./chatStore.ts";
+import { useHelperChat, useHelpers } from "./helperStore.ts";
 import { Markdown } from "./Markdown.tsx";
 import { imageFiles, prepare, sentPicture, type Attachment } from "./pictures.ts";
 import { AppIcon, Icon, Spinner, StateLine } from "./ui.tsx";
@@ -34,7 +35,52 @@ const TOOL_GLYPHS: Record<string, LucideIcon> = {
   other: CircleDot,
 };
 
+/**
+ * Where a helper's chat opens on the PC: "beside" the main chat (the main chat stays in front of you)
+ * or "replace" it (as on the phone, with a way back). The user has not decided yet (Q8 in
+ * docs/APP-COORDINATOR.md); switching is this one constant.
+ */
+export const HELPER_CHAT_PLACEMENT: "beside" | "replace" = "beside";
+/** Below this width of the chat area there is no room for two chats: the helper's takes the main chat's place. */
+const BESIDE_MIN_WIDTH = 760;
+
+/** Opening a helper's chat from its row, and which one is open (its row shows as selected). */
+const HelperPanel = createContext<{ open: (workerId: string) => void; selected: string | null }>({ open: () => {}, selected: null });
+
 export function ChatView({ app, icon, online, headerExtra }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode }) {
+  const helpers = useHelpers(app.id, online);
+  // The open helper chat, per app (moving between apps keeps each one's choice for this run).
+  const [openHelpers, setOpenHelpers] = useState<Record<string, string | null>>({});
+  const openId = openHelpers[app.id] ?? null;
+  const helper = openId ? helpers.find((w) => w.id === openId) : undefined;
+  // How wide the chat area is decides whether two chats fit side by side.
+  const area = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(el);
+    setWidth(el.getBoundingClientRect().width);
+    return () => observer.disconnect();
+  }, []);
+  const placement = HELPER_CHAT_PLACEMENT === "beside" && (width === 0 || width >= BESIDE_MIN_WIDTH) ? "beside" : "replace";
+  const panel = useMemo(() => {
+    const set = (workerId: string | null) => setOpenHelpers((m) => ({ ...m, [app.id]: workerId }));
+    return { open: (id: string) => set(openId === id && placement === "beside" ? null : id), close: () => set(null), selected: openId };
+  }, [openId, app.id, placement]);
+  const side = helper ? <HelperChatView app={app} worker={helper} online={online} placement={placement} onClose={panel.close} /> : null;
+  return (
+    <HelperPanel.Provider value={panel}>
+      <div ref={area} className={side ? `chat-split chat-split-${placement}` : "chat-single"}>
+        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={headerExtra} />}
+        {side}
+      </div>
+    </HelperPanel.Provider>
+  );
+}
+
+function MainChat({ app, icon, online, headerExtra }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode }) {
   const chat = useChat(app.id, online);
   const rows = useMemo(() => buildRows(chat.items, app), [chat.items, app]);
   const st = describeApp(app);
@@ -146,10 +192,12 @@ function Composer({ app, online, onSent, registerDrop }: { app: App; online: boo
   const box = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const state = composerState(app, text, { sending, stopping, online, images: attached.length });
-  // A stop lasts until the turn really ends.
+  // A stop lasts until the main chat's turn really ends (with helpers the app can stay "working"
+  // while only helpers work: they keep going, and the main chat's Stop is done).
+  const replying = mainChatReplying(app);
   useEffect(() => {
-    if (app.status !== "working") setStopping(false);
-  }, [app.status]);
+    if (!replying) setStopping(false);
+  }, [replying]);
   // Grow with the text up to six lines, then scroll (COMPONENTS.md, Composer).
   useLayoutEffect(() => {
     const el = box.current;
@@ -306,6 +354,9 @@ const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App }) {
   if (row.type === "working") return <WorkingRow label={row.label} />;
   if (row.type === "rebuild") return <RebuildRow app={app} />;
   if (row.type === "tools") return <ToolGroup row={row} />;
+  if (row.type === "helper") return <HelperRow worker={row.worker} />;
+  if (row.type === "stopped") return <StoppedRow label={row.label} />;
+  if (row.type === "task") return <TaskCard label={row.label} text={row.text} />;
   const item = row.item;
   switch (item.kind) {
     case "user":
@@ -597,6 +648,137 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ helpers
+
+const HELPER_ICONS: Record<HelperIcon, LucideIcon> = { clock: Clock, pen: Pen, search: Search, merge: GitMerge, package: Package, check: Check, alert: CircleAlert, square: Square };
+
+/** One helper in the main chat (the approved mockup): its task, a mark and a word, its latest line. */
+function HelperRow({ worker }: { worker: WorkerInfo }) {
+  const panel = useContext(HelperPanel);
+  const view = helperView(worker);
+  const selected = panel.selected === worker.id;
+  return (
+    <button
+      className={`helper-row${selected ? " is-open" : ""}`}
+      data-testid={`helper-row-${worker.id}`}
+      aria-label={`${view.title}, ${view.state.label}. ${selected ? "Close" : "Open"} this helper's chat.`}
+      aria-pressed={selected}
+      onClick={() => panel.open(worker.id)}
+    >
+      <span className="helper-badge">
+        <Icon of={HELPER_ICONS[view.icon]} px={18} />
+      </span>
+      <span className="helper-body">
+        <span className="helper-title">{view.title}</span>
+        <StateLine state={view.state.kind} text={view.state.label} />
+        {view.latest ? <span className="helper-latest">{view.latest}</span> : null}
+      </span>
+      <span className="helper-chev">
+        <Icon of={ChevronRight} px={18} />
+      </span>
+    </button>
+  );
+}
+
+/** A plain line where the person stopped a turn. */
+function StoppedRow({ label }: { label: string }) {
+  return (
+    <div className="trow row-type stopped-row" data-testid="stopped-line">
+      <span className="tr-icon">
+        <Icon of={Square} px={14} />
+      </span>
+      <span className="tr-title">{label}</span>
+    </div>
+  );
+}
+
+/** In a helper's chat: what the main chat asked it (its task, then follow-ups). */
+function TaskCard({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="helper-task" data-testid="helper-task">
+      <span className="helper-task-label">
+        <Icon of={Hand} px={14} /> {label}
+      </span>
+      <span className="helper-task-text">{text}</span>
+    </div>
+  );
+}
+
+/** A helper's own chat: read only, with its own Stop. Beside the main chat, or in its place. */
+function HelperChatView({ app, worker, online, placement, onClose }: { app: App; worker: WorkerInfo; online: boolean; placement: "beside" | "replace"; onClose: () => void }) {
+  const chat = useHelperChat(app.id, worker.id, online);
+  const rows = useMemo(() => helperChatRows(chat.items, worker), [chat.items, worker]);
+  const view = helperView(worker);
+  const [stopping, setStopping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!view.active) setStopping(false);
+  }, [view.active]);
+  const scroller = useRef<HTMLDivElement>(null);
+  const [follower] = useState(() => new Follower());
+  useLayoutEffect(() => {
+    if (follower.shouldFollow()) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+  }, [rows, follower]);
+  const stop = async () => {
+    setStopping(true);
+    setError(null);
+    const r = await api.stopHelper(app.id, worker.id);
+    if (!r.ok) {
+      setStopping(false);
+      setError(r.error ?? "Couldn't stop it.");
+    }
+  };
+  return (
+    <aside className={`helper-chat helper-chat-${placement}`} data-testid="helper-chat" aria-label={`Helper: ${view.title}`}>
+      <header className="chat-head helper-head">
+        {placement === "replace" ? (
+          <button className="btn btn-icon" aria-label="Back to the main chat" onClick={onClose}>
+            <Icon of={ChevronLeft} size="lg" />
+          </button>
+        ) : null}
+        <div className="chat-id">
+          <div className="heading">{view.title}</div>
+          <StateLine state={view.state.kind} text={stopping ? "Stopping" : view.state.label} />
+        </div>
+        {view.active ? (
+          <button className="btn btn-quiet btn-sm" data-testid="helper-stop" disabled={stopping} onClick={() => void stop()}>
+            <Icon of={Square} px={14} /> {stopping ? "Stopping" : "Stop"}
+          </button>
+        ) : null}
+        {placement === "beside" ? (
+          <button className="btn btn-icon" aria-label="Close this helper's chat" data-testid="helper-close" onClick={onClose}>
+            <Icon of={X} size="md" />
+          </button>
+        ) : null}
+      </header>
+      {error ? (
+        <div className="helper-error">
+          <StateLine state="problem" text={error} />
+        </div>
+      ) : null}
+      <div
+        className="chat helper-scroll"
+        ref={scroller}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          follower.scrolled(el.scrollHeight - el.scrollTop - el.clientHeight);
+        }}
+      >
+        <div className="timeline">
+          {!chat.loaded && chat.items.length === 0 ? <div className="chat-loading">{chat.error ? <StateLine state="problem" text={chat.error} /> : <Spinner />}</div> : null}
+          {rows.map((r) => (
+            <ChatRow key={r.key} row={r} app={app} />
+          ))}
+        </div>
+      </div>
+      <div className="helper-readonly" data-testid="helper-readonly">
+        <Icon of={MessageSquare} size="sm" />
+        <span>{HELPER_CHAT_FOOTER}</span>
+      </div>
+    </aside>
   );
 }
 

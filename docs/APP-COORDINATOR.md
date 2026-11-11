@@ -85,9 +85,25 @@ coordinator has received it.
 
 ## Stop
 
-- Stop in the main chat stops only the main chat's own reply. Helpers keep working.
-- Each helper has its own Stop (in its chat), which cancels its turn; a helper waiting to land
-  shows "Stopped" at once. The coordinator can stop one too (`stop_worker`).
+- Stop in the main chat stops only the main chat's own reply, and drops the person's messages that
+  were still queued behind it (they show "Not sent, you stopped the agent", as before). Helpers
+  keep working, and their reports stay queued: a helper's news still reaches the main chat.
+- Each helper has its own Stop (in its chat, on the phone and the PC), which cancels its turn; a
+  helper waiting to land shows "Stopped" at once. The coordinator can stop one too (`stop_worker`).
+- Where a turn was stopped, the chat shows a plain "Stopped" line (`ChatItem` kind `stopped`): in
+  the main chat after its Stop, in a helper's chat after the helper's.
+
+## The main chat's other features with helpers
+
+- **Queued messages**: a message waits only behind the main chat's own reply (seconds), never
+  behind helpers. The PC sets `App.replying` while the main chat answers; the composer shows Stop
+  and queues new messages only then, not while only helpers work (the app's status is still
+  "working" then, so the home tile says "2 helpers at work").
+- **Pictures**: they reach the main chat as ACP image blocks, and the message also lists where they
+  are saved on the PC, so the coordinator can put the paths in a helper's brief (a helper opens
+  them by path).
+- **"No new version this time"** and its "Build it again" never show with helpers: the main chat
+  only talks, and builds follow helpers' landings.
 
 ## Restart
 
@@ -98,43 +114,59 @@ own session in its own copy with "The PC restarted while you were working, carry
 usual; a report the coordinator never got is handed over again. An app made before helpers resumes
 its old session and gets the coordinator playbook once on its next message.
 
-## What the person sees
+## What the person sees (built, on the phone and the PC)
 
-The main chat stays the coordinator's conversation. Each helper is one row in it (`ChatItem` kind
-`worker`, upserted in place): its task in a few words, its state (waiting to add its change,
-working, combining changes, building, done, a problem, stopped) and its latest line (its current
-step while it works, its result when done). Tapping the row opens the helper's own chat, **read
-only**: the task it was given, its messages and steps, and its Stop. Anything the person wants to
-tell a helper goes through the main chat. On the PC the helper's chat opens beside the main chat
-(the recommended answer; the user has not decided yet, and "replace the main chat" is a layout
-switch in the desktop app only). Mockup: `docs/mockups/worker-chat.html`.
+The main chat stays the coordinator's conversation; its header and the app's tile say "2 helpers at
+work" while helpers work. Each helper is one row in it (`ChatItem` kind `worker`, upserted in
+place): its task in a few words, its state (waiting to add its change, working, combining changes,
+building, done, a problem, stopped) and its latest line (its current step while it works, its
+result when done). Tapping the row opens the helper's own chat, **read only**: the task it was
+given (a "Task from the main chat" card, then "From the main chat" for follow-ups), its messages
+and steps, a Working line while it is busy, its Stop, and a line at the bottom: "To change what
+this helper does, tell the main chat."
+
+- Phone (`app/`): the row in the chat (`src/chat/ChatRows.tsx`), the helper's chat as its own
+  screen `helper/[appId]/[workerId]` (also a deep link, `anyappagent://helper/<appId>/<workerId>`).
+- PC (`desktop/`): the helper's chat opens beside the main chat when the chat area is at least
+  760 px wide, and in the main chat's place (with a back arrow) when it is narrower. Q8 (beside or
+  replace) is still open with the user: `HELPER_CHAT_PLACEMENT` in `src/renderer/src/Chat.tsx`
+  switches it to always replace.
+- Everything that is not drawing is in the shared core, `shared/chat/helpers.ts` (row wording and
+  icons, the helper chat's rows, which Stop applies, the header count), with tests.
 
 ## Protocol (additive, `shared/protocol.ts`)
 
-- `ChatItemKind` gains `"worker"`; `ChatItem` gains `worker?: WorkerInfo` (on a worker row) and
-  `workerId?: string` (on items of a worker's own chat).
+- `ChatItemKind` gains `"worker"` and `"stopped"`; `ChatItem` gains `worker?: WorkerInfo` (on a
+  worker row) and `workerId?: string` (on items of a worker's own chat).
+- `App` gains `replying?: boolean` (the main chat itself is answering) and `activeHelpers?: number`
+  (helpers waiting, working or building; set, 0 or more, only when the chat uses helpers).
 - New `WorkerState` and `WorkerInfo`.
 - `ServerEvent` gains `worker.updated` and `worker.item` (worker chat items never travel as
   `chat.item`, so an older app never mixes them into the main chat).
 - Routes: `GET /api/apps/:id/workers`, `GET /api/apps/:id/workers/:workerId/messages`,
   `POST /api/apps/:id/workers/:workerId/cancel`. (`POST .../messages` existed briefly before the
   helper chat became read only, and was never released.)
-- `POST /api/apps/:id/cancel` is unchanged: it stops the main chat's turn only.
+- `POST /api/apps/:id/cancel` stops the main chat's turn only.
 
-## Where it lives (`server/`)
+## Where it lives
 
-- `src/coordinator-playbook.ts`: the coordinator and helper playbooks, the report format.
-- `src/workers.ts`: helpers, their sessions, chats, landing slot, landings, clashes, builds,
+- `server/src/coordinator-playbook.ts`: the coordinator and helper playbooks, the report format.
+- `server/src/workers.ts`: helpers, their sessions, chats, landing slot, landings, clashes, builds,
   reports, restart.
-- `src/helper-copies.ts`: the helper's copy (worktree, node_modules copy), saving, landing,
+- `server/src/helper-copies.ts`: the helper's copy (worktree, node_modules copy), saving, landing,
   conflict markers, undoing a landing, removing a copy.
-- `src/worker-http.ts`: the MCP tool endpoint and the worker routes.
-- Small hooks in `apps.ts` (coordinator session options, report turns, build options, status),
-  `http.ts` (two route hooks), `main.ts`, `config.ts`, `acp/claude-session.ts` (MCP servers,
-  instructions on resume) and `acp/translate.ts` (`closeStreams`).
-- Proof: `scripts/coordinator-e2e.mjs` (`E2E_BUILDER=real E2E_APPS=<short folder>
-  E2E_HOME=<builder home>` for real Android builds); unit tests `test/helper-copies.test.ts` (a
-  real Git repo: parallel landings, a clash, markers, undo, cleanup) and `test/worker-tools.test.ts`.
+- `server/src/worker-http.ts`: the MCP tool endpoint and the worker routes.
+- Small hooks in `server/src/apps.ts` (coordinator session options, report turns, build options,
+  status, `replying`, `activeHelpers`, the Stopped line), `http.ts`, `main.ts`, `config.ts`,
+  `acp/claude-session.ts` and `acp/translate.ts`.
+- `shared/chat/helpers.ts` and the `helper`, `stopped` and `task` rows in `shared/chat/rows.ts`.
+- `app/`: `src/chat/ChatRows.tsx`, `src/app/helper/[appId]/[workerId].tsx`, `src/lib/{api,store,session}.ts`.
+- `desktop/`: `src/renderer/src/{Chat.tsx,helperStore.ts,styles.css}`, `src/main/{admin-client,index}.ts`,
+  `src/preload/index.ts`, `src/shared/types.ts`.
+- Proof: `server/scripts/coordinator-e2e.mjs` (`E2E_BUILDER=real E2E_APPS=<short folder>
+  E2E_HOME=<builder home>` for real Android builds); unit tests `server/test/helper-copies.test.ts`
+  and `server/test/worker-tools.test.ts`; the screens: `server/scripts/ui-proof/` (a DevTools
+  driver for the desktop, an API client, and the scripts that drove the phone and the PC).
 
 ## Not covered yet
 

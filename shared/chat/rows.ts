@@ -1,6 +1,6 @@
 // Turning the timeline into the rows both apps draw: runs of tool calls fold into one row (bb's
 // bundles), and the "Working" and "No new version" lines are added at the end when they apply.
-import type { App, ChatItem } from "../protocol.ts";
+import type { App, ChatItem, WorkerInfo } from "../protocol.ts";
 import { summarizeTools, toolActive } from "./tools.ts";
 
 export type Row =
@@ -8,7 +8,13 @@ export type Row =
   /** Two or more tool calls in a row. Folded into `summary` once none is active; while one is, every row shows. */
   | { type: "tools"; key: string; items: ChatItem[]; active: boolean; failed: boolean; summary: string }
   | { type: "working"; key: string; label: string }
-  | { type: "rebuild"; key: string };
+  | { type: "rebuild"; key: string }
+  /** One helper in the main chat (helpers.ts helperView says how it reads); tapping opens its chat. */
+  | { type: "helper"; key: string; worker: WorkerInfo }
+  /** A plain "Stopped" line where the person stopped a turn. */
+  | { type: "stopped"; key: string; label: string }
+  /** In a helper's own chat: what the main chat asked it (its task, then follow-ups). */
+  | { type: "task"; key: string; label: string; text: string };
 
 /** How long the "No new version this time" line waits after the turn ends (a build may still be on its way). */
 export const REBUILD_SETTLE_MS = 5000;
@@ -36,7 +42,9 @@ export function buildRows(items: readonly ChatItem[], app: App | undefined): Row
       continue;
     }
     flush();
-    rows.push({ type: "item", key: item.id, item });
+    if (item.kind === "worker" && item.worker) rows.push({ type: "helper", key: item.id, worker: item.worker });
+    else if (item.kind === "stopped") rows.push({ type: "stopped", key: item.id, label: item.text || "Stopped" });
+    else if (item.kind !== "worker") rows.push({ type: "item", key: item.id, item });
   }
   flush();
 
@@ -52,6 +60,8 @@ export function buildRows(items: readonly ChatItem[], app: App | undefined): Row
  */
 export function turnEndedWithoutBuild(items: readonly ChatItem[], app: App | undefined): boolean {
   if (!app || app.status !== "idle") return false;
+  // With helpers the main chat only talks; builds follow helpers' changes (their rows say so).
+  if (typeof app.activeHelpers === "number") return false;
   let lastUser = -1;
   for (let i = items.length - 1; i >= 0; i--) {
     if (items[i].kind === "user" && !items[i].dropped) {
@@ -72,6 +82,8 @@ export function workingLabel(items: readonly ChatItem[], app: App | undefined): 
   if (!app) return null;
   if (app.status === "creating") return items.length === 0 ? "Setting up your app" : null;
   if (app.status !== "working") return null;
+  // With helpers, "working" can mean only helpers work: their rows move, the main chat does not.
+  if (typeof app.activeHelpers === "number" && app.replying === false) return null;
   // Queued messages wait at the end of the timeline; what moves is the item before them.
   let end = items.length - 1;
   while (end >= 0 && items[end].kind === "user" && items[end].queued) end--;
