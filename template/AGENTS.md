@@ -412,14 +412,17 @@ import { onAction, setWidget, updateTile } from '../../modules/abilities';
 
 onAction('log-glass', async () => {
   const n = await logGlass();          // your own code: save with storage.ts, update the widget
-  return `Glass ${n} logged`;          // optional: shown as a small message
+  return `Glass ${n} logged`;          // optional: a small message (needs the notification permission)
 });
 onAction('start-tea', async () => { await scheduleReminder({ at: new Date(Date.now() + 180_000), title: 'Tea is ready' }); });
 onAction('focus', async (a) => { await save('focus', a.data.on === true); });   // a toggle tile
 onAction('widget-update', async (a) => { if (a.from === 'water') showWater(await getGlasses()); }); // a new, empty widget
 ```
 
-Actions that open the app (`open: true`, a widget tap with `tapAction`) reach a screen:
+A background action has about 9 seconds. Its message shows only if the app may post notifications
+(ask once with `ensureNotificationPermission()`); otherwise Android hides it, so also update the
+widget or tile so the person sees it worked. Actions that open the app (`open: true`, a widget tap
+with `tapAction`) reach a screen:
 
 ```tsx
 import { useOpenAction } from '../../modules/abilities';
@@ -487,11 +490,16 @@ Off by default, so apps that do not use it stay small. Turn on what the app need
 
 - `codes`: `scanCode()` opens Google's full-screen scanner (QR codes and barcodes). It comes with
   Google Play services, so the app needs no camera permission. `readCodes(uri)` finds the codes in
-  a picture. Adds about CODES_COST.
+  a picture.
 - `text`: `readText(uri)` reads printed text (Latin letters) from a picture, with ML Kit on the
-  phone. Adds about TEXT_COST with the model from Google Play services (downloaded once on first
-  use). `"bundled": true` puts the model in the app instead (works offline at once, also on phones
-  without Google Play services) for about BUNDLED_COST more: only if the person needs that.
+  phone.
+- By default the scanner and the reading models come with Google Play services: the phone fetches
+  them once, on first use (this needs the Play Store; until then the calls throw "not on this
+  phone yet"). Codes and text together add only about 0.35 MB to the app.
+- `"bundled": true` puts the reading models inside the app: `readText` and `readCodes` then work
+  offline from the first use, also on phones without Google Play services, for about 9 MB more
+  per CPU type (text alone 5.9 MB). Only if the person needs that. `scanCode()` always needs
+  Google Play services; without it, read codes from a photo with `readCodes`.
 
 ```ts
 import { scanCode, readCodes, readText, cameraSmarts } from '../../modules/camera';

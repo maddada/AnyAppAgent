@@ -21,7 +21,10 @@ export type AbilityAction = {
   data: Record<string, unknown>;
 };
 
-/** Return a short text to show it as a small message ("Glass logged"), or nothing. */
+/**
+ * Return a short text to show it as a small message ("Glass logged"), or nothing. Android shows
+ * it only when the app may post notifications.
+ */
 export type ActionHandler = (action: AbilityAction) => Promise<string | void> | string | void;
 
 type Raw = { name?: string; source?: string; from?: string; data?: string | Record<string, unknown> };

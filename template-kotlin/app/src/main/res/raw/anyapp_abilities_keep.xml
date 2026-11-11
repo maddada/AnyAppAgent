@@ -2,4 +2,4 @@
 <!-- Phone abilities (com.anyapp.abilities) find the widget layout and its parts by name, so
      resource shrinking must keep them. Keep this file. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-  tools:keep="@layout/anyapp_widget,@drawable/anyapp_widget_*,@color/anyapp_widget_*,@dimen/anyapp_widget_*,@style/AnyappWidget*" />
+  tools:keep="@layout/anyapp_widget,@drawable/anyapp_widget_*,@color/anyapp_widget_*,@dimen/anyapp_widget_*,@style/AnyappWidget*,@drawable/glyph_*" />

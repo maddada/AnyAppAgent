@@ -10,7 +10,8 @@ import com.anyapp.abilities.ActionRunner
  * name in AndroidManifest.xml (`com.anyapp.abilities.runner`), so keep the class name.
  *
  * Runs on the main thread: do quick work here, or start a coroutine and call [done] at the end
- * (within about 9 seconds). [done] takes a short message to show as a toast, or null.
+ * (within about 9 seconds). [done] takes a short message to show as a toast (shown only when the
+ * app may post notifications), or null.
  */
 class AppActions : ActionRunner {
   override fun run(context: Context, action: AbilityAction, done: (message: String?) -> Unit) {

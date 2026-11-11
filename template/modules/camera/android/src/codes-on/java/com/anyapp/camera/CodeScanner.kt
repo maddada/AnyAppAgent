@@ -36,7 +36,12 @@ object CodeScanner {
         .addOnSuccessListener { b -> done(Result.success(ScannedCode(b.rawValue ?: b.displayValue ?: "", format(b.format), kind(b.valueType)))) }
         .addOnCanceledListener { done(Result.success(null)) }
         .addOnFailureListener { e ->
-          if (e is MlKitException && e.errorCode == CommonStatusCodes.CANCELED) done(Result.success(null)) else done(Result.failure(e))
+          when {
+            e is MlKitException && e.errorCode == CommonStatusCodes.CANCELED -> done(Result.success(null))
+            e is MlKitException && e.errorCode == MlKitException.UNAVAILABLE ->
+              done(Result.failure(IllegalStateException("The scanner is not on this phone yet: Google Play services is still fetching it. Try again in a minute.", e)))
+            else -> done(Result.failure(e))
+          }
         }
     }
     // The scanner screen is a Google Play services part: fetch it first if this phone has not got it yet.

@@ -320,7 +320,8 @@ what the app offers in `AndroidManifest.xml` and write the actions in
 **Actions** have names you choose. Background ones (a widget button, a tile, a shortcut without
 open) run in `AppActions.run` while the app stays closed: quick work on the main thread, or a
 coroutine (`CoroutineScope(Dispatchers.IO).launch { ...; withContext(Dispatchers.Main) { done("Saved") } }`),
-then `done(message or null)` within about 9 s. Actions that open the app arrive in `MainActivity`:
+then `done(message or null)` within about 9 s (the message shows only if the app may post
+notifications, so also update the widget or tile). Actions that open the app arrive in `MainActivity`:
 
 ```kotlin
 // MainActivity: read it in onCreate and in onNewIntent (override it, then setIntent(intent))
@@ -377,7 +378,7 @@ background action `"widget-update"` (`action.from` is the widget id): fill it in
 
 **Quick Settings tiles** (up to 4: `Tile1` .. `Tile4`). Make the icon with
 `node scripts/glyph.js tea app/src/main/res/drawable/glyph_tea.xml` (any Material Design Icons
-name), then:
+name; keep the `glyph_` prefix), then:
 
 ```xml
 <service android:name="com.anyapp.abilities.Tile1" android:exported="true" android:label="Tea timer"
@@ -404,7 +405,8 @@ Shortcuts.set(context, listOf(
 ```
 
 `icon` is a drawable name (make it with `scripts/glyph.js ... --color "#1F5C45"`, coloured: the
-launcher shows it as is); without one the app icon is used.
+launcher shows it as is); without one the app icon is used. Name these drawables `glyph_*`:
+`res/raw/anyapp_abilities_keep.xml` keeps them through resource shrinking (they are found by name).
 
 **Receiving shares**: add to `MainActivity`'s `<activity>` (keep its launcher filter):
 
@@ -437,6 +439,9 @@ Ready-made in `extras/camera/` (not compiled until you copy it, so other apps st
      `implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")`
    - text: `implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")`
    - either: `implementation("com.google.android.gms:play-services-base:18.5.0")`
+3. Add to `app/proguard-rules.pro` (ML Kit finds its parts by reflection; without it the release
+   build crashes on the first scan):
+   `-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }`
 
 ```kotlin
 import com.anyapp.camera.CodeScanner
@@ -451,10 +456,13 @@ TextReader.read(context, photoUri) { r -> r.onSuccess { t -> t.text; t.lines } }
 ```
 
 Take the photo with `rememberLauncherForActivityResult(ActivityResultContracts.TakePicture())`
-(a `content://` Uri from a FileProvider) or pick one with `PickVisualMedia`. Codes add about
-CODES_COST, text about TEXT_COST (the model comes with Google Play services, once, on first use).
-For a model inside the app (offline at once, phones without Google Play services) use
-`com.google.mlkit:text-recognition:16.0.1` instead: about BUNDLED_COST more, only if needed.
+(a `content://` Uri from a FileProvider) or pick one with `PickVisualMedia`. Codes and text
+together add well under 1 MB: the scanner and the models come with Google Play services, fetched
+once on first use (this needs the Play Store; until then the calls fail with "waiting for the
+module to be downloaded"). For models inside the app (offline at once, phones without Google
+Play services) use `com.google.mlkit:text-recognition:16.0.1` and
+`com.google.mlkit:barcode-scanning:17.3.0` instead of the two `play-services-mlkit-*` lines: about
+9 MB more per CPU type, only if needed. `CodeScanner.scan` always needs Google Play services.
 
 ### Also at hand (Android itself, no library)
 
