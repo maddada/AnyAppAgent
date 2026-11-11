@@ -1,7 +1,7 @@
 {
   "name": "anyappagent-desktop",
   "productName": "AnyAppAgent",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "AnyAppAgent for Windows: runs the companion, onboarding, connect a phone.",
   "main": "out/main/index.js",
@@ -82,7 +82,7 @@
         ]
       },
       {
-        "from": "../app/android/app/build/outputs/apk/release/app-release.apk",
+        "from": "../app/dist/AnyAppAgent-universal.apk",
         "to": "phone/AnyAppAgent.apk"
       },
       {

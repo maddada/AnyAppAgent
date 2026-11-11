@@ -45,7 +45,7 @@ folder(s).
   code is fine; keep its MIT notice in `THIRD_PARTY_NOTICES.md`.
 - **One session per app**: each app has exactly one long-lived Claude Code session on the PC,
   working in that app's project folder. It is the only thing the user talks to for that app. Model
-  it on the Ghostex coordinator idea (`C:\Users\madda\.claude\skills\ghostex-orchestrator\SKILL.md`,
+  it on the Ghostex coordinator idea (`%USERPROFILE%\.claude\skills\ghostex-orchestrator\SKILL.md`,
   project at `C:\dev\Ghostex`): the session gets a short playbook that says it owns this one app
   for a non-technical user on a phone, answers in short plain language, never asks the user to run
   commands or open files, may hand large work to its own subagents, keeps the app building, and
