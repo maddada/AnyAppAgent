@@ -139,7 +139,8 @@ object AppReports {
     } catch (_: Exception) {
       return false
     }
-    context.sendBroadcast(Intent(ACTION_DIARY_REQUEST).setPackage(pkg).putExtra("requestId", requestId))
+    // Include an app that was just installed and never opened (Android keeps it "stopped" until then).
+    context.sendBroadcast(Intent(ACTION_DIARY_REQUEST).setPackage(pkg).putExtra("requestId", requestId).addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES))
     return true
   }
 }

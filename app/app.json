@@ -28,28 +28,29 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
-        "android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"
-      ],
-      "blockedPermissions": [
+        "android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION",
         "android.permission.RECORD_AUDIO"
       ],
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        { "action": "SEND", "category": ["DEFAULT"], "data": [{ "mimeType": "image/*" }] },
+        { "action": "SEND_MULTIPLE", "category": ["DEFAULT"], "data": [{ "mimeType": "image/*" }] },
+        { "action": "SEND", "category": ["DEFAULT"], "data": [{ "mimeType": "text/plain" }] }
+      ]
     },
     "plugins": [
       "expo-router",
       [
         "expo-camera",
         {
-          "cameraPermission": "AnyAppAgent uses the camera to scan the code your PC shows.",
-          "recordAudioAndroid": false
+          "cameraPermission": "AnyAppAgent uses the camera to scan the code your PC shows."
         }
       ],
       [
         "expo-image-picker",
         {
           "photosPermission": "AnyAppAgent lets you send pictures to the agent that makes your app.",
-          "cameraPermission": "AnyAppAgent uses the camera to scan the code your PC shows and to take pictures for your apps.",
-          "microphonePermission": false
+          "cameraPermission": "AnyAppAgent uses the camera to scan the code your PC shows and to take pictures for your apps."
         }
       ],
       [

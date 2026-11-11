@@ -3,21 +3,24 @@ import { FlatList, Keyboard, Pressable, ScrollView, TextInput, View } from "reac
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, History, Image as ImageIcon, ImagePlus, ListTodo, Square, X } from "lucide-react-native";
+import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, EllipsisVertical, Globe, History, Image as ImageIcon, ImagePlus, ListTodo, Send, Square, X } from "lucide-react-native";
 import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, headsUp as bigJobHeadsUp, mainChatReplying, MAX_IMAGES, type HeadsUp, type Row } from "@shared/chat/index";
 import { clipboardHasImage, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
 import { ChatRow } from "@/chat/ChatRows";
 import { describeApp } from "@/lib/describe";
 import { installApp, launchApp } from "@/lib/installer";
 import type { App, ChatItem } from "@/lib/protocol";
+import { useDictation } from "@/lib/dictation";
 import { askForNotificationsOnce, loadChat } from "@/lib/session";
 import { appAction, drafts, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
-import { useKeyboardHeight } from "@/ui/Sheet";
+import { Sheet, useKeyboardHeight } from "@/ui/Sheet";
+import { canSendApp, SendAppPanel } from "@/ui/SendApp";
 import { Spinner } from "@/ui/Spinner";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
+import { DictationNote, MicButton } from "@/ui/MicButton";
 import { HeadsUpCard } from "@/ui/Trust";
 import { border, elevation, icon, radius, size, space, typeStyle, useTheme } from "@/ui/theme";
 
@@ -182,7 +185,6 @@ function Header({ app }: { app: App | undefined }) {
         </T>
         {state ? <StateLine kind={state.kind} label={state.label} role="caption" /> : null}
       </View>
-      {app?.latestApk ? <IconButton testID="chat-versions" icon={History} label="Versions" color={t.textSecondary} onPress={() => router.push(`/versions/${app.id}`)} /> : null}
       {app ? <TodoButton app={app} /> : null}
       {app && action !== "notReady" && !installing ? (
         <Button
@@ -193,7 +195,76 @@ function Header({ app }: { app: App | undefined }) {
           onPress={() => (action === "open" ? launchApp(app) : void installApp(app))}
         />
       ) : null}
+      {app && (pkg || app.latestApk) ? <MenuButton app={app} /> : null}
     </View>
+  );
+}
+
+/**
+ * The chat's menu (the header had no room left for the app's name): Versions, Send app (the APK
+ * through the share sheet) and Share with others (GitHub).
+ */
+function MenuButton({ app }: { app: App }) {
+  const t = useTheme();
+  const [open, setOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const sendable = canSendApp(app);
+  const close = () => {
+    setOpen(false);
+    setSending(false);
+  };
+  return (
+    <>
+      <IconButton testID="chat-menu" icon={EllipsisVertical} label="More" color={t.textSecondary} onPress={() => setOpen(true)} />
+      <Sheet visible={open} onClose={close}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.xl }}>
+          <AppIcon app={app} size={size.appIconSmall} />
+          <T variant="titleSmall" numberOfLines={1} style={{ flex: 1 }}>
+            {sending ? `Send ${app.name}` : app.name}
+          </T>
+        </View>
+        {sending ? (
+          <SendAppPanel app={app} onDone={close} onCancel={() => setSending(false)} />
+        ) : (
+          <View style={{ gap: space.sm }}>
+            {app.latestApk ? (
+              <Button
+                testID="chat-versions"
+                label="Versions"
+                icon={History}
+                variant="quiet"
+                onPress={() => {
+                  close();
+                  router.push(`/versions/${app.id}`);
+                }}
+              />
+            ) : null}
+            {sendable ? <Button testID="chat-menu-send" label="Send app" icon={Send} variant="quiet" onPress={() => setSending(true)} /> : null}
+            {app.latestApk ? (
+              <Button
+                testID="chat-menu-share"
+                label={app.sharing?.shared ? "Shared with others" : "Share with others"}
+                icon={Globe}
+                variant="quiet"
+                onPress={() => {
+                  close();
+                  router.push(`/share/${app.id}`);
+                }}
+              />
+            ) : null}
+            {!sendable && !app.latestApk ? (
+              <T variant="callout" color="textSecondary">
+                Nothing to send yet: the app is not built.
+              </T>
+            ) : !sendable ? (
+              <T variant="caption" color="textSecondary">
+                Install it on this phone to send it as a file.
+              </T>
+            ) : null}
+          </View>
+        )}
+      </Sheet>
+    </>
   );
 }
 
@@ -234,6 +305,9 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
     drafts.setAttachments(appId, list);
   };
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
+  // Dictation (src/lib/dictation.ts): the words land in the box to edit; it never sends.
+  const dictation = useDictation({ value: text, onChange: setText });
+  const listening = dictation.phase === "listening";
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -288,6 +362,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
       }
     }
     setHeads(null);
+    dictation.cancel();
     setSending(true);
     setError(null);
     try {
@@ -328,6 +403,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
           <StateLine kind="problem" label={error} role="caption" lines={0} />
         </View>
       ) : null}
+      <DictationNote dictation={dictation} style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }} />
       {tray ? (
         <View testID="attach-tray" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, paddingBottom: space.sm }}>
           <Button testID="attach-gallery" label="Photos" icon={ImageIcon} variant="quiet" small onPress={() => void add(() => pickFromGallery(MAX_IMAGES - attached.length))} />
@@ -352,8 +428,10 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
           minHeight: size.composerMinHeight,
           borderRadius: radius.composer,
           backgroundColor: t.fieldBg,
-          borderWidth: border.width,
-          borderColor: t.fieldBorder,
+          // Listening: a brick-red line round the box, as on the desktop.
+          borderWidth: listening ? border.focusWidth : border.width,
+          borderColor: listening ? t.problem : t.fieldBorder,
+          margin: listening ? border.width - border.focusWidth : 0,
           ...elevation(t.mode, 1),
         }}
       >
@@ -398,7 +476,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
             ref={input}
             value={text}
             onChangeText={setText}
-            placeholder={state.placeholder}
+            placeholder={listening ? "Listening..." : state.placeholder}
             placeholderTextColor={t.textTertiary}
             cursorColor={t.accent}
             selectionColor={t.accent}
@@ -413,6 +491,9 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
               paddingVertical: space.md,
             }}
           />
+          <View style={{ paddingBottom: sidePad }}>
+            <MicButton dictation={dictation} />
+          </View>
           <View style={{ paddingBottom: sidePad, paddingRight: sidePad }}>
             <Pressable
               testID={showStop ? "composer-stop" : "composer-send"}

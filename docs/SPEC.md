@@ -281,6 +281,31 @@ The user picked "Never lose your apps", "Usage meter" and "Keep my apps healthy"
   missing or older built-in parts) gets a yellow "!" on its icon and "Update it", which sends its
   agent the update message; a reminder once a month while any app is behind.
 
+## Like this, but mine; Send app (added 2026-11-12)
+
+The user picked "Like this, but mine" (Q15) and "Send it in WhatsApp" (Q39) from `C:\aa\ideas\ideas.html`.
+
+- **Like this, but mine**: AnyAppAgent is in Android's share sheet for pictures (one or several)
+  and text (links). Sharing opens one screen (`app/src/app/like-this.tsx`): what was shared, "Make
+  a new app" (a name) or "Change one of my apps" (pick it), a box "What to keep and what to change",
+  then the message goes to that app's agent with the pictures attached (as in the chat) and the link
+  as a line of text. The PC adds a note only the agent sees (`server/src/playbook.ts`,
+  `sharedInNote`): make it like this, the person's way, without the other app's name, logo or
+  artwork; read a link with its web tools if it can, otherwise say in one line what it could not see.
+  Native side: `ShareFiles.kt` copies shared pictures into the cache while Android's grant lasts.
+- **Send app**: on an app's hold menu and the chat's menu (the three dots). One short note first
+  (they allow installs from WhatsApp or Files; new versions do not reach them this way, sharing on
+  GitHub does, `docs/DISTRIBUTION.md`), then the share sheet with the installed APK copied as
+  `<App name>.apk`. Only that file is shared, never the signing key. On a phone the installed APK is
+  the arm64 build (or the universal one when that was installed).
+- **The diary during an install**: when the agent reads an app's diary (`read_diary`) while that
+  app is being installed, the phone waits for the install (up to 42 s, then says it is still
+  installing so the agent tries again) before it asks the app; the PC waits 56 s in all (was
+  25 s; Claude Code gives up on a tool call after about 60 s).
+
+Protocol (additive): `CreateAppRequest.images`, `CreateAppRequest.sharedIn`, `SendMessageRequest.sharedIn`,
+`DiaryAnswer.problem` "installing".
+
 ## Change this app (added 2026-11-12)
 
 The user picked, on `C:\aa\ideas\change-this-app.html`: Suggest a change by share text (Q240), code

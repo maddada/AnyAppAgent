@@ -92,7 +92,8 @@ If you made Prayer Times with AnyAppAgent, share this message to AnyAppAgent or 
 anyapp-suggestion: com.anyapp.prayertimes 37
 ```
 
-It goes through Android's share menu. The owner shares it into AnyAppAgent, or copies it and taps
+It goes through Android's share menu. The owner shares it into AnyAppAgent (the share-in screen
+hands a suggestion to the inbox instead of "Like this, but mine"), or copies it and taps
 Paste a suggestion (phone: the app's sheet, From others; desktop: From others in the app's header).
 The last line files it under the right app (a forwarded message with extra lines around it, or one
 the owner edited, still reads). The PC keeps the inbox (`<state>/suggestions/<appId>.json`, the same
@@ -150,6 +151,44 @@ playbooks tell the agent to use it only when the person asks, and to take only w
 
 ## Later
 
-- The cloud service for people without a PC (paid with cloud API tokens): the sheet's line
-  "No PC? A way to change apps without one, using cloud credits, is planned." is its place.
+- The cloud service for people without a PC (paid with cloud API tokens, `docs/CLOUD.md`): the
+  sheet's line "No PC? A way to change apps without one, using cloud credits, is planned." and the
+  same line on AnyAppAgent's change screen without a PC are its place.
 - A suggestion arriving by itself (a server or the Family circle idea) instead of a forwarded text.
+
+## Proof (2026-11-12)
+
+`emulator-5560`, my own copies of the phone app: **AA Owner** (`com.anyappagent.change`) paired with
+my owner companion (port 8811, state `C:a	\cta\state`) and **AA Friend**
+(`com.anyappagent.change2`) paired with a second companion standing in for the friend's PC (port
+8812, state `C:a	\ctb\state`, GitHub off). Screenshots: `C:a\e2e\change-this-app\`
+(light and dark), desktop ones in `desktop\`.
+
+| Step | Result |
+| --- | --- |
+| Owner companion, GitHub off: new app "Prayer Times" through the companion (real agent turn, real build) | The agent kept the template's Settings screen; build 1 (430 s) |
+| Prayer Times installed by adb while no AnyAppAgent with this feature was on the phone (a dozen older copies were) | Settings: Change this app, Version, "Made by Mohamad" (`01-settings-row-*`). The row opened the app's own sheet (`02-sheet-no-anyappagent-*`), Suggest a change opened its form (`03-*`) |
+| Owner copy installed it (installer of record), the row | "change: com.anyapp.prayertimes is this person's own app; opening its chat": the app's chat (`04-owner-lands-in-chat-*`) |
+| Friend copy as installer, the row | "Prayer Times is Mohamad's app" with Suggest a change and Make my own version (disabled: not shared yet) (`05-friend-choices-light`) |
+| Friend: Ahmad, "Bigger numbers please, I cannot read Isha at night", Send | Android's share menu with exactly the message of `shared/chat/suggestions.ts` (`06-*`, `07-*`); Copy stood in for a messenger (one emulator) |
+| Owner copy: app sheet, From others, Paste a suggestion | "Ahmad suggests ... on version 1" filed under Prayer Times (`09-*`, `10-*`, `11-*`); Open in chat put "Ahmad suggested this change: ..." in the composer (`12-*`) |
+| Desktop (dev build on the owner state): From others, paste a second message ("Mum") | Both listed, Mum's filed by the paste; Open in chat filled the composer; Share dialog with the switch and "Your name in your apps" (`desktop\*-change-*`) |
+| Owner companion with GitHub on: Share, build 2 (carries the feed), Publish 1.0 | Repos `maddada/anyapp-prayertimes` (private) and `maddada/anyapp-prayertimes-releases` (public); release `v1.0-b2` with `prayertimes-source.zip` (239 files) and `update.json` naming it; the anonymous download's SHA-256 equals `update.json`'s; `APP_MEMORY.md` is committed in the private repo but not in the zip; no `.env` or keys in it |
+| Friend copy on version 2, the row | Make my own version enabled; its form defaults to "Prayer Times (Ahmad's)" (`05-friend-choices-shared-*`, `13-friend-own-version-form-*`) |
+| `POST /api/clones` on the friend's PC (the request Make it sends; started by API because another thread kept taking the emulator's front) | Downloaded `v1.0-b2`'s code, made `com.anyapp.prayertimesahmads` "Prayer Times (Ahmad's)" with its own key in the friend's keystore, no `APP_MEMORY.md`; agent turn, build 1 (337 s) |
+| Installed beside the original | `pm list packages`: both `com.anyapp.prayertimes` and `com.anyapp.prayertimesahmads`; signing certificates `3809ee9a...` and `50c8f004...` (`14-*`) |
+| Owner: "Add a sixth row, Tahajjud", build 3, Publish 1.1 | Release `v1.1-b3` with its code |
+| Friend's version, asked "Mohamad added a Tahajjud row in his newest Prayer Times. Copy that row from his app into mine." | Its agent ran `anyapp copy maddada/anyapp-prayertimes-releases` (scratch copy `prayertimes-1-1-...`), brought the row in, quick build 2; on the phone "Prayer Times (Ahmad's)" shows Tahajjud (`14-clone-home-*`) |
+
+Found and fixed during the proof: older AnyAppAgent copies do not know the change link, so apps now
+look for `com.anyappagent.action.CHANGE` (only new versions declare it); a second tap of the row
+reused the change screen still showing "Sent" (it now starts from the choices); the desktop header
+squeezed the app's name to one letter (From others is icon-only, with its count). `app/dev/ui.mjs`
+now resolves the launcher activity (a copy under another package keeps the first copy's class name).
+
+Not proven on the device: the "Show Change this app to others" switch off (the row hidden on a
+friend's phone, still shown on the owner's through `owns/<package>`); the Kotlin preset's row and
+sheet on a phone (the Kotlin template app was built with them, not run); sharing a suggestion into
+AnyAppAgent through the share-in screen (it landed on main after my phone copies were built; the
+Paste path was used). Tests: `shared/chat` 63, `server` 119 (11 new in `test/change.test.ts`),
+`builder` adopt and copies tests, `desktop` 58, typechecks.

@@ -9,6 +9,8 @@ type Props = React.ComponentProps<typeof TextInput> & {
   problem?: string | null;
   containerStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<TextStyle>;
+  /** A button inside the box, at its bottom right (the dictation mic); the text keeps clear of it. */
+  trailing?: React.ReactNode;
 };
 
 /**
@@ -16,7 +18,7 @@ type Props = React.ComponentProps<typeof TextInput> & {
  * while focused, a help line under it; a problem turns the line and the help line problem-red.
  */
 export const Field = forwardRef<React.ComponentRef<typeof TextInput>, Props>(function Field(
-  { label, help, problem, multiline, containerStyle, inputStyle, ...input },
+  { label, help, problem, multiline, containerStyle, inputStyle, trailing, ...input },
   ref,
 ) {
   const t = useTheme();
@@ -31,36 +33,40 @@ export const Field = forwardRef<React.ComponentRef<typeof TextInput>, Props>(fun
           {label}
         </T>
       ) : null}
-      <TextInput
-        ref={ref}
-        {...input}
-        multiline={multiline}
-        onFocus={(e) => {
-          setFocused(true);
-          input.onFocus?.(e);
-        }}
-        onBlur={(e) => {
-          setFocused(false);
-          input.onBlur?.(e);
-        }}
-        placeholderTextColor={t.textTertiary}
-        cursorColor={t.accent}
-        selectionColor={t.accent}
-        textAlignVertical={multiline ? "top" : "center"}
-        style={[
-          {
-            ...body,
-            color: t.text,
-            backgroundColor: t.fieldBg,
-            borderWidth: focused || problem ? border.focusWidth : border.width,
-            borderColor: lineColor,
-            borderRadius: radius.field,
-            paddingHorizontal: space.lg,
-          },
-          multiline ? { paddingVertical: space.md, minHeight: line * 3 + space.md * 2, maxHeight: line * 8 + space.md * 2 } : { height: size.fieldHeight },
-          inputStyle,
-        ]}
-      />
+      <View>
+        <TextInput
+          ref={ref}
+          {...input}
+          multiline={multiline}
+          onFocus={(e) => {
+            setFocused(true);
+            input.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            input.onBlur?.(e);
+          }}
+          placeholderTextColor={t.textTertiary}
+          cursorColor={t.accent}
+          selectionColor={t.accent}
+          textAlignVertical={multiline ? "top" : "center"}
+          style={[
+            {
+              ...body,
+              color: t.text,
+              backgroundColor: t.fieldBg,
+              borderWidth: focused || problem ? border.focusWidth : border.width,
+              borderColor: lineColor,
+              borderRadius: radius.field,
+              paddingHorizontal: space.lg,
+            },
+            multiline ? { paddingVertical: space.md, minHeight: line * 3 + space.md * 2, maxHeight: line * 8 + space.md * 2 } : { height: size.fieldHeight },
+            trailing ? { paddingRight: space.lg + size.sendButton } : null,
+            inputStyle,
+          ]}
+        />
+        {trailing ? <View style={{ position: "absolute", right: space.xs, bottom: multiline ? space.xs : (size.fieldHeight - size.sendButton) / 2 }}>{trailing}</View> : null}
+      </View>
       {problem || help ? (
         <T variant="caption" color={problem ? "problem" : "textSecondary"} style={{ marginTop: space.sm }}>
           {problem ?? help}
