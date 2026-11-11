@@ -686,6 +686,11 @@ function ipc(): void {
   ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
     chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
   );
+  // Versions, undo and crashes (docs/VERSIONS.md). An older companion has no versions route: an empty list.
+  ipcMain.handle("versions:list", (_e, appId: string) => admin?.versions(String(appId)).catch(() => []) ?? []);
+  ipcMain.handle("versions:restore", (_e, appId: string, build: number) => chatAction((c) => c.restoreVersion(String(appId), Number(build)))());
+  ipcMain.handle("versions:undo", (_e, appId: string) => chatAction((c) => c.undo(String(appId)))());
+  ipcMain.handle("crashes:fix", (_e, appId: string, crashId: string) => chatAction((c) => c.fixCrash(String(appId), String(crashId)))());
   // The to-do list (an older companion has no such route: an empty list).
   ipcMain.handle("todos:list", (_e, appId: string) => admin?.todos(String(appId)).catch(() => []) ?? []);
   ipcMain.handle("todos:add", (_e, appId: string, text: string) => chatAction((c) => c.addTodo(String(appId), String(text)))());

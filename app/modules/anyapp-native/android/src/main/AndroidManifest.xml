@@ -24,6 +24,17 @@
         android:name="com.anyappagent.nativebridge.InstallResultReceiver"
         android:exported="false" />
 
+    <!-- Crash reports and diaries from apps made with AnyAppAgent (docs/VERSIONS.md). Exported on
+         purpose: each broadcast carries a PendingIntent whose creator Android stamps, and only apps
+         this AnyAppAgent installed itself are accepted (AppReports.kt). -->
+    <receiver
+        android:name="com.anyappagent.nativebridge.AppReportsReceiver"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="com.anyappagent.action.CRASH" />
+        <action android:name="com.anyappagent.action.DIARY" />
+      </intent-filter>
+    </receiver>
     <!-- AnyAppAgent first (docs/DISTRIBUTION.md stage 5): apps made with AnyAppAgent find it by this
          action and ask the provider whether it handles their updates (then they stay silent). -->
     <provider

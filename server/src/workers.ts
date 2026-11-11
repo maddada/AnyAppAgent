@@ -32,7 +32,8 @@ import {
 } from "./helper-copies.ts";
 import { ChatLog, type AppRecord } from "./store.ts";
 
-export type BuildChangeOutcome = { ok: true; number: number } | { ok: false; error: string; cancelled?: boolean };
+// delivery (docs/FAST-LANE.md): "quick" when the build went to the phone as a quick update.
+export type BuildChangeOutcome = { ok: true; number: number; delivery?: "quick" | "full" } | { ok: false; error: string; cancelled?: boolean };
 
 /** What the worker manager needs from the app manager. */
 export interface WorkerHost {
@@ -45,13 +46,15 @@ export interface WorkerHost {
   /** Upserts an item into the app's main chat and broadcasts it. */
   emitMain(record: AppRecord, draft: ChatDraft & { worker?: WorkerInfo }): void;
   /** Builds the app after a change (one build row in the main chat), fixing failures through `fix`. */
-  buildChange(record: AppRecord, opts: { fix(prompt: string): Promise<string>; cancelled(): boolean; summary: string }): Promise<BuildChangeOutcome>;
+  buildChange(record: AppRecord, opts: { fix(prompt: string): Promise<string>; cancelled(): boolean; summary: string; notesKey?: string }): Promise<BuildChangeOutcome>;
   /** Hands finished workers' reports to the coordinator as its next message. */
   report(record: AppRecord, workerId: string, text: string): void;
   /** A worker started or settled: the app's status may change. */
   activityChanged(record: AppRecord): void;
   /** The page tools (show_page) for a worker's session: its pages show in the main chat. */
   pageTools?(appId: string, from: { workerId: string; title: string }): unknown;
+  /** The app tools (describe_change, read_diary; history.ts) for a helper's session. */
+  appTools?(appId: string, workerId: string): unknown;
   /** Tool calls that are plumbing and never shown (the page tools: a page card stands for them). */
   hiddenTool?(update: Record<string, unknown>): boolean;
 }
@@ -183,6 +186,16 @@ export class WorkerManager {
     const found = this.workers(appId).records.find((w) => w.info.id === workerId);
     if (!found) throw Object.assign(new Error("There is no worker with that id."), { status: 404 });
     return found;
+  }
+
+  /** Runs `fn` holding the app's landing slot, so it never overlaps a landing or its build (Versions). */
+  async withLandingSlot<T>(appId: string, holder: string, fn: () => Promise<T>): Promise<T> {
+    const release = await this.slot(appId).acquire(holder);
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
   }
 
   private slot(appId: string): Slot {
@@ -368,7 +381,10 @@ export class WorkerManager {
       env: appsCliEnv(this.host.stateDir, appId),
       ...(w.sessionId ? { resumeSessionId: w.sessionId } : {}),
       instructions: workerPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: cwd, preset: record.app.preset }, w.info),
-      ...(this.host.pageTools ? { mcpServers: [this.host.pageTools(appId, { workerId: w.info.id, title: w.info.title })] } : {}),
+      mcpServers: [
+        ...(this.host.pageTools ? [this.host.pageTools(appId, { workerId: w.info.id, title: w.info.title })] : []),
+        ...(this.host.appTools ? [this.host.appTools(appId, w.info.id)] : []),
+      ],
       launch: claudeLaunchSpec(this.host.config.acpLaunch),
       onUpdate: (update) => {
         if (this.host.hiddenTool && isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
@@ -551,6 +567,7 @@ export class WorkerManager {
         this.setState(record, w, "building", "Building the new version");
         const outcome = await this.host.buildChange(record, {
           summary: w.info.title,
+          notesKey: w.info.id,
           cancelled: () => rt.stopRequested,
           fix: async (prompt) => {
             this.setState(record, w, "working", "Fixing a small problem in the build");
@@ -564,7 +581,8 @@ export class WorkerManager {
           w.info.buildNumber = outcome.number;
           const combined = w.conflictsResolved ? ` It was combined with a change that landed first (${w.conflictsResolved} time${w.conflictsResolved > 1 ? "s" : ""}).` : "";
           delete w.conflictsResolved;
-          return { state: "done", build: `Its change was added to the app and the new version (build ${outcome.number}) was built and sent to the person's phone.${combined}` };
+          const how = outcome.delivery === "quick" ? " as a quick update (no install needed: the app shows a Reload button)" : " as a new version to install";
+          return { state: "done", build: `Its change was added to the app and the new version (build ${outcome.number}) was built and sent to the person's phone${how}.${combined}` };
         }
         const undone = await undoLanding(record.dir, land.before);
         const back = undone ? " The app was put back as it was before this change; the change is kept in the helper's copy." : "";

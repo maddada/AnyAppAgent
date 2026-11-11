@@ -157,3 +157,31 @@ export async function createGithubRepo(dir: string, repoName: string): Promise<s
   const view = await run("gh", ["repo", "view", repoName, "--json", "url", "-q", ".url"], dir);
   return view.stdout.trim();
 }
+
+/** The commit HEAD points at, or undefined. */
+export async function headCommit(dir: string): Promise<string | undefined> {
+  const head = await git(dir, ["rev-parse", "HEAD"]);
+  return head.code === 0 ? head.stdout.trim() : undefined;
+}
+
+/**
+ * Puts the app's files back as they were in `commit` (Versions, docs/VERSIONS.md) and commits that as
+ * one new commit, so history is never rewritten and every version stays reachable. `keep` paths (the
+ * agent's notes about the person) stay as they are now. Returns the commit before, for taking it back.
+ */
+export async function restoreTree(dir: string, commit: string, message: string, keep: string[] = []): Promise<{ before: string; changed: boolean }> {
+  await commitAll(dir, "Notes before going back");
+  const before = await headCommit(dir);
+  if (!before) throw new Error("This app has no saved history yet.");
+  const known = await git(dir, ["cat-file", "-e", `${commit}^{commit}`]);
+  if (known.code !== 0) throw new Error("The PC does not have the code of that version any more.");
+  const restored = await git(dir, ["restore", "--source", commit, "--staged", "--worktree", "--", ".", ...keep.map((p) => `:(exclude)${p}`)]);
+  if (restored.code !== 0) throw new Error(`git restore failed: ${lastLine(restored)}`);
+  const changed = await commitAll(dir, message);
+  return { before, changed };
+}
+
+/** Takes a go-back out again when it did not build (the commit before is kept). */
+export async function resetKeep(dir: string, commit: string): Promise<boolean> {
+  return (await git(dir, ["reset", "--keep", commit])).code === 0;
+}

@@ -1,3 +1,4 @@
+import { answerDiaryRequest, sendCrashes, startReports } from "./reports";
 import { AppState, PermissionsAndroid, Platform } from "react-native";
 import * as Device from "expo-device";
 import { AnyAppNative } from "anyapp-native";
@@ -20,12 +21,13 @@ import {
   replaceHelperChat,
 } from "./store";
 import { loadPairing, loadPrefs, savePairing, savePrefs, type Pairing, type Prefs } from "./storage";
-import { autoInstallIfNew, installerHooks, onApkReady, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
+import { autoInstallIfNew, installerHooks, onApkReady, onAppReport, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
 import { updateKeepAlive } from "./keepalive";
 
 // ---------- startup, pairing
 
 export async function boot() {
+  startReports();
   const [pairing, prefs] = await Promise.all([loadPairing(), loadPrefs()]);
   setState({ prefs });
   // Pairing first, then ready: a cold start straight into a screen that needs the pairing (the
@@ -40,6 +42,7 @@ export async function boot() {
   installerHooks.linkTrouble = () => reconnectNow();
   startUnpairRetries();
   AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
+  AnyAppNative?.addListener("onAppReport", (e) => onAppReport(e.packageName));
 }
 
 function applyPairing(pairing: Pairing, client?: Client) {
@@ -572,6 +575,7 @@ function onNetworkChanged() {
 
 function onForeground() {
   refreshPackages();
+  void sendCrashes();
   reconnectNow();
   void resumePendingInstall();
 }
@@ -606,6 +610,9 @@ function handleEvent(event: ServerEvent) {
     case "todos.updated":
       setTodos(event.appId, event.todos);
       break;
+    case "diary.request":
+      void answerDiaryRequest(event);
+      break;
   }
 }
 
@@ -620,6 +627,7 @@ async function resync() {
     updateKeepAlive();
     resumeUnfinishedInstalls();
     for (const app of apps) void autoInstallIfNew(app);
+    void sendCrashes();
     void resumePendingInstall();
     const { chatLoaded } = getState();
     await Promise.all(Object.keys(chatLoaded).filter((id) => chatLoaded[id] && apps.some((a) => a.id === id)).map((id) => loadChat(id)));

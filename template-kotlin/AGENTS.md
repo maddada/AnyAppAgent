@@ -27,7 +27,11 @@ app/src/main/java/com/anyapp/app/
   ai/Ai.kt                 AI (chat, streaming, tools, agents) through AnyAppAgent's key
   ai/AiSetupNotice.kt      the "AI is not set up" card with a button to AnyAppAgent
   ai/AiTypes.kt            AiMessage, AiPart, AiTool, AiError ... (AI.md: the wire format, leave it)
-app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service, feedback
+  diary/Diary.kt           the app's diary: Diary.note(context, "...") (see "The diary")
+  diary/CrashCatcher.kt    sends crashes to AnyAppAgent (see "Crashes"; leave it)
+  diary/DiaryRequestReceiver.kt  answers AnyAppAgent's request for the diary (leave it)
+  AnyApp.kt                the Application class: installs the crash catcher at start (keep it)
+app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service, feedback, the diary
 app/src/main/java/com/anyapp/feedback/  "Point at it": shake to send feedback (built in: keep it, leave it as is)
 app/src/main/java/com/anyapp/abilities/ widgets, Quick Settings tiles, app shortcuts, shares (leave its code)
 app/src/main/java/com/anyapp/app/abilities/AppActions.kt  what widget buttons, tiles and shortcuts do
@@ -282,6 +286,42 @@ try { Ai.ask(context, "Hi") } catch (e: AiError) {
 - Save conversations with `Store` (as JSON: `AiMessage.toJson()`) if the person should find them again.
 - The wire format under `Ai` is in `AI.md`; app code never needs it.
 
+### The diary
+
+The app keeps a small private diary on the phone of what it did, so "why didn't it ring?" gets a
+real answer instead of a guess. When the person says something did not work, read it with your
+`read_diary` tool (MCP server `app`) before you change code.
+
+```kotlin
+import com.anyapp.app.diary.Diary
+
+Diary.note(context, "Reminder set for 08:00")       // one line, at most 200 characters; never throws
+Diary.note(context, "Prayer times loaded for 7 days")
+Diary.note(context, "Could not load prayer times: no internet, used yesterday's")
+```
+
+- Write a note for every background action and important event: something scheduled, cancelled,
+  rung, skipped, loaded, failed, a permission missing. Say what happened and why, in plain words.
+  The alarms already write theirs (set, rang, not exact), and crashes are noted by themselves.
+- **Never personal content**: no names, messages, places, health data, or anything the person
+  typed. "Reminder set for 08:00" is fine; the reminder's own text is not.
+- It stays in the app's private storage (the newest 300 notes) and leaves the phone only to the
+  person's own PC, through AnyAppAgent, when you ask for it.
+
+### Crashes
+
+Crashes are caught by themselves (`AnyApp.kt` installs the catcher when the app starts): AnyAppAgent
+on the phone shows "<app> crashed. Fix it?", and a tap sends you the error, its stack, the version
+and the latest diary notes. For an exception you catch but still want to hear about:
+
+```kotlin
+import com.anyapp.app.diary.CrashCatcher
+
+try { load() } catch (e: Exception) { CrashCatcher.reportError(context, e, screen = "Settings"); showProblem() }
+```
+
+Keep `AnyApp.kt`, its `android:name` in the manifest and the `DiaryRequestReceiver` entry.
+
 ### Updates for people the app is shared with (built in, nothing to do)
 
 When the person shares the app from AnyAppAgent, the PC builds it with its update feed and the
@@ -501,6 +541,14 @@ feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbe
 screenshot. To also open it from a button (for example "Send feedback" in a settings screen):
 `com.anyapp.feedback.Feedback.open(activity)` (`LocalActivity.current` in Compose, or
 `LocalContext.current as Activity`). It does not open while a full-screen alarm shows.
+
+## New versions on the phone
+
+After your turn the PC builds a new APK (a few minutes) and AnyAppAgent installs it. If the person is
+inside the app when it arrives, the app shows a small "Version N is ready" card with **Reload**,
+which installs it and opens the app again (`com.anyapp.updates.ReadyPopup`, started in
+`MainActivity.onCreate`: keep that line). Kotlin apps have no quick (over-the-air) updates: every
+change is a new install.
 
 ## The app icon
 

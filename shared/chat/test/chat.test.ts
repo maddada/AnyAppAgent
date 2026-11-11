@@ -182,8 +182,19 @@ test("buildCard words each state the same on both sides", () => {
   assert.equal(buildCard(split, app({ latestApk: built }), "phone", 3, ["arm64-v8a", "armeabi-v7a"])?.sub, "Version 4, 21 MB");
   assert.equal(buildCard(split, app({ latestApk: built }), "phone", 3, ["armeabi-v7a"])?.sub, "Version 4, 60 MB");
   assert.equal(buildCard(split, app({ latestApk: built }), "pc")?.sub, "Version 4, 60 MB. Sent to your phone");
+  // A quick update (docs/FAST-LANE.md): no install on a phone that has the app; a first install is still the APK.
+  const quickBuild = { ...built, number: 4, delivery: "quick" as const, ota: { sizeBytes: 3 * 1048576, sha256: "q", runtime: "r" } };
+  const quick = item("build", { build: quickBuild });
+  const qPc = buildCard(quick, app({ latestApk: quickBuild }), "pc");
+  assert.ok(qPc?.state === "ready" && qPc.title === "Sent as a quick update" && qPc.sub === "Version 4, 3 MB. No install needed");
+  const qPhone = buildCard(quick, app({ latestApk: quickBuild }), "phone", 3);
+  assert.ok(qPhone?.state === "ready" && qPhone.title === "Sent as a quick update" && qPhone.sub === "Version 4, 3 MB. No install needed");
+  const qOn = buildCard(quick, app({ latestApk: quickBuild }), "phone", 4);
+  assert.ok(qOn?.state === "ready" && qOn.installed && qOn.sub === "Version 4. No install needed: tap Reload in the app");
+  const qFresh = buildCard(quick, app({ latestApk: quickBuild }), "phone", null);
+  assert.ok(qFresh?.state === "ready" && qFresh.title === "Your app is ready" && qFresh.sub === "Version 4, 60 MB. Tap Install to put it on this phone");
   const older = buildCard(ok, app({ latestApk: { ...built, number: 5 } }), "pc");
-  assert.deepEqual(older, { state: "older", number: 4, title: "Version 4 was ready" });
+  assert.deepEqual(older, { state: "older", number: 4, title: "Version 4 was ready", changes: [] });
 });
 
 // ---------- state line

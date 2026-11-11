@@ -22,6 +22,9 @@ src/lib/storage.ts       persistent JSON storage + usePersistentState hook
 src/lib/notifications.ts notification permission, notify now, exact scheduled reminders
 src/lib/alarms.ts        exact alarms with sound + spoken text, work while the app is closed
 src/lib/ai.ts            AI (chat, streaming, tools, agents) through AnyAppAgent's key
+src/lib/diary.ts         the app's diary: short private notes of what the app did (see "The diary")
+src/lib/crash.ts         crash catcher: crashes reach AnyAppAgent, which offers a fix (see "Crashes")
+src/components/CrashBoundary.tsx  "Something went wrong" screen instead of a blank one (leave it)
 src/components/AiSetupNotice.tsx  the "AI is not set up" card with a button to AnyAppAgent
 src/theme.ts             colours (light + dark), spacing, radius, font sizes
 assets/icon.png          THE launcher icon (1024x1024 PNG); also the splash and starter image
@@ -29,6 +32,7 @@ assets/sounds/           sound files for alarms and in-app playback (adhan.mp3, 
 scripts/make-icon.mjs    makes assets/icon.png from a colour and a glyph or letter
 modules/alarms/          native (Kotlin) code behind src/lib/alarms.ts
 modules/ai/              native (Kotlin) code behind src/lib/ai.ts (leave it)
+modules/diary/           native (Kotlin) code behind src/lib/diary.ts and src/lib/crash.ts (leave it)
 modules/feedback/        "Point at it": shake to send feedback (built in: keep it, leave it as is)
 modules/abilities/       home screen widgets, Quick Settings tiles, app shortcuts, receiving shares (leave its code)
 modules/camera/          camera smarts: scan codes, read text from pictures (off until app.json turns it on)
@@ -409,9 +413,11 @@ module imported from `App.tsx` (never inside a component: with the app closed, n
 ```ts
 // src/lib/actions.ts, and in src/App.tsx: import '@/lib/actions';
 import { onAction, setWidget, updateTile } from '../../modules/abilities';
+import { diary } from '@/lib/diary';
 
 onAction('log-glass', async () => {
   const n = await logGlass();          // your own code: save with storage.ts, update the widget
+  diary('Glass logged from the widget'); // a diary note for every background action (see "The diary")
   return `Glass ${n} logged`;          // optional: a small message (needs the notification permission)
 });
 onAction('start-tea', async () => { await scheduleReminder({ at: new Date(Date.now() + 180_000), title: 'Tea is ready' }); });
@@ -523,11 +529,73 @@ if (!shot.canceled) {
   (`npx expo install expo-camera`, its `CameraView` with `onBarcodeScanned`): it is much bigger,
   so prefer `scanCode()` in a loop unless the person asks for that.
 
+### The diary (what the app did, for fixing things later)
+
+The app keeps a small private diary on the phone. When the person says something did not work
+("why didn't it ring?"), you read it with the `read_diary` tool (MCP server `app`) instead of
+guessing. So write a note for every background action and every event that matters later:
+
+```tsx
+import { diary } from '@/lib/diary';
+
+diary('Prayer times loaded for Ajman: 6 times');
+diary('Fajr alarm set for 05:12');           // the alarms write "set" and "rang" notes by themselves
+diary('Location not allowed, used the saved city');
+diary('Could not load the weather: offline');
+```
+
+- One short line each (at most 200 characters); the newest 300 notes are kept.
+- **Never personal content**: no names, messages, places the person typed, health data, or
+  anything they wrote. Write what the app did and why ("Reminder set for 08:00", "List saved: 12
+  items"), not what it contains. The diary goes only to the person's own PC, and only when you
+  ask for it; never copy it into the app, a page or GitHub.
+- Crashes and caught errors are written to it by themselves.
+
+### Crashes
+
+Crashes are caught by themselves (`src/lib/crash.ts`, `modules/diary`, `src/components/CrashBoundary.tsx`,
+set up in `src/App.tsx`: leave that in place). AnyAppAgent shows the person "<app> crashed. Fix
+it?" and a tap sends you the report (message, stack, screen, version, the latest diary notes) as
+"Fix the crash". The stack comes from the release bundle, so match it to the code by the error
+message and the screen. An error you catch but want to hear about: `reportError(error)` from
+`@/lib/crash`.
+
+### What changed
+
+Before you end a turn that changed the app, call the `describe_change` tool (MCP server `app`)
+with what changed in the person's words, what to try, and anything to know. It shows on the new
+version's card on their phone. Every version is a commit in Git ("Build N: ..."); the person can go
+back to any version with Versions in their chat, so never rewrite Git history.
+
 ### Other things already installed
 
 `expo-constants` (app name/version: `Constants.expoConfig?.name`),
 `@expo/vector-icons`, `react-native-safe-area-context`, `expo-status-bar`. `fetch` works for the
-internet (HTTPS). `expo-updates` is installed for later over-the-air updates but **off**; leave it.
+internet (HTTPS). `expo-updates` is installed but **off**: over-the-air updates are done by
+`modules/updates` (see "Quick updates and new installs"); leave both as they are.
+
+## Quick updates and new installs (the PC decides, you choose wisely)
+
+After your turn the PC looks at what changed and picks how the new version reaches the phone:
+
+- **Quick update (seconds, no install):** only the JavaScript changed: anything in `src/`, the
+  TypeScript in `modules/*/index.ts`, texts, colours, layout, logic, new screens. The PC bundles it
+  without Gradle and sends it over the air through AnyAppAgent. The app shows a small "Version N is
+  ready" card with **Reload**, which starts the new code in place in about a second. If the app is
+  closed, it simply opens with the new version next time.
+- **New install (a few minutes):** anything native changed: `app.json` (name, permissions,
+  plugins), `package.json` or the lockfile (a new library), anything in `assets/` (the icon,
+  pictures, sounds, fonts), native files in `modules/` (Kotlin, manifests, `app.plugin.js`). The PC
+  runs the full build; the same card appears and Reload installs the new APK and opens the app again.
+- A quick update that crashes when it starts is rolled back on the phone by itself (to the last
+  version that worked) and AnyAppAgent is told.
+
+So: prefer a solution in code when it is as good (an icon from `@expo/vector-icons` instead of a
+new picture, a library already installed instead of a new one), and say in your last sentence which
+it will be: "Sent as a quick update, no install needed." or "This one needs a new install, it takes
+a few minutes." The quick update code lives in `modules/updates` (`Ota.kt`, `ReadyPopup.kt`, the
+loader in `AnyappUpdatesPackage.kt`): never edit or remove it, never add another updater, and never
+turn on `expo-updates`.
 
 ## The app icon
 

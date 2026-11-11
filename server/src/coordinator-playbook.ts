@@ -2,7 +2,7 @@
 // Ghostex coordinator playbook (the user's own ghostex-orchestrator skill), cut down for one person
 // who is not technical and talks to one app from their phone. See docs/APP-COORDINATOR.md.
 import type { AppPreset } from "../../shared/protocol.ts";
-import { checkCommand, feedbackPicturesLine, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
+import { checkCommand, deliveryRules, feedbackPicturesLine, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
 
 type AppInfo = { name: string; packageName: string; dir: string; preset?: AppPreset };
 
@@ -14,7 +14,7 @@ function stack(preset: AppPreset | undefined): string {
 /** The MCP server name the coordinator's worker tools live under (tools show as mcp__workers__*). */
 export const WORKER_TOOLS_SERVER = "workers";
 /** Bump when the coordinator playbook changes enough that resumed sessions must get it again. */
-export const COORDINATOR_PLAYBOOK_VERSION = 4; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures
+export const COORDINATOR_PLAYBOOK_VERSION = 6; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures; 5: quick update or new install; 6: versions, crashes, the diary
 /** The first line of a message that carries worker reports to the coordinator (not from the person). */
 export const REPORT_HEADER = "[Worker report]";
 
@@ -77,8 +77,21 @@ went wrong and what you will do next. Do not relay every detail. A report never 
 started unless something is left to do.
 
 What the PC does by itself: when a worker's change is done, the PC builds the new version of the
-app, saves it, and sends it to the phone, which installs it. A failed build goes back to that
-worker to fix. You never build or save anything yourself.
+app, saves it, and sends it to the phone, with the worker's "What changed" lines on its card. A failed build goes back to that worker to fix. You never
+build or save anything yourself.
+
+${deliveryRules(app.preset, "worker")}
+The report says which it was. Tell the person in plain words: "Sent as a quick update, no install
+needed, tap Reload in the app." or "This one is a new install, it arrives in a few minutes." When you
+brief a worker, ask for a code-only solution when one is as good, so the change can go as a quick update.
+
+Versions and crashes: the person can go back to any earlier version, or undo the last change, with
+the Versions button in this chat; when they ask for that, tell them where it is (one line), or for
+only part of an old version, brief a worker to bring that part back from Git history. A message
+"Fix the crash: ..." comes from the crash card on their phone and carries the app's crash report:
+start a worker with the whole report in its brief. When something did not work as expected ("why
+didn't it ring?"), read the app's diary with the read_diary tool first (or tell the worker to); it
+is private, never copy it into the app, a page or GitHub.
 
 Plan first (the person's rule): before a new app is built, and before any large change (a new
 screen, a new feature, a redesign), the person confirms a plan. You make the plan yourself, it is
@@ -121,7 +134,10 @@ task needs. When you finish your turn, the PC saves your work (do not commit or 
 adds it to the app, builds the app and sends the new version to the person's phone. If another
 change landed first and touches the same lines, you get a message asking you to combine the two. So finish every turn with an app that
 builds: run \`${checkCommand(app.preset)}\` before you end. If the build fails, the build error comes back to you
-as the next message: fix the cause, never remove the feature to make the error go away.`
+as the next message: fix the cause, never remove the feature to make the error go away.
+
+${deliveryRules(app.preset, "worker")}
+Say in your report which it will be.`
     : `Your task is to look into something and report: do not change any of the app's files.`;
   return `You are a worker on the Android app "${app.name}" (package ${app.packageName}). ${stack(app.preset)} Your task:
 "${worker.title}". The project is this folder: ${app.dir}. Its AGENTS.md (loaded through
@@ -143,6 +159,20 @@ Read ${OVERVIEW_FILE} (what the app should do) and ${MEMORY_FILE} (the person's 
 you need them; the coordinator keeps both, so do not edit them.
 
 ${otherAppsRules("builder")}
+
+What changed: before you end a turn that changed the app, call the describe_change tool with what
+changed, in the person's words (the coordinator's brief has them), and when useful what to try and
+anything to know. It shows on the new version's card on their phone. No code words.
+
+Versions: every version the person got is a commit in this folder's Git history ("Build N: ..."; a
+go-back from the Versions screen is "Back to version N"). When they ask for something from an older
+version ("bring back the old colours"), find it there (\`git log\`, \`git show <commit>:<file>\`) and
+bring back only that part. Going back to a whole version is the Versions button in their chat.
+
+The app's diary: the app writes short notes on the phone about what it did (alarms set and rung,
+reminders, errors, crashes). When something did not work as expected ("why didn't it ring?"), read
+it with the read_diary tool before you guess. It is private: never copy it into the app, a page or
+GitHub.
 
 Pages: when your brief asks for a page (a mockup, an explainer), make it with the show_page tool;
 read ${PAGE_KIT_GUIDE} first. It shows in the person's main chat; their answers go to the coordinator.

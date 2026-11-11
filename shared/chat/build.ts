@@ -2,12 +2,13 @@
 // where the two really know different things: the phone knows whether the app is installed on it,
 // the PC knows whether the version has gone out to the phone.
 import type { App, BuildInfo, ChatItem } from "../protocol.ts";
+import { changeLines, type ChangeLine } from "./history.ts";
 
 export type BuildCard =
   | { state: "running"; number: number; title: string; sub: string }
   | { state: "failed"; number: number; title: string; sub: string; canRetry: boolean }
-  | { state: "ready"; number: number; title: string; sub: string; sent: boolean; installed: boolean }
-  | { state: "older"; number: number; title: string };
+  | { state: "ready"; number: number; title: string; sub: string; sent: boolean; installed: boolean; changes: ChangeLine[] }
+  | { state: "older"; number: number; title: string; changes: ChangeLine[] };
 
 export function formatSize(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${Math.round(bytes / 1024 / 1024)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -33,7 +34,10 @@ export function apkFor(build: BuildInfo, abis: readonly string[] = []): { abi?: 
 export function buildCard(item: ChatItem, app: App | undefined, side: "phone" | "pc", installedVersion?: number | null, abis?: readonly string[]): BuildCard | null {
   const b = item.build;
   if (!b) return null;
-  if (b.status === "running") return { state: "running", number: b.number, title: `Building version ${b.number}`, sub: item.text?.trim() || "Usually about two minutes" };
+  if (b.status === "running") {
+    const title = b.restoredFrom ? `Going back to version ${b.restoredFrom}` : `Building version ${b.number}`;
+    return { state: "running", number: b.number, title, sub: item.text?.trim() || "Usually about two minutes" };
+  }
   if (b.status === "failed") {
     // Only the newest build can be tried again, and only while nothing else runs.
     const newest = (app?.latestBuild?.number ?? b.number) <= b.number;
@@ -44,7 +48,9 @@ export function buildCard(item: ChatItem, app: App | undefined, side: "phone" | 
   // says "idle" a moment before apk.ready, so app.latestApk can still be the older build here: a
   // succeeded build at least as new as it is the newest one.
   const newest = (app?.latestApk?.number ?? 0) <= b.number;
-  if (!app || !newest) return { state: "older", number: b.number, title: `Version ${b.number} was ready` };
+  // "What changed" (docs/VERSIONS.md): on the newest card in full; an older line keeps its first line.
+  const changes = changeLines(b.changes);
+  if (!app || !newest) return { state: "older", number: b.number, title: `Version ${b.number} was ready`, changes: changes.slice(0, 1) };
   const sent = (app.latestApk?.number ?? 0) >= b.number;
   const installed = installedVersion != null && installedVersion >= b.number;
   const bytes = side === "phone" ? apkFor(b, abis).sizeBytes : b.sizeBytes;
@@ -60,5 +66,19 @@ export function buildCard(item: ChatItem, app: App | undefined, side: "phone" | 
       : sent
         ? `Version ${b.number}${size}. Sent to your phone`
         : `Version ${b.number}${size}. Saving it, then it goes to your phone`;
-  return { state: "ready", number: b.number, title: "Your app is ready", sub, sent, installed };
+  // The fast lane (docs/FAST-LANE.md): a quick update goes to the app over the air, no install.
+  // A phone without the app (or with older native parts) still gets the APK, as above.
+  if (b.delivery === "quick" && b.ota && (side === "pc" || installedVersion != null)) {
+    const quickSub =
+      side === "phone"
+        ? installed
+          ? `Version ${b.number}. No install needed: tap Reload in the app`
+          : `Version ${b.number}, ${formatSize(b.ota.sizeBytes)}. No install needed`
+        : sent
+          ? `Version ${b.number}, ${formatSize(b.ota.sizeBytes)}. No install needed`
+          : `Version ${b.number}. Saving it, then it goes to your phone`;
+    return { state: "ready", number: b.number, title: b.restoredFrom ? `Back to version ${b.restoredFrom}` : "Sent as a quick update", sub: quickSub, sent, installed, changes };
+  }
+  const title = b.restoredFrom ? `Back to version ${b.restoredFrom}` : "Your app is ready";
+  return { state: "ready", number: b.number, title, sub, sent, installed, changes };
 }

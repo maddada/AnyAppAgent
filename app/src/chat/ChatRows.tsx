@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import {
   Brain,
+  Bug,
   Check,
   ChevronDown,
   ChevronRight,
@@ -25,6 +26,8 @@ import {
   Globe,
   ListTodo,
   Lock,
+  NotebookText,
+  Wrench,
   Package,
   RotateCcw,
   Search,
@@ -42,7 +45,8 @@ import { Button } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
 import { easing, elevation, fonts, icon, motion, radius, size, space, typeStyle, useTheme, border } from "@/ui/theme";
-import { buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, answerLines, pageCard, type HelperIcon, type PageAnswers, type PageCardView, type Row } from "@shared/chat/index";
+import { crashCard, diaryLine, DIARY_PRIVACY, type ChangeLine , buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, answerLines, pageCard, type HelperIcon, type PageAnswers, type PageCardView, type Row } from "@shared/chat/index";
+
 import { StateLine } from "@/ui/StateLine";
 import { Markdown } from "./Markdown";
 
@@ -81,6 +85,10 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
       return <BuildCard item={item} app={app} />;
     case "error":
       return <ErrorRow item={item} />;
+    case "crash":
+      return <CrashCard item={item} app={app} />;
+    case "diary":
+      return <DiaryRow item={item} />;
     default:
       return null;
   }
@@ -479,11 +487,12 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
   if (!card) return null;
 
   if (card.state === "older" || !app) {
+    const what = card.state === "older" ? card.changes[0]?.text : undefined;
     return (
       <LineRow>
         <Glyph icon={Package} color={t.textTertiary} />
-        <T variant="row" color="textTertiary">
-          {card.title}
+        <T variant="row" color="textTertiary" style={{ flex: 1 }} numberOfLines={2}>
+          {what ? `${card.title}: ${what}` : card.title}
         </T>
       </LineRow>
     );
@@ -546,6 +555,7 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
   return (
     <View testID="build-ready" style={box}>
       {head(<Badge icon={Package} fill={t.readySoft} color={t.ready} />)}
+      <WhatChanged lines={card.changes} />
       {phase === "failed" ? (
         <View style={{ gap: space.xs }}>
           <T variant="row" color="problem">
@@ -565,6 +575,98 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
           onPress={() => void installApp(app)}
         />
       )}
+    </View>
+  );
+}
+
+/** "What changed" on a new version's card (docs/VERSIONS.md): Changed, Try it, Good to know. */
+export function WhatChanged({ lines }: { lines: ChangeLine[] }) {
+  const t = useTheme();
+  if (lines.length === 0) return null;
+  return (
+    <View testID="what-changed" style={{ gap: space.sm, borderTopWidth: border.width, borderTopColor: t.border, paddingTop: space.md }}>
+      <T variant="eyebrow" color="textTertiary">
+        What changed
+      </T>
+      {lines.map((line) => (
+        <View key={line.label} style={{ gap: 2 }}>
+          <T variant="caption" color="textSecondary">
+            {line.label}
+          </T>
+          <T variant="callout">{line.text}</T>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** "Tea Timer crashed. Fix it?" (docs/VERSIONS.md): one tap sends the crash to the app's agent. */
+function CrashCard({ item, app }: { item: ChatItem; app: App | undefined }) {
+  const t = useTheme();
+  const client = useStore((s) => s.client);
+  const online = useStore((s) => s.connection === "online");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!item.crash) return null;
+  const card = crashCard(item.crash, app?.name ?? "The app");
+  const crashId = item.crash.id;
+  return (
+    <View
+      testID="crash-card"
+      style={{ backgroundColor: t.surface, borderRadius: radius.card, borderWidth: border.width, borderColor: t.border, padding: space.lg, gap: space.md, ...elevation(t.mode, 1) }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <Badge icon={Bug} fill={t.problemSoft} color={t.problem} />
+        <View style={{ flex: 1 }}>
+          <T variant="heading">{card.title}</T>
+          <T variant="caption" color="textSecondary">
+            {card.meta}
+          </T>
+        </View>
+      </View>
+      <T variant="mono" color="textSecondary" selectable numberOfLines={4}>
+        {card.detail}
+      </T>
+      {error ? <StateLine kind="problem" label={error} role="caption" lines={0} /> : null}
+      {card.canFix && app && client ? (
+        <Button
+          testID="crash-fix"
+          label="Fix it"
+          icon={Wrench}
+          busy={sending}
+          disabled={!online}
+          onPress={() => {
+            setSending(true);
+            setError(null);
+            void client.fixCrash(app.id, crashId).catch((e: unknown) => {
+              setSending(false);
+              setError(e instanceof Error ? e.message : "That did not work. Try again.");
+            });
+          }}
+        />
+      ) : card.asked ? (
+        <StateLine kind="ready" label={card.asked} role="caption" />
+      ) : null}
+    </View>
+  );
+}
+
+/** The agent read the app's diary from this phone: one quiet line, and where it stays. */
+function DiaryRow({ item }: { item: ChatItem }) {
+  const t = useTheme();
+  return (
+    <View testID="diary-row" style={{ flexDirection: "row", alignItems: "flex-start", gap: space.sm, paddingHorizontal: space.xs }}>
+      <View style={{ paddingTop: (ROW_LINE - icon.size.sm) / 2 }}>
+        <Glyph icon={NotebookText} color={item.diary?.ok === false ? t.problem : t.textTertiary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <T variant="row" color="textSecondary">
+          {diaryLine(item.diary)}
+        </T>
+        <T variant="caption" color="textTertiary">
+          {DIARY_PRIVACY}
+        </T>
+      </View>
     </View>
   );
 }

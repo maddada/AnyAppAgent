@@ -16,3 +16,8 @@ android {
     abortOnError false
   }
 }
+
+dependencies {
+  // ReactHost, for the quick update loader (AnyappUpdatesPackage).
+  implementation 'com.facebook.react:react-android'
+}

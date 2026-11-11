@@ -228,3 +228,31 @@ more" option in the New app sheet.
 - Plan first: before a new app or a large change, the plan in bullets and a plan page, then wait for
   "Build it" or a yes. "Ask me more" adds a question page before the plan.
 - Details, routes and the protocol additions: `docs/PAGES.md`.
+
+## The fast lane: quick updates and the Reload popup (added 2026-11-11)
+
+The user picked "Fast lane" and "Bundle swap builds" (`C:\aa\ideas\ideas.html`, Q19, Q20) and asked
+for "a button that appears like a pop-up on the app itself that says 'Reload'" for both quick
+updates and new APKs, so they never have to go back to AnyAppAgent to get a change.
+
+- After every turn the builder decides by the app's native fingerprint: only JavaScript changed
+  means a quick build in seconds (no Gradle): the last APK with the new bundle and version code
+  (bundle swap), plus a quick update signed with the app's own key. Anything native means the
+  full build, as before. Kotlin and Expo Exact apps always get the full build.
+- AnyAppAgent hands a quick update to the app; inside every app a "Version N is ready" card with
+  Reload starts it in place (or installs a new APK through AnyAppAgent and opens the app again).
+  A quick update that fails at start rolls back by itself. Tiles show the version that runs.
+- The playbooks and the templates' AGENTS.md explain it, and the chat says "Sent as a quick update,
+  no install needed" when that is what happened.
+- Design, security and the proof: `docs/FAST-LANE.md`.
+
+## Versions, What changed, Crash catcher, the app's diary (added 2026-11-11)
+
+The user picked "Versions and undo", "What changed card", "Crash catcher" and "A diary the agent can
+read" from the ideas page. Every build is a version the person can go back to (built again as a new,
+higher version, so it installs over the current one and keeps the app's data) or undo; each new
+version arrives with up to three plain lines (Changed, Try it, Good to know) the agent writes with
+its `describe_change` tool; generated apps catch their crashes and hand them to AnyAppAgent, which
+shows "Tea Timer crashed. Fix it?" and sends the report to the app's agent on a tap; and apps keep a
+small private diary on the phone that the agent reads with `read_diary` (phone and PC only). The
+decisions, the Android wire format and the protocol additions: `docs/VERSIONS.md`.

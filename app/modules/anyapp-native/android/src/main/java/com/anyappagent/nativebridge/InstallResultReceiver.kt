@@ -36,6 +36,15 @@ class InstallResultReceiver : BroadcastReceiver() {
       return
     }
 
+    if (status == PackageInstaller.STATUS_SUCCESS && packageName != null && UpdatesProvider.reopenAfterInstall.remove(packageName)) {
+      // The app's Reload popup asked for this install: open it again at once (docs/FAST-LANE.md).
+      try {
+        context.packageManager.getLaunchIntentForPackage(packageName)?.let {
+          context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
+        }
+      } catch (_: Exception) {
+      }
+    }
     InstallEvents.emit(sessionId, statusName(status), message, packageName)
   }
 

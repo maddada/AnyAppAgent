@@ -1,8 +1,8 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
-export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, PageInfo, TodoItem, WorkerInfo };
+export type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, PageInfo, TodoItem, WorkerInfo };
 
 /** One self-check in the setup checklist. */
 export type CheckState = "checking" | "done" | "needed" | "working" | "skipped" | "problem";
@@ -250,6 +250,14 @@ export interface AnyAppBridge {
   /** A QR code (SVG) for a link. */
   qr(text: string): Promise<string>;
   answerPermission(appId: string, requestId: string, optionId: string): Promise<ActionResult>;
+  /** Versions of an app, newest first (docs/VERSIONS.md). */
+  getVersions(appId: string): Promise<AppVersion[]>;
+  /** Builds an earlier version again as a new version. */
+  restoreVersion(appId: string, build: number): Promise<ActionResult>;
+  /** Goes back to the version before the newest one. */
+  undoChange(appId: string): Promise<ActionResult>;
+  /** "Fix it" on a crash card. */
+  fixCrash(appId: string, crashId: string): Promise<ActionResult>;
   /** The person's own to-do list for an app (the agent never sees it). */
   getTodos(appId: string): Promise<TodoItem[]>;
   addTodo(appId: string, text: string): Promise<ActionResult>;
