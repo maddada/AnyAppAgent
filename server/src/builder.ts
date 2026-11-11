@@ -20,7 +20,7 @@ export interface BuildResult {
 export interface Builder {
   kind: "real" | "fake";
   createApp(args: { dir: string; name: string; slug: string; packageName: string; preset?: AppPreset; onLog?: (line: string) => void }): Promise<void>;
-  buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void }): Promise<BuildResult>;
+  buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void; updateFeed?: string; updateTestingFeed?: string }): Promise<BuildResult>;
   getIconPath(args: { dir: string }): string | null;
   // Signing keys (docs/DISTRIBUTION.md): only the real builder has them.
   keys?: {

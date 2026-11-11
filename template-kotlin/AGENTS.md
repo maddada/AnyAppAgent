@@ -274,6 +274,21 @@ try { Ai.ask(context, "Hi") } catch (e: AiError) {
 - Save conversations with `Store` (as JSON: `AiMessage.toJson()`) if the person should find them again.
 - The wire format under `Ai` is in `AI.md`; app code never needs it.
 
+### Updates for people the app is shared with (built in, nothing to do)
+
+When the person shares the app from AnyAppAgent, the PC builds it with its update feed and the
+app updates itself on other people's phones: it checks when it opens and once a day, shows a
+notification when a new version is published, and a tap downloads, checks and installs it. On the
+person's own phone AnyAppAgent installs every build, so the app stays quiet. This is
+`com.anyapp.updates` (the same code in every AnyAppAgent app), started by the
+`AppUpdater.onAppStart(this)` line in `MainActivity` and the entries marked in
+`AndroidManifest.xml`, with `res/raw/anyapp_keep.xml`: never edit or remove any of these, and
+never add another updater. Only if the person asks for an update line or a "Check for updates"
+button: `AppUpdater.check(context)` (off the main thread) returns `State.Available(update)`,
+`UpToDate`, `HandledByAnyAppAgent`, `Off` or `Problem(message)`, and
+`startActivity(Intent(context, UpdateActivity::class.java).putExtra(UpdateActivity.EXTRA_START, true))`
+opens the update box.
+
 ### Also at hand (Android itself, no library)
 
 - Text to speech while the app is open: `android.speech.tts.TextToSpeech`.

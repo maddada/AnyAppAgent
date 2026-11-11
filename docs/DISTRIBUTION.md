@@ -34,8 +34,8 @@ Other people's phones (only what you publish)
 | - | ----- | ------- | ------ |
 | 1 | Per-app signing keys, moving existing apps by key rotation, an encrypted backup the user can restore | `builder/`, `server/`, `desktop/`, `shared/protocol.ts`, `template-kotlin/.gitignore` | Built, proven, in main |
 | 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `shared/protocol.ts` | Built, proven, in main |
-| 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Built and proven ("Stage 3 proof") |
-| 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `template-exact/` (if its native modules allow it), `builder/` | Planned |
+| 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Built, proven, in main |
+| 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `builder/`, `server/` | Built and proven ("Stage 4 proof"); not in Expo Exact yet |
 | 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/`, `shared/protocol.ts` | Planned |
 | 6 | The controls on the PC and the phone: Publish, Share with others, link and QR, downloads per version, channel, key backup | `desktop/`, `app/` | Partly in stage 1 (key backup) |
 
@@ -299,6 +299,58 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
   `releases/latest` can still point at the version before, and a replaced file (the `update.json`
   of a pull back) can still be served as it was for several minutes. With checks at most every 6
   hours that only delays an update; the API (`gh release download`) shows the change at once.
+
+### As built (stage 4)
+
+- `com.anyapp.updates` (`AppUpdater`, `UpdateJob`, `UpdateActivity`, `InstallReceiver`), plain
+  Android APIs only, the same four files in `template-kotlin/app/src/main/java/com/anyapp/updates/`
+  and in the React Native module `template/modules/updates` (an Expo module that starts it and
+  gives JavaScript `checkForUpdate`, `openUpdate`, `updatesOn`, `get/setUpdateChannel`).
+  `builder/test/updater-copies.test.mjs` keeps the copies byte for byte the same.
+- The feed: the companion passes a shared app's `feedUrl` and Testing feed to `buildApk`
+  (`updateFeed`, `updateTestingFeed`, only GitHub release addresses of a `.json` file); the
+  builder's init script writes them as the string resources `anyapp_update_feed` and
+  `anyapp_update_testing_feed` (`buildFeatures.resValues`). `res/raw/anyapp_keep.xml` keeps them
+  through R8 resource shrinking, which removed them in the first try. A build of an app that is
+  not shared has no feed, and the updater does nothing at all.
+- When: on open, at most every 6 hours (the slot is claimed before the check, so two starts check
+  once), and a daily JobScheduler job when online (it needs `ACCESS_NETWORK_STATE`, which the first
+  try lacked: `SecurityException`). Note: force-stopping an app cancels its jobs until it opens again.
+- Before notifying, it asks AnyAppAgent (stage 5); then: compare `build` with `versionCode`, skip a
+  `blocked` build, refuse a feed whose `signer` is not this app's key, pick the APK for the phone's
+  first ABI, else the full one.
+- One notification per build ("<App> <version> is ready", the notes), channel "App updates". A tap
+  opens the update box, which starts at once: the first time, Android's "Install unknown apps"
+  page for this app (once per app), then the download with MB progress, then size and SHA-256
+  (one retry), then the file's package, build number and signing key against the installed copy,
+  then a PackageInstaller session. Android shows its own "Do you want to update this app?" for a
+  copy that came from a browser (the app is not its installer of record).
+- Plain words for every state; a download from another key or of another app offers Close, not
+  Try again.
+- Expo Exact apps do not have the updater yet (their native module support was not looked at);
+  they still get updates on the owner's phone through AnyAppAgent.
+
+## Stage 4 proof
+
+2026-11-11, `emulator-5560` (Android 15) as the friend's phone, the companion setup of stage 2,
+a new Kotlin app "Dist Friend Test" (`com.anyapp.disttestfriend`, own key, a launch counter) made
+from the updated template and shared: repos `anyapp-disttest-friend` (private) and
+`anyapp-disttest-friend-releases` (public).
+
+| Step | Result |
+| ---- | ------ |
+| Publish 1.0; on the "friend's phone" download `disttest-friend.apk` from the public install link and install it (no installer of record, as from a browser) | Installed, `launches=1` |
+| First try of the daily job | Not scheduled: `SecurityException: ACCESS_NETWORK_STATE required` (fixed, then 1.2 published and installed from the link the same way) |
+| Publish 1.3 (build 5); the app's daily job (`cmd jobscheduler run -f`) | `check: build 5 (1.3) is available`; one notification "Dist Friend Test 1.3 is ready" with the notes (`C:\aa\t\shots\friend-1-notification.png`) |
+| Tap | Android's "Install unknown apps" page for the app (first time only); allowed, back |
+| The update box | Downloaded, checked, handed to Android: "Do you want to update this app?"; Update |
+| After | `versionCode=5`, `launches=6` (data kept), the notification gone |
+| A release whose `update.json` has a wrong SHA-256 | "The download was damaged twice, so it was not installed. Try again later."; still build 5 |
+| A release whose APK is signed with another key (its SHA-256 honest) | "This update can't replace your copy (it is signed differently). Ask whoever shared the app for a new link."; still build 5 (`C:\aa\t\shots\tamper-B.png`) |
+| React Native: a new app from the updated template, built with a feed | The module compiles; the APK has the feed string, the activity, job and receiver; on the emulator `daily check scheduled: true`, `check: up to date` (the feed belongs to another package, so nothing is offered) |
+
+The two tampered releases (`tampered-sha-test`, `tampered-key-test`) are left on the test releases
+repo as pre-releases titled "Tampered test ... (not a real version)".
 
 ## Stage 3 proof
 

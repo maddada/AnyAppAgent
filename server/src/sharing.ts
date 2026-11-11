@@ -52,6 +52,11 @@ export function sharingUrls(owner: string, slug: string): Pick<AppSharing, "rele
   };
 }
 
+/** The Testing channel's feed: one pre-release tagged "testing" whose files are replaced (stage 3). */
+export function testingFeedUrl(releasesRepoUrl: string): string {
+  return `${releasesRepoUrl}/releases/download/testing/update-testing.json`;
+}
+
 /** The public README: only the app's name, its icon and how to install. Nothing from the code. */
 export function releasesReadme(app: Pick<App, "name" | "slug">, owner: string, latest?: PublishedVersion): string {
   const { installUrl } = sharingUrls(owner, app.slug);

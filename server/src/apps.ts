@@ -16,7 +16,7 @@ import type { Config } from "./config.ts";
 import { nowIso } from "./fs-util.ts";
 import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
-import { realGithub, shareApp, unshareApp, type GithubApi } from "./sharing.ts";
+import { realGithub, shareApp, testingFeedUrl, unshareApp, type GithubApi } from "./sharing.ts";
 import * as githubCli from "./github.ts";
 import { publishVersion, pullBack, StaleSignerError, parseUpdateJson, repoOf, type ApkFile, type ReleaseApi } from "./publish.ts";
 import { appPlaybook, buildFixPrompt } from "./playbook.ts";
@@ -1053,7 +1053,9 @@ ${overviewNudge()}` : "";
     this.log(`[${app.slug}] build ${number} started`);
     const started = Date.now();
     try {
-      const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog });
+      // A shared app's builds carry its update feeds, so its own updater can find new versions.
+      const feeds = app.sharing ? { updateFeed: app.sharing.feedUrl, updateTestingFeed: testingFeedUrl(app.sharing.releasesRepoUrl) } : {};
+      const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog, ...feeds });
       const apkDir = this.store.apkDir(app.id);
       mkdirSync(apkDir, { recursive: true });
       const target = join(apkDir, apkFileName(number));

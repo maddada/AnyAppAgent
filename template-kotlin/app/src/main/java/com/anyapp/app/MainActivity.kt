@@ -17,6 +17,7 @@ import com.anyapp.app.ui.theme.AppTheme
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    com.anyapp.updates.AppUpdater.onAppStart(this) // updates for people the app is shared with: keep
     enableEdgeToEdge()
     setContent { AppTheme { App() } }
   }
