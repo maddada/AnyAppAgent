@@ -15,6 +15,7 @@ import {
   upsertApp,
   upsertChatItems,
   upsertHelperItems,
+  setTodos,
   upsertHelpers,
   replaceHelperChat,
 } from "./store";
@@ -601,6 +602,9 @@ function handleEvent(event: ServerEvent) {
       break;
     case "worker.item":
       if (event.item.workerId) upsertHelperItems(event.item.workerId, [event.item]);
+      break;
+    case "todos.updated":
+      setTodos(event.appId, event.todos);
       break;
   }
 }

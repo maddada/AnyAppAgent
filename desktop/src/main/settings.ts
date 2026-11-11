@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Settings } from "../shared/types.ts";
 
-export const DEFAULT_SETTINGS: Settings = { onboardingDone: false, githubSkipped: false, startWithWindows: false, closeHintShown: false, phoneApkPath: "" };
+export const DEFAULT_SETTINGS: Settings = { onboardingDone: false, githubSkipped: false, startWithWindows: false, closeHintShown: false, phoneApkPath: "", hexModel: "", hexSkipped: false };
 
 export function loadSettings(file: string): Settings {
   try {

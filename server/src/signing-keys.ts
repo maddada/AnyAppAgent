@@ -3,7 +3,7 @@
 // (lib/keybackup.mjs). Passwords pass straight through and are never kept or logged.
 import { isAbsolute } from "node:path";
 import type { KeysBackupResult, KeysRestoreResult, SigningKeysState } from "../../shared/protocol.ts";
-import { HttpError } from "./apps.ts";
+import { HttpError } from "./http-error.ts";
 import type { Builder } from "./builder.ts";
 
 export const MIN_KEYS_PASSWORD = 8;

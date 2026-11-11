@@ -51,6 +51,7 @@ const BASE_IGNORES = [
   "*.aab",
   "*.jks",
   "*.keystore",
+  "*.p12",
   "local.properties",
   ".env",
   ".env.*",
@@ -69,7 +70,7 @@ export function ensureGitignore(dir: string): void {
   const have = new Set(current.split(/\r?\n/).map((line) => line.trim().replace(/^\//, "")));
   // A project with its own .gitignore (the template has one) only gets what must never be
   // committed when it is missing; an empty project gets the whole list.
-  const wanted = current === "" ? [...BASE_IGNORES, ...BUILD_OUTPUT_IGNORES] : ["node_modules/", ...BUILD_OUTPUT_IGNORES, "*.jks", "*.keystore", ".env"];
+  const wanted = current === "" ? [...BASE_IGNORES, ...BUILD_OUTPUT_IGNORES] : ["node_modules/", ...BUILD_OUTPUT_IGNORES, "*.jks", "*.keystore", "*.p12", ".env"];
   const missing = wanted.filter((line) => !have.has(line) && !(line === ".env" && [...have].some((l) => l.startsWith(".env"))));
   if (missing.length === 0) return;
   const sep = current === "" || current.endsWith("\n") ? "" : "\n";

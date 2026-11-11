@@ -1,8 +1,8 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
-export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, WorkerInfo };
+export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, TodoItem, WorkerInfo };
 
 /** One self-check in the setup checklist. */
 export type CheckState = "checking" | "done" | "needed" | "working" | "skipped" | "problem";
@@ -66,11 +66,34 @@ export interface PhoneCheck {
   connectedCount: number;
 }
 
+/** One speech model Hex has ready. */
+export interface HexModelView {
+  id: string;
+  name: string;
+}
+
+/** Hex (anoma.ly/hex), the free dictation app this PC can use to type by voice. Optional. */
+export interface HexCheck {
+  state: "checking" | "unsupported" | "notInstalled" | "notRunning" | "noModels" | "problem" | "ready";
+  /** Plain words for the user. */
+  summary: string;
+  /** What Hex's local API says it runs. */
+  version?: string;
+  /** What is installed on disk (may be newer than the running one). */
+  installedVersion?: string;
+  /** The models Hex has ready, in Hex's order. */
+  models: HexModelView[];
+  /** The model dictation uses. */
+  model?: string;
+  install?: { running: boolean; line?: string; error?: string };
+}
+
 export interface Checks {
   claude: ClaudeCheck;
   github: GitHubCheck;
   tools: ToolsCheck;
   phone: PhoneCheck;
+  hex: HexCheck;
 }
 
 export type CompanionPhase = "starting" | "running" | "restarting" | "stopped" | "failed";
@@ -95,6 +118,10 @@ export interface Settings {
   closeHintShown: boolean;
   /** The AnyAppAgent phone APK to offer (empty: look in the usual places). */
   phoneApkPath: string;
+  /** The Hex model dictation uses (empty: Hex's first ready model). */
+  hexModel: string;
+  /** The dictation step was skipped in the setup. */
+  hexSkipped: boolean;
 }
 
 /** The phone app on this project's public GitHub release (always the newest release). */
@@ -167,6 +194,8 @@ export interface AnyAppBridge {
   /** An item of a helper's own chat (item.workerId says whose). */
   onHelperItem(listener: (item: ChatItem) => void): () => void;
   onNavigate(listener: (where: "connect-phone" | "home") => void): () => void;
+  /** An app's whole to-do list after a change (from the phone or this PC). */
+  onTodos(listener: (appId: string, todos: TodoItem[]) => void): () => void;
 
   recheck(): Promise<void>;
   claudeSignIn(): Promise<void>;
@@ -193,6 +222,12 @@ export interface AnyAppBridge {
   /** Asks for a backup file, then adds the keys in it that this PC does not have. */
   restoreKeys(password: string): Promise<KeysAction>;
 
+  /** Hex: run its installer, open it, look again, and transcribe a 16 kHz mono WAV recording. */
+  hexInstall(): Promise<void>;
+  hexOpen(): Promise<{ ok: boolean; error?: string }>;
+  hexCheck(): Promise<void>;
+  hexTranscribe(wav: ArrayBuffer): Promise<{ ok: boolean; text?: string; error?: string; code?: string }>;
+
   getMessages(appId: string): Promise<ChatItem[]>;
   getHelpers(appId: string): Promise<WorkerInfo[]>;
   getHelperMessages(appId: string, workerId: string): Promise<ChatItem[]>;
@@ -205,6 +240,13 @@ export interface AnyAppBridge {
   /** Builds the app again (Try again on a failed build). */
   rebuild(appId: string): Promise<ActionResult>;
   answerPermission(appId: string, requestId: string, optionId: string): Promise<ActionResult>;
+  /** The person's own to-do list for an app (the agent never sees it). */
+  getTodos(appId: string): Promise<TodoItem[]>;
+  addTodo(appId: string, text: string): Promise<ActionResult>;
+  setTodoDone(appId: string, todoId: string, done: boolean): Promise<ActionResult>;
+  removeTodo(appId: string, todoId: string): Promise<ActionResult>;
+  /** Sends the item's text to the app's chat as a message, then ticks it off. */
+  sendTodo(appId: string, todoId: string): Promise<ActionResult>;
   /** New app from this PC: the same as the phone's New app sheet (preset: Advanced, default React Native). */
   createApp(name: string, prompt: string, preset?: AppPreset): Promise<ActionResult & { app?: App }>;
 

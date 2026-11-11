@@ -40,13 +40,14 @@ export function claudeLaunchSpec(kind: "local" | "npx"): LaunchSpec {
 const STRIPPED_ENV = new Set(["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT", "CLAUDE_AGENT_SDK_VERSION"]);
 
 /** bb's withoutBridgeRuntimeEnv: the agent must not inherit this process's own agent markers. */
-export function agentEnv(base: NodeJS.ProcessEnv = process.env): Record<string, string | undefined> {
+export function agentEnv(base: NodeJS.ProcessEnv = process.env, extra: Record<string, string> = {}): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(base)) {
     if (STRIPPED_ENV.has(key) || key.startsWith("GHOSTEX_") || key.startsWith("ANYAPP_")) continue;
     env[key] = value;
   }
-  return env;
+  // Added after the stripping: the `anyapp` command's PATH entry and its own ANYAPP_CLI_* variables.
+  return { ...env, ...extra };
 }
 
 export interface PermissionAsk {
@@ -62,6 +63,8 @@ export interface ClaudeSessionOptions {
   instructionsOnResume?: boolean;
   /** ACP McpServer entries for session/new and session/resume (e.g. the coordinator's worker tools). */
   mcpServers?: unknown[];
+  /** Extra environment for the agent, set after agentEnv's stripping (the `anyapp` command). */
+  env?: Record<string, string>;
   launch: LaunchSpec;
   /** Dev and tests only (ANYAPP_ASK_PERMISSIONS=1): stay in the default mode, so permission requests reach the chat. */
   askPermissions?: boolean;
@@ -113,7 +116,7 @@ export class ClaudeSession {
       command: launch.command,
       args: launch.args,
       cwd,
-      env: agentEnv(),
+      env: agentEnv(process.env, this.options.env),
       onSessionUpdate: (sessionId, update) => {
         if (this.loading || (this.sessionId !== "" && sessionId !== this.sessionId)) return;
         this.options.onUpdate(update);

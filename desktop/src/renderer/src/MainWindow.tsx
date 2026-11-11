@@ -8,6 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
 import { ChatView } from "./Chat.tsx";
+import { HexCard } from "./Hex.tsx";
 import type { StepId } from "./Onboarding.tsx";
 import { PairingDialog } from "./Pairing.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
@@ -78,7 +79,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
       </aside>
       <main className="dm-main">
         {page === "apps" ? (
-          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} onGetApp={() => setGetApp(true)} openSetup={openSetup} goSetup={() => setPage("setup")} />
+          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} onGetApp={() => setGetApp(true)} openSetup={openSetup} goSetup={() => setPage("setup")} goSettings={() => setPage("settings")} />
         ) : (
           <div className="dm-scroll">
             {page === "phones" && <PhonesPage s={s} onConnect={() => setConnect(true)} />}
@@ -171,6 +172,7 @@ function AppsPage({
   onGetApp,
   openSetup,
   goSetup,
+  goSettings,
 }: {
   s: Snapshot;
   open: string | null;
@@ -180,6 +182,7 @@ function AppsPage({
   onGetApp: () => void;
   openSetup: (step: StepId) => void;
   goSetup: () => void;
+  goSettings: () => void;
 }) {
   const apps = useMemo(() => [...s.apps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [s.apps]);
   const blocking = setupRows(s).find((r) => r.needsYou && r.blocks);
@@ -236,7 +239,7 @@ function AppsPage({
         )}
       </section>
       <section className="apps-detail">
-        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} onHelperOpen={setHelperOpen} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />}
+        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} onHelperOpen={setHelperOpen} hex={s.checks.hex} onSetupHex={goSettings} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />}
       </section>
     </div>
   );
@@ -759,6 +762,11 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
         </div>
       </section>
       <SigningKeysGroup s={s} />
+      <section className="settings-group">
+        <h2 className="heading">Dictation</h2>
+        <p className="callout secondary">Speak your changes in a chat on this PC instead of typing them. It uses Hex, a free app that turns your voice into text on this PC, offline.</p>
+        <HexCard hex={s.checks.hex} hexModel={s.settings.hexModel} />
+      </section>
       <section className="list">
         <div className="srow">
           <div className="srow-main">
