@@ -6,7 +6,7 @@ import { apkFor } from "@shared/chat/index";
 import type { App, BuildInfo } from "./protocol";
 import { getState, setInstall, setState, type InstallProgress } from "./store";
 import { loadPrefs, savePrefs, type Prefs } from "./storage";
-import { updateKeepAlive } from "./keepalive";
+import { keptAlive, updateKeepAlive } from "./keepalive";
 
 /** The notification icon's tint: the accent from the shared theme (README: color.light.accent). */
 const notificationTint = theme.color.light.accent;
@@ -82,7 +82,10 @@ export async function autoInstallIfNew(app: App) {
   setState({ prefs: { ...prefs, offeredBuilds } });
   void loadPrefs().then((p) => savePrefs({ ...p, offeredBuilds: { ...p.offeredBuilds, [app.id]: build.number } }));
 
-  if (AppState.currentState !== "active") {
+  // In the background the update still downloads and installs by itself when the keep-alive
+  // service runs (it kept AnyAppAgent alive while the PC built it): Android will not freeze the
+  // download. Without it, a notification asks for the tap instead.
+  if (AppState.currentState !== "active" && !keptAlive()) {
     pendingFromBackground.add(app.id);
     AnyAppNative.notify(notificationId(app.id), `${app.name} has an update`, "Tap to install.", `anyappagent://?install=${encodeURIComponent(app.id)}`, notificationTint);
     return;
