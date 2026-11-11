@@ -19,7 +19,7 @@ import {
   replaceHelperChat,
 } from "./store";
 import { loadPairing, loadPrefs, savePairing, savePrefs, type Pairing, type Prefs } from "./storage";
-import { autoInstallIfNew, onApkReady, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
+import { autoInstallIfNew, installerHooks, onApkReady, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
 import { updateKeepAlive } from "./keepalive";
 
 // ---------- startup, pairing
@@ -35,6 +35,8 @@ export async function boot() {
     if (state === "active") onForeground();
   });
   bootedAt = Date.now();
+  // A download that stalled or dropped has the link checked (and the tunnel rebuilt) before it resumes.
+  installerHooks.linkTrouble = () => reconnectNow();
   startUnpairRetries();
   AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
 }

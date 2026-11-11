@@ -23,6 +23,7 @@ import {
   userNote,
   workingLabel,
 } from "../index.ts";
+import { installLabel, type InstallOnDevice } from "../index.ts";
 
 const T0 = "2026-11-11T10:00:00.000Z";
 const at = (s: number) => new Date(Date.parse(T0) + s * 1000).toISOString();
@@ -174,6 +175,13 @@ test("buildCard words each state the same on both sides", () => {
   assert.ok(phone?.state === "ready" && !phone.installed && phone.sub === "Version 4, 60 MB");
   const installed = buildCard(ok, app({ latestApk: built }), "phone", 4);
   assert.ok(installed?.state === "ready" && installed.installed && installed.sub === "Version 4. Installed");
+  const fresh = buildCard(ok, app({ latestApk: built }), "phone", null);
+  assert.ok(fresh?.state === "ready" && fresh.sub === "Version 4, 60 MB. Tap Install to put it on this phone");
+  // With one APK per ABI the phone shows what it downloads, the PC the full size.
+  const split = item("build", { build: { ...built, variants: [{ abi: "x86_64", sizeBytes: 22 * 1048576, sha256: "x" }, { abi: "arm64-v8a", sizeBytes: 21 * 1048576, sha256: "a" }] } });
+  assert.equal(buildCard(split, app({ latestApk: built }), "phone", 3, ["arm64-v8a", "armeabi-v7a"])?.sub, "Version 4, 21 MB");
+  assert.equal(buildCard(split, app({ latestApk: built }), "phone", 3, ["armeabi-v7a"])?.sub, "Version 4, 60 MB");
+  assert.equal(buildCard(split, app({ latestApk: built }), "pc")?.sub, "Version 4, 60 MB. Sent to your phone");
   const older = buildCard(ok, app({ latestApk: { ...built, number: 5 } }), "pc");
   assert.deepEqual(older, { state: "older", number: 4, title: "Version 4 was ready" });
 });
@@ -190,9 +198,20 @@ test("describeApp on the PC and on the phone", () => {
   assert.deepEqual(describeApp(app({ latestApk: apk }), undefined, now + 2 * 3600_000), { kind: "idle", label: "Up to date" });
   assert.deepEqual(describeApp(app()), { kind: "idle", label: "Waiting for the first version" });
   assert.deepEqual(describeApp(app({ latestApk: apk }), { installedVersion: 1 }), { kind: "ready", label: "Update ready" });
-  assert.deepEqual(describeApp(app({ latestApk: apk }), { installedVersion: null }), { kind: "ready", label: "Ready to install" });
+  assert.deepEqual(describeApp(app({ latestApk: apk }), { installedVersion: null }), { kind: "ready", label: "Tap to install" });
   assert.deepEqual(describeApp(app({ latestApk: apk }), { installedVersion: 2 }), { kind: "idle", label: "Version 2 is on this phone" });
   assert.deepEqual(describeApp(app(), { installedVersion: null, install: { phase: "downloading", progress: 0.42 } }), { kind: "working", label: "Downloading 42%" });
+  const mb = 1048576;
+  const on = (install: InstallOnDevice) => describeApp(app(), { installedVersion: 1, install }).label;
+  assert.equal(on({ phase: "waiting", waitingFor: "Tea Timer" }), "Waiting for Tea Timer");
+  assert.equal(on({ phase: "waiting" }), "Getting ready");
+  assert.equal(on({ phase: "downloading", bytesWritten: 34.6 * mb, totalBytes: 85.2 * mb }), "Downloading 34 of 85 MB");
+  assert.equal(on({ phase: "downloading", bytesWritten: 2.25 * mb, totalBytes: 9.6 * mb, retrying: true }), "Reconnecting at 2.3 of 9.6 MB");
+  assert.equal(installLabel({ phase: "downloading", bytesWritten: 34.6 * mb, totalBytes: 85.2 * mb }, true), "34 of 85 MB");
+  assert.equal(installLabel({ phase: "downloading", bytesWritten: 1, totalBytes: 85.2 * mb, retrying: true }, true), "Reconnecting");
+  assert.equal(installLabel({ phase: "waiting", waitingFor: "Tea Timer" }, true), "Waiting");
+  assert.equal(on({ phase: "checking" }), "Checking the download");
+  assert.equal(on({ phase: "installing" }), "Installing");
   assert.equal(appAction(app({ latestApk: apk }), 2), "open");
   assert.equal(appAction(app(), null), "notReady");
 });

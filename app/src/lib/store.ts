@@ -12,6 +12,10 @@ export interface InstallProgress {
   buildNumber: number;
   phase: "waiting" | "downloading" | "checking" | "installing" | "confirm" | "done" | "failed";
   progress?: number; // 0..1 while downloading
+  bytesWritten?: number; // while downloading: bytes on the phone already
+  totalBytes?: number; // while downloading: the whole download
+  waitingFor?: string; // while waiting: the app installing before this one
+  retrying?: boolean; // while downloading: the link stalled or dropped; reconnecting to carry on
   message?: string; // shown when failed
   conflict?: boolean; // signed differently from the installed app: offer to remove it first
 }

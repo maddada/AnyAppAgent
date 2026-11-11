@@ -10,6 +10,7 @@
 // (JAVA_HOME or java/keytool on PATH). Every APK is signed with the same test key
 // (dev/tmp/mock-apps.keystore), so version N+1 installs over version N.
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync, copyFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,7 +96,7 @@ function versionVector(n) {
   return `<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="${w * 1.6}dp" android:height="${80 * 1.6}dp" android:viewportWidth="${w}" android:viewportHeight="80">${paths}</vector>`;
 }
 
-export function makeApk({ packageName, label, versionCode, color = "#22a06b", glyph = "star", out }) {
+export function makeApk({ packageName, label, versionCode, color = "#22a06b", glyph = "star", out, padMb = 0 }) {
   const tc = toolchain();
   if (!tc) throw new Error("Android build-tools not found (set ANDROID_HOME).");
   ensureKeystore();
@@ -142,13 +143,21 @@ export function makeApk({ packageName, label, versionCode, color = "#22a06b", gl
 </manifest>`,
   );
 
+  // --pad-mb N: an N MB asset of random bytes (stored), for testing big downloads.
+  const padArgs = [];
+  if (padMb > 0) {
+    const assets = join(work, "assets");
+    mkdirSync(assets, { recursive: true });
+    writeFileSync(join(assets, "padding.bin"), randomBytes(Math.round(padMb * 1048576)));
+    padArgs.push("-A", assets, "-0", "bin");
+  }
   const flat = join(work, "compiled.zip");
   run(tc.aapt2, ["compile", "--dir", res, "-o", flat]);
   const unsigned = join(work, "unsigned.apk");
   run(tc.aapt2, [
     "link", "-o", unsigned, "-I", tc.androidJar, "--manifest", join(work, "AndroidManifest.xml"),
     "--min-sdk-version", "24", "--target-sdk-version", "34",
-    "--version-code", String(versionCode), "--version-name", `1.${versionCode}`, flat,
+    "--version-code", String(versionCode), "--version-name", `1.${versionCode}`, ...padArgs, flat,
   ]);
   let aligned = unsigned;
   if (tc.zipalign) {
@@ -177,6 +186,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     color: get("color", "#22a06b"),
     glyph: get("glyph", "star"),
     out: get("out", join(TMP, "test.apk")),
+    padMb: Number(get("pad-mb", "0")),
   });
   console.log(out);
 }

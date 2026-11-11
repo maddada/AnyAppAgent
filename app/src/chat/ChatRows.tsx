@@ -33,14 +33,14 @@ import {
 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
-import { installApp, launchApp } from "@/lib/installer";
+import { installApp, launchApp, phoneAbis } from "@/lib/installer";
 import type { App, ChatImage, ChatItem, PlanEntry, WorkerInfo } from "@/lib/protocol";
 import { useStore } from "@/lib/store";
 import { Button } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
 import { easing, elevation, fonts, icon, motion, radius, size, space, typeStyle, useTheme, border } from "@/ui/theme";
-import { buildCard, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row } from "@shared/chat/index";
+import { buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row } from "@shared/chat/index";
 import { StateLine } from "@/ui/StateLine";
 import { Markdown } from "./Markdown";
 
@@ -471,7 +471,7 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
   const [retrying, setRetrying] = useState(false);
   // Words and state from shared/chat/build.ts, the same as on the desktop.
-  const card = buildCard(item, app, "phone", pkg?.versionCode ?? null);
+  const card = buildCard(item, app, "phone", pkg?.versionCode ?? null, phoneAbis());
   if (!card) return null;
 
   if (card.state === "older" || !app) {
@@ -555,7 +555,7 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
       ) : (
         <Button
           testID="build-install"
-          label={busy ? (phase === "downloading" ? `Downloading ${Math.round((install?.progress ?? 0) * 100)}%` : "Installing") : "Install"}
+          label={busy ? (installLabel(install) ?? "Installing") : "Install"}
           icon={Download}
           busy={busy}
           onPress={() => void installApp(app)}

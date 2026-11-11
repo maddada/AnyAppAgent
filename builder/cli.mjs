@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // CLI for humans and tests.
-//   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin]
+//   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact]
 //   node builder/cli.mjs build <dir> --build-number <n> [--quiet]
 //   node builder/cli.mjs icon <dir>
-//   node builder/cli.mjs warm [<spareRootDir>] [--preset react-native|kotlin]
+//   node builder/cli.mjs warm [<spareRootDir>] [--preset react-native|kotlin|expo-exact]
 //        (react-native: the deps cache and a spare; kotlin: a spare and one warm-up build for Gradle's caches)
 import path from 'node:path';
 
@@ -14,10 +14,10 @@ import { refillSpares, spareRootFor } from './lib/spare.mjs';
 function usage(msg) {
   if (msg) console.error(`error: ${msg}\n`);
   console.error(`usage:
-  node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin]
+  node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact]
   node builder/cli.mjs build <dir> --build-number <n> [--quiet]
   node builder/cli.mjs icon <dir>
-  node builder/cli.mjs warm [<dir-on-the-apps-volume>] [--preset react-native|kotlin]`);
+  node builder/cli.mjs warm [<dir-on-the-apps-volume>] [--preset react-native|kotlin|expo-exact]`);
   process.exit(2);
 }
 
@@ -90,8 +90,17 @@ try {
       const deps = await ensureDepsCache(log);
       log(`Deps cache: ${deps.dir}`);
     }
-    const root = spareRootFor(path.resolve(dirArg ?? 'C:\\aa\\apps\\x'), preset);
-    await refillSpares(root, log, preset);
+    if (preset === 'expo-exact') {
+      // No spare: the pinned, patched Exact checkout and its one-time setup (lib/exact.mjs).
+      const { ensureExact, exactEnv, exactDirFor } = await import('./lib/exact.mjs');
+      const { androidEnv } = await import('./lib/env.mjs');
+      const probe = path.resolve(dirArg ?? 'C:\\aa\\apps\\x');
+      const { env, javaHome, sdk } = androidEnv();
+      log(`Exact checkout: ${await ensureExact(probe, log, { env: exactEnv(env, { javaHome, sdk, exactDir: exactDirFor(probe) }).env })}`);
+    } else {
+      const root = spareRootFor(path.resolve(dirArg ?? 'C:\\aa\\apps\\x'), preset);
+      await refillSpares(root, log, preset);
+    }
     log(`Warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   } else {
     usage(cmd ? `unknown command "${cmd}"` : undefined);

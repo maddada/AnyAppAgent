@@ -118,7 +118,8 @@ export class Client {
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;
-  apkUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/apk`;
+  /** With `abi`, the smaller APK made for that processor type (when the build has one). */
+  apkUrl = (id: string, abi?: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/apk${abi ? `?abi=${encodeURIComponent(abi)}` : ""}`;
   socketUrl = () => `${this.baseUrl.replace(/^http/i, "ws")}/ws?token=${encodeURIComponent(this.token)}`;
   authHeaders = () => ({ Authorization: `Bearer ${this.token}` });
 }

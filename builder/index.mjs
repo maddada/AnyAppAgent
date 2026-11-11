@@ -15,7 +15,8 @@ import { CommandError, killTree, npmCommand, run } from './lib/exec.mjs';
 import { ensureKeystore } from './lib/keystore.mjs';
 import { renameWithRetry, tryLock } from './lib/lock.mjs';
 import { fillKotlinPlaceholders, KOTLIN_ICON, syncKotlinIcon } from './lib/kotlin.mjs';
-import { checkPreset, presetOf, readKotlinMeta } from './lib/presets.mjs';
+import { createExactApp, ensureExact, exactDirFor, exactEnv, extractExactError, runExactAndroidBuild } from './lib/exact.mjs';
+import { checkPreset, presetOf, readAppMeta, readKotlinMeta } from './lib/presets.mjs';
 import { claimSpare, refillSparesInBackground } from './lib/spare.mjs';
 import { DEPS_STAMP, depsHash, makeAppTree, templateHash } from './lib/template.mjs';
 
@@ -48,6 +49,12 @@ export async function createApp({ dir, name, slug, packageName, preset, onLog = 
   await fsp.mkdir(path.dirname(dir), { recursive: true });
 
   const t0 = Date.now();
+  if (preset === 'expo-exact') {
+    // `exact new` makes the app in about a second, so there is no spare (lib/exact.mjs).
+    await createExactApp(dir, { name: String(name).trim(), slug, packageName }, onLog);
+    onLog(`Created ${dir} with Expo Exact (${((Date.now() - t0) / 1000).toFixed(1)}s).`);
+    return;
+  }
   const hash = templateHash(preset);
   let how = 'spare';
   if (!(await claimSpare(dir, hash, preset))) {
@@ -93,7 +100,8 @@ async function fillPlaceholders(dir, { name, slug, packageName }) {
 // getIconPath
 
 export function getIconPath({ dir }) {
-  if (readKotlinMeta(dir)) {
+  // Kotlin and Expo Exact apps: icon.png at the project root (an Exact app has none yet: null).
+  if (readAppMeta(dir)) {
     const p = path.resolve(dir, KOTLIN_ICON);
     return fs.existsSync(p) ? p : null;
   }
@@ -163,8 +171,8 @@ async function runBuild(dir, n, onLog, preset) {
     const kotlin = preset === 'kotlin';
     let slug;
     let packageName;
-    if (kotlin) {
-      const meta = readKotlinMeta(dir);
+    if (kotlin || preset === 'expo-exact') {
+      const meta = readAppMeta(dir);
       slug = meta.slug ?? path.basename(dir);
       packageName = meta.package;
     } else {
@@ -173,6 +181,37 @@ async function runBuild(dir, n, onLog, preset) {
       packageName = appJson.expo?.android?.package;
     }
     say(`Building ${packageName ?? slug} #${n} (${preset}) in ${dir}`);
+    const finish = (built, parts = []) => finishApk({ built, parts, sdk, n, dir, slug, packageName, preset, t0, timings, logFile, say });
+
+    if (preset === 'expo-exact') {
+      // Exact's own Android build (Rust, then Gradle), with the builder's init script for the
+      // shared key and versionCode (lib/exact.mjs, builder/exact/pin.json).
+      const exactDir = await phase('exact-setup', () => ensureExact(dir, say, { env: exactEnv(env, { javaHome, sdk, exactDir: exactDirFor(dir) }).env }));
+      const { env: xenv, bun } = exactEnv(env, { javaHome, sdk, exactDir });
+      const gradleProps = {
+        ORG_GRADLE_PROJECT_anyappVersionCode: String(n),
+        ORG_GRADLE_PROJECT_anyappStoreFile: keystore.storeFile,
+        ORG_GRADLE_PROJECT_anyappStorePassword: keystore.storePassword,
+        ORG_GRADLE_PROJECT_anyappKeyAlias: keystore.keyAlias,
+        ORG_GRADLE_PROJECT_anyappKeyPassword: keystore.keyPassword,
+      };
+      say('Running the Expo Exact Android build (Rust, then Gradle)…');
+      const built = await phase('exact', async () => {
+        try {
+          return await runExactAndroidBuild(dir, {
+            env: { ...xenv, ...gradleProps },
+            bun,
+            exactDir,
+            extraGradleArgs: ['--init-script', path.join(BUILDER_DIR, 'anyapp.init.gradle')],
+            stream,
+          });
+        } catch (e) {
+          const lines = e.lines ?? [];
+          throw new BuildError(extractExactError(lines) ?? extractGradle(lines) ?? `The Expo Exact build failed:\n${tail(lines)}`);
+        }
+      });
+      return await finish(built);
+    }
 
     const tscHandle = {};
     const gradleHandle = {};
@@ -252,6 +291,11 @@ async function runBuild(dir, n, onLog, preset) {
         ? [] // no native libraries of its own; it shrinks itself with R8 (app/build.gradle.kts)
         : [
             `-PreactNativeArchitectures=${ABIS}`,
+            // Smaller downloads (anyapp.init.gradle): native libraries compressed, and one APK per
+            // ABI besides the full one (the phone takes arm64-v8a, the emulator x86_64).
+            '-Pexpo.useLegacyPackaging=true',
+            '-PanyappCompressNativeLibs=true',
+            ...(abiSplits() ? [`-PanyappAbiSplits=${ABIS}`] : []),
             // Expo SDK 58 turns R8 shrinking on for release; it costs ~90 s per build and can break
             // reflection-based libraries. Side-loaded apps do not need it (ANYAPP_MINIFY=1 turns it on).
             `-Pandroid.enableMinifyInReleaseBuilds=${process.env.ANYAPP_MINIFY === '1'}`,
@@ -287,37 +331,19 @@ async function runBuild(dir, n, onLog, preset) {
     if (tscErr) throw new BuildError(tscErr);
 
     // 5. Check, copy and fingerprint the APK.
-    const built = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+    const releaseDir = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release');
+    // With ABI splits the full APK is app-universal-release.apk and each ABI has its own.
+    const universal = path.join(releaseDir, 'app-universal-release.apk');
+    const built = fs.existsSync(universal) ? universal : path.join(releaseDir, 'app-release.apk');
     if (!fs.existsSync(built)) throw new BuildError(`Gradle succeeded but ${built} is missing`);
-    const badging = await readBadging(sdk, built);
-    if (badging && badging.versionCode !== n) {
-      throw new BuildError(`APK versionCode is ${badging.versionCode}, expected ${n} (the builder's init script did not apply)`);
-    }
-    if (kotlin && badging && packageName && badging.packageName !== packageName) {
-      throw new BuildError(
-        `The app's package id is ${badging.packageName} but must stay ${packageName} (anyapp.json, used by app/build.gradle.kts). Put it back: a different id cannot update the app on the phone.`,
-      );
-    }
-    const outDir = path.join(dir, 'build', 'apk');
-    await fsp.mkdir(outDir, { recursive: true });
-    const apkPath = path.join(outDir, `${slug}-${n}.apk`);
-    await fsp.copyFile(built, apkPath);
-    await pruneApks(outDir, KEEP_APKS);
-    const buf = await fsp.readFile(apkPath);
-    const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
-    const durationMs = Date.now() - t0;
-    say(`APK ready: ${apkPath} (${(buf.length / 1048576).toFixed(1)} MB) in ${(durationMs / 1000).toFixed(1)}s`);
-    return {
-      apkPath,
-      sizeBytes: buf.length,
-      sha256,
-      versionCode: n,
-      packageName: badging?.packageName ?? packageName,
-      preset,
-      durationMs,
-      timings,
-      logPath: logFile,
-    };
+    // One APK per ABI next to the full one, when this build made them (anyapp.init.gradle).
+    const parts =
+      built === universal
+        ? ABIS.split(',')
+            .map((abi) => ({ abi, path: path.join(releaseDir, `app-${abi}-release.apk`) }))
+            .filter((p) => fs.existsSync(p.path) && fs.statSync(p.path).mtimeMs >= fs.statSync(built).mtimeMs - 60_000)
+        : [];
+    return await finish(built, parts);
   } catch (e) {
     const msg = e instanceof BuildError ? e.message : e instanceof CommandError ? `${e.message}\n${tail(e.lines)}` : e.message;
     logStream.write(`[builder] FAILED: ${msg}\n`);
@@ -327,6 +353,52 @@ async function runBuild(dir, n, onLog, preset) {
   } finally {
     await new Promise((r) => logStream.end(r));
   }
+}
+
+/**
+ * Checks the built APK (versionCode, package id), copies it to build/apk/ and fingerprints it,
+ * with its per-ABI APKs (`parts`, [{ abi, path }]) as `variants`.
+ */
+async function finishApk({ built, parts = [], sdk, n, dir, slug, packageName, preset, t0, timings, logFile, say }) {
+  const badging = await readBadging(sdk, built);
+  if (badging && badging.versionCode !== n) {
+    throw new BuildError(`APK versionCode is ${badging.versionCode}, expected ${n} (the builder's init script did not apply)`);
+  }
+  if (preset !== 'react-native' && badging && packageName && badging.packageName !== packageName) {
+    const where = preset === 'kotlin' ? 'anyapp.json, used by app/build.gradle.kts' : 'app.json app.id';
+    throw new BuildError(
+      `The app's package id is ${badging.packageName} but must stay ${packageName} (${where}). Put it back: a different id cannot update the app on the phone.`,
+    );
+  }
+  const outDir = path.join(dir, 'build', 'apk');
+  await fsp.mkdir(outDir, { recursive: true });
+  const apkPath = path.join(outDir, `${slug}-${n}.apk`);
+  await fsp.copyFile(built, apkPath);
+  const variants = [];
+  for (const part of parts) {
+    const out = path.join(outDir, `${slug}-${n}-${part.abi}.apk`);
+    await fsp.copyFile(part.path, out);
+    const data = await fsp.readFile(out);
+    variants.push({ abi: part.abi, apkPath: out, sizeBytes: data.length, sha256: crypto.createHash('sha256').update(data).digest('hex') });
+  }
+  await pruneApks(outDir, KEEP_APKS);
+  const buf = await fsp.readFile(apkPath);
+  const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
+  const durationMs = Date.now() - t0;
+  const sizes = variants.map((v) => `${v.abi} ${(v.sizeBytes / 1048576).toFixed(1)} MB`).join(', ');
+  say(`APK ready: ${apkPath} (${(buf.length / 1048576).toFixed(1)} MB${sizes ? `; ${sizes}` : ''}) in ${(durationMs / 1000).toFixed(1)}s`);
+  return {
+    apkPath,
+    sizeBytes: buf.length,
+    sha256,
+    ...(variants.length > 0 ? { variants } : {}),
+    versionCode: n,
+    packageName: badging?.packageName ?? packageName,
+    preset,
+    durationMs,
+    timings,
+    logPath: logFile,
+  };
 }
 
 /** Files whose change requires `expo prebuild` to run again. */
@@ -439,10 +511,21 @@ async function readBadging(sdk, apk) {
   }
 }
 
+/** Keeps the APKs of the newest `keep` build numbers (<slug>-<n>.apk and <slug>-<n>-<abi>.apk). */
 async function pruneApks(outDir, keep) {
+  const buildNumber = (f) => {
+    const abi = ABIS.split(',').find((a) => f.endsWith(`-${a}.apk`));
+    const full = abi ? `${f.slice(0, -(abi.length + 5))}.apk` : f;
+    return Number(/-(\d+)\.apk$/.exec(full)?.[1] ?? 0);
+  };
   const apks = (await fsp.readdir(outDir))
     .filter((f) => f.endsWith('.apk'))
-    .map((f) => ({ f, n: Number(/-(\d+)\.apk$/.exec(f)?.[1] ?? 0) }))
-    .sort((a, b) => b.n - a.n);
-  for (const { f } of apks.slice(keep)) await fsp.rm(path.join(outDir, f), { force: true });
+    .map((f) => ({ f, n: buildNumber(f) }));
+  const newest = [...new Set(apks.map((a) => a.n))].sort((a, b) => b - a).slice(0, keep);
+  for (const { f, n } of apks) if (!newest.includes(n)) await fsp.rm(path.join(outDir, f), { force: true });
+}
+
+/** ABI splits are on unless ANYAPP_ABI_SPLITS=0 (then only the full APK is built). */
+function abiSplits() {
+  return process.env.ANYAPP_ABI_SPLITS !== '0';
 }

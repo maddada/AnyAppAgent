@@ -16,6 +16,7 @@ export type InstallStatus =
   | "storage"
   | "blocked"
   | "invalid"
+  | "timeout" // Android gave no final answer in time; the session was abandoned
   | "failed";
 
 export interface InstallResult {
@@ -46,7 +47,12 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   canInstallPackages(): boolean;
   openInstallPermissionSettings(): boolean;
   sha256File(path: string): Promise<string>;
-  install(path: string): Promise<InstallResult>;
+  /** `answerWithinMs`: abandon the session and resolve "timeout" when Android has not answered by then. */
+  install(path: string, answerWithinMs: number): Promise<InstallResult>;
+  /** Shows Android's install prompt again for an install still waiting for the person; true when one opened. */
+  reopenInstallPrompt?(): boolean;
+  /** Build.SUPPORTED_ABIS, best first ("arm64-v8a", ...). Missing on builds before it was added. */
+  supportedAbis?(): string[];
   installWithIntent(path: string): boolean;
   notificationsEnabled(): boolean;
   openNotificationSettings(): boolean;

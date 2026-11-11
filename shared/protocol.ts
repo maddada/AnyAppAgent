@@ -17,12 +17,24 @@ export interface BuildInfo {
   sizeBytes?: number; // set when succeeded
   sha256?: string; // set when succeeded
   error?: string; // short, human readable, set when failed
+  // Added for smaller downloads: the same build as one APK per phone processor type (ABI), each
+  // much smaller than the full APK (sizeBytes/sha256 above), which holds every ABI. Set when
+  // succeeded and the PC built them; absent from older PCs and from apps without native code.
+  variants?: ApkVariant[];
+}
+
+// One APK of a build for one processor type: what GET /api/apps/:id/apk?abi=<abi> serves.
+export interface ApkVariant {
+  abi: string; // an Android ABI name: "arm64-v8a" (phones), "x86_64" (the emulator)
+  sizeBytes: number;
+  sha256: string;
 }
 
 // What an app is made from (chosen under "Advanced" in the New app sheet):
 //   "react-native": Expo / React Native (the default; can come to iPhone later)
 //   "kotlin": native Android (Kotlin, Jetpack Compose; smaller, faster, Android only)
-export type AppPreset = "react-native" | "kotlin";
+//   "expo-exact": Expo Exact, alpha (Contract + TypeScript; one app for Android, iPhone, Mac, web)
+export type AppPreset = "react-native" | "kotlin" | "expo-exact";
 
 export interface App {
   id: string;
@@ -182,6 +194,10 @@ export interface CreateAppRequest {
 
 // GET /api/apps/:id/icon -> image/png (the app's launcher icon; a generated placeholder until it has one)
 // GET /api/apps/:id/apk -> application/vnd.android.package-archive (latestApk; supports Range; 404 if none)
+//   ?abi=<abi> (added): the APK of latestApk.variants for that ABI; an ABI the build has no variant for
+//   gets the full APK; 404 when the variant is listed but no longer on the PC. ETag is the served
+//   file's sha256 in quotes, and If-Range with that ETag resumes a cut download (a different
+//   ETag gets the whole file with 200, so a newer build never mixes into a resumed one).
 
 // GET /api/apps/:id/messages?afterSeq=<n> -> ChatItem[] ordered by seq
 // POST /api/apps/:id/messages -> 202 (the user's ChatItem arrives over the socket)

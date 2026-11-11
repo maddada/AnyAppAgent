@@ -1,13 +1,28 @@
 import { AppState } from "react-native";
-import { Directory, File, Paths } from "expo-file-system";
+import { Directory, DownloadTask, File, Paths } from "expo-file-system";
 import { AnyAppNative, type InstallResult } from "anyapp-native";
 import { theme } from "@shared/theme/tokens";
-import type { App } from "./protocol";
-import { getState, setInstall, setState } from "./store";
+import { apkFor } from "@shared/chat/index";
+import type { App, BuildInfo } from "./protocol";
+import { getState, setInstall, setState, type InstallProgress } from "./store";
 import { loadPrefs, savePrefs, type Prefs } from "./storage";
+import { updateKeepAlive } from "./keepalive";
 
 /** The notification icon's tint: the accent from the shared theme (README: color.light.accent). */
 const notificationTint = theme.color.light.accent;
+
+/** How long Android may take to answer an install (a confirmation nobody sees must not block the queue). */
+export const INSTALL_ANSWER_MS = 3 * 60_000;
+/** A download that moved no byte for this long is cut and resumed where it stopped. */
+export const STALL_MS = 30_000;
+/** Tries in a row that add no byte before the download is given up (each reconnects first). */
+const TRIES_WITHOUT_PROGRESS = 4;
+const RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000];
+
+const BUSY: ReadonlySet<InstallProgress["phase"]> = new Set(["waiting", "downloading", "checking", "installing", "confirm"]);
+
+/** Set by session.ts: check the link to the PC and rebuild it (Easy Connect tunnel, socket) when it is gone. */
+export const installerHooks = { linkTrouble: () => {} };
 
 // ---------- what is installed
 
@@ -34,24 +49,33 @@ export function launchApp(app: App): boolean {
   return AnyAppNative?.launch(app.packageName) ?? false;
 }
 
+/** This phone's ABIs, best first (empty on an older native module: then the full APK is used). */
+export function phoneAbis(): string[] {
+  try {
+    return AnyAppNative?.supportedAbis?.() ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // ---------- offering new builds by themselves, once each
 
-/** Called for `apk.ready`: install it now, or notify if AnyAppAgent is in the background. */
+/** Called for `apk.ready`: install an update now, or notify if AnyAppAgent is in the background. */
 export async function onApkReady(app: App) {
-  await autoInstallIfNew(app, true);
+  await autoInstallIfNew(app);
 }
 
 /**
- * Starts the install of a build the user has not been offered yet, if it is newer than what is
- * on the phone. Each build is offered by itself only once; after that the tile says "Update ready".
+ * Starts the install of a new version of an app that is already on this phone, once per build.
+ * An app that is not on this phone never starts by itself (it may have been made on another
+ * phone or on the PC, and a first install needs Android's confirmation): its card and tile say
+ * "Tap to install".
  */
-export async function autoInstallIfNew(app: App, fresh = false) {
+export async function autoInstallIfNew(app: App) {
   const build = app.latestApk;
   if (!build || !AnyAppNative) return;
   const installed = installedVersion(app);
-  if (installed != null && installed >= build.number) return;
-  // On opening AnyAppAgent, only updates of apps already on the phone start by themselves.
-  if (!fresh && installed == null) return;
+  if (installed == null || installed >= build.number) return;
   const prefs = getState().prefs;
   if ((prefs.offeredBuilds[app.id] ?? 0) >= build.number) return;
   const offeredBuilds = { ...prefs.offeredBuilds, [app.id]: build.number };
@@ -60,13 +84,7 @@ export async function autoInstallIfNew(app: App, fresh = false) {
 
   if (AppState.currentState !== "active") {
     pendingFromBackground.add(app.id);
-    AnyAppNative.notify(
-      notificationId(app.id),
-      installed == null ? `${app.name} is ready` : `${app.name} has an update`,
-      "Tap to install.",
-      `anyappagent://?install=${encodeURIComponent(app.id)}`,
-      notificationTint,
-    );
+    AnyAppNative.notify(notificationId(app.id), `${app.name} has an update`, "Tap to install.", `anyappagent://?install=${encodeURIComponent(app.id)}`, notificationTint);
     return;
   }
   void installApp(app);
@@ -96,8 +114,10 @@ function clearUnfinished(appId: string) {
 let resumedThisRun = false;
 
 /**
- * After AnyAppAgent starts (the first time the app list arrives): retry, once, every download or
- * install that was cut off, for example when AnyAppAgent itself was replaced mid-download.
+ * After AnyAppAgent starts (the first time the app list arrives): carry on, once, with an update
+ * that was cut off, for example when AnyAppAgent itself was replaced mid-download. The part
+ * already downloaded is kept, so it resumes where it stopped. First installs are not resumed by
+ * themselves (they wait for a tap).
  */
 export function resumeUnfinishedInstalls() {
   if (resumedThisRun || !AnyAppNative) return;
@@ -106,7 +126,7 @@ export function resumeUnfinishedInstalls() {
   for (const [appId, entry] of Object.entries(unfinished)) {
     const app = getState().apps[appId];
     const installed = app ? installedVersion(app) : null;
-    const stillWanted = app?.latestApk && app.latestApk.number >= entry.build && (installed ?? 0) < app.latestApk.number;
+    const stillWanted = installed != null && app?.latestApk && app.latestApk.number >= entry.build && installed < app.latestApk.number;
     if (!app || !stillWanted || entry.retried) {
       clearUnfinished(appId);
       continue;
@@ -118,6 +138,9 @@ export function resumeUnfinishedInstalls() {
 
 /** Back in front after a "ready" notification (tapped or not): install what was waiting. */
 export async function resumePendingInstall() {
+  // An install waiting for the person's yes: Android may have blocked its prompt while AnyAppAgent
+  // was in the background, or another prompt covered it. Show it again.
+  if (current && getState().installs[current]?.phase === "installing") AnyAppNative?.reopenInstallPrompt?.();
   const waiting = getState().needInstallPermission;
   if (waiting && AnyAppNative?.canInstallPackages()) {
     setState({ needInstallPermission: null });
@@ -148,24 +171,59 @@ export function notificationId(appId: string): number {
 // ---------- download, check, install (one at a time)
 
 let queue: Promise<void> = Promise.resolve();
+/** The app the queue works on now: the others say "Waiting for <its name>". */
+let current: string | null = null;
 
 export function installApp(app: App): Promise<void> {
-  const current = getState().installs[app.id];
-  if (current && ["waiting", "downloading", "checking", "installing", "confirm"].includes(current.phase)) {
-    return queue;
-  }
+  const now = getState().installs[app.id];
+  if (now && BUSY.has(now.phase)) return queue;
   const build = app.latestApk;
   if (!build) return Promise.resolve();
-  setInstall(app.id, { buildNumber: build.number, phase: "waiting" });
+  const ahead = current && current !== app.id ? getState().apps[current]?.name : undefined;
+  setInstall(app.id, { buildNumber: build.number, phase: "waiting", ...(ahead ? { waitingFor: ahead } : {}) });
+  updateKeepAlive();
   queue = queue.then(() => runInstall(app.id)).catch(() => undefined);
   return queue;
 }
 
 async function runInstall(appId: string) {
-  const { client } = getState();
+  current = appId;
+  const name = getState().apps[appId]?.name;
+  for (const [id, install] of Object.entries(getState().installs)) {
+    if (id !== appId && install.phase === "waiting") setInstall(id, { ...install, ...(name ? { waitingFor: name } : {}) });
+  }
+  try {
+    await installOne(appId);
+  } finally {
+    current = null;
+    updateKeepAlive();
+  }
+}
+
+function apkDirectory() {
+  return new Directory(Paths.cache, "apks");
+}
+
+function apkFileName(app: App, build: BuildInfo, abi: string | undefined) {
+  return `${app.slug || app.id}-${build.number}${abi ? `-${abi}` : ""}.apk`;
+}
+
+/** Drops this app's other downloads (older builds): what is kept is only the one in progress. */
+function dropOtherDownloads(app: App, keep: string) {
+  try {
+    const prefix = `${app.slug || app.id}-`;
+    for (const entry of apkDirectory().list()) {
+      if (entry instanceof File && entry.name.startsWith(prefix) && entry.name !== keep) entry.delete();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function installOne(appId: string) {
   const app = getState().apps[appId];
   const build = app?.latestApk;
-  if (!client || !app || !build || !AnyAppNative) {
+  if (!getState().client || !app || !build || !AnyAppNative) {
     setInstall(appId, null);
     return;
   }
@@ -178,44 +236,22 @@ async function runInstall(appId: string) {
     return;
   }
 
-  const dir = new Directory(Paths.cache, "apks");
-  const file = new File(dir, `${app.slug || app.id}-${build.number}.apk`);
+  const want = apkFor(build, phoneAbis());
+  const dir = apkDirectory();
+  const name = apkFileName(app, build, want.abi);
+  const file = new File(dir, name);
   try {
     if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
-    if (file.exists) file.delete();
-
-    setInstall(appId, { buildNumber: build.number, phase: "downloading", progress: 0 });
+    // A part downloaded before (cut off, or AnyAppAgent restarted) is kept and resumed.
+    dropOtherDownloads(app, name);
     markUnfinished(appId, build.number);
-    // A first connection can stall for seconds (seen on the emulator and on waking phones):
-    // try the download three times, 5 s and 15 s apart, before saying it stopped.
-    let downloaded: File | null | undefined = null;
-    for (let attempt = 0; attempt < 3 && !downloaded; attempt++) {
-      if (attempt > 0) {
-        await new Promise((r) => setTimeout(r, attempt === 1 ? 5000 : 15000));
-        if (file.exists) file.delete();
-        setInstall(appId, { buildNumber: build.number, phase: "downloading", progress: 0 });
-      }
-      const from = getState().client ?? client; // the link may have been rebuilt meanwhile
-      const task = File.createDownloadTask(from.apkUrl(appId), file, {
-        headers: from.authHeaders(),
-        onProgress: ({ bytesWritten, totalBytes }) => {
-          const total = totalBytes > 0 ? totalBytes : (build.sizeBytes ?? 0);
-          if (total > 0) setInstall(appId, { buildNumber: build.number, phase: "downloading", progress: Math.min(1, bytesWritten / total) });
-        },
-      });
-      try {
-        downloaded = await task.downloadAsync();
-      } catch (e) {
-        console.warn(`download ${app.packageName}, try ${attempt + 1}: ${e instanceof Error ? e.message : String(e)}`);
-        if (attempt === 2) throw e;
-      }
-    }
-    if (!downloaded) throw new Error("The download stopped.");
+    await download(appId, build.number, file, want);
 
     setInstall(appId, { buildNumber: build.number, phase: "checking" });
-    if (build.sha256) {
+    if (want.sha256) {
       const sum = await AnyAppNative.sha256File(file.uri);
-      if (sum.toLowerCase() !== build.sha256.toLowerCase()) {
+      if (sum.toLowerCase() !== want.sha256.toLowerCase()) {
+        file.delete();
         throw new Error("The download was damaged. Try again.");
       }
     }
@@ -223,17 +259,17 @@ async function runInstall(appId: string) {
     setInstall(appId, { buildNumber: build.number, phase: "installing" });
     let result: InstallResult;
     try {
-      result = await AnyAppNative.install(file.uri);
+      result = await answerWithin(AnyAppNative.install(file.uri, INSTALL_ANSWER_MS), INSTALL_ANSWER_MS + 15_000);
     } catch {
       // PackageInstaller refused to even start: hand it to the system installer screen.
       if (AnyAppNative.installWithIntent(file.uri)) {
         setInstall(appId, { buildNumber: build.number, phase: "confirm" });
-        watchFallback(app, build.number);
+        watchFallback(app, build.number, name);
         return;
       }
       throw new Error("Android wouldn't start the install.");
     }
-    finish(app, build.number, result);
+    finish(app, build.number, result, name);
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);
     if (!PLAIN.has(raw)) console.warn(`install ${app.packageName}: ${raw}`);
@@ -245,16 +281,114 @@ async function runInstall(appId: string) {
   }
 }
 
+/** The native side gives up on its own after INSTALL_ANSWER_MS; this is the last word if it never answers. */
+function answerWithin(install: Promise<InstallResult>, ms: number): Promise<InstallResult> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve({ status: "timeout", message: "no answer from the native side", packageName: null }), ms);
+    install.then(
+      (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      },
+      (e: unknown) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const sizeOf = (file: File) => {
+  try {
+    return file.exists ? file.size : 0;
+  } catch {
+    return 0;
+  }
+};
+
+/**
+ * Downloads `want` into `file`, resuming whatever part is there already (Range, with If-Range on
+ * the file's checksum so a newer build never mixes in). A link that moves no byte for STALL_MS
+ * is cut and resumed; each retry first has the link to the PC checked and rebuilt. Gives up only
+ * after TRIES_WITHOUT_PROGRESS tries in a row that added nothing.
+ */
+async function download(appId: string, buildNumber: number, file: File, want: { abi?: string; sizeBytes?: number; sha256?: string }) {
+  let triesWithoutProgress = 0;
+  for (;;) {
+    const have = sizeOf(file);
+    const total = want.sizeBytes ?? 0;
+    if (total > 0 && have === total) return; // all there (a download that finished before a restart)
+    if (total > 0 && have > total) {
+      file.delete();
+      continue;
+    }
+    const client = getState().client;
+    if (!client) throw new Error("not connected to the PC");
+
+    let written = have;
+    let size = total;
+    let movedAt = Date.now();
+    let shownAt = 0;
+    const show = (retrying: boolean) => {
+      shownAt = Date.now();
+      setInstall(appId, {
+        buildNumber,
+        phase: "downloading",
+        bytesWritten: written,
+        ...(size > 0 ? { totalBytes: size, progress: Math.min(1, written / size) } : { progress: 0 }),
+        ...(retrying ? { retrying: true } : {}),
+      });
+    };
+    show(triesWithoutProgress > 0);
+    const onProgress = ({ bytesWritten, totalBytes }: { bytesWritten: number; totalBytes: number }) => {
+      if (bytesWritten > written) movedAt = Date.now();
+      written = bytesWritten;
+      if (totalBytes > 0) size = totalBytes;
+      if (Date.now() - shownAt > 400 || (size > 0 && written >= size)) show(false);
+    };
+    const url = client.apkUrl(appId, want.abi);
+    const headers: Record<string, string> = { ...client.authHeaders(), ...(have > 0 && want.sha256 ? { "If-Range": `"${want.sha256}"` } : {}) };
+    const task =
+      have > 0
+        ? DownloadTask.fromSavable({ url, fileUri: file.uri, isDirectory: false, headers, resumeData: String(have) }, { onProgress })
+        : File.createDownloadTask(url, file, { headers, onProgress });
+    const watchdog = setInterval(() => {
+      if (Date.now() - movedAt < STALL_MS || task.state !== "active") return;
+      console.warn(`download ${appId}: no byte for ${STALL_MS / 1000} s at ${written}; cutting it to resume`);
+      try {
+        task.pause();
+      } catch {
+        // already ended
+      }
+    }, 2_000);
+    try {
+      const done = have > 0 ? await task.resumeAsync() : await task.downloadAsync();
+      if (done) return;
+    } catch (e) {
+      console.warn(`download ${appId} from ${have}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      clearInterval(watchdog);
+    }
+    triesWithoutProgress = sizeOf(file) > have ? 0 : triesWithoutProgress + 1;
+    if (triesWithoutProgress >= TRIES_WITHOUT_PROGRESS) throw new Error("The download stopped.");
+    written = sizeOf(file);
+    show(true);
+    installerHooks.linkTrouble();
+    await sleep(RETRY_DELAYS_MS[Math.min(triesWithoutProgress, RETRY_DELAYS_MS.length - 1)]);
+  }
+}
+
 /** Messages thrown above that are already written for people. */
 const PLAIN = new Set(["The download was damaged. Try again.", "Android wouldn't start the install."]);
 
-function finish(app: App, buildNumber: number, result: InstallResult) {
+function finish(app: App, buildNumber: number, result: InstallResult, fileName: string) {
   installedVersion(app);
   switch (result.status) {
     case "success":
       clearUnfinished(app.id);
       setInstall(app.id, { buildNumber, phase: "done" });
-      cleanup(app, buildNumber);
+      cleanup(fileName);
       setTimeout(() => {
         if (getState().installs[app.id]?.phase === "done") setInstall(app.id, null);
       }, 4000);
@@ -272,6 +406,11 @@ function finish(app: App, buildNumber: number, result: InstallResult) {
         conflict: true,
         message: "The version on your phone was made differently, so this one can't replace it. Remove it, then install again.",
       });
+      return;
+    case "timeout":
+      // The download is kept: tapping Install again goes straight to installing.
+      console.warn(`install ${app.packageName}: ${result.message ?? "timeout"}`);
+      setInstall(app.id, { buildNumber, phase: "failed", message: "Android didn't finish installing it. Tap Install to try again." });
       return;
     default:
       // Android's own message (INSTALL_PARSE_FAILED_..., file paths) is for logs, not for people.
@@ -296,14 +435,14 @@ function plainInstallError(result: InstallResult): string {
 }
 
 /** With the system installer screen there is no result callback: look when we're back in front. */
-function watchFallback(app: App, buildNumber: number) {
+function watchFallback(app: App, buildNumber: number, fileName: string) {
   const sub = AppState.addEventListener("change", (state) => {
     if (state !== "active") return;
     sub.remove();
     const v = installedVersion(app);
     if (v != null && v >= buildNumber) {
       setInstall(app.id, { buildNumber, phase: "done" });
-      cleanup(app, buildNumber);
+      cleanup(fileName);
       setTimeout(() => setInstall(app.id, null), 4000);
     } else {
       setInstall(app.id, null);
@@ -311,9 +450,9 @@ function watchFallback(app: App, buildNumber: number) {
   });
 }
 
-function cleanup(app: App, buildNumber: number) {
+function cleanup(fileName: string) {
   try {
-    const f = new File(new Directory(Paths.cache, "apks"), `${app.slug || app.id}-${buildNumber}.apk`);
+    const f = new File(apkDirectory(), fileName);
     if (f.exists) f.delete();
   } catch {
     // ignore

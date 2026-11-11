@@ -3,6 +3,8 @@
 // 1500) and writes a small dummy "APK". A build fails when ANYAPP_FAKE_BUILD_FAIL is "always",
 // when it is a number N and this is one of the first N builds of the process, or while the
 // project contains a file named FAKE_BUILD_FAIL (its text becomes the error).
+// ANYAPP_FAKE_APK_DIR (tests on a device): build N copies <dir>/<package>-<N>.apk, a real APK made
+// beforehand (app/dev/make-test-apk.mjs), and <package>-<N>-<abi>.apk as its ABI variants.
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -60,6 +62,8 @@ export async function buildApk(args: { dir: string; buildNumber: number; onLog?:
   if (failSetting === "always" || (failSetting && /^\d+$/.test(failSetting) && buildsSoFar <= Number(failSetting))) {
     throw new Error(`App.tsx:3:10 - error TS2304: Cannot find name 'Foo'. (fake failure ${buildsSoFar})`);
   }
+  const ready = readyMadeApk(args.dir, args.buildNumber);
+  if (ready) return ready;
   const outDir = join(tmpdir(), "anyapp-fake-builds", basename(args.dir));
   mkdirSync(outDir, { recursive: true });
   const apkPath = join(outDir, `app-${args.buildNumber}.apk`);
@@ -70,6 +74,20 @@ export async function buildApk(args: { dir: string; buildNumber: number; onLog?:
   ]);
   writeFileSync(apkPath, body);
   return { apkPath, sizeBytes: body.length, sha256: createHash("sha256").update(body).digest("hex") };
+}
+
+function readyMadeApk(dir: string, buildNumber: number): BuildResult | null {
+  const from = process.env.ANYAPP_FAKE_APK_DIR;
+  if (!from) return null;
+  const pkg = (JSON.parse(readFileSync(join(dir, "app.json"), "utf8")) as { expo?: { android?: { package?: string } } }).expo?.android?.package;
+  const file = (abi?: string) => join(from, `${pkg}-${buildNumber}${abi ? `-${abi}` : ""}.apk`);
+  if (!pkg || !existsSync(file())) return null;
+  const describe = (path: string) => {
+    const data = readFileSync(path);
+    return { apkPath: path, sizeBytes: data.length, sha256: createHash("sha256").update(data).digest("hex") };
+  };
+  const variants = ["arm64-v8a", "x86_64"].filter((abi) => existsSync(file(abi))).map((abi) => ({ abi, ...describe(file(abi)) }));
+  return { ...describe(file()), ...(variants.length > 0 ? { variants } : {}) };
 }
 
 export function getIconPath(args: { dir: string }): string | null {

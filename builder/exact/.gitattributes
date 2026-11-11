@@ -1,0 +1,2 @@
+# git apply needs the patch byte for byte, with LF line endings, on every checkout.
+*.patch text eol=lf
