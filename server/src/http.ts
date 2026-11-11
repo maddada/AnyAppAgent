@@ -147,6 +147,7 @@ export function startHttpServer(deps: {
   broadcast(event: ServerEvent): void;
   adminChanged(): void;
   adminState(): AdminState;
+  phonesConnected(): number;
   ready: Promise<void>;
   close(): void;
 } {
@@ -323,6 +324,9 @@ export function startHttpServer(deps: {
     if (path.startsWith("/page/") || path.startsWith("/page-kit/")) {
       if (await apps.pages.route(req, res, path, url)) return;
     }
+    if (path.startsWith("/mcp/app/")) {
+      if (await apps.history.mcpRoute(req, res, path, url)) return;
+    }
     if (path.startsWith("/mcp/pages/")) {
       if (await apps.pages.mcpRoute(req, res, path, url)) return;
     }
@@ -395,6 +399,14 @@ export function startHttpServer(deps: {
         }
       }
       return sendError(res, 405, "Method not allowed.");
+    }
+    // Versions and undo, crashes, the diary (docs/VERSIONS.md)
+    const restore = /^\/api\/apps\/([^/]+)\/versions\/(\d{1,9})\/restore$/.exec(path);
+    if (restore && method === "POST") return sendJson(res, 202, await apps.restore(decodeURIComponent(restore[1]), Number(restore[2])));
+    const crashFix = /^\/api\/apps\/([^/]+)\/crashes\/([0-9a-f-]{36})\/fix$/.exec(path);
+    if (crashFix && method === "POST") {
+      apps.fixCrash(decodeURIComponent(crashFix[1]), crashFix[2]);
+      return sendJson(res, 202, {});
     }
     if (await workerApiRoute(req, res, path, url, { workers: apps.workers, checkApp: (appId) => void apps.get(appId) })) return;
     // "Update it" on an app that is behind (health.ts): POST /api/apps/:id/keep-healthy
@@ -497,6 +509,16 @@ export function startHttpServer(deps: {
     } else if (method === "POST" && action === "build") {
       apps.rebuild(id);
       return sendJson(res, 202, {});
+    } else if (method === "GET" && action === "versions") {
+      return sendJson(res, 200, await apps.versions(id));
+    } else if (method === "POST" && action === "undo") {
+      return sendJson(res, 202, await apps.undo(id));
+    } else if (method === "POST" && action === "crashes") {
+      return sendJson(res, 201, apps.reportCrash(id, await readBody<unknown>(req, 256 * 1024)));
+    } else if (method === "POST" && action === "diary") {
+      apps.diaryAnswer(id, await readBody<unknown>(req, 512 * 1024));
+      res.writeHead(204);
+      return void res.end();
     } else if (method === "POST" && action === "permission") {
       const body = await readBody<PermissionAnswerRequest>(req);
       apps.answerPermission(id, str(body.requestId, "requestId"), str(body.optionId, "optionId"));
@@ -561,6 +583,7 @@ export function startHttpServer(deps: {
     ready,
     adminChanged,
     adminState,
+    phonesConnected: () => [...phoneSockets.keys()].filter((ws) => ws.readyState === ws.OPEN).length,
     broadcast(event) {
       const data = JSON.stringify(event);
       for (const ws of phoneSockets.keys()) if (ws.readyState === ws.OPEN) ws.send(data);

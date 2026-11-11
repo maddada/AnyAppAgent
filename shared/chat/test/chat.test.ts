@@ -194,7 +194,7 @@ test("buildCard words each state the same on both sides", () => {
   const qFresh = buildCard(quick, app({ latestApk: quickBuild }), "phone", null);
   assert.ok(qFresh?.state === "ready" && qFresh.title === "Your app is ready" && qFresh.sub === "Version 4, 60 MB. Tap Install to put it on this phone");
   const older = buildCard(ok, app({ latestApk: { ...built, number: 5 } }), "pc");
-  assert.deepEqual(older, { state: "older", number: 4, title: "Version 4 was ready" });
+  assert.deepEqual(older, { state: "older", number: 4, title: "Version 4 was ready", changes: [] });
 });
 
 // ---------- state line

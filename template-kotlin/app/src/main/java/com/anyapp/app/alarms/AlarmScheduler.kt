@@ -7,6 +7,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import com.anyapp.app.diary.Diary
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object AlarmScheduler {
   const val TAG = "AnyappAlarms"
@@ -31,12 +35,21 @@ object AlarmScheduler {
       // setAlarmClock is never deferred by Doze or battery savers.
       am.setAlarmClock(AlarmManager.AlarmClockInfo(alarm.at, launchPendingIntent(c)), operation)
       Log.i(TAG, "Scheduled exact alarm ${alarm.id} at ${alarm.at}")
+      Diary.note(c, "${alarm.title.take(60)} alarm set for ${timeLabel(alarm.at)}")
       true
     } else {
       am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, alarm.at, operation)
       Log.w(TAG, "Exact alarms not allowed; scheduled ${alarm.id} inexactly")
+      Diary.note(c, "${alarm.title.take(60)} alarm set for ${timeLabel(alarm.at)}, but not exactly: the phone does not allow exact alarms, so it may ring late")
       false
     }
+  }
+
+  /** "15:42" today, "Nov 12 15:42" on another day: for diary notes. */
+  private fun timeLabel(at: Long): String {
+    val day = SimpleDateFormat("yyyyMMdd", Locale.US)
+    val same = day.format(Date(at)) == day.format(Date())
+    return SimpleDateFormat(if (same) "HH:mm" else "MMM d HH:mm", Locale.US).format(Date(at))
   }
 
   fun cancel(c: Context, id: String) {

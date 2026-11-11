@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AppUsage, UsageState } from "../../protocol.ts";
-import { cacheLine, formatTokens, headsUp, PLAN_UNKNOWN, planLine, reminderText, usageLine, usageRows, whenLabel } from "../index.ts";
+import { cacheLine, formatTokens, headsUp, PLAN_UNKNOWN, planLine, reminderText, usageLine, usageRows, resetLabel } from "../index.ts";
 
 const now = new Date(2026, 10, 11, 10, 0);
 const u = (input: number, cacheRead = 0) => ({ inputTokens: input, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: cacheRead });
@@ -25,8 +25,8 @@ test("a plan line only shows a percentage Claude reported", () => {
   assert.equal(planLine({ kind: "seven_day", status: "allowed_warning", seenAt: "" }, now).text, "Claude says you are close to your weekly limit.");
   assert.equal(planLine({ kind: "five_hour", status: "rejected", resetsAt: resets, seenAt: "" }, now).text, "5-hour limit is used up until 16:00. Changes wait until then.");
   assert.equal(planLine({ kind: "five_hour", status: "allowed", usedPercent: 85, seenAt: "" }, now).kind, "near");
-  assert.equal(whenLabel(new Date(2026, 10, 13, 9, 5).toISOString(), now), "Fri 09:05");
-  assert.equal(whenLabel(new Date(2026, 10, 30, 9, 5).toISOString(), now), "30 Nov");
+  assert.equal(resetLabel(new Date(2026, 10, 13, 9, 5).toISOString(), now), "Fri 09:05");
+  assert.equal(resetLabel(new Date(2026, 10, 30, 9, 5).toISOString(), now), "30 Nov");
   assert.match(PLAN_UNKNOWN, /not a percentage/);
 });
 

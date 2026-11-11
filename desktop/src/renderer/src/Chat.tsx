@@ -5,12 +5,12 @@
 import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FileCheck, FilePen, FileQuestion, FileText, Folder, GitMerge, Globe, Hand, ImagePlus, ListTodo, Lock, MessageSquare, Mic, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
+  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FileCheck, FilePen, FileQuestion, FileText, Folder, GitMerge, Globe, Hand, History, NotebookText, TriangleAlert, Wrench, ImagePlus, ListTodo, Lock, MessageSquare, Mic, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
 } from "lucide-react";
 import type { App, ChatImage, ChatItem, HexCheck, PageInfo, WorkerInfo } from "../../shared/types.ts";
 import { DICTATE_HOTKEY, HOLD_MS, insertAt, isDictateHotkey, useDictation } from "./dictation.ts";
 import {
-  answerLines, buildCard, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
+  answerLines, buildCard, crashCard, DIARY_PRIVACY, diaryLine, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
 } from "../../../../shared/chat/index.ts";
 import { drafts, useChat } from "./chatStore.ts";
 import { useHelperChat, useHelpers } from "./helperStore.ts";
@@ -18,6 +18,7 @@ import { Markdown } from "./Markdown.tsx";
 import { imageFiles, prepare, sentPicture, type Attachment } from "./pictures.ts";
 import { AppIcon, Icon, Spinner, StateLine } from "./ui.tsx";
 import { TodoPanel } from "./Todo.tsx";
+import { VersionsPanel } from "./Versions.tsx";
 import type { CareState } from "../../../../shared/protocol.ts";
 import { bigJob, HeadsUpCard, HealthNotice, UsageNote } from "./Trust.tsx";
 import type { HeadsUp } from "../../../../shared/chat/index.ts";
@@ -59,7 +60,10 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, on
   // The to-do list open beside the chat, per app (it and a helper's chat take turns on the side).
   const [todoOpen, setTodoOpen] = useState<Record<string, boolean>>({});
   const showTodo = !!todoOpen[app.id];
-  const openId = showTodo ? null : (openHelpers[app.id] ?? null);
+  // The Versions panel (docs/VERSIONS.md) takes turns with the to-do list and a helper's chat.
+  const [versionsOpen, setVersionsOpen] = useState<Record<string, boolean>>({});
+  const showVersions = !showTodo && !!versionsOpen[app.id];
+  const openId = showTodo || showVersions ? null : (openHelpers[app.id] ?? null);
   const helper = openId ? helpers.find((w) => w.id === openId) : undefined;
   // How wide the chat area is decides how the two chats share it.
   const area = useRef<HTMLDivElement>(null);
@@ -75,7 +79,7 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, on
   const placement = HELPER_CHAT_PLACEMENT;
   const narrow = width > 0 && width < ROOMY_WIDTH;
   // The window makes room for two chats while one is open beside the main chat (the app list folds).
-  const open = (!!helper && placement === "beside") || showTodo;
+  const open = (!!helper && placement === "beside") || showTodo || showVersions;
   useEffect(() => {
     onHelperOpen?.(open);
   }, [open, onHelperOpen]);
@@ -83,11 +87,26 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, on
   const panel = useMemo(() => {
     const set = (workerId: string | null) => {
       setOpenHelpers((m) => ({ ...m, [app.id]: workerId }));
-      if (workerId) setTodoOpen((m) => ({ ...m, [app.id]: false }));
+      if (workerId) {
+        setTodoOpen((m) => ({ ...m, [app.id]: false }));
+        setVersionsOpen((m) => ({ ...m, [app.id]: false }));
+      }
     };
     return { open: (id: string) => set(openId === id && placement === "beside" ? null : id), close: () => set(null), selected: openId };
   }, [openId, app.id, placement]);
-  const toggleTodo = () => setTodoOpen((m) => ({ ...m, [app.id]: !m[app.id] }));
+  const toggleTodo = () => {
+    setTodoOpen((m) => ({ ...m, [app.id]: !m[app.id] }));
+    setVersionsOpen((m) => ({ ...m, [app.id]: false }));
+  };
+  const toggleVersions = () => {
+    setVersionsOpen((m) => ({ ...m, [app.id]: !showVersions }));
+    setTodoOpen((m) => ({ ...m, [app.id]: false }));
+  };
+  const versionsButton = (
+    <button className={`btn btn-quiet btn-sm versions-toggle${showVersions ? " is-on" : ""}`} data-testid="versions-toggle" aria-pressed={showVersions} onClick={toggleVersions}>
+      <Icon of={History} px={14} /> Versions
+    </button>
+  );
   const todoButton = (
     <button className={`btn btn-quiet btn-sm todo-toggle${showTodo ? " is-on" : ""}`} data-testid="todo-toggle" aria-pressed={showTodo} onClick={toggleTodo}>
       <Icon of={ListTodo} px={14} /> To-do
@@ -96,13 +115,15 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, on
   );
   const side = showTodo ? (
     <TodoPanel app={app} online={online} onClose={toggleTodo} />
+  ) : showVersions ? (
+    <VersionsPanel app={app} online={online} onClose={toggleVersions} />
   ) : helper ? (
     <HelperChatView app={app} worker={helper} online={online} placement={placement} onClose={panel.close} />
   ) : null;
   return (
     <HelperPanel.Provider value={panel}>
       <div ref={area} className={side ? `chat-split chat-split-${placement}${narrow ? " is-narrow" : ""}` : "chat-single"}>
-        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={<>{todoButton}{headerExtra}</>} hex={hex} onSetupHex={onSetupHex} care={care} />}
+        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={<>{versionsButton}{todoButton}{headerExtra}</>} hex={hex} onSetupHex={onSetupHex} care={care} />}
         {side}
       </div>
     </HelperPanel.Provider>
@@ -519,6 +540,20 @@ const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App }) {
       return <PermissionCard item={item} />;
     case "build":
       return <BuildCard item={item} app={app} />;
+    case "crash":
+      return item.crash ? <CrashCard item={item} app={app} /> : null;
+    case "diary":
+      return (
+        <div className="diary-row" data-testid="diary-row">
+          <div className="trow row-type">
+            <span className="tr-icon">
+              <Icon of={NotebookText} size="sm" />
+            </span>
+            <span className="tr-title wrap">{diaryLine(item.diary)}</span>
+          </div>
+          <div className="caption tertiary diary-privacy">{DIARY_PRIVACY}</div>
+        </div>
+      );
     case "error":
       return (
         <div className="err-row row-type">
@@ -758,6 +793,7 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
           <Icon of={Package} size="sm" />
         </span>
         <span className="tr-title tertiary">{card.title}</span>
+        {card.changes[0] ? <span className="tr-detail older-change">{card.changes[0].text}</span> : null}
       </div>
     );
   }
@@ -773,6 +809,19 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
           <div className="build-sub row-type">{card.sub}</div>
         </div>
       </div>
+      {card.state === "ready" && card.changes.length > 0 && (
+        <div className="changes" data-testid="what-changed">
+          <div className="caption changes-head">What changed</div>
+          <dl className="changes-list">
+            {card.changes.map((c) => (
+              <div className="changes-line" key={c.label}>
+                <dt className="caption">{c.label}</dt>
+                <dd>{c.text}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
       {card.state === "running" && (
         <div className="progress indeterminate">
           <span />
@@ -793,6 +842,53 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
             {retrying ? <Spinner /> : <Icon of={RotateCcw} size="sm" />} {retrying ? "Building" : "Try again"}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ crashes (docs/VERSIONS.md)
+
+/** "Tea Timer crashed. Fix it?": one tap sends the crash to the app's agent. */
+function CrashCard({ item, app }: { item: ChatItem; app: App }) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const crash = item.crash!;
+  const card = crashCard(crash, app.name);
+  return (
+    <div className="card crash" data-testid="crash-card">
+      <div className="build-top">
+        <span className="badge problem">
+          <Icon of={TriangleAlert} size="md" />
+        </span>
+        <div className="grow">
+          <div className="heading">{card.title}</div>
+          <div className="build-sub row-type">{card.meta}</div>
+        </div>
+      </div>
+      {card.detail ? <div className="crash-detail mono">{card.detail}</div> : null}
+      {card.canFix ? (
+        <div className="crash-actions">
+          <button
+            className="btn btn-primary btn-sm"
+            data-testid="crash-fix"
+            disabled={sending}
+            onClick={async () => {
+              setSending(true);
+              setError(null);
+              const r = await api.fixCrash(app.id, crash.id);
+              if (!r.ok) {
+                setSending(false);
+                setError(r.error ?? "That did not work. Try again.");
+              }
+            }}
+          >
+            {sending ? <Spinner /> : <Icon of={Wrench} size="sm" />} {sending ? "Sending" : "Fix it"}
+          </button>
+          {error ? <StateLine state="problem" text={error} /> : null}
+        </div>
+      ) : (
+        <StateLine state="ready" text={card.asked ?? "Sent to the agent"} />
       )}
     </div>
   );

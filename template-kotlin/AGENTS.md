@@ -27,8 +27,16 @@ app/src/main/java/com/anyapp/app/
   ai/Ai.kt                 AI (chat, streaming, tools, agents) through AnyAppAgent's key
   ai/AiSetupNotice.kt      the "AI is not set up" card with a button to AnyAppAgent
   ai/AiTypes.kt            AiMessage, AiPart, AiTool, AiError ... (AI.md: the wire format, leave it)
-app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service, feedback
+  diary/Diary.kt           the app's diary: Diary.note(context, "...") (see "The diary")
+  diary/CrashCatcher.kt    sends crashes to AnyAppAgent (see "Crashes"; leave it)
+  diary/DiaryRequestReceiver.kt  answers AnyAppAgent's request for the diary (leave it)
+  AnyApp.kt                the Application class: installs the crash catcher at start (keep it)
+app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service, feedback, the diary
 app/src/main/java/com/anyapp/feedback/  "Point at it": shake to send feedback (built in: keep it, leave it as is)
+app/src/main/java/com/anyapp/abilities/ widgets, Quick Settings tiles, app shortcuts, shares (leave its code)
+app/src/main/java/com/anyapp/app/abilities/AppActions.kt  what widget buttons, tiles and shortcuts do
+extras/camera/             camera smarts (scan codes, read text): copy in only when needed
+scripts/glyph.js           makes a tile or shortcut icon (vector drawable) from an icon name
 app/src/main/assets/anyapp-feedback/   the feedback screen's fonts (leave them)
 app/src/main/res/values/strings.xml   app_name: the name under the icon
 app/src/main/res/raw/      sound files for alarms (adhan.mp3, beep.ogg, ...)
@@ -278,6 +286,42 @@ try { Ai.ask(context, "Hi") } catch (e: AiError) {
 - Save conversations with `Store` (as JSON: `AiMessage.toJson()`) if the person should find them again.
 - The wire format under `Ai` is in `AI.md`; app code never needs it.
 
+### The diary
+
+The app keeps a small private diary on the phone of what it did, so "why didn't it ring?" gets a
+real answer instead of a guess. When the person says something did not work, read it with your
+`read_diary` tool (MCP server `app`) before you change code.
+
+```kotlin
+import com.anyapp.app.diary.Diary
+
+Diary.note(context, "Reminder set for 08:00")       // one line, at most 200 characters; never throws
+Diary.note(context, "Prayer times loaded for 7 days")
+Diary.note(context, "Could not load prayer times: no internet, used yesterday's")
+```
+
+- Write a note for every background action and important event: something scheduled, cancelled,
+  rung, skipped, loaded, failed, a permission missing. Say what happened and why, in plain words.
+  The alarms already write theirs (set, rang, not exact), and crashes are noted by themselves.
+- **Never personal content**: no names, messages, places, health data, or anything the person
+  typed. "Reminder set for 08:00" is fine; the reminder's own text is not.
+- It stays in the app's private storage (the newest 300 notes) and leaves the phone only to the
+  person's own PC, through AnyAppAgent, when you ask for it.
+
+### Crashes
+
+Crashes are caught by themselves (`AnyApp.kt` installs the catcher when the app starts): AnyAppAgent
+on the phone shows "<app> crashed. Fix it?", and a tap sends you the error, its stack, the version
+and the latest diary notes. For an exception you catch but still want to hear about:
+
+```kotlin
+import com.anyapp.app.diary.CrashCatcher
+
+try { load() } catch (e: Exception) { CrashCatcher.reportError(context, e, screen = "Settings"); showProblem() }
+```
+
+Keep `AnyApp.kt`, its `android:name` in the manifest and the `DiaryRequestReceiver` entry.
+
 ### Updates for people the app is shared with (built in, nothing to do)
 
 When the person shares the app from AnyAppAgent, the PC builds it with its update feed and the
@@ -292,6 +336,173 @@ button: `AppUpdater.check(context)` (off the main thread) returns `State.Availab
 `UpToDate`, `HandledByAnyAppAgent`, `Off` or `Problem(message)`, and
 `startActivity(Intent(context, UpdateActivity::class.java).putExtra(UpdateActivity.EXTRA_START, true))`
 opens the update box.
+
+### Phone abilities: widgets, Quick Settings tiles, app shortcuts, receiving shares
+
+Use these when the person asks for a home screen widget, a "button in the pull-down menu", a
+long-press shortcut on the icon, or for the app to appear when they share something. The code is
+ready in `com/anyapp/abilities/` (the same core as every AnyAppAgent app; leave it as is). R8
+removes all of it from apps that do not declare anything, so the app stays small. You declare
+what the app offers in `AndroidManifest.xml` and write the actions in
+`com/anyapp/app/abilities/AppActions.kt`.
+
+**Once, for any ability**, inside `<application>`:
+
+```xml
+<!-- Phone abilities (com.anyapp.abilities): background actions run AppActions. -->
+<meta-data android:name="com.anyapp.abilities.runner" android:value="com.anyapp.app.abilities.AppActions" />
+<receiver android:name="com.anyapp.abilities.ActionReceiver" android:exported="false" />
+<activity android:name="com.anyapp.abilities.ActionActivity" android:exported="false"
+  android:excludeFromRecents="true" android:noHistory="true" android:taskAffinity=""
+  android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+```
+
+**Actions** have names you choose. Background ones (a widget button, a tile, a shortcut without
+open) run in `AppActions.run` while the app stays closed: quick work on the main thread, or a
+coroutine (`CoroutineScope(Dispatchers.IO).launch { ...; withContext(Dispatchers.Main) { done("Saved") } }`),
+then `done(message or null)` within about 9 s (the message shows only if the app may post
+notifications, so also update the widget or tile). Actions that open the app arrive in `MainActivity`:
+
+```kotlin
+// MainActivity: read it in onCreate and in onNewIntent (override it, then setIntent(intent))
+val opened = com.anyapp.abilities.Actions.takeOpened(intent)   // AbilityAction(name, source, from, data) or null
+if (opened?.name == "show-log") nav.go(Route.Log)
+```
+
+**Widgets** (up to 4: `Widget1` .. `Widget4`). Per widget, a receiver and a small XML file:
+
+```xml
+<receiver android:name="com.anyapp.abilities.Widget1" android:exported="false" android:label="Water today">
+  <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+  <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_water" />
+  <meta-data android:name="com.anyapp.abilities.widget" android:value="water" />
+</receiver>
+```
+
+```xml
+<!-- res/xml/widget_water.xml. Cells: 2x2 is 110dp, 4x2 is 250x110dp, 2x3 is 110x180dp. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:minWidth="110dp" android:minHeight="110dp" android:minResizeWidth="110dp" android:minResizeHeight="110dp"
+  android:targetCellWidth="2" android:targetCellHeight="2" android:resizeMode="horizontal|vertical"
+  android:updatePeriodMillis="3600000" android:initialLayout="@layout/anyapp_widget"
+  android:description="@string/widget_water_description" android:widgetCategory="home_screen" />
+```
+
+Then set what it shows whenever the data changes (and when the app starts). Android draws it
+while the app is closed; `countdownTo` counts down live and `timeline` moves it on by itself:
+
+```kotlin
+import com.anyapp.abilities.*
+
+Widgets.update(context, "water", WidgetContent(
+  title = "Water today",                  // small line in the accent colour
+  value = "5 of 8",                       // the big text
+  subtitle = "3 to go",
+  progress = 5 / 8.0,                     // a bar, 0 to 1
+  button = WidgetButton("Log a glass", action = "log-glass"),   // open = true opens the app instead
+  tapAction = "show-log",                 // optional: tapping the widget opens the app with it
+  accent = "#1F5C45", accentDark = "#7FC7A6",
+  timeline = listOf(midnightMillis to WidgetContent(value = "0 of 8", subtitle = "8 to go", progress = 0.0)),
+))
+Widgets.update(context, "prayer", WidgetContent(
+  title = "Asr in", countdownTo = asrMillis, subtitle = "Ajman",
+  rows = listOf(WidgetRow("Dhuhr", "12:08"), WidgetRow("Asr", "15:21", strong = true)),   // up to 6
+  timeline = listOf(asrMillis to WidgetContent(title = "Maghrib in", countdownTo = maghribMillis)),
+))
+if (!Widgets.isPlaced(context, "water")) Widgets.requestPin(context, "water")   // Android asks the person
+```
+
+A timeline entry changes only the fields it names. A new widget with no content yet sends the
+background action `"widget-update"` (`action.from` is the widget id): fill it in there. If
+`requestPin` returns false, tell the person: "Touch and hold the home screen, tap Widgets".
+
+**Quick Settings tiles** (up to 4: `Tile1` .. `Tile4`). Make the icon with
+`node scripts/glyph.js tea app/src/main/res/drawable/glyph_tea.xml` (any Material Design Icons
+name; keep the `glyph_` prefix), then:
+
+```xml
+<service android:name="com.anyapp.abilities.Tile1" android:exported="true" android:label="Tea timer"
+  android:icon="@drawable/glyph_tea" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+  <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+  <meta-data android:name="com.anyapp.abilities.tile" android:value="tea" />
+  <meta-data android:name="com.anyapp.abilities.tile.mode" android:value="run" />      <!-- run | open | toggle -->
+  <meta-data android:name="com.anyapp.abilities.tile.action" android:value="start-tea" /> <!-- default: the tile id -->
+</service>
+```
+
+`run` runs the action in the background, `open` opens the app with it, `toggle` switches the tile
+on and off and runs the action with `action.data.getBoolean("on")`. Change it from code:
+`Tiles.update(context, "tea", subtitle = "Ready at 15:40")`, `Tiles.isOn(context, "focus")`. The
+person adds a tile once (pull down twice, the pencil, drag it up): say so in the app.
+
+**App shortcuts** (long-press the icon, up to 4). Set them when the app starts:
+
+```kotlin
+Shortcuts.set(context, listOf(
+  Shortcut("log", "Log a glass", action = "log-glass", icon = "glyph_cup_water"),   // runs in the background
+  Shortcut("inbox", "Shared things", action = "show-inbox", open = true),          // opens the app
+))
+```
+
+`icon` is a drawable name (make it with `scripts/glyph.js ... --color "#1F5C45"`, coloured: the
+launcher shows it as is); without one the app icon is used. Name these drawables `glyph_*`:
+`res/raw/anyapp_abilities_keep.xml` keeps them through resource shrinking (they are found by name).
+
+**Receiving shares**: add to `MainActivity`'s `<activity>` (keep its launcher filter):
+
+```xml
+<intent-filter>
+  <action android:name="android.intent.action.SEND" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <data android:mimeType="text/plain" />
+  <data android:mimeType="image/*" />
+</intent-filter>
+<!-- several images at once: the same with android.intent.action.SEND_MULTIPLE and image/* -->
+```
+
+```kotlin
+// MainActivity, in onCreate and onNewIntent:
+val share = Shares.take(this, intent)   // Share(text, subject, url, files, mimeType) or null, once per share
+share?.files?.forEach { it.uri; it.mimeType; it.name; it.size }   // already copied into the app's files/shared/
+```
+
+A shared link arrives as `text` (`url` is its first web address). Files stay until
+`Shares.delete(context, path)`; show what arrived at once ("Saved").
+
+### Camera smarts: scan codes, read text from pictures (on the phone, no cost)
+
+Ready-made in `extras/camera/` (not compiled until you copy it, so other apps stay small):
+
+1. Copy what you need to `app/src/main/java/com/anyapp/camera/` (`CodeScanner.kt`, `TextReader.kt`).
+2. Add to `dependencies` in `app/build.gradle.kts`:
+   - codes: `implementation("com.google.android.gms:play-services-code-scanner:16.1.0")` and
+     `implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")`
+   - text: `implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")`
+   - either: `implementation("com.google.android.gms:play-services-base:18.5.0")`
+3. Add to `app/proguard-rules.pro` (ML Kit finds its parts by reflection; without it the release
+   build crashes on the first scan):
+   `-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }`
+
+```kotlin
+import com.anyapp.camera.CodeScanner
+import com.anyapp.camera.TextReader
+
+CodeScanner.scan(activity) { r ->   // Google's full-screen scanner: no camera permission needed
+  r.onSuccess { code -> code?.value; code?.format /* "qr", "ean13" */; code?.kind /* "url", "product" */ }
+  r.onFailure { problem = "The scanner did not open" }
+}
+CodeScanner.read(context, pictureUri) { r -> r.onSuccess { codes -> codes.map { it.value } } }   // codes in a picture
+TextReader.read(context, photoUri) { r -> r.onSuccess { t -> t.text; t.lines } }   // printed Latin text
+```
+
+Take the photo with `rememberLauncherForActivityResult(ActivityResultContracts.TakePicture())`
+(a `content://` Uri from a FileProvider) or pick one with `PickVisualMedia`. Codes and text
+together add well under 1 MB: the scanner and the models come with Google Play services, fetched
+once on first use (this needs the Play Store; until then the calls fail with "waiting for the
+module to be downloaded"). For models inside the app (offline at once, phones without Google
+Play services) use `com.google.mlkit:text-recognition:16.0.1` and
+`com.google.mlkit:barcode-scanning:17.3.0` instead of the two `play-services-mlkit-*` lines: about
+9 MB more per CPU type, only if needed. `CodeScanner.scan` always needs Google Play services.
 
 ### Also at hand (Android itself, no library)
 

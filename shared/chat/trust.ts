@@ -46,7 +46,7 @@ export function limitName(kind: string): string {
 }
 
 /** "16:00" today, "Tue 09:00" later this week, "14 Nov" after that. */
-export function whenLabel(iso: string, now: Date = new Date()): string {
+export function resetLabel(iso: string, now: Date = new Date()): string {
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return "";
   const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -69,7 +69,7 @@ export interface PlanLine {
 export function planLine(limit: PlanLimit, now: Date = new Date()): PlanLine {
   const name = limitName(limit.kind);
   const Name = name[0].toUpperCase() + name.slice(1);
-  const resets = limit.resetsAt ? whenLabel(limit.resetsAt, now) : "";
+  const resets = limit.resetsAt ? resetLabel(limit.resetsAt, now) : "";
   if (limit.status === "rejected") {
     return { text: `${Name} is used up${resets ? ` until ${resets}` : ""}. Changes wait until then.`, kind: "out", ...(limit.usedPercent !== undefined ? { percent: limit.usedPercent } : {}) };
   }

@@ -5,7 +5,8 @@
 //   ANYAPP_PORT=8931 ANYAPP_ADMIN_TOKEN=... node dev/fake-companion.mjs
 //
 // Extra env: ANYAPP_STATE_DIR (writes pairing-code.txt there), FAKE_EASY_CONNECT=off|ready|error,
-// FAKE_SEED=1 (a few example apps). Dev-only hooks: POST /__fake/pair-phone {name},
+// FAKE_SEED=1 (a few example apps), FAKE_HISTORY=1 (a Tea Timer app with versions, What changed, a crash
+// card and a diary line: docs/VERSIONS.md). Dev-only hooks: POST /__fake/pair-phone {name},
 // POST /__fake/disconnect-all.
 import { createServer } from "node:http";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
@@ -165,6 +166,40 @@ function upsert(appId, item) {
   send({ type: "chat.item", item: list.find((i) => i.id === item.id) });
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+
+// Versions, What changed, a crash and the diary (docs/VERSIONS.md): one app, "Tea Timer".
+const fakeVersions = new Map(); // appId -> AppVersion[] newest first
+if (process.env.FAKE_HISTORY === "1") {
+  const app = makeApp("Tea Timer", "idle");
+  const at = (minutesAgo) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
+  const notes = {
+    1: { changed: "A timer for green, black and herbal tea, each with its own time" },
+    2: { changed: "The timer now rings three times when the tea is ready", tryIt: "Start a 1 minute timer and wait for it", goodToKnow: "Your saved teas are kept" },
+    3: { changed: "A big Start button and a softer bell sound", tryIt: "Tap Start on Green tea", goodToKnow: "The old bell is still in Settings" },
+  };
+  const build = (n, minutesAgo) => ({ number: n, status: "succeeded", startedAt: at(minutesAgo + 2), finishedAt: at(minutesAgo), sizeBytes: 31_000_000, changes: notes[n] });
+  Object.assign(app, { activeHelpers: 0, latestBuild: build(3, 4), latestApk: build(3, 4), lastMessagePreview: "Done. The Start button is bigger and the bell is softer." });
+  fakeVersions.set(app.id, [
+    { build: 3, title: notes[3].changed, changes: notes[3], createdAt: at(4), current: true, canRestore: false },
+    { build: 2, title: notes[2].changed, changes: notes[2], createdAt: at(40), current: false, canRestore: true },
+    { build: 1, title: notes[1].changed, changes: notes[1], createdAt: at(90), current: false, canRestore: true },
+  ]);
+  const list = chats.get(app.id);
+  let seq = 0;
+  const push = (item, minutesAgo) => list.push({ id: randomUUID(), appId: app.id, seq: ++seq, createdAt: at(minutesAgo), updatedAt: at(minutesAgo), ...item });
+  push({ kind: "user", text: "Make the timer ring three times when the tea is ready." }, 45);
+  push({ kind: "assistant", text: "Done. It now rings three times." }, 41);
+  push({ kind: "build", build: build(2, 40), text: "The new version is ready" }, 40);
+  push({ kind: "user", text: "Bigger start button please, and a softer bell." }, 10);
+  push({ kind: "assistant", text: "Done. The Start button is bigger and the bell is softer." }, 5);
+  push({ kind: "build", build: build(3, 4), text: "The new version is ready" }, 4);
+  push({ kind: "crash", crash: { id: randomUUID(), appId: app.id, kind: "crash", message: "TypeError: Cannot read property 'minutes' of undefined", screen: "Home", versionCode: 3, count: 2, firstAt: at(3), lastAt: at(2) } }, 2);
+  push({ kind: "user", text: "Fix the crash" }, 1);
+  push({ kind: "diary", diary: { ok: true, entries: 42 } }, 1);
+  push({ kind: "assistant", text: "The diary shows the timer started with no tea picked after you deleted Herbal. I am fixing that now." }, 0);
+  seqs.set(app.id, seq);
+}
 
 async function simulateTurn(app, prompt) {
   upsert(app.id, { id: randomUUID(), kind: "user", text: prompt });
@@ -362,6 +397,44 @@ const server = createServer(async (req, res) => {
       send({ type: "app.updated", app: publicApp(app) });
       json(res, 200, publicApp(app));
       setTimeout(() => void simulateTurn(app, String(body.prompt || "Make it.")), 800);
+      return;
+    }
+    // Versions, undo and crash fix (docs/VERSIONS.md)
+    const vm = path.match(/^\/api\/apps\/([^/]+)\/(versions|undo)(?:\/(\d+)\/restore)?$/);
+    if (vm) {
+      const app = apps.get(decodeURIComponent(vm[1]));
+      if (!app) return json(res, 404, { error: "No such app." });
+      const versions = fakeVersions.get(app.id) ?? [];
+      if (vm[2] === "versions" && !vm[3] && req.method === "GET") return json(res, 200, versions);
+      if (req.method !== "POST") return json(res, 405, { error: "Method not allowed." });
+      if (app.status !== "idle") return json(res, 409, { error: "Wait until the agent has finished." });
+      const current = versions.findIndex((v) => v.current);
+      const target = vm[2] === "undo" ? versions[current + 1] : versions.find((v) => v.build === Number(vm[3]));
+      if (!target) return json(res, vm[2] === "undo" ? 409 : 404, { error: vm[2] === "undo" ? "There is nothing to undo." : "There is no such version." });
+      const number = (app.latestBuild?.number ?? 0) + 1;
+      const rowId = randomUUID();
+      const changes = { changed: `Back to version ${target.build}: ${target.title}`, goodToKnow: "Later versions stay in Versions, so you can come back to them." };
+      updateApp(app, { status: "building", latestBuild: { number, status: "running", startedAt: now(), restoredFrom: target.build } });
+      upsert(app.id, { id: rowId, kind: "build", build: app.latestBuild, text: "Building the old version again" });
+      setTimeout(() => {
+        const done = { number, status: "succeeded", startedAt: app.latestBuild.startedAt, finishedAt: now(), sizeBytes: 31_000_000, restoredFrom: target.build, changes };
+        for (const v of versions) v.current = false;
+        versions.unshift({ build: number, title: changes.changed, changes, createdAt: now(), restoredFrom: target.build, current: true, canRestore: false });
+        for (const v of versions.slice(1)) v.canRestore = true;
+        upsert(app.id, { id: rowId, kind: "build", build: done, text: "The new version is ready" });
+        updateApp(app, { status: "idle", latestBuild: done, latestApk: done });
+        send({ type: "apk.ready", app: publicApp(app) });
+      }, 4000);
+      return json(res, 202, publicApp(app));
+    }
+    const cm = path.match(/^\/api\/apps\/([^/]+)\/crashes\/([^/]+)\/fix$/);
+    if (cm && req.method === "POST") {
+      const app = apps.get(decodeURIComponent(cm[1]));
+      const item = app && chats.get(app.id).find((i) => i.kind === "crash" && i.crash?.id === cm[2]);
+      if (!item) return json(res, 404, { error: "That crash is not in the chat any more." });
+      upsert(app.id, { id: item.id, kind: "crash", crash: { ...item.crash, fixAskedAt: now() } });
+      json(res, 202);
+      void simulateTurn(app, "Fix the crash");
       return;
     }
     const pm = path.match(/^\/api\/apps\/([^/]+)\/pages\/([0-9a-f]+)\/open$/);

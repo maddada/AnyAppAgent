@@ -22,6 +22,9 @@ src/lib/storage.ts       persistent JSON storage + usePersistentState hook
 src/lib/notifications.ts notification permission, notify now, exact scheduled reminders
 src/lib/alarms.ts        exact alarms with sound + spoken text, work while the app is closed
 src/lib/ai.ts            AI (chat, streaming, tools, agents) through AnyAppAgent's key
+src/lib/diary.ts         the app's diary: short private notes of what the app did (see "The diary")
+src/lib/crash.ts         crash catcher: crashes reach AnyAppAgent, which offers a fix (see "Crashes")
+src/components/CrashBoundary.tsx  "Something went wrong" screen instead of a blank one (leave it)
 src/components/AiSetupNotice.tsx  the "AI is not set up" card with a button to AnyAppAgent
 src/theme.ts             colours (light + dark), spacing, radius, font sizes
 assets/icon.png          THE launcher icon (1024x1024 PNG); also the splash and starter image
@@ -29,7 +32,10 @@ assets/sounds/           sound files for alarms and in-app playback (adhan.mp3, 
 scripts/make-icon.mjs    makes assets/icon.png from a colour and a glyph or letter
 modules/alarms/          native (Kotlin) code behind src/lib/alarms.ts
 modules/ai/              native (Kotlin) code behind src/lib/ai.ts (leave it)
+modules/diary/           native (Kotlin) code behind src/lib/diary.ts and src/lib/crash.ts (leave it)
 modules/feedback/        "Point at it": shake to send feedback (built in: keep it, leave it as is)
+modules/abilities/       home screen widgets, Quick Settings tiles, app shortcuts, receiving shares (leave its code)
+modules/camera/          camera smarts: scan codes, read text from pictures (off until app.json turns it on)
 app.json                 app config (name, permissions, plugins)
 overview.md              what the person wants the app to do (see below)
 ```
@@ -369,6 +375,197 @@ if (updatesOn()) {
   if (s.state === 'available') openUpdate(); // the update box: download, check, install
 }
 ```
+
+### Phone abilities: widgets, Quick Settings tiles, app shortcuts, receiving shares
+
+Use these when the person asks for a home screen widget, a "button in the pull-down menu", a
+long-press shortcut on the icon, or for the app to appear when they share something. Everything is
+ready in `modules/abilities` (the same Kotlin code as every AnyAppAgent app): you only declare
+what the app offers in `app.json` and write JavaScript. Add one plugin entry (all keys optional):
+
+```json
+["./modules/abilities/app.plugin.js", {
+  "widgets":   [{ "id": "water", "name": "Water today", "description": "Glasses so far", "size": "small" }],
+  "tiles":     [{ "id": "tea", "label": "Tea timer", "icon": "tea", "mode": "run", "action": "start-tea" }],
+  "shortcuts": [{ "id": "log", "label": "Log a glass", "icon": "cup-water", "action": "log-glass" }],
+  "shares":    ["text", "image"]
+}]
+```
+
+- `widgets` (up to 4): `size` `small` (2x2), `wide` (4x2), `tall` (2x3, room for rows) or
+  `large` (4x3); the person can resize. `name` shows in the phone's widget list.
+- `tiles` (up to 4): `mode` `run` (the action runs in the background, default), `open` (opens
+  the app with the action) or `toggle` (on and off; the action gets `data.on`). `action` defaults
+  to the id.
+- `shortcuts` (up to 4): shown when the app icon is long-pressed. `"open": true` opens the app
+  with the action; otherwise it runs in the background and the app stays closed.
+- `icon`: a Material Design Icons name (https://pictogrammers.com/library/mdi/, the names
+  `npm run icon -- --search` finds). `"iconColor": "#14532D"` colours the shortcut icons
+  (default: the app icon's background colour).
+- `shares`: `text` (text and links), `image`, `video`, `file`.
+- An app without this entry gets none of it: no widget in the list, no tile, no share target.
+  Changing it needs a new build (automatic).
+
+**Actions** (what a widget button, tile or shortcut does) have names you choose. Background
+actions run your JavaScript while the app stays closed. Register them at the top level of a
+module imported from `App.tsx` (never inside a component: with the app closed, no screen runs):
+
+```ts
+// src/lib/actions.ts, and in src/App.tsx: import '@/lib/actions';
+import { onAction, setWidget, updateTile } from '../../modules/abilities';
+import { diary } from '@/lib/diary';
+
+onAction('log-glass', async () => {
+  const n = await logGlass();          // your own code: save with storage.ts, update the widget
+  diary('Glass logged from the widget'); // a diary note for every background action (see "The diary")
+  return `Glass ${n} logged`;          // optional: a small message (needs the notification permission)
+});
+onAction('start-tea', async () => { await scheduleReminder({ at: new Date(Date.now() + 180_000), title: 'Tea is ready' }); });
+onAction('focus', async (a) => { await save('focus', a.data.on === true); });   // a toggle tile
+onAction('widget-update', async (a) => { if (a.from === 'water') showWater(await getGlasses()); }); // a new, empty widget
+```
+
+A background action has about 9 seconds. Its message shows only if the app may post notifications
+(ask once with `ensureNotificationPermission()`); otherwise Android hides it, so also update the
+widget or tile so the person sees it worked. Actions that open the app (`open: true`, a widget tap
+with `tapAction`) reach a screen:
+
+```tsx
+import { useOpenAction } from '../../modules/abilities';
+useOpenAction((a) => { if (a.name === 'show-inbox') navigation.navigate('Inbox'); });
+```
+
+**Widgets** show what you last gave them, so set the content whenever the data changes (and on
+app start). Android draws it while the app is closed; `countdownTo` counts down live and a
+`timeline` moves the widget on by itself (next prayer, a new day at midnight):
+
+```ts
+import { setWidget, pinWidget, isWidgetPlaced } from '../../modules/abilities';
+
+setWidget('water', {
+  title: 'Water today',                    // small line in the accent colour
+  value: '5 of 8',                         // the big text
+  subtitle: '3 to go',
+  progress: 5 / 8,                         // a bar, 0 to 1
+  button: { label: 'Log a glass', action: 'log-glass' },   // open: true to open the app instead
+  tapAction: 'show-log',                   // optional: tapping the widget opens the app with it
+  accent: '#1F5C45', accentDark: '#7FC7A6',
+  timeline: [{ at: midnight, value: '0 of 8', subtitle: '8 to go', progress: 0 }],
+});
+setWidget('prayer', {
+  title: 'Asr in', countdownTo: asrTime, subtitle: 'Ajman',
+  rows: [{ label: 'Dhuhr', value: '12:08' }, { label: 'Asr', value: '15:21', strong: true }],  // up to 6
+  timeline: [{ at: asrTime, title: 'Maghrib in', countdownTo: maghribTime, rows: [/* Maghrib strong */] }],
+});
+if (!isWidgetPlaced('water')) pinWidget('water');   // "Add to home screen" button: Android asks the person
+```
+
+- A timeline entry changes only the fields it names. Plan a day or more ahead (all of today's
+  prayers, midnight); the app refreshes it the next time it opens.
+- Keep text short: the widget has one big value and two small lines. Use the app's accent.
+- If `pinWidget` returns false, tell the person: "Touch and hold the home screen, tap Widgets,
+  find this app".
+
+**Tiles** change their label or subtitle from code: `updateTile('tea', { subtitle: 'Ready at 15:40' })`,
+`updateTile('focus', { on: true })`, `isTileOn('focus')`. The person adds a tile once: pull down
+the status bar twice, tap the pencil, drag the tile up. Say so in the app.
+
+**Shares**: with `shares` in app.json the app appears in the share sheet. A share opens the app:
+
+```tsx
+import { useIncomingShare, deleteSharedFile } from '../../modules/abilities';
+
+useIncomingShare((s) => {       // in the first screen; also gets the share that opened the app
+  s.text; s.url;                // a shared link arrives as text; url is its first web address
+  s.files;                      // [{ uri: 'file://...', mimeType: 'image/jpeg', name, size }], copied into the app
+  setInbox((prev) => [s, ...prev]);
+});
+<Image source={{ uri: s.files[0].uri }} />
+```
+
+Shared files stay in the app until `deleteSharedFile(file)`; save the `uri` in storage to keep
+them. Show what arrived at once ("Saved") so the person knows it worked.
+
+### Camera smarts: scan codes, read text from pictures (on the phone, no cost)
+
+Off by default, so apps that do not use it stay small. Turn on what the app needs in `app.json`:
+
+```json
+["./modules/camera/app.plugin.js", { "codes": true, "text": true }]
+```
+
+- `codes`: `scanCode()` opens Google's full-screen scanner (QR codes and barcodes). It comes with
+  Google Play services, so the app needs no camera permission. `readCodes(uri)` finds the codes in
+  a picture.
+- `text`: `readText(uri)` reads printed text (Latin letters) from a picture, with ML Kit on the
+  phone.
+- By default the scanner and the reading models come with Google Play services: the phone fetches
+  them once, on first use (this needs the Play Store; until then the calls throw "not on this
+  phone yet"). Codes and text together add only about 0.35 MB to the app.
+- `"bundled": true` puts the reading models inside the app: `readText` and `readCodes` then work
+  offline from the first use, also on phones without Google Play services, for about 9 MB more
+  per CPU type (text alone 5.9 MB). Only if the person needs that. `scanCode()` always needs
+  Google Play services; without it, read codes from a photo with `readCodes`.
+
+```ts
+import { scanCode, readCodes, readText, cameraSmarts } from '../../modules/camera';
+import * as ImagePicker from 'expo-image-picker';   // npx expo install expo-image-picker (for photos)
+
+const code = await scanCode();          // null if closed; { value: '4006381333931', format: 'ean13', kind: 'product' }
+if (code?.kind === 'url') { /* code.value is a web address */ }
+const found = await readCodes(pictureUri);   // every code in a picture (a screenshot, a shared photo)
+
+const perm = await ImagePicker.requestCameraPermissionsAsync();
+const shot = await ImagePicker.launchCameraAsync({ quality: 1 });   // or launchImageLibraryAsync
+if (!shot.canceled) {
+  const { text, lines } = await readText(shot.assets[0].uri);       // a receipt: find the total in lines
+}
+```
+
+- Both can throw (no Google Play services, the first download still running, an unreadable
+  picture): catch it and show a friendly line with a "Try again" button.
+- For a photo diary or plain photos you only need `expo-image-picker` (no camera smarts).
+- A live camera view inside a screen (scanning many items in a row) needs `expo-camera`
+  (`npx expo install expo-camera`, its `CameraView` with `onBarcodeScanned`): it is much bigger,
+  so prefer `scanCode()` in a loop unless the person asks for that.
+
+### The diary (what the app did, for fixing things later)
+
+The app keeps a small private diary on the phone. When the person says something did not work
+("why didn't it ring?"), you read it with the `read_diary` tool (MCP server `app`) instead of
+guessing. So write a note for every background action and every event that matters later:
+
+```tsx
+import { diary } from '@/lib/diary';
+
+diary('Prayer times loaded for Ajman: 6 times');
+diary('Fajr alarm set for 05:12');           // the alarms write "set" and "rang" notes by themselves
+diary('Location not allowed, used the saved city');
+diary('Could not load the weather: offline');
+```
+
+- One short line each (at most 200 characters); the newest 300 notes are kept.
+- **Never personal content**: no names, messages, places the person typed, health data, or
+  anything they wrote. Write what the app did and why ("Reminder set for 08:00", "List saved: 12
+  items"), not what it contains. The diary goes only to the person's own PC, and only when you
+  ask for it; never copy it into the app, a page or GitHub.
+- Crashes and caught errors are written to it by themselves.
+
+### Crashes
+
+Crashes are caught by themselves (`src/lib/crash.ts`, `modules/diary`, `src/components/CrashBoundary.tsx`,
+set up in `src/App.tsx`: leave that in place). AnyAppAgent shows the person "<app> crashed. Fix
+it?" and a tap sends you the report (message, stack, screen, version, the latest diary notes) as
+"Fix the crash". The stack comes from the release bundle, so match it to the code by the error
+message and the screen. An error you catch but want to hear about: `reportError(error)` from
+`@/lib/crash`.
+
+### What changed
+
+Before you end a turn that changed the app, call the `describe_change` tool (MCP server `app`)
+with what changed in the person's words, what to try, and anything to know. It shows on the new
+version's card on their phone. Every version is a commit in Git ("Build N: ..."); the person can go
+back to any version with Versions in their chat, so never rewrite Git history.
 
 ### Other things already installed
 

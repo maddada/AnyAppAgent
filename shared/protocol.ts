@@ -22,6 +22,11 @@ export interface BuildInfo {
   // much smaller than the full APK (sizeBytes/sha256 above), which holds every ABI. Set when
   // succeeded and the PC built them; absent from older PCs and from apps without native code.
   variants?: ApkVariant[];
+  // Added with versions and undo (docs/VERSIONS.md). What changed in this version, in the person's
+  // words (the agent writes it with its describe_change tool; the PC writes it for a go-back).
+  // Set when succeeded; absent from older PCs and on builds made before.
+  changes?: ChangeNotes;
+  restoredFrom?: number; // this build went back to the code of that earlier version (Versions, Undo)
   // Added for the fast lane (docs/FAST-LANE.md). "quick": only JavaScript changed, so the PC made
   // this build in seconds without Gradle (the APK above is the last one with the new bundle) and
   // also a quick update (`ota`) that a phone whose app has the same native part (`runtime`) applies
@@ -30,6 +35,13 @@ export interface BuildInfo {
   // The build's native fingerprint (the app's string resource anyapp_runtime). React Native only.
   runtime?: string;
   ota?: OtaInfo;
+}
+
+// "What changed" (docs/VERSIONS.md): up to three short plain lines, never code words.
+export interface ChangeNotes {
+  changed: string; // what is different now: "The timer now rings three times"
+  tryIt?: string; // what to try: "Start a 1 minute timer and wait for it"
+  goodToKnow?: string; // anything to know: "Your saved timers are kept"
 }
 
 // A quick update: GET /api/apps/:id/ota serves the zip of the app's latest build (a signed
@@ -142,7 +154,9 @@ export type ChatItemKind =
   | "error" // something failed outside the agent's own text
   | "worker" // one row per worker in the app's main chat (ChatItem.worker); upserted as it moves
   | "stopped" // a plain "Stopped" line where the person stopped a turn (main chat or a helper's chat)
-  | "page"; // added: a page the agent published (ChatItem.page); the chat shows a card that opens it
+  | "page" // added: a page the agent published (ChatItem.page); the chat shows a card that opens it
+  | "crash" // added: the app crashed on the phone (ChatItem.crash); the card offers "Fix it"
+  | "diary"; // added: the agent read the app's diary from the phone (ChatItem.diary), one quiet line
 
 export interface ToolCallInfo {
   title: string; // "Edit App.tsx", "Run npm install"
@@ -187,6 +201,8 @@ export interface ChatItem {
   // Added with the usage meter: on a user item, what its agent work used so far (the main chat's turn,
   // the helpers it started, their build fixes and their reports). Grows while the work runs.
   usage?: TokenUsage;
+  crash?: CrashInfo; // added: on a "crash" item; upserted when it happens again or "Fix it" is tapped
+  diary?: DiaryReadInfo; // added: on a "diary" item
   createdAt: string;
   updatedAt: string;
 }
@@ -249,6 +265,73 @@ export interface PageOpenResponse {
   expiresAt: string;
 }
 // GET /api/apps/:id/pages -> PageInfo[] (oldest first)
+
+// ---------- Versions and undo (added, docs/VERSIONS.md). Every build that succeeded is a version. Going back
+// never installs an old APK (Android refuses a lower version code): the PC builds the old code again as a
+// new version with a higher number, so it installs over the current one and the app's data stays.
+
+export interface AppVersion {
+  build: number; // its version number (the APK's versionCode)
+  title: string; // one plain line: what changed (ChangeNotes.changed, or the PC's summary for older builds)
+  changes?: ChangeNotes;
+  createdAt: string;
+  restoredFrom?: number; // it went back to that version
+  current: boolean; // the newest version (App.latestApk): what the phone gets
+  canRestore: boolean; // false when the PC no longer has its code (or it is the current one)
+}
+// GET /api/apps/:id/versions -> AppVersion[] (newest first)
+// POST /api/apps/:id/versions/:build/restore -> App (202: the go-back build starts; it arrives as a build
+//   item whose BuildInfo.restoredFrom is set). 409 + ErrorBody while the app is busy, 404 for an unknown version.
+// POST /api/apps/:id/undo -> App (202): goes back to the version before the newest one (409 when there is none).
+
+// ---------- Crash catcher (added, docs/VERSIONS.md). An app made with AnyAppAgent that crashes (or shows its
+// "something went wrong" screen) tells AnyAppAgent on the phone, which sends the report here when connected.
+
+export interface CrashReport {
+  kind: "crash" | "error"; // crash: the app closed; error: it caught the error and showed its error screen
+  message: string; // the error's own message (one line), e.g. "TypeError: undefined is not a function"
+  stack?: string; // Java and/or JavaScript stack, at most 16 KB
+  screen?: string; // the screen it was on, when the app knows it
+  versionCode?: number; // the build the phone runs
+  at: string; // when it happened, ISO 8601
+  diary?: DiaryEntry[]; // the app's latest diary notes (at most 50), oldest first
+}
+export interface CrashInfo {
+  id: string;
+  appId: string;
+  kind: "crash" | "error";
+  message: string; // one line
+  screen?: string;
+  versionCode?: number;
+  count: number; // the same crash again within a day bumps this instead of adding a card
+  firstAt: string;
+  lastAt: string;
+  fixAskedAt?: string; // "Fix it" sent it to the app's agent
+}
+// POST /api/apps/:id/crashes CrashReport -> CrashInfo (also arrives as a "crash" chat item)
+// POST /api/apps/:id/crashes/:crashId/fix -> 202 (sends "Fix the crash" to the app's chat as the person's
+//   message; the agent gets the whole report with it)
+
+// ---------- The app's diary (added, docs/VERSIONS.md): a small private log the app keeps on the phone of what
+// it did ("Asr alarm set for 15:42", "Alarm rang"). The agent reads it when fixing something; it goes from the
+// phone to this PC only, and is not kept by the PC (the agent's own session on the PC has it).
+
+export interface DiaryEntry {
+  at: string; // ISO 8601
+  text: string; // one short line, at most 200 characters
+}
+export interface DiaryReadInfo {
+  ok: boolean;
+  entries: number; // how many notes were read
+  problem?: string; // plain sentence when it could not be read
+}
+// The PC asks a phone for an app's diary with the ServerEvent "diary.request"; the phone answers with
+// POST /api/apps/:id/diary DiaryAnswer -> 204 (within 25 s, else the agent hears that the phone did not answer)
+export interface DiaryAnswer {
+  requestId: string;
+  entries?: DiaryEntry[]; // oldest first, at most 300
+  problem?: "not_installed" | "no_answer" | "not_supported"; // the app is not on this phone / did not answer / is too old to keep a diary
+}
 
 // ---------- HTTP (JSON). Everything except /api/health and /api/pair needs
 // `Authorization: Bearer <token>`. Errors: non-2xx with ErrorBody.
@@ -393,7 +476,8 @@ export type ServerEvent =
   | { type: "worker.updated"; worker: WorkerInfo } // a worker started or changed (its main-chat row also arrives as chat.item)
   | { type: "worker.item"; item: ChatItem } // upsert into the chat of worker item.workerId (never the main chat)
   | { type: "todos.updated"; appId: string; todos: TodoItem[] } // added: the app's whole to-do list after a change
-  | { type: "care.updated"; care: CareState }; // added: the usage meter, the health reminder or the backup changed
+  | { type: "care.updated"; care: CareState } // added: the usage meter, the health reminder or the backup changed
+  | { type: "diary.request"; appId: string; packageName: string; requestId: string }; // added: send this app's diary (POST /diary)
 
 // ---------- Desktop app (desktop/, Electron) to companion. The desktop app starts the companion
 // as a child process with the env var ANYAPP_ADMIN_TOKEN=<random secret>. That token is accepted

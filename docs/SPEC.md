@@ -246,6 +246,17 @@ updates and new APKs, so they never have to go back to AnyAppAgent to get a chan
   no install needed" when that is what happened.
 - Design, security and the proof: `docs/FAST-LANE.md`.
 
+## Versions, What changed, Crash catcher, the app's diary (added 2026-11-11)
+
+The user picked "Versions and undo", "What changed card", "Crash catcher" and "A diary the agent can
+read" from the ideas page. Every build is a version the person can go back to (built again as a new,
+higher version, so it installs over the current one and keeps the app's data) or undo; each new
+version arrives with up to three plain lines (Changed, Try it, Good to know) the agent writes with
+its `describe_change` tool; generated apps catch their crashes and hand them to AnyAppAgent, which
+shows "Tea Timer crashed. Fix it?" and sends the report to the app's agent on a tap; and apps keep a
+small private diary on the phone that the agent reads with `read_diary` (phone and PC only). The
+decisions, the Android wire format and the protocol additions: `docs/VERSIONS.md`.
+
 ## Never lose your apps, the usage meter, keep my apps healthy (added 2026-11-11)
 
 The user picked "Never lose your apps", "Usage meter" and "Keep my apps healthy"

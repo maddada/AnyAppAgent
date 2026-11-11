@@ -3,8 +3,8 @@ import { FlatList, Keyboard, Pressable, ScrollView, TextInput, View } from "reac
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, Image as ImageIcon, ImagePlus, ListTodo, Square, X } from "lucide-react-native";
-import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, mainChatReplying, MAX_IMAGES, type Row , headsUp as bigJobHeadsUp, type HeadsUp } from "@shared/chat/index";
+import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, History, Image as ImageIcon, ImagePlus, ListTodo, Square, X } from "lucide-react-native";
+import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, headsUp as bigJobHeadsUp, mainChatReplying, MAX_IMAGES, type HeadsUp, type Row } from "@shared/chat/index";
 import { clipboardHasImage, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
 import { ChatRow } from "@/chat/ChatRows";
 import { describeApp } from "@/lib/describe";
@@ -182,6 +182,7 @@ function Header({ app }: { app: App | undefined }) {
         </T>
         {state ? <StateLine kind={state.kind} label={state.label} role="caption" /> : null}
       </View>
+      {app?.latestApk ? <IconButton testID="chat-versions" icon={History} label="Versions" color={t.textSecondary} onPress={() => router.push(`/versions/${app.id}`)} /> : null}
       {app ? <TodoButton app={app} /> : null}
       {app && action !== "notReady" && !installing ? (
         <Button
