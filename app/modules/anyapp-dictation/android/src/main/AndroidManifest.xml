@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Dictation into the chat box: asked for on the first tap of the mic, used only while listening. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+  <!-- Android 11+ package visibility: see the phone's speech recognition services. -->
+  <queries>
+    <intent>
+      <action android:name="android.speech.RecognitionService" />
+    </intent>
+  </queries>
+</manifest>

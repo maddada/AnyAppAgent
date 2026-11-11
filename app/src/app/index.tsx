@@ -10,11 +10,13 @@ import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/c
 import { installApp, installFromLink, launchApp, updateFromLink } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
+import { useDictation } from "@/lib/dictation";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
 import { appAction, getState, removeApp, sortedApps, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
+import { DictationNote, MicButton } from "@/ui/MicButton";
 import { Sheet } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
@@ -472,6 +474,7 @@ export function InstallFailure({ app, message, conflict }: { app: App; message?:
 // ---------- New app
 
 function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const t = useTheme();
   const client = useStore((s) => s.client);
   const [name, setName] = useState("");
   const care = useStore((s) => s.care);
@@ -480,12 +483,20 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   const [preset, setPreset] = useState<AppPreset>("react-native");
   const [askMore, setAskMore] = useState(false);
   const promptRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  // Dictation into "What should it do?" (src/lib/dictation.ts); it never makes the app by itself.
+  const dictation = useDictation({ value: prompt, onChange: setPrompt });
+  const listening = dictation.phase === "listening";
+  const { cancel: cancelDictation } = dictation;
+  useEffect(() => {
+    if (!visible) cancelDictation();
+  }, [visible, cancelDictation]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = name.trim().length > 0 && prompt.trim().length > 0;
 
   const submit = async () => {
     if (!client || !ready) return;
+    dictation.cancel();
     setBusy(true);
     setError(null);
     try {
@@ -519,10 +530,13 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         label="What should it do?"
         value={prompt}
         onChangeText={setPrompt}
-        placeholder="Wake me up for each prayer in Ajman, with a reminder before it."
+        placeholder={listening ? "Listening..." : "Wake me up for each prayer in Ajman, with a reminder before it."}
         multiline
         containerStyle={{ marginTop: space.lg }}
+        inputStyle={listening ? { borderWidth: border.focusWidth, borderColor: t.problem } : undefined}
+        trailing={<MicButton dictation={dictation} testID="new-app-mic" />}
       />
+      <DictationNote dictation={dictation} style={{ marginTop: space.sm }} />
       <AskMore value={askMore} onChange={setAskMore} />
       <Advanced open={advanced} onToggle={() => setAdvanced(!advanced)} preset={preset} onPreset={setPreset} />
       {error ? (

@@ -32,6 +32,11 @@ Build from PowerShell after `. C:\dev\AnyAppAgent\scripts\android-env.ps1` (see 
   generated apps bind to (`AiProxyService`, caller check in `AiTrust.kt`), provider streaming
   (`AiProviders.kt`) and usage per app. Settings UI: `src/ui/AiSettings.tsx`. Test without a key:
   `node dev/fake-ai-provider.mjs` + `adb shell setprop debug.anyapp.ai.url http://10.0.2.2:8913`.
+- `modules/anyapp-dictation/` voice dictation into the prompt boxes with Android's own
+  `SpeechRecognizer` (on-device recognizer on Android 12+ when the phone has one, else the phone's
+  recognizer asked to stay offline; the phone's language). No library, no key. The hook is
+  `src/lib/dictation.ts`, the mic and its note `src/ui/MicButton.tsx`. The microphone permission
+  is asked on the first tap of the mic only.
 - `dev/` the mock PC (`mock-server.mjs`), the tiny test-APK builder (`make-test-apk.mjs`), the icon
   painter (`png.mjs`, `make-app-icons.mjs`) and the adb driver (`ui.mjs`).
 - `docs/screens/` screenshots from the emulator.

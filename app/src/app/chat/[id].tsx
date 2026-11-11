@@ -10,6 +10,7 @@ import { ChatRow } from "@/chat/ChatRows";
 import { describeApp } from "@/lib/describe";
 import { installApp, launchApp } from "@/lib/installer";
 import type { App, ChatItem } from "@/lib/protocol";
+import { useDictation } from "@/lib/dictation";
 import { askForNotificationsOnce, loadChat } from "@/lib/session";
 import { appAction, drafts, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
@@ -18,6 +19,7 @@ import { useKeyboardHeight } from "@/ui/Sheet";
 import { Spinner } from "@/ui/Spinner";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
+import { DictationNote, MicButton } from "@/ui/MicButton";
 import { HeadsUpCard } from "@/ui/Trust";
 import { border, elevation, icon, radius, size, space, typeStyle, useTheme } from "@/ui/theme";
 
@@ -234,6 +236,9 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
     drafts.setAttachments(appId, list);
   };
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
+  // Dictation (src/lib/dictation.ts): the words land in the box to edit; it never sends.
+  const dictation = useDictation({ value: text, onChange: setText });
+  const listening = dictation.phase === "listening";
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -288,6 +293,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
       }
     }
     setHeads(null);
+    dictation.cancel();
     setSending(true);
     setError(null);
     try {
@@ -328,6 +334,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
           <StateLine kind="problem" label={error} role="caption" lines={0} />
         </View>
       ) : null}
+      <DictationNote dictation={dictation} style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }} />
       {tray ? (
         <View testID="attach-tray" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, paddingBottom: space.sm }}>
           <Button testID="attach-gallery" label="Photos" icon={ImageIcon} variant="quiet" small onPress={() => void add(() => pickFromGallery(MAX_IMAGES - attached.length))} />
@@ -352,8 +359,10 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
           minHeight: size.composerMinHeight,
           borderRadius: radius.composer,
           backgroundColor: t.fieldBg,
-          borderWidth: border.width,
-          borderColor: t.fieldBorder,
+          // Listening: a brick-red line round the box, as on the desktop.
+          borderWidth: listening ? border.focusWidth : border.width,
+          borderColor: listening ? t.problem : t.fieldBorder,
+          margin: listening ? border.width - border.focusWidth : 0,
           ...elevation(t.mode, 1),
         }}
       >
@@ -398,7 +407,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
             ref={input}
             value={text}
             onChangeText={setText}
-            placeholder={state.placeholder}
+            placeholder={listening ? "Listening..." : state.placeholder}
             placeholderTextColor={t.textTertiary}
             cursorColor={t.accent}
             selectionColor={t.accent}
@@ -413,6 +422,9 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
               paddingVertical: space.md,
             }}
           />
+          <View style={{ paddingBottom: sidePad }}>
+            <MicButton dictation={dictation} />
+          </View>
           <View style={{ paddingBottom: sidePad, paddingRight: sidePad }}>
             <Pressable
               testID={showStop ? "composer-stop" : "composer-send"}
