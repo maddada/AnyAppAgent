@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { PackageInfo } from "anyapp-native";
+import { appAction as sharedAppAction, Drafts, mergeItems, replaceHistory } from "@shared/chat/index";
+import type { Attachment } from "@/chat/attachments";
 import { Client } from "./api";
 import type { App, ChatItem } from "./protocol";
 import { defaultPrefs, type Pairing, type Prefs } from "./storage";
@@ -86,31 +88,16 @@ export function sortedApps(apps: Record<string, App>): App[] {
 
 export function upsertChatItems(appId: string, incoming: ChatItem[]) {
   if (incoming.length === 0) return;
-  setState((s) => {
-    const list = [...(s.chats[appId] ?? [])];
-    for (const item of incoming) {
-      const at = list.findIndex((x) => x.id === item.id);
-      if (at >= 0) {
-        list[at] = item;
-      } else {
-        // Usually appended at the end; insert in seq order otherwise.
-        let i = list.length;
-        while (i > 0 && list[i - 1].seq > item.seq) i--;
-        list.splice(i, 0, item);
-      }
-    }
-    return { chats: { ...s.chats, [appId]: list } };
-  });
+  setState((s) => ({ chats: { ...s.chats, [appId]: mergeItems(s.chats[appId] ?? [], incoming) } }));
 }
 
 /** The server's full history wins; keep any newer item that arrived over the socket meanwhile. */
 export function replaceChat(appId: string, items: ChatItem[]) {
-  const sorted = [...items].sort((a, b) => a.seq - b.seq);
-  const ids = new Set(sorted.map((i) => i.id));
-  const maxSeq = sorted.length ? sorted[sorted.length - 1].seq : -1;
-  const newer = (getState().chats[appId] ?? []).filter((i) => !ids.has(i.id) && i.seq > maxSeq);
-  setState((s) => ({ chats: { ...s.chats, [appId]: [...sorted, ...newer] } }));
+  setState((s) => ({ chats: { ...s.chats, [appId]: replaceHistory(s.chats[appId] ?? [], items) } }));
 }
+
+/** What the user typed but did not send yet, per app, kept while they move between apps. */
+export const drafts = new Drafts<Attachment>();
 
 // ---------- installs
 
@@ -123,12 +110,9 @@ export function setInstall(appId: string, progress: InstallProgress | null) {
   });
 }
 
-/** What the big button for an app should do right now. */
+/** What the big button for an app should do right now (shared/chat/state.ts). */
 export type AppAction = "open" | "install" | "update" | "notReady";
 
 export function appAction(app: App, pkg: PackageInfo | null | undefined): AppAction {
-  const latest = app.latestApk?.number;
-  if (!pkg) return latest ? "install" : "notReady";
-  if (latest && latest > pkg.versionCode) return "update";
-  return "open";
+  return sharedAppAction(app, pkg?.versionCode ?? null);
 }

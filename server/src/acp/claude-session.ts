@@ -7,7 +7,7 @@
 //   session/cancel to stop a turn -> permission requests answered allow_once in full mode.
 // Claude Code is launched the way bb's ACP registry entry "claude-acp" launches it: the
 // @agentclientprotocol/claude-agent-acp package (bb: `npx -y @agentclientprotocol/claude-agent-acp@<v>`).
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import {
@@ -59,6 +59,8 @@ export interface ClaudeSessionOptions {
   resumeSessionId?: string;
   instructions: string;
   launch: LaunchSpec;
+  /** Dev and tests only (ANYAPP_ASK_PERMISSIONS=1): stay in the default mode, so permission requests reach the chat. */
+  askPermissions?: boolean;
   onUpdate(update: unknown): void;
   onPermission(ask: PermissionAsk): void;
   onExit(info: AcpAgentExitInfo): void;
@@ -72,6 +74,14 @@ function sliceLines(content: string, line: number | undefined, limit: number | u
   return lines.slice(start, limit === undefined ? undefined : start + limit).join("\n");
 }
 
+/** A picture saved on the PC, sent with a prompt. */
+export interface PromptImage {
+  path: string;
+  mimeType: string;
+}
+
+type AcpPromptBlock = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
+
 export class ClaudeSession {
   sessionId = "";
   resumed = false;
@@ -79,6 +89,8 @@ export class ClaudeSession {
   private readonly options: ClaudeSessionOptions;
   private connection: AcpAgentConnection | undefined;
   private pendingInstructions: string | undefined;
+  /** The agent's promptCapabilities.image (bb: supportsImageInput). */
+  supportsImageInput = false;
   private loading = false;
   private canResume = false;
 
@@ -114,6 +126,9 @@ export class ClaudeSession {
       const supportsResume = sessionCaps["resume"] !== undefined && sessionCaps["resume"] !== null && sessionCaps["resume"] !== false;
       const supportsLoad = agent["loadSession"] === true;
       this.canResume = supportsResume || supportsLoad;
+      // bb: session.supportsImageInput = capabilities.prompt.image
+      const promptCaps = isJsonObject(agent["promptCapabilities"]) ? agent["promptCapabilities"] : {};
+      this.supportsImageInput = promptCaps["image"] === true;
       const authMethods = isJsonObject(init) && Array.isArray(init["authMethods"]) ? init["authMethods"] : [];
       if (authMethods.some((m) => isJsonObject(m) && m["id"] === "cached_token")) {
         await connection.request("authenticate", { methodId: "cached_token", _meta: { headless: true } }, 60_000);
@@ -143,7 +158,8 @@ export class ClaudeSession {
         this.sessionId = sessionId;
         this.options.log(`session/new created Claude Code session ${sessionId}`);
       }
-      await this.selectFullAccessMode(configState);
+      if (!this.options.askPermissions) await this.selectFullAccessMode(configState);
+      else await this.connection.request("session/set_mode", { sessionId: this.sessionId, modeId: "default" }, 30_000).catch(() => undefined);
     } catch (error) {
       await connection.kill();
       throw error;
@@ -168,15 +184,35 @@ export class ClaudeSession {
     }
   }
 
-  /** Sends one prompt and resolves with the ACP stopReason when the turn ends. */
-  async prompt(text: string): Promise<string> {
+  /**
+   * Sends one prompt and resolves with the ACP stopReason when the turn ends. Pictures go as ACP
+   * image content blocks read from the saved file, as bb's buildPromptContentBlocks does for a
+   * "localImage" (packages/provider-bridge-acp/src/bridge/bridge.ts), or as a text line naming the
+   * file when the agent does not take images.
+   */
+  async prompt(text: string, images: PromptImage[] = []): Promise<string> {
     if (!this.connection || this.connection.exited) throw new Error("The Claude Code session is not running");
-    const prompt: { type: "text"; text: string }[] = [];
+    const prompt: AcpPromptBlock[] = [];
     if (this.pendingInstructions) {
       prompt.push({ type: "text", text: `<system_instructions>\n${this.pendingInstructions}\n</system_instructions>` });
       this.pendingInstructions = undefined;
     }
-    prompt.push({ type: "text", text });
+    if (text) prompt.push({ type: "text", text });
+    for (const image of images) {
+      if (!this.supportsImageInput) {
+        prompt.push({ type: "text", text: `[image attachment on disk: ${image.path}]` });
+        continue;
+      }
+      try {
+        prompt.push({ type: "image", data: readFileSync(image.path).toString("base64"), mimeType: image.mimeType });
+      } catch {
+        prompt.push({ type: "text", text: `[unreadable image attachment: ${image.path}]` });
+      }
+    }
+    if (images.length > 0) {
+      // The files stay on this PC, so the agent can also put a picture into the app when asked to.
+      prompt.push({ type: "text", text: `(The ${images.length === 1 ? "picture is" : "pictures are"} also saved on this PC: ${images.map((i) => i.path).join(", ")})` });
+    }
     const result = await this.connection.request("session/prompt", { sessionId: this.sessionId, prompt }, null);
     return isJsonObject(result) ? (readString(result, "stopReason") ?? "end_turn") : "end_turn";
   }

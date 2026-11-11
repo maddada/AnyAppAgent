@@ -1,8 +1,8 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, ChatItem } from "../../../shared/protocol.ts";
+import type { AdminState, App, ChatImage, ChatItem, ImageUpload } from "../../../shared/protocol.ts";
 
-export type { AdminState, App, ChatItem };
+export type { AdminState, App, ChatImage, ChatItem, ImageUpload };
 
 /** One self-check in the setup checklist. */
 export type CheckState = "checking" | "done" | "needed" | "working" | "skipped" | "problem";
@@ -97,6 +97,14 @@ export interface Settings {
   phoneApkPath: string;
 }
 
+/** The phone app on this project's public GitHub release (always the newest release). */
+export const PHONE_RELEASE_URL = "https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent.apk";
+
+export interface PhoneRelease {
+  url: string;
+  qrSvg: string;
+}
+
 export interface PhoneDownload {
   available: boolean;
   url?: string;
@@ -137,6 +145,12 @@ export interface Snapshot {
   };
 }
 
+/** A chat action's answer: errors come back as a plain sentence. */
+export interface ActionResult {
+  ok: boolean;
+  error?: string;
+}
+
 /** What the preload bridge exposes as window.anyapp. */
 export interface AnyAppBridge {
   getSnapshot(): Promise<Snapshot>;
@@ -157,6 +171,8 @@ export interface AnyAppBridge {
   toolsCancel(): Promise<void>;
 
   phoneDownload(): Promise<PhoneDownload>;
+  /** The QR code for the phone app's GitHub release download. */
+  phoneRelease(): Promise<PhoneRelease>;
   newPairingCode(): Promise<void>;
   setEasyConnect(enabled: boolean): Promise<void>;
   /** Turns Easy Connect on once when the phone step opens, if it is off. */
@@ -164,7 +180,16 @@ export interface AnyAppBridge {
   removeDevice(id: string): Promise<void>;
 
   getMessages(appId: string): Promise<ChatItem[]>;
-  sendMessage(appId: string, text: string): Promise<{ ok: boolean; error?: string }>;
+  sendMessage(appId: string, text: string, images?: ImageUpload[]): Promise<ActionResult>;
+  /** A picture sent in a chat, as a data URL (undefined when it is gone). */
+  getImage(appId: string, imageId: string): Promise<string | undefined>;
+  /** Stop: ends the agent's current turn; messages waiting behind it are not sent. */
+  cancelTurn(appId: string): Promise<ActionResult>;
+  /** Builds the app again (Try again on a failed build). */
+  rebuild(appId: string): Promise<ActionResult>;
+  answerPermission(appId: string, requestId: string, optionId: string): Promise<ActionResult>;
+  /** New app from this PC: the same as the phone's New app sheet. */
+  createApp(name: string, prompt: string): Promise<ActionResult & { app?: App }>;
 
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>;
   restartCompanion(): Promise<void>;

@@ -21,6 +21,7 @@ and installs over the previous version. It must be dead simple for a regular, no
 | Folder      | What                                                                            |
 | ----------- | ------------------------------------------------------------------------------- |
 | `shared/`   | `protocol.ts`: the wire contract between phone and PC. Types only.               |
+| `shared/chat/` | The chat core both apps use: rows, tool titles, markdown blocks, build card, state line, composer, pictures. Plain TypeScript, tested with `node --test`. |
 | `server/`   | The PC companion: pairing, one Claude Code session per app, Git/GitHub, builds.  |
 | `template/` | The React Native (Expo) starter every new app is copied from.                    |
 | `builder/`  | Creates an app from the template and builds its signed APK.                      |

@@ -7,6 +7,7 @@ import type { Snapshot } from "../../shared/types.ts";
 import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
 import { PairingPanel } from "./Pairing.tsx";
 import { Icon, QrPlate, Spinner, Wordmark } from "./ui.tsx";
+import { GetPhoneApp } from "./PhoneApp.tsx";
 
 const api = window.anyapp;
 
@@ -182,7 +183,7 @@ const stepOf = (id: StepId) => `Step ${ORDER.indexOf(id) + 1} of ${RAIL.length}`
 
 function Welcome() {
   const loop: [LucideIcon, string, string][] = [
-    [Smartphone, "You describe it", "On your phone, in your own words."],
+    [Smartphone, "You describe it", "On your phone or on this PC, in your own words."],
     [Monitor, "This PC makes it", "Claude writes the app and this PC builds it."],
     [Download, "It appears on your phone", "Ready to open. Ask for changes any time."],
   ];
@@ -190,7 +191,7 @@ function Welcome() {
     <>
       <div className="eyebrow">Welcome</div>
       <h1 className="hero">Make your own Android apps by describing them</h1>
-      <p className="lede">AnyAppAgent turns your ideas into real apps. You tell it what you want on your phone, and this PC does the rest.</p>
+      <p className="lede">AnyAppAgent turns your ideas into real apps. You tell it what you want, on your phone or right here, and this PC does the rest.</p>
       <div className="loop">
         {loop.map(([of, title, line], i) => (
           <div key={title} className="row" style={{ flex: 1, alignItems: "stretch" }}>
@@ -461,43 +462,24 @@ function GitHubStep({ s }: { s: Snapshot }) {
 }
 
 function PhoneGetStep() {
-  const [info, setInfo] = useState<Awaited<ReturnType<typeof api.phoneDownload>> | null>(null);
   useEffect(() => {
     // Start "connect from anywhere" now: its first start takes a few minutes, and this step covers that.
     void api.easyConnectAuto();
-    let alive = true;
-    const load = () => void api.phoneDownload().then((i) => alive && setInfo(i));
-    load();
-    const t = setInterval(load, 5000); // the phone app may still be on its way
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
   }, []);
-  const ready = info?.available && info.qrSvg;
   return (
     <>
-      <Head eyebrow={stepOf("phone-get")} title="Put AnyAppAgent on your phone" lede="Your phone needs the AnyAppAgent app. It comes straight from this PC, not from the Play Store." />
-      {ready ? (
-        <div className="pair">
-          <QrPlate svg={info.qrSvg!} size={sizeTokens.qr * 1.5} label="Download AnyAppAgent" />
-          <How
-            flush
-            items={[
-              ["Point your phone's camera at this code", "Your phone must be on the same Wi-Fi as this PC."],
-              ["Tap the download, then Open", "It takes a moment."],
-              ["Allow installing from this source", "Android asks once because it is not from the Play Store. Then tap Install."],
-            ]}
-          />
-        </div>
-      ) : (
-        <CheckCard
-          state={info ? "todo" : "working"}
-          icon={Smartphone}
-          title="The phone app"
-          status={info ? "It isn't ready on this PC yet. This page shows its code as soon as it is. Already have it? Carry on." : "Getting it ready…"}
+      <Head eyebrow={stepOf("phone-get")} title="Put AnyAppAgent on your phone" lede="Your phone needs the AnyAppAgent app. It downloads from AnyAppAgent's page on GitHub, not from the Play Store." />
+      <div className="pair">
+        <GetPhoneApp big />
+        <How
+          flush
+          items={[
+            ["Point your phone's camera at this code", "Tap the link it shows. The download starts."],
+            ["Open the downloaded file", "It takes a moment."],
+            ["Allow installing from this source", "Android asks once because it is not from the Play Store. Then tap Install."],
+          ]}
         />
-      )}
+      </div>
     </>
   );
 }
@@ -532,13 +514,13 @@ function DoneStep() {
   return (
     <>
       <div className="eyebrow">All set</div>
-      <h1 className="hero">Now pick up your phone</h1>
-      <p className="lede">Everything on this PC is ready. The rest happens on your phone.</p>
+      <h1 className="hero">Now make your first app</h1>
+      <p className="lede">Everything on this PC is ready. Start an app on your phone or right here in this window.</p>
       <How
         items={[
-          ["Open AnyAppAgent", "On your phone."],
-          ["Tap New app and describe it", "In your own words, like “a shopping list I can share with my family”."],
+          ["Tap New app and describe it", "In AnyAppAgent on your phone or here, in your own words, like “a shopping list I can share with my family”."],
           ["Wait a few minutes", "This PC makes it, and it appears on your phone, ready to open."],
+          ["Ask for changes in its chat", "From your phone or from this PC. Each new version goes to your phone by itself."],
         ]}
       />
       <p className="label secondary" style={{ marginTop: "var(--aa-space-2xl)", maxWidth: "var(--aa-size-reading-width)" }}>
