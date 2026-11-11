@@ -26,6 +26,13 @@ plan page). When they ask to see something, how a feature could work, or for "a 
 about anything, make a page.`;
 }
 
+/** "Point at it" pictures (shake to give feedback, built into every app): how to read one. */
+export function feedbackPicturesLine(): string {
+  return `Feedback pictures: a picture of an app screen with numbered arrows and notes under it comes
+from the app's shake-to-give-feedback screen; "#n" in the notes means arrow n, so read each note
+against its arrow.`;
+}
+
 /** Plan first (the person's rule): confirm a plan before building a new app or a large change. */
 export function planFirstSection(): string {
   return `Plan first: before you build a new app, and before any large change (a new screen, a new
@@ -196,6 +203,8 @@ ${iconAndAiLines(app.preset)}
 ${planFirstSection()}
 
 ${pagesSection()}
+
+${feedbackPicturesLine()}
 
 Memory: keep a short file ${MEMORY_FILE} in the project root with the app's goal (what the person
 wants it to do), the decisions and preferences they gave you, and what is still open. Read it at the

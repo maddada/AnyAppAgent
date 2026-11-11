@@ -19,6 +19,8 @@
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
   <!-- The daily update check runs only when the phone is online. -->
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- "Point at it" feedback saves to the gallery: no permission from Android 10 on, older phones ask once. -->
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
   <!-- AI goes through AnyAppAgent on this phone (it holds the key): the app must be able to see it
        (Android 11+ package visibility) to bind to its AI service and to open its settings. -->
@@ -101,5 +103,21 @@
       android:name=".alarms.AlarmService"
       android:exported="false"
       android:foregroundServiceType="mediaPlayback" />
+
+    <!-- "Point at it" feedback (com.anyapp.feedback): shake the phone, point with numbered
+         arrows, write notes, Save. Built into every app: keep these. The provider starts the
+         shake watcher when the app starts and serves the saved pictures for pasting. -->
+    <provider
+      android:name="com.anyapp.feedback.FeedbackProvider"
+      android:authorities="${applicationId}.anyappfeedback"
+      android:exported="false"
+      android:grantUriPermissions="true" />
+    <activity
+      android:name="com.anyapp.feedback.FeedbackActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
+      android:windowSoftInputMode="adjustResize|stateHidden"
+      android:theme="@android:style/Theme.Material.Light.NoActionBar" />
   </application>
 </manifest>

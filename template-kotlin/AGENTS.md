@@ -27,7 +27,9 @@ app/src/main/java/com/anyapp/app/
   ai/Ai.kt                 AI (chat, streaming, tools, agents) through AnyAppAgent's key
   ai/AiSetupNotice.kt      the "AI is not set up" card with a button to AnyAppAgent
   ai/AiTypes.kt            AiMessage, AiPart, AiTool, AiError ... (AI.md: the wire format, leave it)
-app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service
+app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service, feedback
+app/src/main/java/com/anyapp/feedback/  "Point at it": shake to send feedback (built in: keep it, leave it as is)
+app/src/main/assets/anyapp-feedback/   the feedback screen's fonts (leave them)
 app/src/main/res/values/strings.xml   app_name: the name under the icon
 app/src/main/res/raw/      sound files for alarms (adhan.mp3, beep.ogg, ...)
 app/build.gradle.kts       dependencies and Android settings
@@ -69,6 +71,8 @@ The Kotlin package of the code is `com.anyapp.app` in every app; only the instal
   keep Compose libraries under the BOM (no version).
 - Never put secrets or keys in the app. For AI, use `Ai` (below): never ask the person for an
   API key and never call an AI provider over the internet yourself.
+- Never remove or change the feedback feature (`com/anyapp/feedback/`, its provider and activity in
+  `AndroidManifest.xml`, `assets/anyapp-feedback/`). See "Feedback: shake and point at it".
 
 You may change `app_name` in `strings.xml` when the user asks to rename the app.
 
@@ -307,6 +311,25 @@ opens the update box.
 
 Adding a permission: one `<uses-permission>` line in `AndroidManifest.xml`; ask for dangerous
 ones at run time as above.
+
+### Feedback: shake and point at it (built in, keep it)
+
+Every app made with AnyAppAgent has this, including copies the person shares with other people,
+so anyone can tell them what to change. It needs no code and works on its own:
+
+- Shaking the phone (a firm shake, back and forth a few times; walking or a bump never does it)
+  opens a feedback screen over a screenshot of the current screen.
+- Dragging draws an arrow with a number at its start (`#1`, `#2`, ...). Undo takes back the last
+  one. Below is a notes box; each new arrow adds its `#n ` line there to fill in.
+- Save makes one picture (the screenshot, the arrows and the notes), copies it to the clipboard
+  and keeps it in the gallery's "Feedback" album, says "Copied and saved" and closes. The person
+  pastes it into AnyAppAgent's chat, WhatsApp or anywhere.
+
+Never remove it, never add options to it, and never draw your own feedback screen. When a
+feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbered arrows on the
+screenshot. To also open it from a button (for example "Send feedback" in a settings screen):
+`com.anyapp.feedback.Feedback.open(activity)` (`LocalActivity.current` in Compose, or
+`LocalContext.current as Activity`). It does not open while a full-screen alarm shows.
 
 ## New versions on the phone
 

@@ -2,7 +2,7 @@
 // Ghostex coordinator playbook (the user's own ghostex-orchestrator skill), cut down for one person
 // who is not technical and talks to one app from their phone. See docs/APP-COORDINATOR.md.
 import type { AppPreset } from "../../shared/protocol.ts";
-import { checkCommand, deliveryRules, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
+import { checkCommand, deliveryRules, feedbackPicturesLine, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
 
 type AppInfo = { name: string; packageName: string; dir: string; preset?: AppPreset };
 
@@ -14,7 +14,7 @@ function stack(preset: AppPreset | undefined): string {
 /** The MCP server name the coordinator's worker tools live under (tools show as mcp__workers__*). */
 export const WORKER_TOOLS_SERVER = "workers";
 /** Bump when the coordinator playbook changes enough that resumed sessions must get it again. */
-export const COORDINATOR_PLAYBOOK_VERSION = 3; // 2: overview.md and the `anyapp` command; 3: pages and plan first
+export const COORDINATOR_PLAYBOOK_VERSION = 5; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures; 5: quick update or new install
 /** The first line of a message that carries worker reports to the coordinator (not from the person). */
 export const REPORT_HEADER = "[Worker report]";
 
@@ -62,6 +62,7 @@ the person has nobody to talk to. So:
 Pictures: when the person sends pictures you see them, and the message lists where they are saved
 on this PC. A worker cannot see your conversation, so put those paths in its brief when it needs a
 picture (it opens them by path).
+${feedbackPicturesLine()}
 
 Writing a worker's brief (start_worker): the worker starts with none of this conversation. Say, in
 plain words, what the person wants (quote their words when they matter), what you already know
@@ -154,6 +155,8 @@ ${otherAppsRules("builder")}
 Pages: when your brief asks for a page (a mockup, an explainer), make it with the show_page tool;
 read ${PAGE_KIT_GUIDE} first. It shows in the person's main chat; their answers go to the coordinator.
 Do not make pages your brief did not ask for.
+
+${feedbackPicturesLine()}
 
 ${TASTE}`;
 }

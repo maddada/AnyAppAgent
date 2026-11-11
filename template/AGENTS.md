@@ -29,6 +29,7 @@ assets/sounds/           sound files for alarms and in-app playback (adhan.mp3, 
 scripts/make-icon.mjs    makes assets/icon.png from a colour and a glyph or letter
 modules/alarms/          native (Kotlin) code behind src/lib/alarms.ts
 modules/ai/              native (Kotlin) code behind src/lib/ai.ts (leave it)
+modules/feedback/        "Point at it": shake to send feedback (built in: keep it, leave it as is)
 app.json                 app config (name, permissions, plugins)
 overview.md              what the person wants the app to do (see below)
 ```
@@ -65,6 +66,7 @@ overview.md              what the person wants the app to do (see below)
   slower and riskier.
 - Never put secrets or keys in the app. For AI, use `src/lib/ai.ts` (below): never ask the person
   for an API key and never call an AI provider with `fetch`.
+- Never remove or change `modules/feedback/` (see "Feedback: shake and point at it").
 
 You may change `expo.name` (the name under the icon) when the user asks to rename the app.
 
@@ -324,6 +326,30 @@ try { await ask('Hi'); } catch (e) {
   (`npx expo install expo-image-picker`, then `launchImageLibraryAsync({ base64: true, quality: 0.6 })`)
   and pass `asset.base64`. Keep images small (quality 0.6 or a resize), a few MB at most.
 - Save conversations with `usePersistentState` if the person should find them again.
+
+### Feedback: shake and point at it (built in, keep it)
+
+Every app made with AnyAppAgent has this, including copies the person shares with other people,
+so anyone can tell them what to change. It needs no code and works on its own:
+
+- Shaking the phone (a firm shake, back and forth a few times; walking or a bump never does it)
+  opens a feedback screen over a screenshot of the current screen.
+- Dragging draws an arrow with a number at its start (`#1`, `#2`, ...). Undo takes back the last
+  one. Below is a notes box; each new arrow adds its `#n ` line there to fill in.
+- Save makes one picture (the screenshot, the arrows and the notes), copies it to the clipboard
+  and keeps it in the gallery's "Feedback" album, says "Copied and saved" and closes. The person
+  pastes it into AnyAppAgent's chat, WhatsApp or anywhere.
+
+Never remove it, never add options to it, and never draw your own feedback screen. When a
+feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbered arrows on the
+screenshot. To also open it from a button (for example "Send feedback" in a settings screen):
+
+```tsx
+import { openFeedback } from '../../modules/feedback';
+<Button title="Send feedback" onPress={() => openFeedback()} />
+```
+
+It does not open while a full-screen alarm shows.
 
 ### Updates for people the app is shared with (built in, nothing to do)
 
