@@ -167,7 +167,11 @@ export class AppManager {
       appExists: (appId) => Boolean(this.store.find(appId)),
       showCard: (appId, itemId, page) => {
         const record = this.store.find(appId);
-        if (record) this.emitItem(record, { id: itemId, kind: "page", text: page.title, page });
+        if (!record) return;
+        this.emitItem(record, { id: itemId, kind: "page", text: page.title, page });
+        // A page with questions (a plan, "Ask me more") waits for the person; its answers clear it.
+        if (page.answeredAt) this.setWaitingForAnswer(record, false);
+        else if ((page.questions?.length ?? 0) > 0) this.setWaitingForAnswer(record, true);
       },
       deliver: (appId, text) => this.sendMessage(appId, text),
     });
@@ -230,6 +234,13 @@ export class AppManager {
         }
       }
       delete app.replying;
+      // A question page still waiting, with no message from the person after it (also for pages
+      // published before App.waitingForAnswer existed).
+      const all = chat.all();
+      const lastPage = [...all].reverse().find((i) => i.kind === "page" && i.page && (i.page.questions?.length ?? 0) > 0);
+      const waiting = Boolean(lastPage && !lastPage.page!.answeredAt && !all.some((i) => i.kind === "user" && !i.dropped && i.seq > lastPage.seq));
+      if (waiting) app.waitingForAnswer = true;
+      else delete app.waitingForAnswer;
       this.refreshSigning(record);
       if (app.latestBuild?.status === "running") {
         app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD };
@@ -515,6 +526,8 @@ export class AppManager {
     const saved = uploads.map((u) => this.saveImage(record.app.id, u));
     const images: ChatImage[] = saved.map(({ chat }) => chat);
     this.emitItem(record, { id: itemId, kind: "user", text: text.trim(), ...(images.length ? { images } : {}), ...(queued ? { queued: true } : {}) });
+    // Any message from the person (a page's answers, or "yes" typed in the chat) is their answer.
+    if (record.app.waitingForAnswer) record.app.waitingForAnswer = false;
     const answers = parsePageAnswers(text);
     record.app.lastMessagePreview = answers ? shorten(answersPreview(answers), 140) : text.trim() ? shorten(text, 140) : picturesLabel(images.length);
     this.touch(record);
@@ -811,6 +824,13 @@ export class AppManager {
       rt.running = false;
       this.setReplying(record, false);
     }
+  }
+
+  /** App.waitingForAnswer: a plan or question page waits for the person (shared/chat/state.ts words it). */
+  private setWaitingForAnswer(record: AppRecord, waiting: boolean): void {
+    if (record.deleted || (record.app.waitingForAnswer ?? false) === waiting) return;
+    record.app.waitingForAnswer = waiting;
+    this.touch(record);
   }
 
   /** The main chat itself is answering (its Stop applies), as opposed to helpers working. */

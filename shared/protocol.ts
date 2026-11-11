@@ -53,6 +53,9 @@ export interface App {
   // With helpers (docs/APP-COORDINATOR.md): status is "working" while the main chat OR any helper works.
   replying?: boolean; // the main chat itself is answering now (its Stop applies); absent from older PCs
   activeHelpers?: number; // helpers waiting, working or building now; set (0 or more) only when the chat uses helpers
+  // Added with pages: a page with questions (a plan, "Ask me more") waits for the person. Cleared when it
+  // is answered or the person sends any message. Absent from older PCs.
+  waitingForAnswer?: boolean;
   signing?: "shared" | "own" | "moved"; // which key signs its builds (docs/DISTRIBUTION.md); absent from older PCs
   sharing?: AppSharing; // absent until the app is shared once (docs/DISTRIBUTION.md)
   openTodos?: number; // to-do items not ticked off yet (see "To-do"); absent from older PCs and when there are none

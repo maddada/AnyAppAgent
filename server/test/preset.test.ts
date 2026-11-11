@@ -44,6 +44,30 @@ describe("app presets", () => {
     }
   });
 
+  it("says the app waits for the person while a question page is open, until it is answered", async () => {
+    const { apps, done } = manager();
+    try {
+      const app = apps.create("Tea Timer", "A tea timer");
+      await new Promise((r) => setTimeout(r, 50));
+      apps.pages.publish({ appId: app.id, html: "<title>Tea: a look</title><gx-page><h1>Look</h1></gx-page>" });
+      expect(apps.get(app.id).waitingForAnswer).toBeFalsy();
+      const { page } = apps.pages.publish({ appId: app.id, html: '<title>Tea: the plan</title><gx-questions><gx-question title="Build it?"><gx-choice>Build it</gx-choice></gx-question></gx-questions>' });
+      expect(apps.get(app.id).waitingForAnswer).toBe(true);
+      const server = (await import("node:http")).createServer((req, res) => {
+        const url = new URL(req.url ?? "/", "http://localhost");
+        void apps.pages.route(req, res, url.pathname, url);
+      });
+      await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+      const port = (server.address() as { port: number }).port;
+      const { path } = apps.pages.open(app.id, page.id);
+      await fetch(`http://127.0.0.1:${port}${path}/answers`, { method: "POST", body: JSON.stringify({ answers: { "Build it?": "Build it" } }) });
+      server.close();
+      expect(apps.get(app.id).waitingForAnswer).toBe(false);
+    } finally {
+      done();
+    }
+  });
+
   it("refuses an unknown preset with a plain 400", () => {
     const { apps, done } = manager();
     try {

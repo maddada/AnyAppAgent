@@ -67,6 +67,11 @@ export function appAction(app: App, installedVersion: number | null | undefined)
   return "open";
 }
 
+/** The state line while a plan or question page waits for the person (App.waitingForAnswer). */
+export const WAITING_FOR_ANSWER = "Waiting for your answer";
+/** The same on a half-width phone tile, which keeps to one short line. */
+export const WAITING_FOR_ANSWER_SHORT = "Your answer";
+
 export function describeApp(app: App, device?: OnDevice, now = Date.now()): StateText {
   const install = device?.install;
   if (install) {
@@ -101,14 +106,17 @@ export function describeApp(app: App, device?: OnDevice, now = Date.now()): Stat
   const built = app.latestBuild;
   // A finished build that is not announced yet is still on its way, never "ready" or "waiting".
   if (built?.status === "succeeded" && built.number > (apk?.number ?? 0)) return { kind: "working", label: `Saving version ${built.number}` };
-  if (!apk) return { kind: "idle", label: "Waiting for the first version" };
+  // A plan or question page waits for the person (an update or install to tap still comes first).
+  const waiting: StateText | null = app.waitingForAnswer ? { kind: "ready", label: WAITING_FOR_ANSWER } : null;
+  if (!apk) return waiting ?? { kind: "idle", label: "Waiting for the first version" };
   if (device) {
     const action = appAction(app, device.installedVersion);
     if (action === "update") return { kind: "ready", label: "Update ready" };
     // Not on this phone yet: it never installs by itself, so the line asks for the tap.
     if (action === "install") return { kind: "ready", label: "Tap to install" };
-    return { kind: "idle", label: `Version ${device.installedVersion} is on this phone` };
+    return waiting ?? { kind: "idle", label: `Version ${device.installedVersion} is on this phone` };
   }
+  if (waiting) return waiting;
   const fresh = apk.finishedAt && now - Date.parse(apk.finishedAt) < 60 * 60_000;
   return fresh ? { kind: "ready", label: `Version ${apk.number} ready` } : { kind: "idle", label: "Up to date" };
 }

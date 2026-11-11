@@ -1,5 +1,5 @@
 import type { PackageInfo } from "anyapp-native";
-import { appAction, describeApp as describeShared, installLabel, type AppAction, type StateText } from "@shared/chat/index";
+import { appAction, describeApp as describeShared, installLabel, WAITING_FOR_ANSWER_SHORT, type AppAction, type StateText } from "@shared/chat/index";
 import type { App } from "./protocol";
 import type { InstallProgress } from "./store";
 
@@ -59,10 +59,13 @@ export function tileState(app: App, pkg: PackageInfo | null | undefined, install
   }
   const built = app.latestBuild;
   if (built?.status === "succeeded" && built.number > (app.latestApk?.number ?? 0)) return { kind: "working", label: `Saving ${v(built.number)}` };
-  if (!app.latestApk) return { kind: "idle", label: "No version yet" };
+  // A plan or question page waits for the person (an update or install to tap still comes first).
+  const waiting: StateText | null = app.waitingForAnswer ? { kind: "ready", label: WAITING_FOR_ANSWER_SHORT } : null;
+  if (!app.latestApk) return waiting ?? { kind: "idle", label: "No version yet" };
   const action = appAction(app, pkg?.versionCode ?? null);
   if (action === "update") return { kind: "ready", label: `${v(app.latestApk.number)} ready` };
   if (action === "install") return { kind: "ready", label: "Tap to install" };
+  if (waiting) return waiting;
   if (pkg) return { kind: "idle", label: v(pkg.versionCode) };
   return full;
 }

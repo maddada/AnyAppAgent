@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { ChatItem, PageInfo } from "../../protocol.ts";
-import { answerLines, buildRows, helperPageNote, pageAnswersMessage, pageCard, parsePageAnswers, staysInPage, waitingPages } from "../index.ts";
+import type { App, ChatItem, PageInfo } from "../../protocol.ts";
+import { answerLines, buildRows, describeApp, helperPageNote, pageAnswersMessage, pageCard, parsePageAnswers, staysInPage, waitingPages } from "../index.ts";
 
 const page = (over: Partial<PageInfo> = {}): PageInfo => ({ id: "ab12", appId: "a", title: "Your app's plan", createdAt: "2026-11-11T10:00:00Z", ...over });
 const item = (over: Partial<ChatItem>): ChatItem => ({ id: "i", appId: "a", seq: 1, kind: "user", createdAt: "2026-11-11T10:00:00Z", updatedAt: "2026-11-11T10:00:00Z", ...over });
@@ -68,4 +68,15 @@ test("only the page's own address stays in its web view", () => {
   assert.equal(staysInPage(at, "http://127.0.0.1:5000/page/ab12/t"), true);
   assert.equal(staysInPage(at, "https://example.com/"), false);
   assert.equal(staysInPage(at, "http://127.0.0.1:5000/api/apps"), false);
+});
+
+test("a waiting plan or question page says so in the state line, updates still come first", () => {
+  const app = (over: Partial<App> = {}): App => ({ id: "a", name: "P", slug: "p", packageName: "com.anyapp.p", status: "idle", iconVersion: 1, createdAt: "x", updatedAt: "x", ...over });
+  const apk = { number: 3, status: "succeeded" as const, startedAt: "2026-11-11T10:00:00Z", finishedAt: "2026-11-11T10:05:00Z" };
+  assert.deepEqual(describeApp(app({ waitingForAnswer: true })), { kind: "ready", label: "Waiting for your answer" });
+  assert.equal(describeApp(app()).label, "Waiting for the first version");
+  assert.equal(describeApp(app({ waitingForAnswer: true, status: "working" })).label, "Making changes");
+  assert.equal(describeApp(app({ waitingForAnswer: true, latestApk: apk, latestBuild: apk }), { installedVersion: 3 }).label, "Waiting for your answer");
+  assert.equal(describeApp(app({ waitingForAnswer: true, latestApk: apk, latestBuild: apk }), { installedVersion: 2 }).label, "Update ready");
+  assert.equal(describeApp(app({ waitingForAnswer: true, latestApk: apk, latestBuild: apk })).label, "Waiting for your answer");
 });
