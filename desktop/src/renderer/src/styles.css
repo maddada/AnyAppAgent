@@ -241,6 +241,8 @@ button.lrow:hover { background: var(--aa-selected-bg); }
 /* ---------- 4. dialog */
 .scrim { position: fixed; inset: 0; background: var(--aa-scrim); display: grid; place-items: center; z-index: 10; animation: fade var(--aa-duration-base); }
 .dialog { width: var(--aa-size-dialog-width); max-width: calc(100vw - 2 * var(--aa-space-2xl)); max-height: calc(100vh - 2 * var(--aa-space-2xl)); overflow-y: auto; background: var(--aa-surface-overlay); border-radius: var(--aa-radius-sheet); box-shadow: var(--aa-shadow-3); padding: var(--aa-space-2xl); display: flex; flex-direction: column; gap: var(--aa-space-lg); animation: pop var(--aa-duration-slow) var(--aa-ease-enter); }
+/* A dialog that scrolls keeps its scrollbar clear of the rounded corners. */
+.dialog::-webkit-scrollbar-track { margin: var(--aa-radius-sheet) 0; }
 .dialog.wide { width: calc(var(--aa-size-dialog-width) * 1.7); /* no token: wide dialog that holds the big QR */ }
 /* The close button's glyph lines up with the dialog's padding, not its larger hit area. */
 .dialog-head { display: flex; align-items: center; gap: var(--aa-space-md); margin: calc(-1 * var(--aa-space-md)) calc(-1 * var(--aa-space-md)) 0 0; }
