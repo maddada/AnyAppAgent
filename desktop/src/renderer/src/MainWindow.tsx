@@ -8,6 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
 import { ChatView } from "./Chat.tsx";
+import { HexCard } from "./Hex.tsx";
 import type { StepId } from "./Onboarding.tsx";
 import { PairingDialog } from "./Pairing.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
@@ -78,7 +79,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
       </aside>
       <main className="dm-main">
         {page === "apps" ? (
-          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} onGetApp={() => setGetApp(true)} openSetup={openSetup} goSetup={() => setPage("setup")} />
+          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} onGetApp={() => setGetApp(true)} openSetup={openSetup} goSetup={() => setPage("setup")} goSettings={() => setPage("settings")} />
         ) : (
           <div className="dm-scroll">
             {page === "phones" && <PhonesPage s={s} onConnect={() => setConnect(true)} />}
@@ -171,6 +172,7 @@ function AppsPage({
   onGetApp,
   openSetup,
   goSetup,
+  goSettings,
 }: {
   s: Snapshot;
   open: string | null;
@@ -180,6 +182,7 @@ function AppsPage({
   onGetApp: () => void;
   openSetup: (step: StepId) => void;
   goSetup: () => void;
+  goSettings: () => void;
 }) {
   const apps = useMemo(() => [...s.apps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [s.apps]);
   const blocking = setupRows(s).find((r) => r.needsYou && r.blocks);
@@ -236,7 +239,7 @@ function AppsPage({
         )}
       </section>
       <section className="apps-detail">
-        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} onHelperOpen={setHelperOpen} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />}
+        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} onHelperOpen={setHelperOpen} hex={s.checks.hex} onSetupHex={goSettings} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />}
       </section>
     </div>
   );
@@ -609,6 +612,129 @@ function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: () =
   return <button type="button" className={`switch${on ? " on" : ""}`} role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onChange} />;
 }
 
+/** "Tea Timer", or a plain name for the PC's shared key (docs/DISTRIBUTION.md). */
+function keyName(s: Snapshot, id: string): string {
+  if (id === "shared") return "the shared key (apps made before per-app keys)";
+  return s.admin?.signing?.keys.find((k) => k.id === id)?.appName ?? id;
+}
+
+function listNames(names: string[]): string {
+  return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+function SigningKeysGroup({ s }: { s: Snapshot }) {
+  const signing = s.admin?.signing;
+  const [mode, setMode] = useState<"backup" | "restore" | null>(null);
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; problem?: boolean } | null>(null);
+  if (!signing) return null;
+  const own = signing.keys.filter((k) => k.kind !== "shared").length;
+  const fresh = signing.notBackedUp.filter((id) => id !== "shared" || !signing.lastBackupAt);
+  const last = signing.lastBackupAt ? new Date(signing.lastBackupAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : null;
+  const close = () => {
+    setMode(null);
+    setPw("");
+    setPw2("");
+  };
+  const tooShort = pw.length < 8;
+  const mismatch = mode === "backup" && pw2 !== pw;
+  const go = async () => {
+    if (!mode || tooShort || mismatch) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = mode === "backup" ? await api.backupKeys(pw) : await api.restoreKeys(pw);
+      if ("cancelled" in r) return;
+      if (!r.ok) {
+        setNote({ text: r.error, problem: true });
+        return;
+      }
+      close();
+      if (mode === "backup") {
+        setNote({ text: `Saved ${r.count} ${r.count === 1 ? "key" : "keys"} to ${r.file}. Keep this file and its password somewhere safe, away from this PC.` });
+      } else {
+        const res = r.restored!;
+        const parts: string[] = [];
+        if (res.added.length) parts.push(`Restored ${res.added.length === 1 ? "1 key" : `${res.added.length} keys`}: ${listNames(res.added.map((id) => keyName(s, id)))}.`);
+        if (!res.added.length && !res.conflicts.length) parts.push("Nothing new: this PC already has every key in that backup.");
+        for (const c of res.conflicts) parts.push(`Kept this PC's own key for ${keyName(s, c.id)}: the backup has a different one.`);
+        setNote({ text: parts.join(" "), problem: res.conflicts.length > 0 });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="list">
+      <div className="srow">
+        <div className="srow-main">
+          <span className="body">Signing keys</span>
+          <span className="sub">
+            Each app is signed with a key kept on this PC ({own} {own === 1 ? "app has" : "apps have"} {own === 1 ? "its" : "their"} own). Phones only take updates signed with the same key, so
+            without a backup, losing this PC means your apps can never be updated again.
+          </span>
+          {fresh.length > 0 ? (
+            <span className="sub problem-text">
+              {last ? `Not in the last backup (${last}): ${listNames(fresh.map((id) => keyName(s, id)))}.` : "Not backed up yet."}
+            </span>
+          ) : (
+            last && <span className="sub">Last backup: {last}.</span>
+          )}
+        </div>
+        <div className="row">
+          <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => (setNote(null), setMode(mode === "backup" ? null : "backup"))}>
+            Back up
+          </button>
+          <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => (setNote(null), setMode(mode === "restore" ? null : "restore"))}>
+            Restore
+          </button>
+        </div>
+      </div>
+      {mode && (
+        <form
+          className="srow"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void go();
+          }}
+        >
+          <div className="srow-main">
+            <span className="sub">
+              {mode === "backup"
+                ? "Choose a password for the backup file (at least 8 characters). It is not saved anywhere: without it the file cannot be opened."
+                : "The password you chose when you made the backup. Keys this PC already has are never replaced."}
+            </span>
+            <div className="row wrap">
+              <input className="field field-small" type="password" autoFocus autoComplete="new-password" placeholder="Password" value={pw} onChange={(e) => setPw(e.target.value)} />
+              {mode === "backup" && (
+                <input className="field field-small" type="password" autoComplete="new-password" placeholder="Same password again" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+              )}
+            </div>
+            {mode === "backup" && pw2.length > 0 && mismatch && <span className="sub problem-text">The two passwords are not the same.</span>}
+          </div>
+          <div className="row">
+            <button className="btn btn-quiet btn-sm" type="button" disabled={busy} onClick={close}>
+              Cancel
+            </button>
+            <button className="btn btn-primary btn-sm" type="submit" disabled={busy || tooShort || mismatch}>
+              {busy ? "Working..." : mode === "backup" ? "Choose where to save" : "Choose the backup file"}
+            </button>
+          </div>
+        </form>
+      )}
+      {note && (
+        <div className="srow">
+          <div className="srow-main">
+            <span className={`sub${note.problem ? " problem-text" : ""}`}>{note.text}</span>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) => void }) {
   const c = s.companion;
   const ecOn = !!s.admin && s.admin.easyConnect.state !== "off";
@@ -642,6 +768,12 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
             Show again
           </button>
         </div>
+      </section>
+      <SigningKeysGroup s={s} />
+      <section className="settings-group">
+        <h2 className="heading">Dictation</h2>
+        <p className="callout secondary">Speak your changes in a chat on this PC instead of typing them. It uses Hex, a free app that turns your voice into text on this PC, offline.</p>
+        <HexCard hex={s.checks.hex} hexModel={s.settings.hexModel} />
       </section>
       <section className="list">
         <div className="srow">

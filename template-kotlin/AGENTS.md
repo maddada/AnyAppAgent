@@ -34,10 +34,25 @@ app/build.gradle.kts       dependencies and Android settings
 icon.png                   THE launcher icon (1024x1024 PNG)
 scripts/make-icon.mjs      makes icon.png from a colour and a glyph or letter
 anyapp.json                written by AnyAppAgent: preset, slug and package id (read only)
+overview.md                what the person wants the app to do (see below)
 ```
 
 The Kotlin package of the code is `com.anyapp.app` in every app; only the installed package id
 (from `anyapp.json`) differs. Keep new code under `com.anyapp.app`.
+
+## overview.md and the person's other apps
+
+- `overview.md` (project root) holds the app's main requirements as the person gave them: what
+  the app is for, its main screens and features, the choices that matter. High level and short,
+  not a README and not a changelog. The agent the person talks to (the main chat) keeps it up to date after every
+  message that changes what the app should do; a helper reads it and leaves it alone. A first line
+  `<!-- anyapp: draft ... -->` marks a draft the PC wrote: replace the whole file.
+- The `anyapp` command shows the person's other apps on this PC: `anyapp apps` (name, kind,
+  version, folder; this app is marked `*`), `anyapp overview <app>` (its `overview.md`),
+  `anyapp path <app>` (its folder, to read its code). Before building a new app or feature, look
+  there for something that already works (a calculation, a screen, notifications, a look the
+  person liked) and copy it into this app, adapted to it.
+- Other apps are read only: never change, build, commit or run anything in another app's folder.
 
 ## Never
 

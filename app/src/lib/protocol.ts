@@ -21,6 +21,7 @@ export type {
   SendMessageRequest,
   ServerEvent,
   ToolCallInfo,
+  TodoItem,
   WorkerInfo,
   PageInfo,
   PageOpenResponse,

@@ -1,12 +1,13 @@
 // AnyAppAgent desktop: runs the companion, onboarding and the main window, sits in the tray.
-import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
-import type { Checks, ImageUpload, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
+import type { Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
 import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
@@ -19,6 +20,7 @@ import { detectTools } from "./detect/tools.ts";
 import { detectDeps } from "./detect/deps.ts";
 import { run } from "./exec.ts";
 import { ToolsInstaller } from "./install/tools-installer.ts";
+import { HEX_SITE, HexFailure, hexState, hexTranscribe, installHex, openHex } from "./hex.ts";
 import { firstExisting, resolvePaths } from "./paths.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
 import { ClaudeSignIn, GitHubSignIn } from "./signin.ts";
@@ -64,6 +66,7 @@ const checks: Checks = {
   github: { state: "checking", summary: "Checking…" },
   tools: { state: "checking", summary: "Checking…", pieces: [] },
   phone: { state: "checking", summary: "Checking…", pairedCount: 0, connectedCount: 0 },
+  hex: { state: "checking", summary: "Checking…", models: [] },
 };
 
 let ghLocation: GhLocation | undefined;
@@ -141,6 +144,7 @@ async function connectAdmin(): Promise<void> {
     });
     client.on("helper", (worker: WorkerInfo) => win?.webContents.send("helper:updated", worker));
     client.on("helper-item", (item: ChatItem) => win?.webContents.send("helper:item", item));
+    client.on("todos", (appId: string, todos: unknown) => win?.webContents.send("todos:updated", appId, todos));
     await client.connect();
     companion.markRunning(client.adminRoutes);
     log(`[desktop] companion answering; admin routes: ${client.adminRoutes ? "yes" : "no (fallback)"}`);
@@ -232,8 +236,67 @@ async function checkTools(): Promise<void> {
   broadcast();
 }
 
+// ---------------------------------------------------------------- Hex (dictation)
+
+let hexInstalling = false;
+let hexInstallError: string | undefined;
+async function checkHex(): Promise<void> {
+  const forced = simulate.get("hex");
+  const install = hexInstalling ? checks.hex.install : hexInstallError ? { running: false, error: hexInstallError } : undefined;
+  let next = await hexState({ env, home: homedir(), savedModel: settings.hexModel || undefined });
+  if (forced === "notInstalled" || forced === "installing") next = { state: "notInstalled", summary: "Hex isn't installed on this PC.", models: [] };
+  if (forced === "notRunning") next = { state: "notRunning", summary: "Hex is installed but not open.", installedVersion: "3.4.0", models: [] };
+  next.install = forced === "installing" ? { running: true, line: "Downloading Hex 3.4.0" } : install;
+  if (JSON.stringify(next) === JSON.stringify(checks.hex)) return;
+  checks.hex = next;
+  broadcast();
+}
+
+async function runHexInstall(): Promise<void> {
+  if (hexInstalling) return;
+  hexInstalling = true;
+  hexInstallError = undefined;
+  checks.hex = { ...checks.hex, install: { running: true, line: "Getting Hex's installer…" } };
+  broadcast();
+  log("[hex] running Hex's installer");
+  try {
+    await installHex({
+      onLine: (line) => {
+        log(`[hex] ${line}`);
+        checks.hex = { ...checks.hex, install: { running: true, line } };
+        broadcast();
+      },
+    });
+    log("[hex] installed");
+    // Hex's installer starts Hex; if it did not, open it so dictation can work right away.
+    hexInstalling = false;
+    checks.hex = { ...checks.hex, install: undefined };
+    await checkHex();
+    if (checks.hex.state === "notRunning") {
+      try {
+        openHex(env, homedir());
+      } catch (e) {
+        log(`[hex] open after install: ${(e as Error).message}`);
+      }
+    }
+  } catch (error) {
+    hexInstallError = (error as Error).message;
+    log(`[hex] install failed: ${hexInstallError}`);
+  } finally {
+    hexInstalling = false;
+    await checkHex();
+  }
+}
+
+// Hex opens and closes on its own: look every 4 s while the window shows, every 30 s otherwise.
+let hexTick = 0;
+setInterval(() => {
+  hexTick++;
+  if ((win?.isVisible() && !win.isMinimized()) || hexTick % 8 === 0) void checkHex();
+}, 4_000);
+
 async function recheckAll(): Promise<void> {
-  await Promise.all([checkClaude(), checkGitHub(), checkTools()]);
+  await Promise.all([checkClaude(), checkGitHub(), checkTools(), checkHex()]);
   updatePhoneCheck();
   broadcast();
 }
@@ -380,6 +443,7 @@ function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void 
     updateTray();
   }
   if (key === "githubSkipped") void checkGitHub();
+  if (key === "hexModel") void checkHex();
   // The companion reads ANYAPP_HOST_APK at start.
   if (key === "phoneApkPath") void companion.restart();
   broadcast();
@@ -518,6 +582,72 @@ function ipc(): void {
   });
   ipcMain.handle("pairing:easy", (_e, enabled: boolean) => admin?.easyConnect(Boolean(enabled)));
   ipcMain.handle("devices:remove", (_e, id: string) => admin?.removeDevice(String(id)));
+  ipcMain.handle("hex:install", () => void runHexInstall());
+  ipcMain.handle("hex:check", () => checkHex());
+  ipcMain.handle("hex:open", async () => {
+    try {
+      openHex(env, homedir());
+      // Hex takes a moment to write its local API file.
+      for (let i = 0; i < 10 && checks.hex.state !== "ready"; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        await checkHex();
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof HexFailure ? error.message : `Hex couldn't be opened. Open it from the Start menu, or get it from ${HEX_SITE}` };
+    }
+  });
+  ipcMain.handle("hex:transcribe", async (_e, wav: ArrayBuffer) => {
+    try {
+      const bytes = new Uint8Array(wav);
+      const started = Date.now();
+      const text = await hexTranscribe({ env, home: homedir(), savedModel: settings.hexModel || undefined, wav: bytes });
+      // Never the words themselves: only how long it took.
+      log(`[hex] transcribed ${Math.round(bytes.byteLength / 32_000)} s of audio in ${Date.now() - started} ms`);
+      return { ok: true, text };
+    } catch (error) {
+      const f = error instanceof HexFailure ? error : new HexFailure("failed", "Hex couldn't transcribe this. Try again.");
+      log(`[hex] transcribe failed: ${f.code}`);
+      void checkHex();
+      return { ok: false, error: f.message, code: f.code };
+    }
+  });
+  // Signing keys (docs/DISTRIBUTION.md): a file dialog here, the work in the companion.
+  const keysFilter = [{ name: "AnyAppAgent key backup", extensions: ["anyappkeys"] }];
+  // Dev and proofs only: ANYAPP_DESKTOP_DIALOG_FILE answers both file dialogs, so a script can drive them.
+  const dialogFile = env.ANYAPP_DESKTOP_DIALOG_FILE;
+  ipcMain.handle("keys:backup", async (_e, password: string): Promise<KeysAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const day = new Date().toISOString().slice(0, 10);
+    const pick = dialogFile ? { canceled: false, filePath: dialogFile } : await dialog.showSaveDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+      title: "Back up signing keys",
+      defaultPath: join(app.getPath("documents"), `AnyAppAgent keys ${day}.anyappkeys`),
+      filters: keysFilter,
+    });
+    if (pick.canceled || !pick.filePath) return { cancelled: true };
+    try {
+      const result = await admin.backupKeys(pick.filePath, String(password));
+      return { ok: true, file: result.file, count: result.count };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("keys:restore", async (_e, password: string): Promise<KeysAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const pick = dialogFile ? { canceled: false, filePaths: [dialogFile] } : await dialog.showOpenDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+      title: "Restore signing keys",
+      defaultPath: app.getPath("documents"),
+      filters: keysFilter,
+      properties: ["openFile"],
+    });
+    const file = pick.filePaths[0];
+    if (pick.canceled || !file) return { cancelled: true };
+    try {
+      return { ok: true, file, restored: await admin.restoreKeys(file, String(password)) };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
   ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
   ipcMain.handle("helpers:list", (_e, appId: string) => admin?.helpers(String(appId)) ?? []);
   ipcMain.handle("helpers:messages", (_e, appId: string, workerId: string) => admin?.helperMessages(String(appId), String(workerId)) ?? []);
@@ -542,7 +672,15 @@ function ipc(): void {
   ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
     chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
   );
-  ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string, askMore?: boolean) =>
+  // The to-do list (an older companion has no such route: an empty list).
+  ipcMain.handle("todos:list", (_e, appId: string) => admin?.todos(String(appId)).catch(() => []) ?? []);
+  ipcMain.handle("todos:add", (_e, appId: string, text: string) => chatAction((c) => c.addTodo(String(appId), String(text)))());
+  ipcMain.handle("todos:done", (_e, appId: string, todoId: string, done: boolean) =>
+    chatAction((c) => c.updateTodo(String(appId), String(todoId), { done: Boolean(done) }))(),
+  );
+  ipcMain.handle("todos:remove", (_e, appId: string, todoId: string) => chatAction((c) => c.removeTodo(String(appId), String(todoId)))());
+  ipcMain.handle("todos:send", (_e, appId: string, todoId: string) => chatAction((c) => c.sendTodo(String(appId), String(todoId)))());
+    ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string, askMore?: boolean) =>
     // Only a known preset passes; anything else is the default (React Native).
     chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" || preset === "expo-exact" ? preset : undefined, askMore === true))(),
   );
@@ -599,10 +737,12 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
     companion.start();
     void checkClaude();
     void checkGitHub();
+    void checkHex();
 
     win?.on("focus", () => {
       void checkClaude();
       void checkGitHub();
+      void checkHex();
     });
     if (env.ANYAPP_DESKTOP_SHOTS && win) {
       const pairFakePhone = async () => {

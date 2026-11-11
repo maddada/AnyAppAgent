@@ -3,15 +3,15 @@ import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindow
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, Download, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
+import { ChevronDown, Download, ListTodo, MessageCircle, Plus, Settings, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
-import { actionLabel, describeApp } from "@/lib/describe";
+import { actionLabel, describeApp, tileState } from "@/lib/describe";
 import { installLabel } from "@shared/chat/index";
 import { installApp, installFromLink, launchApp } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
-import { appAction, removeApp, sortedApps, useStore } from "@/lib/store";
+import { appAction, getState, removeApp, sortedApps, useStore } from "@/lib/store";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
@@ -24,6 +24,8 @@ const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
 /** COMPONENTS.md 3 and 4: the New app plus is 28, the sheet head icon 56 (no icon-size token for either). */
 const NEW_TILE_PLUS = 28;
 const SHEET_ICON = 56;
+/** Large text settings grow the tile names and the home hint up to this, then they shrink to fit. */
+const TILE_TEXT_MAX_SCALE = 1.6;
 
 type Tile = { kind: "new" } | { kind: "app"; app: App };
 
@@ -50,13 +52,31 @@ function AppGrid() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const apps = useStore((s) => s.apps);
-  const appsLoaded = useStore((s) => s.appsLoaded);
   const [selected, setSelected] = useState<{ id: string; manage: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
 
   // The user's apps first, newest first; the New app slot closes the grid (as in the renders).
   const tiles: Tile[] = useMemo(() => [...sortedApps(apps).map((app) => ({ kind: "app" as const, app })), { kind: "new" }], [apps]);
   const tileWidth = (width - size.screenGutter * 2 - size.gridGap) / 2;
+  const hasApps = tiles.length > 1;
+
+  /**
+   * One tap: open the app when it is on this phone. Not on it yet but built: start the install
+   * (the tile says "Tap to install", then shows the download). Anything else (busy installing,
+   * failed, no version yet, can't be launched): the options sheet, which says why and what to do.
+   */
+  const tapApp = (app: App) => {
+    const s = getState();
+    const install = s.installs[app.id];
+    const pkg = s.packages[app.packageName];
+    const busy = !!install && ["waiting", "downloading", "checking", "installing", "confirm"].includes(install.phase);
+    if (pkg && launchApp(app)) return;
+    if (!pkg && !busy && install?.phase !== "failed" && appAction(app, pkg) === "install") {
+      void installApp(app);
+      return;
+    }
+    setSelected({ id: app.id, manage: false });
+  };
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }}>
@@ -65,22 +85,39 @@ function AppGrid() {
         keyExtractor={(item) => (item.kind === "new" ? "new" : item.app.id)}
         numColumns={2}
         columnWrapperStyle={{ gap: size.gridGap }}
-        contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: insets.bottom + space["2xl"] }}
+        contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: hasApps ? space["2xl"] : insets.bottom + space["2xl"] }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={reconnectNow} colors={[t.text]} progressBackgroundColor={t.surface} />}
         ListHeaderComponent={<Header />}
         renderItem={({ item }) =>
           item.kind === "new" ? (
-            <NewTile width={tileWidth} empty={appsLoaded && tiles.length === 1} onPress={() => setCreating(true)} />
+            <NewTile width={tileWidth} onPress={() => setCreating(true)} />
           ) : (
             <AppTile
               app={item.app}
               width={tileWidth}
-              onPress={() => setSelected({ id: item.app.id, manage: false })}
-              onLongPress={() => setSelected({ id: item.app.id, manage: true })}
+              onPress={() => tapApp(item.app)}
+              onLongPress={() => {
+                AnyAppNative?.haptic?.();
+                setSelected({ id: item.app.id, manage: false });
+              }}
             />
           )
         }
       />
+      {hasApps ? (
+        <T
+          testID="home-hint"
+          variant="caption"
+          color="textTertiary"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.4}
+          maxFontSizeMultiplier={TILE_TEXT_MAX_SCALE}
+          style={{ textAlign: "center", paddingHorizontal: size.screenGutter, paddingTop: space.xs, paddingBottom: insets.bottom + space.sm }}
+        >
+          Hold to see options or prompt
+        </T>
+      ) : null}
       <AppSheet selection={selected} onClose={() => setSelected(null)} />
       <NewAppSheet visible={creating} onClose={() => setCreating(false)} />
     </View>
@@ -130,11 +167,8 @@ function Header() {
 function TileStateLine({ app }: { app: App }) {
   const pkg = useStore((s) => s.packages[app.packageName]);
   const install = useStore((s) => s.installs[app.id]);
-  const state = describeApp(app, pkg, install);
-  if (!state) return null;
-  // On a tile the idle line is short; the sheet says the full sentence.
-  const label = installLabel(install, true) ?? (state.kind === "idle" && pkg ? `Version ${pkg.versionCode}` : state.label);
-  return <StateLine kind={state.kind} label={label} />;
+  const line = tileState(app, pkg, install);
+  return <StateLine kind={line.kind} label={line.label} fit />;
 }
 
 /** Tiles: scale to 0.98 while pressed (COMPONENTS.md 3). */
@@ -145,6 +179,7 @@ function PressScale({
   style,
   testID,
   label,
+  hint,
 }: {
   onPress: () => void;
   onLongPress?: () => void;
@@ -152,12 +187,19 @@ function PressScale({
   style: object;
   testID?: string;
   label: string;
+  hint?: string;
 }) {
   const [pressed, setPressed] = useState(false);
   return (
     <Pressable
       testID={testID}
+      accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={hint}
+      accessibilityActions={onLongPress ? [{ name: "longpress", label: "Options" }] : undefined}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === "longpress") onLongPress?.();
+      }}
       onPress={onPress}
       onLongPress={onLongPress}
       onPressIn={() => setPressed(true)}
@@ -171,10 +213,14 @@ function PressScale({
 
 function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number; onPress: () => void; onLongPress: () => void }) {
   const t = useTheme();
+  const pkg = useStore((s) => s.packages[app.packageName]);
+  const line = tileState(app, pkg, useStore((s) => s.installs[app.id]));
+  const label = pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
   return (
     <PressScale
       testID={`app-tile-${app.slug}`}
-      label={app.name}
+      label={label}
+      hint="Hold for options and its chat"
       onPress={onPress}
       onLongPress={onLongPress}
       style={{
@@ -190,7 +236,15 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
       }}
     >
       <AppIcon app={app} size={size.appIcon} />
-      <T variant="name" numberOfLines={2} style={{ marginTop: space.md, textAlign: look.tileTextAlign }}>
+      <T
+        variant="name"
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
+        maxFontSizeMultiplier={TILE_TEXT_MAX_SCALE}
+        // Android shrinks the letters, not the fixed line height: let the line follow the letters.
+        style={{ marginTop: space.md, textAlign: look.tileTextAlign, lineHeight: undefined }}
+      >
         {app.name}
       </T>
       <View style={{ flex: 1, minHeight: space.xs }} />
@@ -199,7 +253,7 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
   );
 }
 
-function NewTile({ width, empty, onPress }: { width: number; empty: boolean; onPress: () => void }) {
+function NewTile({ width, onPress }: { width: number; onPress: () => void }) {
   const t = useTheme();
   return (
     <PressScale
@@ -225,8 +279,8 @@ function NewTile({ width, empty, onPress }: { width: number; empty: boolean; onP
         New app
       </T>
       <View style={{ flex: 1, minHeight: space.xs }} />
-      <T variant="label" color="textSecondary">
-        {empty ? "Describe your idea, your PC makes it" : "Describe your idea"}
+      <T variant="label" color="textSecondary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+        Describe your idea
       </T>
     </PressScale>
   );
@@ -265,6 +319,12 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
     onClose();
     router.push(`/chat/${shown.id}`);
   };
+  const doTodo = () => {
+    if (!shown) return;
+    onClose();
+    router.push(`/todo/${shown.id}`);
+  };
+  const todoLabel = shown?.openTodos ? `To-do (${shown.openTodos})` : "To-do";
 
   return (
     <Sheet visible={!!selection && !!app} onClose={onClose}>
@@ -330,6 +390,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
               ) : (
                 <Button testID="app-change" label="Change it" icon={MessageCircle} onPress={doChange} />
               )}
+              <Button testID="app-todo" label={todoLabel} icon={ListTodo} variant="quiet" onPress={doTodo} />
               {pkg && action === "update" ? (
                 <T variant="caption" color="textSecondary" style={{ textAlign: "center", marginTop: space.xs }}>
                   {`Version ${pkg.versionCode} is on this phone.`}

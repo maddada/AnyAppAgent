@@ -3,7 +3,7 @@ import { FlatList, Keyboard, Pressable, ScrollView, TextInput, View } from "reac
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, Image as ImageIcon, ImagePlus, Square, X } from "lucide-react-native";
+import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, Image as ImageIcon, ImagePlus, ListTodo, Square, X } from "lucide-react-native";
 import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, mainChatReplying, MAX_IMAGES, type Row } from "@shared/chat/index";
 import { clipboardHasImage, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
 import { ChatRow } from "@/chat/ChatRows";
@@ -181,6 +181,7 @@ function Header({ app }: { app: App | undefined }) {
         </T>
         {state ? <StateLine kind={state.kind} label={state.label} role="caption" /> : null}
       </View>
+      {app ? <TodoButton app={app} /> : null}
       {app && action !== "notReady" && !installing ? (
         <Button
           testID="chat-header-action"
@@ -189,6 +190,27 @@ function Header({ app }: { app: App | undefined }) {
           small
           onPress={() => (action === "open" ? launchApp(app) : void installApp(app))}
         />
+      ) : null}
+    </View>
+  );
+}
+
+/** The app's to-do list, one tap from its chat, with how many ideas are still open. */
+function TodoButton({ app }: { app: App }) {
+  const t = useTheme();
+  const count = app.openTodos ?? 0;
+  return (
+    <View>
+      <IconButton testID="chat-todo" icon={ListTodo} label={count ? `To-do, ${count} open` : "To-do"} color={t.textSecondary} onPress={() => router.push(`/todo/${app.id}`)} />
+      {count ? (
+        <View
+          pointerEvents="none"
+          style={{ position: "absolute", top: space.xs, right: space.xs, minWidth: 18, height: 18, paddingHorizontal: space.xs, borderRadius: radius.full, backgroundColor: t.accent, alignItems: "center", justifyContent: "center" }}
+        >
+          <T variant="caption" color="onAccent" style={{ fontSize: 11, lineHeight: 14 }}>
+            {count > 99 ? "99+" : String(count)}
+          </T>
+        </View>
       ) : null}
     </View>
   );

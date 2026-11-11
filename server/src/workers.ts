@@ -12,6 +12,8 @@ import { ClaudeSession, claudeLaunchSpec, pickAllowOption } from "./acp/claude-s
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { Config } from "./config.ts";
 import { workerPlaybook } from "./coordinator-playbook.ts";
+import { appsCliEnv } from "./apps-cli.ts";
+import { commitAll } from "./git.ts";
 import { checkCommand } from "./playbook.ts";
 import { nowIso, readJson, writeJsonAtomic } from "./fs-util.ts";
 import { existsSync } from "node:fs";
@@ -199,6 +201,25 @@ export class WorkerManager {
     return rt;
   }
 
+  /**
+   * Saves what the main chat wrote in the app folder (overview.md, APP_MEMORY.md) in the app's
+   * history after its turn, so they are committed even when no helper lands next. It takes the
+   * landing slot, so it never runs in the middle of a landing.
+   */
+  saveMainNotes(appId: string, dir: string): void {
+    void this.slot(appId)
+      .acquire("main-notes")
+      .then(async (release) => {
+        try {
+          if (this.host.record(appId) && (await commitAll(dir, "Notes from the main chat"))) this.host.log(`[${appId}] saved the main chat's notes`);
+        } catch (error) {
+          this.host.log(`[${appId}] could not save the main chat's notes: ${(error as Error).message}`);
+        } finally {
+          release();
+        }
+      });
+  }
+
   // ---------- reads
 
   list(appId: string): WorkerInfo[] {
@@ -344,6 +365,7 @@ export class WorkerManager {
     const cwd = this.workDir(record, w);
     const session = new ClaudeSession({
       cwd,
+      env: appsCliEnv(this.host.stateDir, appId),
       ...(w.sessionId ? { resumeSessionId: w.sessionId } : {}),
       instructions: workerPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: cwd, preset: record.app.preset }, w.info),
       ...(this.host.pageTools ? { mcpServers: [this.host.pageTools(appId, { workerId: w.info.id, title: w.info.title })] } : {}),

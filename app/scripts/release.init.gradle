@@ -1,0 +1,35 @@
+// Gradle init script for `npm run apk -- --release` only (docs/RELEASING.md). Debug and test
+// builds never load it, so they keep the React Native debug key.
+//   - signs the release variant with the phone app's release key (properties passed as
+//     ORG_GRADLE_PROJECT_anyappRelease* environment variables, never written to disk),
+//   - one APK per ABI next to the universal one (-PanyappReleaseAbis=arm64-v8a,x86_64),
+//   - native libraries stored compressed, so the download is about half the size,
+//   - skips the release lint check (slow, not useful for a side-loaded app).
+gradle.allprojects { p ->
+  p.tasks.configureEach { t ->
+    if (t.name.startsWith('lintVital')) t.enabled = false
+  }
+  p.plugins.withId('com.android.application') {
+    def store = p.findProperty('anyappReleaseStoreFile')
+    if (!store) throw new GradleException('release.init.gradle needs anyappReleaseStoreFile (use npm run apk -- --release).')
+    p.extensions.getByName('androidComponents').finalizeDsl { android ->
+      def cfg = android.signingConfigs.findByName('anyappRelease') ?: android.signingConfigs.create('anyappRelease')
+      cfg.storeFile = new File(store.toString())
+      cfg.storePassword = p.findProperty('anyappReleaseStorePassword')?.toString()
+      cfg.keyAlias = p.findProperty('anyappReleaseKeyAlias')?.toString()
+      cfg.keyPassword = p.findProperty('anyappReleaseKeyPassword')?.toString()
+      cfg.storeType = 'PKCS12'
+      android.buildTypes.getByName('release').signingConfig = cfg
+      def abis = (p.findProperty('anyappReleaseAbis')?.toString() ?: 'arm64-v8a,x86_64').split(',').collect { it.trim() }.findAll { it }
+      android.splits.abi.enable = true
+      android.splits.abi.reset()
+      android.splits.abi.include(*abis)
+      android.splits.abi.universalApk = true
+      // With splits on, React Native no longer sets ndk.abiFilters: keep other ABIs' prebuilt
+      // libraries out of the universal APK.
+      android.defaultConfig.ndk.abiFilters.clear()
+      android.defaultConfig.ndk.abiFilters.addAll(abis)
+      android.packaging.jniLibs.useLegacyPackaging = true
+    }
+  }
+}

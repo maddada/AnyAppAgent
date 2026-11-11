@@ -30,9 +30,24 @@ scripts/make-icon.mjs    makes assets/icon.png from a colour and a glyph or lett
 modules/alarms/          native (Kotlin) code behind src/lib/alarms.ts
 modules/ai/              native (Kotlin) code behind src/lib/ai.ts (leave it)
 app.json                 app config (name, permissions, plugins)
+overview.md              what the person wants the app to do (see below)
 ```
 
 `@/` means `src/` in imports (`import { Card } from '@/components/Card'`).
+
+## overview.md and the person's other apps
+
+- `overview.md` (project root) holds the app's main requirements as the person gave them: what
+  the app is for, its main screens and features, the choices that matter. High level and short,
+  not a README and not a changelog. The agent the person talks to (the main chat) keeps it up to date after every
+  message that changes what the app should do; a helper reads it and leaves it alone. A first line
+  `<!-- anyapp: draft ... -->` marks a draft the PC wrote: replace the whole file.
+- The `anyapp` command shows the person's other apps on this PC: `anyapp apps` (name, kind,
+  version, folder; this app is marked `*`), `anyapp overview <app>` (its `overview.md`),
+  `anyapp path <app>` (its folder, to read its code). Before building a new app or feature, look
+  there for something that already works (a calculation, a screen, notifications, a look the
+  person liked) and copy it into this app, adapted to it.
+- Other apps are read only: never change, build, commit or run anything in another app's folder.
 
 ## Never
 

@@ -11,6 +11,7 @@ import type {
   PairResponse,
   PermissionAnswerRequest,
   SendMessageRequest,
+  TodoItem,
 } from "./protocol";
 
 /** An error with a sentence that can be shown to the user as is. */
@@ -120,6 +121,15 @@ export class Client {
   // Pages: a fresh signed address for one page (served without a token; the ticket is the grant).
   openPage = (id: string, pageId: string) =>
     this.call<PageOpenResponse>(`/api/apps/${encodeURIComponent(id)}/pages/${encodeURIComponent(pageId)}/open`, "POST", {});
+  // The person's own to-do list for an app (the agent never sees it).
+  todos = (id: string) => this.call<TodoItem[]>(`/api/apps/${encodeURIComponent(id)}/todos`);
+  addTodo = (id: string, text: string) => this.call<TodoItem>(`/api/apps/${encodeURIComponent(id)}/todos`, "POST", { text });
+  setTodoDone = (id: string, todoId: string, done: boolean) =>
+    this.call<TodoItem>(`/api/apps/${encodeURIComponent(id)}/todos/${encodeURIComponent(todoId)}`, "PATCH", { done });
+  removeTodo = (id: string, todoId: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/todos/${encodeURIComponent(todoId)}`, "DELETE");
+  /** Sends the item's text to the app's chat as a message, then ticks it off. */
+  sendTodo = (id: string, todoId: string) =>
+    this.call<TodoItem>(`/api/apps/${encodeURIComponent(id)}/todos/${encodeURIComponent(todoId)}/send`, "POST", {});
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;

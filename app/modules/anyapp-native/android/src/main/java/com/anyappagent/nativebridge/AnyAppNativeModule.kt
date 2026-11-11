@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.HapticFeedbackConstants
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -107,6 +108,13 @@ class AnyAppNativeModule : Module() {
       val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return@Function false
       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       startActivity(intent)
+    }
+
+    /** A light tick under the finger (a long press on a tile). Needs no permission. */
+    Function("haptic") {
+      val view = appContext.currentActivity?.window?.decorView ?: return@Function false
+      view.post { view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) }
+      true
     }
 
     Function("openAppSettings") { packageName: String ->
@@ -249,7 +257,15 @@ class AnyAppNativeModule : Module() {
 
     // ---------- keep the connection alive while the PC works
 
+    /** Is the keep-alive service running in the foreground (so this process will not be frozen)? */
+    Function("keepAliveRunning") {
+      KeepAliveService.running
+    }
+
     Function("startKeepAlive") { text: String, color: String? ->
+      // Already running: change its text in place. A new start from the background is refused
+      // by Android, and it is not needed.
+      if (KeepAliveService.update(context, text, color)) return@Function true
       val intent = Intent(context, KeepAliveService::class.java)
         .putExtra(KeepAliveService.EXTRA_TEXT, text)
         .putExtra(KeepAliveService.EXTRA_COLOR, color)

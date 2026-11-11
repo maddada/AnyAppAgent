@@ -1,9 +1,9 @@
 // The app manager: creating apps, one Claude Code session per app, a build after every turn,
 // Git/GitHub, and the chat timeline. Every change goes out as a ServerEvent.
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, PageInfo, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, PageInfo, PublishRequest, ReleaseStats, ServerEvent, TodoItem, WorkerInfo } from "../../shared/protocol.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import { answersPreview, parsePageAnswers } from "../../shared/chat/pages.ts";
 import { isPageToolCall, Pages } from "./pages.ts";
@@ -18,20 +18,21 @@ import type { Config } from "./config.ts";
 import { nowIso } from "./fs-util.ts";
 import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
+import { realGithub, shareApp, unshareApp, type GithubApi } from "./sharing.ts";
+import * as githubCli from "./github.ts";
+import { publishVersion, pullBack, StaleSignerError, parseUpdateJson, repoOf, type ApkFile, type ReleaseApi } from "./publish.ts";
 import { appPlaybook, buildFixPrompt, firstPrompt } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
 import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
 import { isWorkerToolCall, workerToolsMcpServer } from "./worker-http.ts";
 import { WorkerManager, type BuildChangeOutcome } from "./workers.ts";
+import { cleanTodoText, TodoLists } from "./todos.ts";
 import { isJsonObject } from "./acp/acp-client.ts";
+import { appsCliEnv, firstOverview, OVERVIEW_FILE, overviewNeedsAgent } from "./apps-cli.ts";
+import { overviewNudge } from "./playbook.ts";
 
-export class HttpError extends Error {
-  readonly status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+export { HttpError } from "./http-error.ts";
+import { HttpError } from "./http-error.ts";
 
 // itemId: the user's chat item for a prompt the user sent, marked `queued` while it waits.
 // A report carries finished helpers' reports to the coordinator (never dropped by Stop).
@@ -134,10 +135,15 @@ export class AppManager {
   private readonly interruptedBuilds = new Set<string>();
   /** A plain sentence when the builder cannot run on this PC (no Android toolchain), else null. */
   private readonly checkToolchain: () => string | null;
+  private readonly github: GithubApi;
+  /** Apps whose sharing is being turned on or off right now (one change at a time). */
+  private readonly sharingBusy = new Set<string>();
   /** Each app's workers, when its main chat is a coordinator (config.coordinator). */
   readonly workers: WorkerManager | undefined;
   /** The pages agents publish into the apps' chats (pages.ts). */
   readonly pages: Pages;
+  /** The person's own to-do list per app; never given to the agent. */
+  private readonly todoLists: TodoLists;
 
   constructor(deps: {
     store: Store;
@@ -146,7 +152,9 @@ export class AppManager {
     broadcast: (event: ServerEvent) => void;
     log: (...parts: unknown[]) => void;
     checkToolchain?: () => string | null;
+    github?: GithubApi;
   }) {
+    this.github = deps.github ?? realGithub;
     this.store = deps.store;
     this.builder = deps.builder;
     this.config = deps.config;
@@ -163,6 +171,7 @@ export class AppManager {
       },
       deliver: (appId, text) => this.sendMessage(appId, text),
     });
+    this.todoLists = new TodoLists(this.store.stateDir);
     this.workers = this.config.coordinator
       ? new WorkerManager({
           config: this.config,
@@ -221,6 +230,7 @@ export class AppManager {
         }
       }
       delete app.replying;
+      this.refreshSigning(record);
       if (app.latestBuild?.status === "running") {
         app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD };
         // Built again by itself once the server listens (startWork), not left for the person to notice.
@@ -388,18 +398,22 @@ export class AppManager {
     this.runtime(app.id).held = true;
     this.broadcast({ type: "app.updated", app });
     this.emitItem(record, { id: randomUUID(), kind: "user", text: prompt.trim() });
-    this.finishCreate(record, firstPrompt(prompt.trim(), { askMore: askMore === true, planFirst: this.config.planFirst })).catch((error: unknown) => {
+    this.finishCreate(record, prompt.trim(), firstPrompt(prompt.trim(), { askMore: askMore === true, planFirst: this.config.planFirst })).catch((error: unknown) => {
       if (!record.deleted) this.log(`[${app.slug}] creation stopped:`, (error as Error).message);
     });
     return app;
   }
 
-  private async finishCreate(record: ReadyRecord, prompt: string): Promise<void> {
+  /** prompt: the person's words (the overview draft); agentPrompt: what the agent gets (with the PC's plan-first line). */
+  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt): Promise<void> {
     const { app, dir } = record;
     try {
       mkdirSync(this.config.appsDir, { recursive: true });
       this.log(`[${app.slug}] creating ${dir} with the ${this.builder.kind} builder`);
       await this.builder.createApp({ dir, name: app.name, slug: app.slug, packageName: app.packageName, preset: app.preset ?? "react-native", onLog: () => {} });
+      // A first overview.md (what the person asked for), so other apps' agents see it at once; this
+      // app's agent rewrites it on its first turn and keeps it up to date.
+      if (!existsSync(join(dir, OVERVIEW_FILE))) writeFileSync(join(dir, OVERVIEW_FILE), firstOverview(app.name, prompt));
       await git.initRepo(dir, `Create ${app.name}`);
       record.iconStamp = this.iconStamp(record);
       record.ready = true;
@@ -427,9 +441,64 @@ export class AppManager {
     }
     // The first prompt goes in front of anything the user sent while the app was being set up.
     const rt = this.runtime(app.id);
-    rt.queue.unshift({ kind: "prompt", text: prompt });
+    rt.queue.unshift({ kind: "prompt", text: agentPrompt });
     rt.held = false;
     if (!rt.running) void this.drain(record);
+  }
+
+  // ---------- the person's to-do list (never shown to the agent)
+
+  todos(id: string): TodoItem[] {
+    this.record(id);
+    return this.todoLists.list(id);
+  }
+
+  addTodo(id: string, text: string): TodoItem {
+    const record = this.record(id);
+    const clean = cleanTodoText(text);
+    if (!clean) throw new HttpError(400, "Write something first.");
+    const item = this.todoLists.add(id, clean);
+    if (!item) throw new HttpError(409, "This list is full. Remove a few done items first.");
+    this.todosChanged(record);
+    return item;
+  }
+
+  updateTodo(id: string, todoId: string, change: { done?: unknown; text?: unknown }): TodoItem {
+    const record = this.record(id);
+    if (change.done !== undefined && typeof change.done !== "boolean") throw new HttpError(400, '"done" must be true or false.');
+    if (change.text !== undefined && typeof change.text !== "string") throw new HttpError(400, '"text" must be a string.');
+    const text = typeof change.text === "string" ? cleanTodoText(change.text) : undefined;
+    if (text === "") throw new HttpError(400, "Write something first.");
+    const item = this.todoLists.update(id, todoId, { ...(typeof change.done === "boolean" ? { done: change.done } : {}), ...(text ? { text } : {}) });
+    if (!item) throw new HttpError(404, "That to-do is not on the list any more.");
+    this.todosChanged(record);
+    return item;
+  }
+
+  removeTodo(id: string, todoId: string): void {
+    const record = this.record(id);
+    if (!this.todoLists.remove(id, todoId)) throw new HttpError(404, "That to-do is not on the list any more.");
+    this.todosChanged(record);
+  }
+
+  /** Sends the item's text to the app's chat as the person's message, then ticks it off. */
+  sendTodo(id: string, todoId: string): TodoItem {
+    const record = this.record(id);
+    const item = this.todoLists.find(id, todoId);
+    if (!item) throw new HttpError(404, "That to-do is not on the list any more.");
+    this.sendMessage(id, item.text);
+    const sent = this.todoLists.update(id, todoId, { done: true, sentAt: nowIso() })!;
+    this.todosChanged(record);
+    return sent;
+  }
+
+  private todosChanged(record: AppRecord): void {
+    const open = this.todoLists.openCount(record.app.id);
+    if (open > 0) record.app.openTodos = open;
+    else delete record.app.openTodos;
+    this.broadcast({ type: "todos.updated", appId: record.app.id, todos: this.todoLists.list(record.app.id) });
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
   }
 
   sendMessage(id: string, text: string, uploads: ImageUpload[] = []): void {
@@ -475,6 +544,172 @@ export class AppManager {
       if (existsSync(path)) return { path, mimeType };
     }
     return null;
+  }
+
+  /** Which key signs this app's builds (docs/DISTRIBUTION.md); unknown with the fake builder. */
+  private refreshSigning(record: AppRecord): void {
+    if (!this.builder.keys) return;
+    try {
+      record.app.signing = this.builder.keys.kind(record.app.packageName);
+    } catch {
+      // a broken key record is reported by the next build
+    }
+  }
+
+  /**
+   * "Share with others" on or off (docs/DISTRIBUTION.md, "GitHub"). On: the code stays in the
+   * private repo, a public anyapp-<slug>-releases repo gets a README and the icon, and an app still
+   * on the shared key moves to its own key first (then builds again, so the phone gets that build).
+   */
+  async setShared(id: string, shared: boolean): Promise<App> {
+    const record = this.record(id);
+    if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
+    if (!this.config.github) throw new HttpError(409, "GitHub is turned off on this PC, so apps cannot be shared.");
+    if (this.sharingBusy.has(id)) throw new HttpError(409, "Sharing is already being changed for this app.");
+    if (shared === Boolean(record.app.sharing?.shared)) return record.app;
+    this.sharingBusy.add(id);
+    try {
+      if (shared) {
+        const { sharing, movedKey } = await shareApp(record.app, {
+          github: this.github,
+          ensureCodeRepo: () => this.ensureCodeRepo(record),
+          ...(this.builder.keys
+            ? { keys: { kind: (p: string) => this.builder.keys!.kind(p), move: async (p: string) => void (await this.builder.keys!.move(p)) } }
+            : {}),
+          iconPng: () => this.iconPng(record),
+          log: this.log,
+        });
+        record.app.sharing = sharing;
+        this.refreshSigning(record);
+        this.touch(record);
+        // A plain build (no agent turn unless it fails), so the phone gets the build with the new key.
+        if (movedKey && record.app.latestApk) this.enqueue(record, { kind: "build" });
+      } else {
+        record.app.sharing = await unshareApp(record.app, { github: this.github, log: this.log });
+        this.touch(record);
+      }
+      return record.app;
+    } finally {
+      this.sharingBusy.delete(id);
+    }
+  }
+
+  /**
+   * Publishes the newest build of a shared app as a GitHub release (docs/DISTRIBUTION.md, stage 3).
+   * A build signed before the app got its own key is built again instead (409).
+   */
+  async publish(id: string, req: PublishRequest): Promise<App> {
+    const record = this.record(id);
+    if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
+    if (this.sharingBusy.has(id)) throw new HttpError(409, "This app is already being published or shared.");
+    this.sharingBusy.add(id);
+    try {
+      const build = record.app.latestApk;
+      const apks: ApkFile[] = [];
+      if (build?.sha256) {
+        const dir = this.store.apkDir(id);
+        const full = join(dir, apkFileName(build.number));
+        if (existsSync(full)) apks.push({ abi: "universal", path: full, size: statSync(full).size, sha256: build.sha256 });
+        for (const v of build.variants ?? []) {
+          const path = join(dir, apkFileName(build.number, v.abi));
+          if (existsSync(path)) apks.push({ abi: v.abi, path, size: v.sizeBytes, sha256: v.sha256 });
+        }
+      }
+      try {
+        const releases = await publishVersion(record.app, build, req, {
+          github: this.releaseApi,
+          apks,
+          currentSigner: () => this.currentSigner(record),
+          notesBetween: (after, upTo) => this.buildSummaries(record, after, upTo),
+          log: this.log,
+        });
+        record.app.sharing = { ...record.app.sharing!, releases };
+        this.touch(record);
+        return record.app;
+      } catch (error) {
+        if (error instanceof StaleSignerError) this.enqueue(record, { kind: "build" });
+        throw error;
+      }
+    } finally {
+      this.sharingBusy.delete(id);
+    }
+  }
+
+  /** Certificate SHA-256 of the key that signs this app's builds now (null with the fake builder). */
+  private async currentSigner(record: AppRecord): Promise<string | null> {
+    if (!this.builder.keys) return null;
+    const listed = await this.builder.keys.list();
+    const kind = this.builder.keys.kind(record.app.packageName);
+    return listed.keys.find((k) => k.id === (kind === "shared" ? "shared" : record.app.packageName))?.certSha256 ?? null;
+  }
+
+  /** Stops offering a published stable version (docs/DISTRIBUTION.md, "Pull back"). */
+  async pullBack(id: string, buildNumber: number): Promise<App> {
+    const record = this.record(id);
+    if (this.sharingBusy.has(id)) throw new HttpError(409, "This app is already being published or shared.");
+    this.sharingBusy.add(id);
+    try {
+      const releases = await pullBack(record.app, buildNumber, {
+        github: this.releaseApi,
+        readUpdateJson: async (full, tag) => parseUpdateJson(await githubCli.downloadAsset(full, tag, "update.json")),
+        writeAsset: (full, tag, name, content) => githubCli.writeAsset(full, tag, name, content),
+        log: this.log,
+      });
+      record.app.sharing = { ...record.app.sharing!, releases };
+      this.touch(record);
+      return record.app;
+    } finally {
+      this.sharingBusy.delete(id);
+    }
+  }
+
+  /** Downloads per published version, from GitHub. */
+  async releaseStats(id: string): Promise<ReleaseStats[]> {
+    const record = this.record(id);
+    if (!record.app.sharing) return [];
+    try {
+      const list = await githubCli.listReleases(repoOf(record.app));
+      return list.map((r) => ({ tag: r.tag, downloads: r.assets.filter((a) => a.name.endsWith(".apk")).reduce((n, a) => n + a.downloads, 0) }));
+    } catch (error) {
+      throw new HttpError(502, `GitHub is not reachable: ${(error as Error).message.split(/\r?\n/)[0].slice(0, 160)}`);
+    }
+  }
+
+  private get releaseApi(): ReleaseApi {
+    return {
+      createRelease: githubCli.createRelease,
+      uploadAssets: githubCli.uploadAssets,
+      editRelease: githubCli.editRelease,
+      releaseExists: githubCli.releaseExists,
+      putFile: (full, path, content, message) => this.github.putFile(full, path, content, message),
+    };
+  }
+
+  /** "Build 5: add a dark mode" commit summaries for the builds after `after` up to `upTo`. */
+  private async buildSummaries(record: AppRecord, after: number, upTo: number): Promise<string> {
+    const log = await git.run("git", ["log", "--format=%s", "-n", "200"], record.dir);
+    if (log.code !== 0) return "";
+    const lines: string[] = [];
+    for (const subject of log.stdout.split(/\r?\n/)) {
+      const m = /^Build (\d+): (.+)$/.exec(subject.trim());
+      if (!m) continue;
+      const n = Number(m[1]);
+      if (n > after && n <= upTo && !lines.includes(m[2])) lines.push(m[2]);
+    }
+    return lines.reverse().map((l) => `- ${l}`).join("\n");
+  }
+
+  /** The app's private code repo: made now if GitHub failed when the app was created. */
+  private async ensureCodeRepo(record: AppRecord): Promise<void> {
+    if (record.app.repoUrl) return;
+    if (!existsSync(join(record.dir, ".git"))) await git.initRepo(record.dir, `Create ${record.app.name}`);
+    record.app.repoUrl = await git.createGithubRepo(record.dir, `anyapp-${record.app.slug}`);
+    this.store.save();
+  }
+
+  private iconPng(record: AppRecord): Buffer {
+    const path = this.safeIconPath(record);
+    return path ? readFileSync(path) : placeholderIconPng(record.app.name);
   }
 
   rebuild(id: string): void {
@@ -591,6 +826,7 @@ export class AppManager {
     const jobs = [first, ...rt.queue.filter((job): job is Job & { kind: "report" } => job.kind === "report")];
     rt.queue = rt.queue.filter((job) => job.kind !== "report");
     const stop = await this.agentTurn(record, reportPrompt(jobs.map((job) => job.text)));
+    this.workers?.saveMainNotes(record.app.id, record.dir);
     this.workers?.reported(record.app.id, jobs.map((job) => job.workerId));
     if (stop !== "cancelled") this.setStatus(record, "idle");
   }
@@ -600,12 +836,13 @@ export class AppManager {
       // The coordinator only talks and starts workers; builds follow workers' changes. Pictures go to
       // it as image blocks, and their paths on this PC too, so it can hand them to a helper's brief.
       const paths = images.length > 0 ? `\n\n(The pictures are saved on this PC at: ${images.map((i) => i.path).join(", ")}. A helper can open them by path.)` : "";
-      await this.agentTurn(record, `${text}${paths}`, images);
+      await this.agentTurn(record, `${text}${paths}${this.overviewNote(record)}`, images);
+      this.workers.saveMainNotes(record.app.id, record.dir);
       this.setStatus(record, "idle");
       return;
     }
     const before = await git.treeSnapshot(record.dir, (m) => this.log(`[${record.app.slug}] ${m}`));
-    const stopReason = await this.agentTurn(record, text, images);
+    const stopReason = await this.agentTurn(record, `${text}${this.overviewNote(record)}`, images);
     if (stopReason === "cancelled" || this.runtime(record.app.id).cancelRequested) {
       this.setStatus(record, "idle");
       return;
@@ -619,7 +856,14 @@ export class AppManager {
     await this.buildCycle(record);
   }
 
-  private async ensureSession(record: AppRecord): Promise<ClaudeSession> {
+  /** Added to the person's prompt (not shown to them) while the app has no overview.md of the agent's own. */
+  private overviewNote(record: AppRecord): string {
+    return overviewNeedsAgent(record.dir) ? `
+
+${overviewNudge()}` : "";
+  }
+
+    private async ensureSession(record: AppRecord): Promise<ClaudeSession> {
     const rt = this.runtime(record.app.id);
     if (rt.session?.alive) return rt.session;
     if (rt.starting) return rt.starting;
@@ -636,6 +880,7 @@ export class AppManager {
       : undefined;
     const session = new ClaudeSession({
       cwd: record.dir,
+      env: appsCliEnv(this.store.stateDir, record.app.id),
       ...(record.sessionId ? { resumeSessionId: record.sessionId } : {}),
       instructions: appPlaybook(appInfo),
       mcpServers: [this.pages.mcpServer(this.config.port, record.app.id)],
@@ -783,6 +1028,7 @@ export class AppManager {
         this.errorItem(record, "Could not save this version to GitHub right now; it is kept on the PC.");
       }
       record.app.latestApk = build;
+      this.refreshSigning(record);
       this.checkIcon(record);
       this.setStatus(record, "idle");
       this.broadcast({ type: "apk.ready", app: record.app });
@@ -845,6 +1091,7 @@ export class AppManager {
         finishedAt: nowIso(),
         sizeBytes: statSync(target).size,
         sha256: result.sha256,
+        ...(result.signing?.certSha256 ? { signerSha256: result.signing.certSha256 } : {}),
         ...(variants.length > 0 ? { variants } : {}),
       };
       app.latestBuild = build;

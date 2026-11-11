@@ -5,9 +5,10 @@
 import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FileCheck, FilePen, FileQuestion, FileText, Folder, GitMerge, Globe, Hand, ImagePlus, ListTodo, Lock, MessageSquare, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
+  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FileCheck, FilePen, FileQuestion, FileText, Folder, GitMerge, Globe, Hand, ImagePlus, ListTodo, Lock, MessageSquare, Mic, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
 } from "lucide-react";
-import type { App, ChatImage, ChatItem, PageInfo, WorkerInfo } from "../../shared/types.ts";
+import type { App, ChatImage, ChatItem, HexCheck, PageInfo, WorkerInfo } from "../../shared/types.ts";
+import { DICTATE_HOTKEY, HOLD_MS, insertAt, isDictateHotkey, useDictation } from "./dictation.ts";
 import {
   answerLines, buildCard, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
 } from "../../../../shared/chat/index.ts";
@@ -16,6 +17,7 @@ import { useHelperChat, useHelpers } from "./helperStore.ts";
 import { Markdown } from "./Markdown.tsx";
 import { imageFiles, prepare, sentPicture, type Attachment } from "./pictures.ts";
 import { AppIcon, Icon, Spinner, StateLine } from "./ui.tsx";
+import { TodoPanel } from "./Todo.tsx";
 
 const api = window.anyapp;
 /** COMPONENTS.md: tool detail blocks show at most 12 lines until "Show all". */
@@ -47,11 +49,14 @@ const ROOMY_WIDTH = 760;
 /** Opening a helper's chat from its row, and which one is open (its row shows as selected). */
 const HelperPanel = createContext<{ open: (workerId: string) => void; selected: string | null }>({ open: () => {}, selected: null });
 
-export function ChatView({ app, icon, online, headerExtra, onHelperOpen }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; onHelperOpen?: (open: boolean) => void }) {
+export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, onSetupHex }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; onHelperOpen?: (open: boolean) => void; hex?: HexCheck; onSetupHex?: () => void }) {
   const helpers = useHelpers(app.id, online);
   // The open helper chat, per app (moving between apps keeps each one's choice for this run).
   const [openHelpers, setOpenHelpers] = useState<Record<string, string | null>>({});
-  const openId = openHelpers[app.id] ?? null;
+  // The to-do list open beside the chat, per app (it and a helper's chat take turns on the side).
+  const [todoOpen, setTodoOpen] = useState<Record<string, boolean>>({});
+  const showTodo = !!todoOpen[app.id];
+  const openId = showTodo ? null : (openHelpers[app.id] ?? null);
   const helper = openId ? helpers.find((w) => w.id === openId) : undefined;
   // How wide the chat area is decides how the two chats share it.
   const area = useRef<HTMLDivElement>(null);
@@ -67,27 +72,41 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen }: { app
   const placement = HELPER_CHAT_PLACEMENT;
   const narrow = width > 0 && width < ROOMY_WIDTH;
   // The window makes room for two chats while one is open beside the main chat (the app list folds).
-  const open = !!helper && placement === "beside";
+  const open = (!!helper && placement === "beside") || showTodo;
   useEffect(() => {
     onHelperOpen?.(open);
   }, [open, onHelperOpen]);
   useEffect(() => () => onHelperOpen?.(false), [onHelperOpen]);
   const panel = useMemo(() => {
-    const set = (workerId: string | null) => setOpenHelpers((m) => ({ ...m, [app.id]: workerId }));
+    const set = (workerId: string | null) => {
+      setOpenHelpers((m) => ({ ...m, [app.id]: workerId }));
+      if (workerId) setTodoOpen((m) => ({ ...m, [app.id]: false }));
+    };
     return { open: (id: string) => set(openId === id && placement === "beside" ? null : id), close: () => set(null), selected: openId };
   }, [openId, app.id, placement]);
-  const side = helper ? <HelperChatView app={app} worker={helper} online={online} placement={placement} onClose={panel.close} /> : null;
+  const toggleTodo = () => setTodoOpen((m) => ({ ...m, [app.id]: !m[app.id] }));
+  const todoButton = (
+    <button className={`btn btn-quiet btn-sm todo-toggle${showTodo ? " is-on" : ""}`} data-testid="todo-toggle" aria-pressed={showTodo} onClick={toggleTodo}>
+      <Icon of={ListTodo} px={14} /> To-do
+      {app.openTodos ? <span className="todo-count" data-testid="todo-count">{app.openTodos}</span> : null}
+    </button>
+  );
+  const side = showTodo ? (
+    <TodoPanel app={app} online={online} onClose={toggleTodo} />
+  ) : helper ? (
+    <HelperChatView app={app} worker={helper} online={online} placement={placement} onClose={panel.close} />
+  ) : null;
   return (
     <HelperPanel.Provider value={panel}>
       <div ref={area} className={side ? `chat-split chat-split-${placement}${narrow ? " is-narrow" : ""}` : "chat-single"}>
-        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={headerExtra} />}
+        {side && placement === "replace" ? null : <MainChat app={app} icon={icon} online={online} headerExtra={<>{todoButton}{headerExtra}</>} hex={hex} onSetupHex={onSetupHex} />}
         {side}
       </div>
     </HelperPanel.Provider>
   );
 }
 
-function MainChat({ app, icon, online, headerExtra }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode }) {
+function MainChat({ app, icon, online, headerExtra, hex, onSetupHex }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; hex?: HexCheck; onSetupHex?: () => void }) {
   const chat = useChat(app.id, online);
   const rows = useMemo(() => buildRows(chat.items, app), [chat.items, app]);
   const st = describeApp(app);
@@ -177,14 +196,14 @@ function MainChat({ app, icon, online, headerExtra }: { app: App; icon?: string;
           </button>
         )}
       </div>
-      <Composer key={app.id} app={app} online={online} onSent={jump} registerDrop={(add) => (dropInto.current = add)} />
+      <Composer key={app.id} app={app} online={online} onSent={jump} registerDrop={(add) => (dropInto.current = add)} hex={hex} onSetupHex={onSetupHex} />
     </div>
   );
 }
 
 // ------------------------------------------------------------------ composer
 
-function Composer({ app, online, onSent, registerDrop }: { app: App; online: boolean; onSent: () => void; registerDrop: (add: ((files: File[]) => void) | null) => void }) {
+function Composer({ app, online, onSent, registerDrop, hex, onSetupHex }: { app: App; online: boolean; onSent: () => void; registerDrop: (add: ((files: File[]) => void) | null) => void; hex?: HexCheck; onSetupHex?: () => void }) {
   const [text, setTextState] = useState(() => drafts.get(app.id));
   const setText = (v: string) => {
     setTextState(v);
@@ -269,6 +288,67 @@ function Composer({ app, online, onSent, registerDrop }: { app: App; online: boo
       setError(r.error ?? "Couldn't stop it.");
     }
   };
+  // Dictation with Hex (dictation.ts): the transcript goes in at the caret.
+  const textNow = useRef(text);
+  textNow.current = text;
+  const dictation = useDictation({
+    onText: (said) => {
+      const el = box.current;
+      const value = textNow.current;
+      const focused = !!el && document.activeElement === el;
+      const next = insertAt(value, focused ? el.selectionStart : value.length, focused ? el.selectionEnd : value.length, said);
+      setText(next.value);
+      requestAnimationFrame(() => {
+        el?.focus();
+        el?.setSelectionRange(next.caret, next.caret);
+      });
+    },
+  });
+  const hexState = hex?.state ?? "checking";
+  const hexReady = hexState === "ready";
+  const dictate = () => {
+    if (dictation.phase === "recording") return dictation.stop();
+    if (dictation.phase !== "idle") return;
+    if (!hexReady) {
+      dictation.setError(hexState === "checking" ? "Looking for Hex on this PC..." : hexProblem(hex!));
+      return;
+    }
+    void dictation.start();
+  };
+  // Ctrl+Alt+Space anywhere in this chat: tap to start and tap to stop, or hold and let go.
+  // Escape cancels a recording.
+  const press = useRef<{ at: number; started: boolean } | null>(null);
+  const dictateNow = useRef(dictate);
+  dictateNow.current = dictate;
+  const phaseNow = useRef(dictation.phase);
+  phaseNow.current = dictation.phase;
+  const { cancel: cancelDictation, stop: stopDictation } = dictation;
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && (phaseNow.current === "recording" || phaseNow.current === "starting")) {
+        e.preventDefault();
+        cancelDictation();
+        return;
+      }
+      if (!isDictateHotkey(e)) return;
+      e.preventDefault();
+      if (e.repeat) return;
+      press.current = { at: Date.now(), started: phaseNow.current === "idle" };
+      dictateNow.current();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (!press.current || (e.code !== "Space" && e.key !== "Control" && e.key !== "Alt")) return;
+      const p = press.current;
+      press.current = null;
+      if (p.started && Date.now() - p.at >= HOLD_MS) stopDictation();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [cancelDictation, stopDictation]);
   const isStop = state.button === "stop";
   const hasContent = text.trim().length > 0 || attached.length > 0;
   return (
@@ -280,7 +360,20 @@ function Composer({ app, online, onSent, registerDrop }: { app: App; online: boo
       }}
     >
       {error && <p className="label composer-note">{error}</p>}
-      <div className="composer-box">
+      {dictation.error && (
+        <div className="label composer-note dictate-note">
+          <span>{dictation.error}</span>
+          {!hexReady && onSetupHex && (
+            <button type="button" className="btn btn-text label" onClick={onSetupHex}>
+              Set up Hex
+            </button>
+          )}
+          <button type="button" className="btn btn-icon" aria-label="Dismiss" onClick={() => dictation.setError(null)}>
+            <Icon of={X} size="sm" />
+          </button>
+        </div>
+      )}
+      <div className={`composer-box${dictation.phase === "recording" ? " is-recording" : ""}`}>
         {(attached.length > 0 || adding > 0) && (
           <div className="composer-thumbs">
             {attached.map((a) => (
@@ -324,7 +417,7 @@ function Composer({ app, online, onSent, registerDrop }: { app: App; online: boo
           <textarea
             ref={box}
             data-testid="composer-input"
-            placeholder={state.placeholder}
+            placeholder={dictation.phase === "recording" ? "Listening. Stop when you're done." : dictation.phase === "transcribing" ? "Hex is writing it down..." : state.placeholder}
             value={text}
             rows={1}
             onChange={(e) => setText(e.target.value)}
@@ -342,6 +435,23 @@ function Composer({ app, online, onSent, registerDrop }: { app: App; online: boo
               }
             }}
           />
+          {dictation.phase === "recording" && (
+            <span className="dictate-meter mono" aria-hidden>
+              <span className="dictate-dot" style={{ transform: `scale(${1 + dictation.level * 0.9})` }} />
+              {`${Math.floor(dictation.seconds / 60)}:${String(dictation.seconds % 60).padStart(2, "0")}`}
+            </span>
+          )}
+          <button
+            type="button"
+            className={`mic${dictation.phase === "recording" ? " is-recording" : ""}${!hexReady && hexState !== "checking" ? " is-off" : ""}`}
+            data-testid="composer-mic"
+            onClick={dictate}
+            disabled={dictation.phase === "starting" || dictation.phase === "transcribing"}
+            aria-label={dictation.phase === "recording" ? "Stop and write it down" : "Dictate with Hex"}
+            title={dictation.phase === "recording" ? `Stop (${DICTATE_HOTKEY}). Esc cancels.` : hexReady ? `Dictate with Hex (${DICTATE_HOTKEY}). Tap to start and tap to stop, or hold and let go.` : hex ? hexProblem(hex) : "Dictate with Hex"}
+          >
+            {dictation.phase === "transcribing" || dictation.phase === "starting" ? <Spinner /> : <Icon of={dictation.phase === "recording" ? Square : Mic} size="md" />}
+          </button>
           <button
             className={`send${isStop ? " stop" : hasContent ? " on" : ""}`}
             data-testid={isStop ? "composer-stop" : "composer-send"}
@@ -356,10 +466,18 @@ function Composer({ app, online, onSent, registerDrop }: { app: App; online: boo
       </div>
       <p className="caption composer-hint">
         {state.button === "queue" ? <span className="keep">The agent is busy: this waits its turn. </span> : ""}
-        <span className="keep">Enter to send, Shift+Enter for a new line.</span> <span className="keep">Paste or drop pictures to add them.</span>
+        <span className="keep">Enter to send, Shift+Enter for a new line.</span> <span className="keep">Paste or drop pictures to add them.</span>{hexReady ? <> <span className="keep">{DICTATE_HOTKEY} to dictate.</span></> : null}
       </p>
     </form>
   );
+}
+
+/** Why dictation can't start, in plain words. */
+function hexProblem(hex: HexCheck): string {
+  if (hex.state === "notInstalled") return "Dictation uses Hex, a free app that turns your voice into text on this PC. It isn't installed yet.";
+  if (hex.state === "notRunning") return "Dictation needs Hex open. Open Hex, then try again.";
+  if (hex.state === "noModels") return "Hex has no speech model yet. Open Hex and download one in its settings.";
+  return hex.summary;
 }
 
 // ------------------------------------------------------------------ rows

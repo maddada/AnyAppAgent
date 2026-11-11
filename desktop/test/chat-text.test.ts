@@ -10,7 +10,7 @@ describe("chat row titles", () => {
   });
 
   it("never shows a raw command line as the title (older history)", () => {
-    expect(plainToolTitle({ kind: "execute", title: 'T="C:/Users/madda/AppData/Local/Temp/tapcounter-typ" && cd "$T"' })).toBe("Ran a command");
+    expect(plainToolTitle({ kind: "execute", title: 'T="C:/Users/me/AppData/Local/Temp/tapcounter-typ" && cd "$T"' })).toBe("Ran a command");
     expect(plainToolTitle({ kind: "execute", title: "node - <<'EOF'\nconst fs = require('fs');" })).toBe("Ran a command");
     expect(plainToolTitle({ kind: "execute", title: "npx tsc --noEmit", detail: "npx tsc --noEmit" })).toBe("Ran a command");
     expect(plainToolTitle({ kind: "execute", title: "cd /c/aa/scratch && node cmp.mjs" })).toBe("Ran a command");

@@ -3,6 +3,7 @@
 import qrcode from "qrcode-terminal";
 import type { ServerEvent } from "../../shared/protocol.ts";
 import { AppManager } from "./apps.ts";
+import { installAppsCli } from "./apps-cli.ts";
 import { Auth } from "./auth.ts";
 import { loadBuilder } from "./builder.ts";
 import { loadConfig } from "./config.ts";
@@ -10,6 +11,7 @@ import { EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
 import { serverName, startHttpServer } from "./http.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
+import { SigningKeys } from "./signing-keys.ts";
 import { Store } from "./store.ts";
 import { loadToolchain, TOOLCHAIN_MISSING } from "./toolchain.ts";
 import { warmBuilder } from "./warm.ts";
@@ -22,6 +24,13 @@ export async function main(): Promise<void> {
   const config = loadConfig();
   const adminToken = process.env.ANYAPP_ADMIN_TOKEN;
   const store = new Store(config.stateDir);
+  // The `anyapp` command for the apps' agents (their sessions get its folder on PATH).
+  let cliDir = "";
+  try {
+    cliDir = installAppsCli(config.stateDir);
+  } catch (error) {
+    log("could not install the anyapp command:", (error as Error).message);
+  }
   const auth = new Auth(config.stateDir, adminToken);
   const toolchain = loadToolchain(config.stateDir);
   const builder = await loadBuilder(config.builder);
@@ -37,6 +46,7 @@ export async function main(): Promise<void> {
     checkToolchain: () => (builder.kind === "real" && !toolchain ? TOOLCHAIN_MISSING : null),
   });
   apps.recover();
+  const signing = new SigningKeys(builder, () => new Map(apps.list().map((app) => [app.packageName, app.name])), log);
 
   const http = startHttpServer({
     host: config.host,
@@ -45,9 +55,16 @@ export async function main(): Promise<void> {
     auth,
     apps,
     easyConnect,
+    signing,
     ...(process.env.ANYAPP_HOST_APK ? { hostApkPath: process.env.ANYAPP_HOST_APK } : {}),
   });
-  broadcast = http.broadcast;
+  broadcast = (event) => {
+    // A new app gets its own signing key: show it (and that it is not backed up yet) on the PC.
+    if (event.type === "app.updated") signing.refreshSoon();
+    http.broadcast(event);
+  };
+  signing.onChange = () => http.adminChanged();
+  void signing.refresh();
   auth.onChange = () => http.adminChanged();
   easyConnect.onChange = () => http.adminChanged();
   try {
@@ -79,6 +96,7 @@ export async function main(): Promise<void> {
       : "  Android tools: not needed (fake builder)",
     `  Builder: ${builder.kind}   GitHub: ${config.github ? "on" : "off"}   Desktop app: ${auth.hasAdmin ? "connected" : "not used"}   Apps: ${config.appsDir}`,
     `  State: ${config.stateDir}`,
+    ...(cliDir ? [`  Agents' anyapp command: ${cliDir}`] : []),
     "",
   ];
   console.log(lines.join("\n"));
