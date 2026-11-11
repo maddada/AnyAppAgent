@@ -1,0 +1,21 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Phone abilities (com.anyapp.abilities): widgets, Quick Settings tiles, app shortcuts and
+       shares. Only these two small entries are always there; the widgets, tiles, shortcuts and
+       share filters an app offers are added by modules/abilities/app.plugin.js from app.json. -->
+  <application>
+    <!-- Background actions run the app's JavaScript (onAction in modules/abilities). -->
+    <meta-data
+      android:name="com.anyapp.abilities.runner"
+      android:value="expo.modules.anyappabilities.JsActionRunner" />
+    <receiver
+      android:name="com.anyapp.abilities.ActionReceiver"
+      android:exported="false" />
+    <activity
+      android:name="com.anyapp.abilities.ActionActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:noHistory="true"
+      android:taskAffinity=""
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+  </application>
+</manifest>

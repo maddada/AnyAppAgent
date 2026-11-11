@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="anyapp_widget_bg">#1C1D20</color>
+  <color name="anyapp_widget_text">#F2F1EC</color>
+  <color name="anyapp_widget_muted">#A3A6AB</color>
+  <color name="anyapp_widget_track">#34363A</color>
+  <color name="anyapp_widget_accent">#7FC7A6</color>
+  <color name="anyapp_widget_on_accent">#10241B</color>
+</resources>

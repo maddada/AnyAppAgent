@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.anyappabilities'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.anyappabilities"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  lint {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // JsActionRunner starts the app's JavaScript for background actions (a headless task).
+  implementation 'com.facebook.react:react-android'
+}

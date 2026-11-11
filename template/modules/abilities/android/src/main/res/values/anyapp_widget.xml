@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home screen widget look (com.anyapp.abilities): calm surface, one accent. Dark in values-night. -->
+<resources>
+  <color name="anyapp_widget_bg">#FBFAF7</color>
+  <color name="anyapp_widget_text">#1E2023</color>
+  <color name="anyapp_widget_muted">#6A6D72</color>
+  <color name="anyapp_widget_track">#E6E3DC</color>
+  <color name="anyapp_widget_accent">#1F5C45</color>
+  <color name="anyapp_widget_on_accent">#FFFFFF</color>
+  <dimen name="anyapp_widget_radius">20dp</dimen>
+
+  <style name="AnyappWidgetValue">
+    <item name="android:layout_width">match_parent</item>
+    <item name="android:layout_height">wrap_content</item>
+    <item name="android:layout_marginTop">2dp</item>
+    <item name="android:ellipsize">end</item>
+    <item name="android:fontFamily">sans-serif-medium</item>
+    <item name="android:fontFeatureSettings">tnum</item>
+    <item name="android:includeFontPadding">false</item>
+    <item name="android:singleLine">true</item>
+    <item name="android:textColor">@color/anyapp_widget_text</item>
+    <item name="android:textSize">30sp</item>
+  </style>
+
+  <style name="AnyappWidgetRow">
+    <item name="android:layout_height">wrap_content</item>
+    <item name="android:ellipsize">end</item>
+    <item name="android:singleLine">true</item>
+    <item name="android:textColor">@color/anyapp_widget_text</item>
+    <item name="android:textSize">14sp</item>
+  </style>
+</resources>
