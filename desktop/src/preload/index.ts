@@ -1,6 +1,6 @@
 // The typed bridge between the renderer (no Node, context isolated) and the main process.
 import { contextBridge, ipcRenderer } from "electron";
-import type { AnyAppBridge, ChatItem, Snapshot, WorkerInfo } from "../shared/types.ts";
+import type { AnyAppBridge, ChatItem, Snapshot, TodoItem, WorkerInfo } from "../shared/types.ts";
 
 const bridge: AnyAppBridge = {
   getSnapshot: () => ipcRenderer.invoke("snapshot"),
@@ -29,6 +29,11 @@ const bridge: AnyAppBridge = {
     ipcRenderer.on("navigate", fn);
     return () => ipcRenderer.removeListener("navigate", fn);
   },
+  onTodos: (listener) => {
+    const fn = (_e: unknown, appId: string, todos: TodoItem[]) => listener(appId, todos);
+    ipcRenderer.on("todos:updated", fn);
+    return () => ipcRenderer.removeListener("todos:updated", fn);
+  },
   recheck: () => ipcRenderer.invoke("recheck"),
   claudeSignIn: () => ipcRenderer.invoke("claude:signin"),
   claudeCancel: () => ipcRenderer.invoke("claude:cancel"),
@@ -54,6 +59,11 @@ const bridge: AnyAppBridge = {
   cancelTurn: (appId) => ipcRenderer.invoke("apps:cancel", appId),
   rebuild: (appId) => ipcRenderer.invoke("apps:rebuild", appId),
   answerPermission: (appId, requestId, optionId) => ipcRenderer.invoke("apps:permission", appId, requestId, optionId),
+  getTodos: (appId) => ipcRenderer.invoke("todos:list", appId),
+  addTodo: (appId, text) => ipcRenderer.invoke("todos:add", appId, text),
+  setTodoDone: (appId, todoId, done) => ipcRenderer.invoke("todos:done", appId, todoId, done),
+  removeTodo: (appId, todoId) => ipcRenderer.invoke("todos:remove", appId, todoId),
+  sendTodo: (appId, todoId) => ipcRenderer.invoke("todos:send", appId, todoId),
   createApp: (name, prompt, preset) => ipcRenderer.invoke("apps:create", name, prompt, preset),
   setSetting: (key, value) => ipcRenderer.invoke("settings:set", key, value),
   restartCompanion: () => ipcRenderer.invoke("companion:restart"),
