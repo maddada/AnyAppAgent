@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { plainToolTitle } from "../src/renderer/src/chatText.ts";
+// The tool titles now live in the shared chat core (shared/chat/tools.ts), used by the phone too.
+import { plainToolTitle, summarizeTools } from "../../shared/chat/index.ts";
+import type { ChatItem } from "../../shared/protocol.ts";
 
 describe("chat row titles", () => {
   it("keeps the companion's plain command titles", () => {
@@ -28,8 +30,6 @@ describe("search row titles", () => {
   });
 });
 
-import { summarizeTools } from "../src/renderer/src/chatText.ts";
-
 describe("folded tool rows", () => {
   it("counts each file once (a real turn: day.ts once, HomeScreen.tsx seven times, the memory file)", () => {
     const tools = [
@@ -38,6 +38,7 @@ describe("folded tool rows", () => {
       { kind: "edit", title: "Changed APP_MEMORY.md" },
       { kind: "execute", title: "Run typecheck, lint and bundle checks", detail: "npm run check" },
     ];
-    expect(summarizeTools(tools)).toBe("Edited 3 files, ran a command");
+    const items = tools.map((tool, i) => ({ id: `t${i}`, appId: "a", seq: i, kind: "tool", tool: { ...tool, status: "completed" }, createdAt: "", updatedAt: "" }) as ChatItem);
+    expect(summarizeTools(items)).toBe("Edited 3 files, ran a command");
   });
 });

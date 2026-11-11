@@ -7,6 +7,8 @@ export type {
   BuildInfo,
   ChatItem,
   ChatItemKind,
+  ChatImage,
+  ImageUpload,
   CreateAppRequest,
   EasyConnectPairRequest,
   ErrorBody,

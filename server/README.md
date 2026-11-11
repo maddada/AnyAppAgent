@@ -26,6 +26,7 @@ stay paired.
 | `ANYAPP_APPS_DIR`       | `C:\aa\apps`                  | Where app projects are created                                   |
 | `ANYAPP_BUILDER`        | `auto`                        | `real` = `../builder/index.mjs`, `fake` = built-in fake, `auto` = real when it exists |
 | `ANYAPP_GITHUB`         | `on`                          | `off` skips creating and pushing GitHub repos                    |
+| `ANYAPP_ASK_PERMISSIONS` | off                         | `1` (dev and tests only): the session stays in the default mode and every permission request waits in the chat |
 | `ANYAPP_ACP_LAUNCH`     | `local`                       | `npx` launches Claude with bb's exact registry command (`npx -y @agentclientprotocol/claude-agent-acp@0.102.0`) |
 | `ANYAPP_ADMIN_TOKEN`    | unset                         | The desktop app's secret: accepted on every route, the only key to `/api/admin/*` |
 | `ANYAPP_HOST_APK`       | unset                         | The AnyAppAgent phone app's APK, served at `GET /download/anyappagent.apk` |

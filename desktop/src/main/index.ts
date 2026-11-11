@@ -6,7 +6,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem } from "../../../shared/protocol.ts";
-import type { Checks, PairingView, PhoneDownload, Settings, Snapshot } from "../shared/types.ts";
+import type { Checks, ImageUpload, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
+import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
 import { AdminClient, lanAddresses } from "./admin-client.ts";
@@ -495,6 +496,8 @@ function ipc(): void {
     const { statSync } = await import("node:fs");
     return { available: true, url, qrSvg: await qrSvg(url), sizeBytes: statSync(apk).size };
   });
+  // The phone app from this project's public GitHub release: works on any network, phone camera only.
+  ipcMain.handle("phone:release", async (): Promise<PhoneRelease> => ({ url: PHONE_RELEASE_URL, qrSvg: await qrSvg(PHONE_RELEASE_URL) }));
   // The phone step turns Easy Connect on once (it is off by default and its first start takes a few minutes).
   ipcMain.handle("pairing:easy-auto", async () => {
     if (easyConnectAutoTried || !admin?.adminRoutes || admin.state?.easyConnect.state !== "off") return;
@@ -506,15 +509,27 @@ function ipc(): void {
   ipcMain.handle("pairing:easy", (_e, enabled: boolean) => admin?.easyConnect(Boolean(enabled)));
   ipcMain.handle("devices:remove", (_e, id: string) => admin?.removeDevice(String(id)));
   ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
-  ipcMain.handle("apps:send", async (_e, appId: string, text: string) => {
+  // Chat actions answer { ok, error } with a plain sentence instead of throwing across IPC.
+  const chatAction = (run: (client: AdminClient) => Promise<unknown>) => async () => {
     try {
       if (!admin) throw new Error("AnyAppAgent is still starting.");
-      await admin.send(String(appId), String(text));
-      return { ok: true };
+      const value = await run(admin);
+      return { ok: true, ...(value && typeof value === "object" ? { app: value } : {}) };
     } catch (error) {
-      return { ok: false, error: (error as Error).message };
+      const message = (error as Error).message;
+      return { ok: false, error: /fetch failed|ECONNREFUSED|aborted|timeout/i.test(message) ? "The companion on this PC is not answering. It restarts by itself; try again in a moment." : message };
     }
-  });
+  };
+  ipcMain.handle("apps:send", (_e, appId: string, text: string, images?: ImageUpload[]) =>
+    chatAction((c) => c.send(String(appId), String(text), Array.isArray(images) ? images : []))(),
+  );
+  ipcMain.handle("apps:image", (_e, appId: string, imageId: string) => admin?.image(String(appId), String(imageId)));
+  ipcMain.handle("apps:cancel", (_e, appId: string) => chatAction((c) => c.cancel(String(appId)))());
+  ipcMain.handle("apps:rebuild", (_e, appId: string) => chatAction((c) => c.rebuild(String(appId)))());
+  ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
+    chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
+  );
+  ipcMain.handle("apps:create", (_e, name: string, prompt: string) => chatAction((c) => c.createApp(String(name), String(prompt)))());
   ipcMain.handle("settings:set", (_e, key: keyof Settings, value: unknown) => {
     if (key in settings && typeof value === typeof settings[key]) setSetting(key, value as never);
   });
@@ -533,10 +548,11 @@ function ipc(): void {
 
 // ---------------------------------------------------------------- lifecycle
 
-if (!app.requestSingleInstanceLock()) {
+if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
   app.quit();
 } else {
-  app.on("second-instance", () => showWindow());
+  // `AnyAppAgent.exe --quit` asks the running app to quit the normal way (as Quit in the tray does), for updates.
+  app.on("second-instance", (_e, argv) => (argv.includes("--quit") ? app.quit() : showWindow()));
   app.setAppUserModelId("com.anyappagent.desktop");
 
   app.whenReady().then(async () => {

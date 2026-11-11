@@ -45,6 +45,14 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "AnyAppAgent lets you send pictures to the agent that makes your app.",
+          "cameraPermission": "AnyAppAgent uses the camera to scan the code your PC shows and to take pictures for your apps.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

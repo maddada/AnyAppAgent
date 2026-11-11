@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { networkInterfaces, hostname } from "node:os";
 import { join } from "node:path";
 import WebSocket from "ws";
-import type { AdminEvent, AdminState, App, ChatItem, PairedDevice } from "../../../shared/protocol.ts";
+import type { AdminEvent, AdminState, App, ChatItem, ImageUpload, PairedDevice } from "../../../shared/protocol.ts";
 
 const VIRTUAL_ADAPTER = /vethernet|wsl|hyper-v|virtualbox|vmware|tailscale|zerotier|docker|loopback|vpn/i;
 
@@ -228,8 +228,48 @@ export class AdminClient extends EventEmitter {
     return this.request<ChatItem[]>("GET", `/api/apps/${encodeURIComponent(appId)}/messages`);
   }
 
-  send(appId: string, text: string): Promise<void> {
-    return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/messages`, { text });
+  send(appId: string, text: string, images: ImageUpload[] = []): Promise<void> {
+    return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/messages`, { text, ...(images.length ? { images } : {}) });
+  }
+
+  /** A picture sent in the chat, as a data URL for the renderer (it cannot send the admin token). */
+  async image(appId: string, imageId: string): Promise<string | undefined> {
+    try {
+      const res = await fetch(`${this.base}/api/apps/${encodeURIComponent(appId)}/images/${encodeURIComponent(imageId)}`, {
+        headers: { authorization: `Bearer ${this.token}` },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) return undefined;
+      const type = (res.headers.get("content-type") ?? "image/png").split(";")[0];
+      if (!/^image\/(png|jpeg|webp|gif)$/.test(type)) return undefined;
+      return `data:${type};base64,${Buffer.from(await res.arrayBuffer()).toString("base64")}`;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Stop: ends the agent's current turn (ACP session/cancel on the companion). */
+  cancel(appId: string): Promise<void> {
+    return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/cancel`, {});
+  }
+
+  /** Builds again without a new message (a failed build's Try again). */
+  rebuild(appId: string): Promise<void> {
+    return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/build`, {});
+  }
+
+  answerPermission(appId: string, requestId: string, optionId: string): Promise<void> {
+    return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/permission`, { requestId, optionId });
+  }
+
+  /** A new app, made from this PC: the same route and fields as the phone's New app sheet. */
+  async createApp(name: string, prompt: string): Promise<App> {
+    const app = await this.request<App>("POST", "/api/apps", { name, prompt });
+    if (!this.apps.some((a) => a.id === app.id)) {
+      this.apps.push(app);
+      this.emit("apps", this.apps);
+    }
+    return app;
   }
 
   async icon(appId: string): Promise<string | undefined> {

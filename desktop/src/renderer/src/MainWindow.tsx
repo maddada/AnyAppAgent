@@ -1,13 +1,16 @@
-// The main window after onboarding: sidebar (Apps, Phones, Setup, Settings), the app list with
-// today's activity, the phone and "add another phone" panels, and each app's chat (Chat.tsx).
+// The main window after onboarding: sidebar (Apps, Phones, Setup, Settings). The Apps page is
+// split: the list of apps on the left, and on the right either the open app's chat (Chat.tsx, the
+// same chat as on the phone) or today's activity with the phone panels. New app works from here
+// too, with the same fields and words as the phone's New app sheet.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronRight, CircleAlert, Cloud, FolderOpen, KeyRound, LayoutGrid, ListChecks, RefreshCw, Settings as Gear, Smartphone, Wrench, X } from "lucide-react";
+import { CircleAlert, Cloud, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, RefreshCw, Settings as Gear, Smartphone, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CheckState, Snapshot } from "../../shared/types.ts";
 import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
 import { ChatView } from "./Chat.tsx";
 import type { StepId } from "./Onboarding.tsx";
 import { PairingPanel, TypedCode, useFreshCode } from "./Pairing.tsx";
+import { GetPhoneApp } from "./PhoneApp.tsx";
 import { AppIcon, Icon, QrPlate, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
 
 const api = window.anyapp;
@@ -17,6 +20,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
   const [page, setPage] = useState<Page>("apps");
   const [openApp, setOpenApp] = useState<string | null>(null);
   const [connect, setConnect] = useState(false);
+  const [newApp, setNewApp] = useState(false);
   useEffect(() => {
     if (connectRequest > 0) setConnect(true);
   }, [connectRequest]);
@@ -26,8 +30,12 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
         setOpenApp(null);
         setPage(p);
       },
-      openApp: (id: string | null) => setOpenApp(id),
+      openApp: (id: string | null) => {
+        setPage("apps");
+        setOpenApp(id);
+      },
       connect: (v: boolean) => setConnect(v),
+      newApp: (v: boolean) => setNewApp(v),
     };
   });
   const app = s.apps.find((a) => a.id === openApp);
@@ -46,7 +54,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
           {nav.map(([id, of, label]) => (
             <button
               key={id}
-              className={`nav-i${page === id && !app ? " is-active" : ""}`}
+              className={`nav-i${page === id ? " is-active" : ""}`}
               onClick={() => {
                 setOpenApp(null);
                 setPage(id);
@@ -65,17 +73,26 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
         <SideStatus s={s} />
       </aside>
       <main className="dm-main">
-        {app ? (
-          <ChatView app={app} icon={s.icons[app.id]} onBack={() => setOpenApp(null)} />
+        {page === "apps" ? (
+          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} openSetup={openSetup} goSetup={() => setPage("setup")} />
         ) : (
           <div className="dm-scroll">
-            {page === "apps" && <AppsPage s={s} onOpen={setOpenApp} onConnect={() => setConnect(true)} openSetup={openSetup} goSetup={() => setPage("setup")} />}
             {page === "phones" && <PhonesPage s={s} />}
             {page === "setup" && <SetupPage s={s} openSetup={openSetup} />}
             {page === "settings" && <SettingsPage s={s} openSetup={openSetup} />}
           </div>
         )}
       </main>
+      {newApp && (
+        <NewAppDialog
+          onClose={() => setNewApp(false)}
+          onMade={(id) => {
+            setNewApp(false);
+            setPage("apps");
+            setOpenApp(id);
+          }}
+        />
+      )}
       {connect && (
         <Dialog title="Connect a phone" wide onClose={() => setConnect(false)}>
           <p className="callout body">
@@ -137,77 +154,179 @@ function activity(s: Snapshot): { time: string; text: string }[] {
     });
 }
 
-function AppsPage({ s, onOpen, onConnect, openSetup, goSetup }: { s: Snapshot; onOpen: (id: string) => void; onConnect: () => void; openSetup: (step: StepId) => void; goSetup: () => void }) {
+function AppsPage({
+  s,
+  open,
+  onOpen,
+  onNewApp,
+  onConnect,
+  openSetup,
+  goSetup,
+}: {
+  s: Snapshot;
+  open: string | null;
+  onOpen: (id: string | null) => void;
+  onNewApp: () => void;
+  onConnect: () => void;
+  openSetup: (step: StepId) => void;
+  goSetup: () => void;
+}) {
   const apps = useMemo(() => [...s.apps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [s.apps]);
   const blocking = setupRows(s).find((r) => r.needsYou && r.blocks);
-  const recent = activity(s);
+  const app = apps.find((a) => a.id === open);
+  const online = s.companion.phase === "running";
   return (
-    <>
+    <div className="apps-split">
+      <section className="apps-pane" aria-label="Your apps">
+        <header className="apps-pane-head">
+          <h1 className="title-small">Your apps</h1>
+          <button className="btn btn-primary btn-sm" onClick={onNewApp} disabled={!online} data-testid="new-app">
+            <Icon of={Plus} size="sm" /> New app
+          </button>
+        </header>
+        {blocking && (
+          <div className="card notice apps-notice">
+            <div className="grow">
+              <StateLine state="problem" text={blocking.problemText ?? blocking.sub} />
+            </div>
+            <button className="btn btn-quiet btn-sm" onClick={() => (blocking.step ? openSetup(blocking.step) : goSetup())}>
+              Fix it
+            </button>
+          </div>
+        )}
+        {apps.length === 0 ? (
+          <div className="apps-empty">
+            <strong className="heading">No apps yet</strong>
+            <p className="callout secondary">Describe your first app here or in AnyAppAgent on your phone. This PC makes it, and it appears on your phone, ready to open.</p>
+            <button className="btn btn-primary btn-sm" onClick={onNewApp} disabled={!online}>
+              <Icon of={Plus} size="sm" /> New app
+            </button>
+          </div>
+        ) : (
+          <div className="apps-list">
+            {apps.map((a) => {
+              const st = appState(a);
+              const v = a.latestApk ?? a.latestBuild;
+              return (
+                <button key={a.id} className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined}>
+                  <AppIcon icon={s.icons[a.id]} small />
+                  <div className="arow-main">
+                    <div className="arow-top">
+                      <span className="body arow-name">{a.name}</span>
+                      <span className="arow-meta">{[v ? `v${v.number}` : "", timeAgo(a.updatedAt)].filter(Boolean).join(", ")}</span>
+                    </div>
+                    <StateLine state={st.state} text={st.text} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+      <section className="apps-detail">
+        {app ? <ChatView app={app} icon={s.icons[app.id]} online={online} /> : <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} />}
+      </section>
+    </div>
+  );
+}
+
+/** The right side of the Apps page when no app is open: today's activity and the phones. */
+function Overview({ s, hasApps, onConnect }: { s: Snapshot; hasApps: boolean; onConnect: () => void }) {
+  const recent = activity(s);
+  const hasPhone = (s.admin?.devices.length ?? 0) > 0;
+  return (
+    <div className="dm-scroll ov">
       <header className="dm-head">
         <div>
-          <h1 className="title">Your apps</h1>
-          <p className="dm-sub callout">{apps.length === 0 ? "Nothing made yet" : `${apps.length} ${apps.length === 1 ? "app" : "apps"}, all made on this PC`}</p>
+          <h2 className="title">{hasApps ? "Pick an app to change it" : "Make your first app"}</h2>
+          <p className="dm-sub callout">{hasApps ? "Its chat opens here. Ask for a change, and the new version goes to your phone." : "Tap New app and say what it should do. This PC makes it."}</p>
         </div>
         <button className="btn btn-quiet" onClick={() => api.openFolder("apps")}>
           <Icon of={FolderOpen} size="button" /> Open apps folder
         </button>
       </header>
-      <div className="dm-cols">
-        <div className="dm-left">
-          {blocking && (
-            <div className="card notice">
-              <div className="grow">
-                <StateLine state="problem" text={blocking.problemText ?? blocking.sub} />
-              </div>
-              <button className="btn btn-quiet btn-sm" onClick={() => (blocking.step ? openSetup(blocking.step) : goSetup())}>
-                Fix it
-              </button>
-            </div>
-          )}
-          {apps.length === 0 ? (
-            <section className="list empty">
-              <strong className="heading">No apps yet</strong>
-              <p className="callout secondary">Make your first one from your phone: open AnyAppAgent and tap New app. It shows up here while this PC makes it.</p>
-            </section>
-          ) : (
-            <section className="list">
-              {apps.map((a) => {
-                const st = appState(a);
-                const v = a.latestApk ?? a.latestBuild;
-                return (
-                  <button key={a.id} className="lrow" onClick={() => onOpen(a.id)}>
-                    <AppIcon icon={s.icons[a.id]} />
-                    <div className="lrow-main">
-                      <div className="heading">{a.name}</div>
-                      <StateLine state={st.state} text={st.text} />
-                    </div>
-                    <div className="lrow-meta">{[v ? `v${v.number}` : "", timeAgo(a.updatedAt)].filter(Boolean).join(", ")}</div>
-                    <span className="lrow-chev">
-                      <Icon of={ChevronRight} size="button" />
-                    </span>
-                  </button>
-                );
-              })}
-            </section>
-          )}
-          {recent.length > 0 && (
-            <section className="recent">
-              <div className="eyebrow">Today</div>
-              {recent.map((r, i) => (
-                <div key={i} className="recent-row">
-                  <time>{r.time}</time>
-                  <span>{r.text}</span>
-                </div>
-              ))}
-            </section>
-          )}
+      <div className="ov-grid">
+        <div className="panel">
+          <div className="eyebrow">{hasPhone ? "AnyAppAgent for another phone" : "AnyAppAgent for your phone"}</div>
+          <GetPhoneApp />
         </div>
-        <aside className="dm-aside">
-          <PhonesPanel s={s} />
-          <AddPhonePanel s={s} onMore={onConnect} />
-        </aside>
+        <AddPhonePanel s={s} onMore={onConnect} />
+        {hasPhone && <PhonesPanel s={s} />}
       </div>
-    </>
+      <section className="recent ov-recent">
+        <div className="eyebrow">Today</div>
+        {recent.length > 0 ? (
+          recent.map((r, i) => (
+            <div key={i} className="recent-row">
+              <time>{r.time}</time>
+              <span>{r.text}</span>
+            </div>
+          ))
+        ) : (
+          <p className="callout tertiary">Nothing happened today yet.</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/** New app from the PC: the same fields and words as the phone's New app sheet. */
+function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId: string) => void }) {
+  const [name, setName] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ready = name.trim().length > 0 && prompt.trim().length > 0;
+  const submit = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    setError(null);
+    const r = await api.createApp(name.trim(), prompt.trim());
+    setBusy(false);
+    if (!r.ok || !r.app) return setError(r.error ?? "That didn't work. Try again.");
+    onMade(r.app.id);
+  };
+  return (
+    <Dialog
+      title="New app"
+      onClose={onClose}
+      actions={
+        <button className="btn btn-primary btn-block" disabled={!ready || busy} onClick={() => void submit()} data-testid="new-app-submit">
+          {busy && <Spinner />} Make it
+        </button>
+      }
+    >
+      <form
+        className="fields"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <label className="fld">
+          <span className="label">Name</span>
+          <input className="field" data-testid="new-app-name" value={name} maxLength={40} placeholder="For example, Prayer Times" autoFocus onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="fld">
+          <span className="label">What should it do?</span>
+          <textarea
+            className="field field-multi"
+            data-testid="new-app-prompt"
+            value={prompt}
+            rows={4}
+            placeholder="Wake me up for each prayer in Ajman, with a reminder before it."
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                void submit();
+              }
+            }}
+          />
+        </label>
+        {error && <p className="label problem-text">{error}</p>}
+      </form>
+    </Dialog>
   );
 }
 
