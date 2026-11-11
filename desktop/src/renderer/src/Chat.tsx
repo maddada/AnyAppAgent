@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, FilePen, FileText, Folder, Globe, ListTodo, Lock, Package, Search, Terminal, Trash, X,
+  ArrowUp, Brain, Mic, Square, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, FilePen, FileText, Folder, Globe, ListTodo, Lock, Package, Search, Terminal, Trash, X,
 } from "lucide-react";
-import type { App, ChatItem } from "../../shared/types.ts";
+import type { App, ChatItem, HexCheck } from "../../shared/types.ts";
+import { DICTATE_HOTKEY, HOLD_MS, insertAt, isDictateHotkey, useDictation } from "./dictation.ts";
 import { AppIcon, Icon, Spinner, StateLine, appState } from "./ui.tsx";
 import { plainToolTitle, summarizeTools } from "./chatText.ts";
 
@@ -23,9 +24,76 @@ const TOOL_GLYPHS: Record<string, LucideIcon> = {
   other: CircleDot,
 };
 
-export function ChatView({ app, icon, onBack }: { app: App; icon?: string; onBack: () => void }) {
+export function ChatView({ app, icon, hex, onBack, onSetupHex }: { app: App; icon?: string; hex: HexCheck; onBack: () => void; onSetupHex: () => void }) {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [text, setText] = useState("");
+  const box = useRef<HTMLTextAreaElement>(null);
+  const textNow = useRef(text);
+  textNow.current = text;
+  const dictation = useDictation({
+    onText: (said) => {
+      const el = box.current;
+      const value = textNow.current;
+      const focused = !!el && document.activeElement === el;
+      const next = insertAt(value, focused ? el.selectionStart : value.length, focused ? el.selectionEnd : value.length, said);
+      setText(next.value);
+      requestAnimationFrame(() => {
+        el?.focus();
+        el?.setSelectionRange(next.caret, next.caret);
+      });
+    },
+  });
+  // The box grows with what is in it (a dictation is often several lines), up to about six lines.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [text]);
+  const hexReady = hex.state === "ready";
+  const dictate = () => {
+    if (dictation.phase === "recording") return dictation.stop();
+    if (dictation.phase !== "idle") return;
+    if (!hexReady) {
+      dictation.setError(hex.state === "checking" ? "Looking for Hex on this PC..." : hexProblem(hex));
+      return;
+    }
+    void dictation.start();
+  };
+  // Ctrl+Alt+Space anywhere in this chat: tap to start and tap to stop, or hold and let go.
+  // Escape cancels a recording.
+  const press = useRef<{ at: number; started: boolean } | null>(null);
+  const dictateNow = useRef(dictate);
+  dictateNow.current = dictate;
+  const phaseNow = useRef(dictation.phase);
+  phaseNow.current = dictation.phase;
+  const { cancel: cancelDictation, stop: stopDictation } = dictation;
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && (phaseNow.current === "recording" || phaseNow.current === "starting")) {
+        e.preventDefault();
+        cancelDictation();
+        return;
+      }
+      if (!isDictateHotkey(e)) return;
+      e.preventDefault();
+      if (e.repeat) return;
+      press.current = { at: Date.now(), started: phaseNow.current === "idle" };
+      dictateNow.current();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (!press.current || (e.code !== "Space" && e.key !== "Control" && e.key !== "Alt")) return;
+      const p = press.current;
+      press.current = null;
+      if (p.started && Date.now() - p.at >= HOLD_MS) stopDictation();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [cancelDictation, stopDictation]);
   const [sendError, setSendError] = useState<string | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -93,9 +161,10 @@ export function ChatView({ app, icon, onBack }: { app: App; icon?: string; onBac
           void send();
         }}
       >
-        <div className="composer-box">
+        <div className={`composer-box${dictation.phase === "recording" ? " is-recording" : ""}`}>
           <textarea
-            placeholder="Ask for a change"
+            ref={box}
+            placeholder={dictation.phase === "recording" ? "Listening. Stop when you're done." : dictation.phase === "transcribing" ? "Hex is writing it down..." : "Ask for a change"}
             value={text}
             rows={1}
             onChange={(e) => setText(e.target.value)}
@@ -106,14 +175,51 @@ export function ChatView({ app, icon, onBack }: { app: App; icon?: string; onBac
               }
             }}
           />
+          {dictation.phase === "recording" && (
+            <span className="dictate-meter mono" aria-hidden>
+              <span className="dictate-dot" style={{ transform: `scale(${1 + dictation.level * 0.9})` }} />
+              {`${Math.floor(dictation.seconds / 60)}:${String(dictation.seconds % 60).padStart(2, "0")}`}
+            </span>
+          )}
+          <button
+            type="button"
+            className={`mic${dictation.phase === "recording" ? " is-recording" : ""}${!hexReady && hex.state !== "checking" ? " is-off" : ""}`}
+            onClick={dictate}
+            disabled={dictation.phase === "starting" || dictation.phase === "transcribing"}
+            aria-label={dictation.phase === "recording" ? "Stop and write it down" : "Dictate with Hex"}
+            title={dictation.phase === "recording" ? `Stop (${DICTATE_HOTKEY}). Esc cancels.` : hexReady ? `Dictate with Hex (${DICTATE_HOTKEY}). Tap to start and tap to stop, or hold and let go.` : hexProblem(hex)}
+          >
+            {dictation.phase === "transcribing" || dictation.phase === "starting" ? <Spinner /> : <Icon of={dictation.phase === "recording" ? Square : Mic} size="md" />}
+          </button>
           <button className={`send${text.trim() ? " on" : ""}`} type="submit" disabled={!text.trim()} aria-label={busy ? "Queue this change" : "Send"}>
             <Icon of={ArrowUp} size="md" />
           </button>
         </div>
         {sendError && <p className="label composer-note">{sendError}</p>}
+        {dictation.error && (
+          <div className="label composer-note dictate-note">
+            <span>{dictation.error}</span>
+            {!hexReady && (
+              <button type="button" className="btn btn-text label" onClick={onSetupHex}>
+                Set up Hex
+              </button>
+            )}
+            <button type="button" className="btn btn-icon" aria-label="Dismiss" onClick={() => dictation.setError(null)}>
+              <Icon of={X} size="sm" />
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );
+}
+
+/** Why dictation can't start, in plain words. */
+function hexProblem(hex: HexCheck): string {
+  if (hex.state === "notInstalled") return "Dictation uses Hex, a free app that turns your voice into text on this PC. It isn't installed yet.";
+  if (hex.state === "notRunning") return "Dictation needs Hex open. Open Hex, then try again.";
+  if (hex.state === "noModels") return "Hex has no speech model yet. Open Hex and download one in its settings.";
+  return hex.summary;
 }
 
 /** Small, safe markdown: paragraphs, bullet lists, **strong**, `code`. Never HTML from the agent. */

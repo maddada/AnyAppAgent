@@ -271,3 +271,19 @@ details.adv summary { cursor: pointer; color: var(--aa-text-tertiary); font-size
 .send.on { background: var(--aa-accent); color: var(--aa-on-accent); }
 .composer-note { max-width: calc(var(--aa-size-reading-width) + 2 * var(--aa-space-2xl)); margin: var(--aa-space-xs) auto 0; color: var(--aa-problem); }
 .notice .state > span:last-child { white-space: normal; }
+
+/* Dictation with Hex (Chat.tsx composer, Hex.tsx card) */
+.mic { width: var(--aa-size-send-button); height: var(--aa-size-send-button); border-radius: var(--aa-radius-send); display: grid; place-items: center; flex: none; background: transparent; color: var(--aa-text-secondary); }
+.mic:hover:not(:disabled) { background: var(--aa-surface-sunken); color: var(--aa-text); }
+.mic.is-off { color: var(--aa-text-tertiary); }
+.mic.is-recording { background: var(--aa-problem); color: var(--aa-on-problem); }
+.composer-box.is-recording { box-shadow: inset 0 0 0 var(--aa-focus-width) var(--aa-problem), var(--aa-shadow-1); }
+.dictate-meter { align-self: center; display: inline-flex; align-items: center; gap: var(--aa-space-sm); color: var(--aa-problem); font-size: var(--aa-type-label-size); padding: 0 var(--aa-space-xs); }
+.dictate-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--aa-problem); transition: transform 80ms linear; }
+.dictate-note { display: flex; align-items: center; gap: var(--aa-space-sm); color: var(--aa-text-secondary); }
+.dictate-note > span { flex: 1; }
+.settings-group { display: flex; flex-direction: column; gap: var(--aa-space-sm); }
+.settings-group .check-card { margin-top: var(--aa-space-sm); }
+.hex-model { gap: var(--aa-space-md); align-items: center; }
+.hex-model select { min-width: 16rem; }
+.settings-group .check-card, .settings-group .under-card { max-width: none; }

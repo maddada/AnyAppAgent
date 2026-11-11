@@ -66,11 +66,34 @@ export interface PhoneCheck {
   connectedCount: number;
 }
 
+/** One speech model Hex has ready. */
+export interface HexModelView {
+  id: string;
+  name: string;
+}
+
+/** Hex (anoma.ly/hex), the free dictation app this PC can use to type by voice. Optional. */
+export interface HexCheck {
+  state: "checking" | "unsupported" | "notInstalled" | "notRunning" | "noModels" | "problem" | "ready";
+  /** Plain words for the user. */
+  summary: string;
+  /** What Hex's local API says it runs. */
+  version?: string;
+  /** What is installed on disk (may be newer than the running one). */
+  installedVersion?: string;
+  /** The models Hex has ready, in Hex's order. */
+  models: HexModelView[];
+  /** The model dictation uses. */
+  model?: string;
+  install?: { running: boolean; line?: string; error?: string };
+}
+
 export interface Checks {
   claude: ClaudeCheck;
   github: GitHubCheck;
   tools: ToolsCheck;
   phone: PhoneCheck;
+  hex: HexCheck;
 }
 
 export type CompanionPhase = "starting" | "running" | "restarting" | "stopped" | "failed";
@@ -95,6 +118,10 @@ export interface Settings {
   closeHintShown: boolean;
   /** The AnyAppAgent phone APK to offer (empty: look in the usual places). */
   phoneApkPath: string;
+  /** The Hex model dictation uses (empty: Hex's first ready model). */
+  hexModel: string;
+  /** The dictation step was skipped in the setup. */
+  hexSkipped: boolean;
 }
 
 export interface PhoneDownload {
@@ -162,6 +189,12 @@ export interface AnyAppBridge {
   /** Turns Easy Connect on once when the phone step opens, if it is off. */
   easyConnectAuto(): Promise<void>;
   removeDevice(id: string): Promise<void>;
+
+  /** Hex: run its installer, open it, look again, and transcribe a 16 kHz mono WAV recording. */
+  hexInstall(): Promise<void>;
+  hexOpen(): Promise<{ ok: boolean; error?: string }>;
+  hexCheck(): Promise<void>;
+  hexTranscribe(wav: ArrayBuffer): Promise<{ ok: boolean; text?: string; error?: string; code?: string }>;
 
   getMessages(appId: string): Promise<ChatItem[]>;
   sendMessage(appId: string, text: string): Promise<{ ok: boolean; error?: string }>;

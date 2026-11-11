@@ -25,7 +25,7 @@ Useful environment variables (all optional):
 | `ANYAPP_DESKTOP_USERDATA` | A separate settings folder (a fresh onboarding) for tests. |
 | `ANYAPP_HOST_APK` | The phone app's APK, if not set in Settings, Advanced, and not in `../app/dist/AnyAppAgent.apk`. |
 | `ANYAPP_DESKTOP_THEME=light/dark` | Force a theme. |
-| `ANYAPP_DESKTOP_SIMULATE` | Dev only, for screenshots: `claude=needed/signing-in,github=needed/code,tools=needed/installing,phone=none`. |
+| `ANYAPP_DESKTOP_SIMULATE` | Dev only, for screenshots: `claude=needed/signing-in,github=needed/code,tools=needed/installing,phone=none,hex=notInstalled/installing/notRunning`. |
 | `ANYAPP_DESKTOP_SHOTS=<folder>` | Dev only: walk every screen in light and dark, save PNGs, quit. `ANYAPP_DESKTOP_SHOTS_SET=flow/states/real`. |
 
 ## How it runs the companion
@@ -57,6 +57,19 @@ Detection reads the hash from the builder itself (`builder/lib/template.mjs`), a
 fills a missing cache with `builder/cli.mjs warm` (about 3 minutes, needs the internet), so the
 user's first app does not start with a silent wait.
 
+## Dictation with Hex
+
+Optional, copied from Ghostex's Dictate: the setup's last step ("Talk instead of typing") and
+Settings, Dictation offer Hex (https://anoma.ly/hex/), a free app that turns speech into text on
+this PC, offline. Install Hex runs Hex's own installer (`anoma.ly/hex/install-windows.ps1`,
+signature checked by the script, per user, no administrator), then opens Hex (`hex.exe app`).
+In a chat, the microphone button or Ctrl+Alt+Space records (tap to start and tap to stop, or hold
+and let go; Esc cancels). The renderer records with MediaRecorder, decodes to a 16 kHz mono WAV,
+and the main process posts it to Hex's local API (`%APPDATA%\hex\local-api.json` gives the port
+and token; `src/main/hex.ts`). The transcript goes in at the caret. The token and the words are
+never logged. A proof run can feed a WAV as the microphone with Chromium's
+`--use-fake-device-for-media-stream --use-file-for-fake-audio-capture=<file.wav>`.
+
 ## Layout
 
 - `src/main/`: Electron main process. `index.ts` (window, tray, IPC, lifecycle), `companion.ts`
@@ -64,7 +77,7 @@ user's first app does not start with a silent wait.
   without the admin routes), `detect/` (Claude, GitHub, tools), `signin.ts` (Claude and GitHub
   sign-in without a terminal), `install/` (the tools installer), `shots.ts` (dev screenshots).
 - `src/preload/`: the typed bridge (`window.anyapp`); context isolation on, no Node in the page.
-- `src/renderer/`: React. `Onboarding.tsx`, `MainWindow.tsx`, `Pairing.tsx`, `illustrations.tsx`.
+- `src/renderer/`: React. `Onboarding.tsx`, `MainWindow.tsx`, `Pairing.tsx`, `Chat.tsx`, `Hex.tsx` (the Hex card), `dictation.ts` (recording), `illustrations.tsx`.
 - The look comes from the shared theme (`../shared/theme`): the renderer imports its `theme.css`
   (every value is a `--aa-*` variable, fonts bundled by Vite), code reads `tokens.ts`, and the window,
   installer and tray icons are `../shared/theme/mark/windows`. Nothing Workbench-specific lives here.

@@ -6,6 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import type { CheckState, Snapshot } from "../../shared/types.ts";
 import { size as sizeTokens } from "../../../../shared/theme/tokens.ts";
 import { ChatView } from "./Chat.tsx";
+import { HexCard } from "./Hex.tsx";
 import type { StepId } from "./Onboarding.tsx";
 import { PairingPanel, TypedCode, useFreshCode } from "./Pairing.tsx";
 import { AppIcon, Icon, QrPlate, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
@@ -66,7 +67,16 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
       </aside>
       <main className="dm-main">
         {app ? (
-          <ChatView app={app} icon={s.icons[app.id]} onBack={() => setOpenApp(null)} />
+          <ChatView
+            app={app}
+            icon={s.icons[app.id]}
+            hex={s.checks.hex}
+            onBack={() => setOpenApp(null)}
+            onSetupHex={() => {
+              setOpenApp(null);
+              setPage("settings");
+            }}
+          />
         ) : (
           <div className="dm-scroll">
             {page === "apps" && <AppsPage s={s} onOpen={setOpenApp} onConnect={() => setConnect(true)} openSetup={openSetup} goSetup={() => setPage("setup")} />}
@@ -467,6 +477,11 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
             Show again
           </button>
         </div>
+      </section>
+      <section className="settings-group">
+        <h2 className="heading">Dictation</h2>
+        <p className="callout secondary">Speak your changes in a chat on this PC instead of typing them. It uses Hex, a free app that turns your voice into text on this PC, offline.</p>
+        <HexCard hex={s.checks.hex} hexModel={s.settings.hexModel} />
       </section>
       <section className="list">
         <div className="srow">
