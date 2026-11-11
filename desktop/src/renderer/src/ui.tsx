@@ -5,6 +5,7 @@ import { CircleAlert } from "lucide-react";
 import { icon as iconTokens } from "../../../../shared/theme/tokens.ts";
 import markUrl from "../../../../shared/theme/mark/mark.svg";
 import type { App } from "../../shared/types.ts";
+import { describeApp, type StateKind } from "../../../../shared/chat/index.ts";
 
 type IconSize = keyof typeof iconTokens.size;
 
@@ -26,7 +27,7 @@ export function Wordmark() {
   );
 }
 
-export type UiState = "working" | "ready" | "problem" | "idle";
+export type UiState = StateKind;
 
 export function StateLine({ state, text }: { state: UiState; text: string }) {
   return (
@@ -66,30 +67,10 @@ export function timeAgo(iso?: string): string {
   return d.toLocaleDateString();
 }
 
-/** An app's state in the four words the theme allows. */
+/** An app's state in the four words the theme allows: the shared wording (shared/chat/state.ts), as on the phone. */
 export function appState(app: App): { state: UiState; text: string } {
-  switch (app.status) {
-    case "creating":
-      return { state: "working", text: "Setting up" };
-    case "working":
-      return { state: "working", text: "Making changes" };
-    case "building":
-      // After the build itself the companion still commits and pushes before it announces the APK.
-      return app.latestBuild?.status === "succeeded"
-        ? { state: "working", text: `Saving version ${app.latestBuild.number}` }
-        : { state: "working", text: `Building version ${app.latestBuild?.number ?? ""}`.trim() };
-    case "error":
-      return { state: "problem", text: app.latestBuild?.status === "failed" ? "Couldn't build" : "Something went wrong" };
-    default: {
-      const apk = app.latestApk;
-      const built = app.latestBuild;
-      // A finished build that is not announced yet is still on its way, never "ready" or "waiting".
-      if (built?.status === "succeeded" && built.number > (apk?.number ?? 0)) return { state: "working", text: `Saving version ${built.number}` };
-      if (!apk) return { state: "idle", text: "Waiting for the first version" };
-      const fresh = apk.finishedAt && Date.now() - Date.parse(apk.finishedAt) < 60 * 60_000;
-      return fresh ? { state: "ready", text: `Version ${apk.number} ready` } : { state: "idle", text: "Up to date" };
-    }
-  }
+  const st = describeApp(app);
+  return { state: st.kind, text: st.label };
 }
 
 export function AppIcon({ icon, small }: { icon?: string; small?: boolean }) {
