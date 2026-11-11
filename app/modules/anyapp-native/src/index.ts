@@ -55,6 +55,9 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   reopenInstallPrompt?(): boolean;
   /** Build.SUPPORTED_ABIS, best first ("arm64-v8a", ...). Missing on builds before it was added. */
   supportedAbis?(): string[];
+  /** Apps followed from a share link: AnyAppAgent handles their updates (docs/DISTRIBUTION.md stage 5). */
+  setFollowedApps?(packageNames: string[]): void;
+  handlesUpdatesOf?(packageName: string): boolean;
   installWithIntent(path: string): boolean;
   notificationsEnabled(): boolean;
   openNotificationSettings(): boolean;

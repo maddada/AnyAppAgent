@@ -24,6 +24,20 @@
         android:name="com.anyappagent.nativebridge.InstallResultReceiver"
         android:exported="false" />
 
+    <!-- AnyAppAgent first (docs/DISTRIBUTION.md stage 5): apps made with AnyAppAgent find it by this
+         action and ask the provider whether it handles their updates (then they stay silent). -->
+    <provider
+        android:name="com.anyappagent.nativebridge.UpdatesProvider"
+        android:authorities="${applicationId}.updates"
+        android:exported="true" />
+    <service
+        android:name="com.anyappagent.nativebridge.UpdatesHostService"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="com.anyappagent.action.UPDATES" />
+      </intent-filter>
+    </service>
+
     <service
         android:name="com.anyappagent.nativebridge.KeepAliveService"
         android:exported="false"

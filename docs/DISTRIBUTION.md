@@ -35,8 +35,8 @@ Other people's phones (only what you publish)
 | 1 | Per-app signing keys, moving existing apps by key rotation, an encrypted backup the user can restore | `builder/`, `server/`, `desktop/`, `shared/protocol.ts`, `template-kotlin/.gitignore` | Built, proven, in main |
 | 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `shared/protocol.ts` | Built, proven, in main |
 | 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Built, proven, in main |
-| 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `builder/`, `server/` | Built and proven ("Stage 4 proof"); not in Expo Exact yet |
-| 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/`, `shared/protocol.ts` | Planned |
+| 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `builder/`, `server/` | Built, proven, in main; not in Expo Exact yet |
+| 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/` | Built and proven ("Stage 5 proof"); following a friend's app from a share link inside AnyAppAgent is not built yet |
 | 6 | The controls on the PC and the phone: Publish, Share with others, link and QR, downloads per version, channel, key backup | `desktop/`, `app/` | Partly in stage 1 (key backup) |
 
 Each stage ends with a proof on `emulator-5560` and test GitHub repos that are deleted afterwards.
@@ -329,6 +329,40 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
   Try again.
 - Expo Exact apps do not have the updater yet (their native module support was not looked at);
   they still get updates on the owner's phone through AnyAppAgent.
+
+### As built (stage 5)
+
+- `app/modules/anyapp-native`: an exported `UpdatesProvider` (authority `<AnyAppAgent's package>.updates`)
+  and an exported `UpdatesHostService` with the action `com.anyappagent.action.UPDATES`, which only
+  lets apps find AnyAppAgent (Android 11+ package visibility: the templates query that action).
+- An app asks `content://<host>.updates/handles/<its package>`; the answer is 1 when AnyAppAgent
+  installed it (it is the installer of record: the owner's phone, where every build comes from the
+  PC) or the package is in AnyAppAgent's "followed" list (`setFollowedApps`, for a later "Add a
+  shared app"). The provider answers only the app that asks about itself (the caller's package
+  must be the package asked about), so no app learns anything about another.
+- Because hosts are found by the action, a copy of AnyAppAgent under another package (as in the
+  proof) works the same.
+- AI proxy (`AiTrust`): an app whose signing history (Android's key rotation record) holds a
+  trusted certificate is trusted too, so a moved app keeps AI after its own updater installed the
+  rotated build.
+- Not built: "Add a shared app" in AnyAppAgent for a friend who has AnyAppAgent (it would add the
+  package to the followed list and watch its feed). Without it, a friend's AnyAppAgent does not
+  handle the friend's copy, and the app's own updater does the work, as in stage 4.
+
+## Stage 5 proof
+
+2026-11-11, `emulator-5560`. My own copy of the phone app (`com.anyappagent.dist`, built from this
+branch with `app.json` changed only for that build) paired with my test companion on port 8797
+(same-network code). "Dist Friend Test" build 5 was on the phone from the stage 4 proof, installed
+from the public link (no installer of record).
+
+| Step | Result |
+| ---- | ------ |
+| After pairing | AnyAppAgent offered build 6 by itself; Android asked once ("Do you want to update this app?", AnyAppAgent did not install the copy there); after it `installerPackageName=com.anyappagent.dist` |
+| The provider asked by the shell for that app | `handles=0` (only the app itself gets an answer) |
+| The app's own daily check | `check: AnyAppAgent handles this app's updates`; no notification |
+| Build 7 on the PC, also published to GitHub as 1.4 | AnyAppAgent installed it by itself (no prompt now that it is the installer) with its own notification "Getting Dist Friend Test onto your phone"; `versionCode=7` |
+| The app's own check after that | Still "AnyAppAgent handles this app's updates", 0 notifications from the app: one update, one notification, through AnyAppAgent |
 
 ## Stage 4 proof
 
