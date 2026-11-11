@@ -25,6 +25,7 @@ and installs over the previous version. It must be dead simple for a regular, no
 | `server/`   | The PC companion: pairing, one Claude Code session per app, Git/GitHub, builds.  |
 | `template/` | The React Native (Expo) starter every new app is copied from.                    |
 | `template-kotlin/` | The native Android starter (Kotlin, Compose) for the "Kotlin" preset.     |
+| `template-exact/` | AnyAppAgent's files for the "Expo Exact" preset (alpha; apps come from `exact new`). |
 | `builder/`  | Creates an app from the template and builds its signed APK.                      |
 | `app/`      | The AnyAppAgent Android app itself (React Native, Expo).                         |
 | `docs/`     | This file and `ENVIRONMENT.md` (Android toolchain and emulator on this PC).       |
@@ -104,8 +105,9 @@ folder(s).
 ```
 createApp({ dir, name, slug, packageName, preset?, onLog? }) -> Promise<void>
     Copies the template into dir, fills in name and package id, and leaves it ready to build.
-    preset: "react-native" (default, template/) or "kotlin" (template-kotlin/). buildApk and
-    getIconPath tell the two apart by the folder (app.json or anyapp.json).
+    preset: "react-native" (default, template/), "kotlin" (template-kotlin/) or "expo-exact"
+    (alpha: `exact new` from a pinned, patched Expo Exact checkout, builder/exact/). buildApk and
+    getIconPath tell them apart by the folder (anyapp.json's preset, else app.json).
 buildApk({ dir, buildNumber, onLog? }) -> Promise<{ apkPath, sizeBytes, sha256, variants? }>
     Builds a signed, installable APK with versionCode = buildNumber. Rejects with an Error whose
     message is the useful part of the build output (the part an agent needs to fix it).

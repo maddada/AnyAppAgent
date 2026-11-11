@@ -1,12 +1,13 @@
-// The two kinds of app the builder makes:
+// The kinds of app the builder makes:
 //   react-native (default): template/ (Expo / React Native, with Kotlin modules)
 //   kotlin:                 template-kotlin/ (native Android: Kotlin, Jetpack Compose, Material 3)
+//   expo-exact (alpha):     `exact new` from a pinned Expo Exact checkout, plus template-exact/ (lib/exact.mjs)
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { BUILDER_DIR, TEMPLATE_DIR } from './env.mjs';
 
-export const PRESETS = ['react-native', 'kotlin'];
+export const PRESETS = ['react-native', 'kotlin', 'expo-exact'];
 export const DEFAULT_PRESET = 'react-native';
 
 /** The Kotlin template. ANYAPP_KOTLIN_TEMPLATE_DIR overrides it. */
@@ -14,7 +15,7 @@ export const KOTLIN_TEMPLATE_DIR = process.env.ANYAPP_KOTLIN_TEMPLATE_DIR
   ? path.resolve(process.env.ANYAPP_KOTLIN_TEMPLATE_DIR)
   : path.resolve(BUILDER_DIR, '..', 'template-kotlin');
 
-/** The file a Kotlin app keeps its preset, slug and package id in (the builder writes it). */
+/** The file a Kotlin or Expo Exact app keeps its preset, slug and package id in (the builder writes it). */
 export const KOTLIN_META = 'anyapp.json';
 
 export function checkPreset(preset) {
@@ -34,19 +35,26 @@ export function skipFor(preset) {
     : new Set(['node_modules', 'build', 'android', 'ios', '.expo', 'dist', '.git']);
 }
 
-/** Reads a Kotlin app's anyapp.json, or null. */
-export function readKotlinMeta(dir) {
+/** Reads an app's anyapp.json ({ preset, slug, package }), or null. */
+export function readAppMeta(dir) {
   try {
     const meta = JSON.parse(fs.readFileSync(path.join(dir, KOTLIN_META), 'utf8'));
-    return meta?.preset === 'kotlin' ? meta : null;
+    return PRESETS.includes(meta?.preset) ? meta : null;
   } catch {
     return null;
   }
 }
 
+/** Reads a Kotlin app's anyapp.json, or null. */
+export function readKotlinMeta(dir) {
+  const meta = readAppMeta(dir);
+  return meta?.preset === 'kotlin' ? meta : null;
+}
+
 /** Which preset an existing app folder was made from. */
 export function presetOf(dir) {
-  if (readKotlinMeta(dir)) return 'kotlin';
+  const meta = readAppMeta(dir);
+  if (meta) return meta.preset;
   if (fs.existsSync(path.join(dir, 'app.json'))) return 'react-native';
   return null;
 }
