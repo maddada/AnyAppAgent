@@ -3,6 +3,13 @@ import { theme } from "@shared/theme/tokens";
 import { getState } from "./store";
 
 let running = false;
+let stopTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * How long the service stays after the work ended. A build ends ("idle") a moment before its APK
+ * is announced; if the service stopped in between, the download that follows could not start it
+ * again from the background (Android refuses) and Android would freeze AnyAppAgent mid-download.
+ */
+const LINGER_MS = 30_000;
 
 /**
  * While the PC is making or changing an app, or an APK is on its way to this phone, keep
@@ -25,15 +32,29 @@ export function updateKeepAlive() {
         : busy.length === 1
           ? `Your PC is working on ${busy[0].name}`
           : `Your PC is working on ${busy.length} apps`;
-    // Re-sent when the text changes; Android only allows starting it while we're in front.
+    if (stopTimer) clearTimeout(stopTimer);
+    stopTimer = null;
+    // Started only while we're in front (Android's rule); once it runs, a new text is changed in place.
     if (!running || lastText !== text) {
       running = AnyAppNative.startKeepAlive(text, theme.color.light.accent) || running;
       lastText = text;
     }
-  } else if (running) {
-    AnyAppNative.stopKeepAlive();
-    running = false;
-    lastText = "";
+  } else if (running && !stopTimer) {
+    stopTimer = setTimeout(() => {
+      stopTimer = null;
+      AnyAppNative?.stopKeepAlive();
+      running = false;
+      lastText = "";
+    }, LINGER_MS);
+  }
+}
+
+/** True while the keep-alive service runs: AnyAppAgent will not be frozen, even in the background. */
+export function keptAlive(): boolean {
+  try {
+    return AnyAppNative?.keepAliveRunning?.() ?? false;
+  } catch {
+    return false;
   }
 }
 

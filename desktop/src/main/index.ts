@@ -1,12 +1,12 @@
 // AnyAppAgent desktop: runs the companion, onboarding and the main window, sits in the tray.
-import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
-import type { Checks, ImageUpload, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
+import type { Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
 import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
@@ -137,6 +137,7 @@ async function connectAdmin(): Promise<void> {
     client.on("chat", (item: ChatItem) => win?.webContents.send("chat:item", item));
     client.on("helper", (worker: WorkerInfo) => win?.webContents.send("helper:updated", worker));
     client.on("helper-item", (item: ChatItem) => win?.webContents.send("helper:item", item));
+    client.on("todos", (appId: string, todos: unknown) => win?.webContents.send("todos:updated", appId, todos));
     await client.connect();
     companion.markRunning(client.adminRoutes);
     log(`[desktop] companion answering; admin routes: ${client.adminRoutes ? "yes" : "no (fallback)"}`);
@@ -514,6 +515,42 @@ function ipc(): void {
   });
   ipcMain.handle("pairing:easy", (_e, enabled: boolean) => admin?.easyConnect(Boolean(enabled)));
   ipcMain.handle("devices:remove", (_e, id: string) => admin?.removeDevice(String(id)));
+  // Signing keys (docs/DISTRIBUTION.md): a file dialog here, the work in the companion.
+  const keysFilter = [{ name: "AnyAppAgent key backup", extensions: ["anyappkeys"] }];
+  // Dev and proofs only: ANYAPP_DESKTOP_DIALOG_FILE answers both file dialogs, so a script can drive them.
+  const dialogFile = env.ANYAPP_DESKTOP_DIALOG_FILE;
+  ipcMain.handle("keys:backup", async (_e, password: string): Promise<KeysAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const day = new Date().toISOString().slice(0, 10);
+    const pick = dialogFile ? { canceled: false, filePath: dialogFile } : await dialog.showSaveDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+      title: "Back up signing keys",
+      defaultPath: join(app.getPath("documents"), `AnyAppAgent keys ${day}.anyappkeys`),
+      filters: keysFilter,
+    });
+    if (pick.canceled || !pick.filePath) return { cancelled: true };
+    try {
+      const result = await admin.backupKeys(pick.filePath, String(password));
+      return { ok: true, file: result.file, count: result.count };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("keys:restore", async (_e, password: string): Promise<KeysAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const pick = dialogFile ? { canceled: false, filePaths: [dialogFile] } : await dialog.showOpenDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+      title: "Restore signing keys",
+      defaultPath: app.getPath("documents"),
+      filters: keysFilter,
+      properties: ["openFile"],
+    });
+    const file = pick.filePaths[0];
+    if (pick.canceled || !file) return { cancelled: true };
+    try {
+      return { ok: true, file, restored: await admin.restoreKeys(file, String(password)) };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
   ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
   ipcMain.handle("helpers:list", (_e, appId: string) => admin?.helpers(String(appId)) ?? []);
   ipcMain.handle("helpers:messages", (_e, appId: string, workerId: string) => admin?.helperMessages(String(appId), String(workerId)) ?? []);
@@ -538,6 +575,14 @@ function ipc(): void {
   ipcMain.handle("apps:permission", (_e, appId: string, requestId: string, optionId: string) =>
     chatAction((c) => c.answerPermission(String(appId), String(requestId), String(optionId)))(),
   );
+  // The to-do list (an older companion has no such route: an empty list).
+  ipcMain.handle("todos:list", (_e, appId: string) => admin?.todos(String(appId)).catch(() => []) ?? []);
+  ipcMain.handle("todos:add", (_e, appId: string, text: string) => chatAction((c) => c.addTodo(String(appId), String(text)))());
+  ipcMain.handle("todos:done", (_e, appId: string, todoId: string, done: boolean) =>
+    chatAction((c) => c.updateTodo(String(appId), String(todoId), { done: Boolean(done) }))(),
+  );
+  ipcMain.handle("todos:remove", (_e, appId: string, todoId: string) => chatAction((c) => c.removeTodo(String(appId), String(todoId)))());
+  ipcMain.handle("todos:send", (_e, appId: string, todoId: string) => chatAction((c) => c.sendTodo(String(appId), String(todoId)))());
   ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string) =>
     // Only a known preset passes; anything else is the default (React Native).
     chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" || preset === "expo-exact" ? preset : undefined))(),

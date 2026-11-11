@@ -223,6 +223,7 @@ button.lrow:hover { background: var(--aa-selected-bg); }
 .srow:has(> .badge) { min-height: var(--aa-size-app-row-height); }
 .srow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-hair); }
 .srow-main .sub { color: var(--aa-text-secondary); font-size: var(--aa-type-label-size); line-height: var(--aa-type-label-line); }
+.srow-main .sub.problem-text { color: var(--aa-problem); }
 .appicon { width: var(--aa-size-app-icon-medium); height: var(--aa-size-app-icon-medium); border-radius: calc(var(--aa-size-app-icon-medium) / 4); overflow: hidden; flex: none; position: relative; background: var(--aa-surface-sunken); display: grid; place-items: center; color: var(--aa-text-tertiary); }
 .appicon::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--aa-icon-edge); }
 .appicon img { width: 100%; height: 100%; display: block; object-fit: cover; }
@@ -491,3 +492,27 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
   .side-status { padding: var(--aa-space-md) 0; }
   .side-status > div { display: none; }
 }
+
+/* ---------- to-do list (the person's own notes per app, beside the chat) */
+.chat-head > .todo-toggle { margin-left: auto; flex: none; }
+.todo-toggle.is-on { background: var(--aa-selected-bg); }
+.todo-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--aa-radius-full); background: var(--aa-accent); color: var(--aa-on-accent); font-family: var(--aa-type-mono-family); font-size: 11px; line-height: 18px; text-align: center; } /* no token */
+.todo-panel .chat-head .chat-id { flex: 1; min-width: 0; }
+.todo-sub { color: var(--aa-text-secondary); }
+.todo-add { display: flex; gap: var(--aa-space-sm); padding: var(--aa-space-md) var(--aa-space-lg); border-bottom: var(--aa-border-width) solid var(--aa-border); }
+.todo-add .field { flex: 1; }
+.todo-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--aa-space-sm) 0 var(--aa-space-lg); }
+.todo-list { display: flex; flex-direction: column; }
+.todo-row { display: flex; align-items: center; gap: var(--aa-space-sm); min-height: var(--aa-size-touch); padding: 0 var(--aa-space-sm) 0 var(--aa-space-md); }
+.todo-row:hover { background: var(--aa-selected-bg); }
+.todo-tick { width: 32px; height: 32px; display: grid; place-items: center; flex: none; color: var(--aa-text-secondary); border-radius: var(--aa-radius-full); } /* no token */
+.todo-tick:hover { color: var(--aa-accent); }
+.todo-row.is-done .todo-tick { color: var(--aa-ready); }
+.todo-text { flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: text; padding: var(--aa-space-xs) 0; }
+.todo-row.is-done .todo-text { color: var(--aa-text-tertiary); text-decoration: line-through; text-decoration-color: var(--aa-border-strong); }
+.todo-sent { color: var(--aa-text-tertiary); flex: none; }
+.todo-send, .todo-remove { flex: none; }
+.todo-remove { width: 32px; height: 32px; opacity: 0; } /* no token */
+.todo-row:hover .todo-remove, .todo-remove:focus-visible { opacity: 1; }
+.todo-done-head { color: var(--aa-text-tertiary); padding: var(--aa-space-lg) var(--aa-space-lg) var(--aa-space-xs); text-transform: uppercase; letter-spacing: 0.06em; }
+.todo-empty { padding: var(--aa-space-2xl) var(--aa-space-lg); text-align: center; color: var(--aa-text-secondary); }

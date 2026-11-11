@@ -177,6 +177,16 @@ regular field in AnyAppAgent's Settings, not a separate screen.
   calls). `adb shell setprop debug.anyapp.ai.url http://10.0.2.2:<port>` points AnyAppAgent at it;
   only adb can set it, and while it is set the stored key is never sent (a placeholder is).
 
+## Sharing apps and updates (added 2026-11-11)
+
+The user: "i want to make the app have distribution features built in ... you can send updates
+through github to people ... integrate each app that i create with github so i can upload it there".
+Decided: an updater in every app with AnyAppAgent handling updates first when it is on the phone,
+private repos with a "Share with others" switch that makes a public releases-only repo, and one
+signing key per app. The plan, the stages and their proofs: `docs/DISTRIBUTION.md`. Since stage 1,
+new apps are signed with their own key (`%USERPROFILE%\.anyappagent\keystore\apps\<package id>`);
+apps made before keep the shared key until they are moved by key rotation.
+
 ## Apps that know each other (added 2026-11-11)
 
 The user: "We need an AnyAppAgent CLI that we install on the machine ... list all of the apps, and

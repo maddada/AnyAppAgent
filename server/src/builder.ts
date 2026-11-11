@@ -20,6 +20,22 @@ export interface Builder {
   createApp(args: { dir: string; name: string; slug: string; packageName: string; preset?: AppPreset; onLog?: (line: string) => void }): Promise<void>;
   buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void }): Promise<BuildResult>;
   getIconPath(args: { dir: string }): string | null;
+  // Signing keys (docs/DISTRIBUTION.md): only the real builder has them.
+  keys?: {
+    list(): Promise<{ keys: { id: string; kind: "shared" | "own" | "moved"; certSha256: string }[]; lastBackupAt: string | null; notBackedUp: string[] }>;
+    backup(args: { file: string; password: string }): Promise<{ file: string; count: number; createdAt: string }>;
+    restore(args: { file: string; password: string }): Promise<{ added: string[]; same: string[]; conflicts: { id: string; reason: string }[] }>;
+    kind(packageName: string): "shared" | "own" | "moved";
+    move(packageName: string): Promise<unknown>;
+  };
+}
+
+interface KeysModule {
+  listSigningKeys?: NonNullable<Builder["keys"]>["list"];
+  backupSigningKeys?: NonNullable<Builder["keys"]>["backup"];
+  restoreSigningKeys?: NonNullable<Builder["keys"]>["restore"];
+  appSigningKind?: (args: { packageName: string }) => "shared" | "own" | "moved";
+  moveAppToOwnKey?: (args: { packageName: string }) => Promise<unknown>;
 }
 
 export const REAL_BUILDER_PATH = join(REPO_DIR, "builder", "index.mjs");
@@ -27,7 +43,7 @@ export const REAL_BUILDER_PATH = join(REPO_DIR, "builder", "index.mjs");
 export async function loadBuilder(choice: "auto" | "real" | "fake"): Promise<Builder> {
   const useReal = choice === "real" || (choice === "auto" && existsSync(REAL_BUILDER_PATH));
   if (!useReal) return { kind: "fake", ...fake };
-  const mod = (await import(pathToFileURL(REAL_BUILDER_PATH).href)) as Omit<Builder, "kind">;
+  const mod = (await import(pathToFileURL(REAL_BUILDER_PATH).href)) as Omit<Builder, "kind" | "keys"> & KeysModule;
   for (const name of ["createApp", "buildApk", "getIconPath"] as const) {
     if (typeof mod[name] !== "function") throw new Error(`builder/index.mjs does not export ${name}()`);
   }
@@ -36,5 +52,16 @@ export async function loadBuilder(choice: "auto" | "real" | "fake"): Promise<Bui
     createApp: (args) => mod.createApp(args),
     buildApk: (args) => mod.buildApk(args),
     getIconPath: (args) => mod.getIconPath(args),
+    ...(mod.listSigningKeys && mod.backupSigningKeys && mod.restoreSigningKeys && mod.appSigningKind && mod.moveAppToOwnKey
+      ? {
+          keys: {
+            list: mod.listSigningKeys,
+            backup: mod.backupSigningKeys,
+            restore: mod.restoreSigningKeys,
+            kind: (packageName: string) => mod.appSigningKind!({ packageName }),
+            move: (packageName: string) => mod.moveAppToOwnKey!({ packageName }),
+          },
+        }
+      : {}),
   };
 }

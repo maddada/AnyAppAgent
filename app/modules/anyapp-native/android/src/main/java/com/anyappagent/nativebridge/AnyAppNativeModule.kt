@@ -257,7 +257,15 @@ class AnyAppNativeModule : Module() {
 
     // ---------- keep the connection alive while the PC works
 
+    /** Is the keep-alive service running in the foreground (so this process will not be frozen)? */
+    Function("keepAliveRunning") {
+      KeepAliveService.running
+    }
+
     Function("startKeepAlive") { text: String, color: String? ->
+      // Already running: change its text in place. A new start from the background is refused
+      // by Android, and it is not needed.
+      if (KeepAliveService.update(context, text, color)) return@Function true
       val intent = Intent(context, KeepAliveService::class.java)
         .putExtra(KeepAliveService.EXTRA_TEXT, text)
         .putExtra(KeepAliveService.EXTRA_COLOR, color)

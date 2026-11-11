@@ -52,8 +52,27 @@ export interface App {
   // With helpers (docs/APP-COORDINATOR.md): status is "working" while the main chat OR any helper works.
   replying?: boolean; // the main chat itself is answering now (its Stop applies); absent from older PCs
   activeHelpers?: number; // helpers waiting, working or building now; set (0 or more) only when the chat uses helpers
+  signing?: "shared" | "own" | "moved"; // which key signs its builds (docs/DISTRIBUTION.md); absent from older PCs
+  sharing?: AppSharing; // absent until the app is shared once (docs/DISTRIBUTION.md)
+  openTodos?: number; // to-do items not ticked off yet (see "To-do"); absent from older PCs and when there are none
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------- Sharing an app with other people (docs/DISTRIBUTION.md, "GitHub")
+// The code stays in the app's private repo; sharing makes a second, public repo that holds only a
+// README and the published versions (releases), so a friend can install it and get updates.
+export interface AppSharing {
+  shared: boolean; // true: the releases repo is public and new versions can be published
+  releasesRepoUrl: string; // https://github.com/<owner>/anyapp-<slug>-releases
+  installUrl: string; // the latest full APK, for a link or a QR (404 until a version is published)
+  feedUrl: string; // the update.json the app's own updater reads
+  since: string; // when it was first shared
+}
+// POST /api/apps/:id/share ShareRequest -> App (turns sharing on or off; 400 with a plain sentence
+// when something that looks like a secret would go public, 502 when GitHub fails)
+export interface ShareRequest {
+  shared: boolean;
 }
 
 export type ChatItemKind =
@@ -239,6 +258,33 @@ export interface PermissionAnswerRequest {
 //   talks to it through the main chat.
 // POST /api/apps/:id/workers/:workerId/cancel -> 202 (stops that worker; the main chat's cancel never does)
 
+// ---------- To-do (added): the person's own short list of ideas for an app. Kept by the PC per app, shown on
+// the phone and the desktop; the app's agent never sees it (not in its prompt, its repo or its tools).
+
+export interface TodoItem {
+  id: string;
+  text: string; // one line
+  done: boolean; // ticked off
+  sentAt?: string; // when "Send to agent" sent it to the chat (it is done from then on)
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /api/apps/:id/todos -> TodoItem[] (oldest first)
+// POST /api/apps/:id/todos -> TodoItem (201)
+export interface AddTodoRequest {
+  text: string;
+}
+// PATCH /api/apps/:id/todos/:todoId -> TodoItem
+export interface UpdateTodoRequest {
+  done?: boolean;
+  text?: string;
+}
+// DELETE /api/apps/:id/todos/:todoId -> 204
+// POST /api/apps/:id/todos/:todoId/send -> TodoItem (sends its text to the app's chat as the person's
+//   message, as POST /messages does, then marks it done)
+// Every change also arrives over the socket as "todos.updated" (the whole list) and "app.updated" (openTodos).
+
 // ---------- WebSocket: GET /ws?token=<token>. Server to app only; JSON text frames.
 // The app may send the text frame "ping" every few seconds: writing is how a phone notices a dead
 // connection whose close never reached it. The companion ignores frames from the app.
@@ -250,7 +296,8 @@ export type ServerEvent =
   | { type: "chat.item"; item: ChatItem } // upsert by item.id
   | { type: "apk.ready"; app: App } // a new APK can be downloaded and installed now
   | { type: "worker.updated"; worker: WorkerInfo } // a worker started or changed (its main-chat row also arrives as chat.item)
-  | { type: "worker.item"; item: ChatItem }; // upsert into the chat of worker item.workerId (never the main chat)
+  | { type: "worker.item"; item: ChatItem } // upsert into the chat of worker item.workerId (never the main chat)
+  | { type: "todos.updated"; appId: string; todos: TodoItem[] }; // added: the app's whole to-do list after a change
 
 // ---------- Desktop app (desktop/, Electron) to companion. The desktop app starts the companion
 // as a child process with the env var ANYAPP_ADMIN_TOKEN=<random secret>. That token is accepted
@@ -288,6 +335,41 @@ export interface AdminState {
   };
   easyConnect: EasyConnectState;
   devices: PairedDevice[];
+  signing?: SigningKeysState; // absent with the fake builder (added for docs/DISTRIBUTION.md)
+}
+
+// ---------- Signing keys (docs/DISTRIBUTION.md, "Signing"). Nothing here ever holds a password or
+// a private key; certificates are public.
+export interface SigningKeysState {
+  keys: SigningKeyInfo[];
+  lastBackupAt: string | null; // ISO time of the last backup made on this PC, null if never
+  notBackedUp: string[]; // ids of keys made since the last backup (all of them if never)
+}
+export interface SigningKeyInfo {
+  id: string; // "shared" (the PC's key for apps made before per-app keys) or an app's package id
+  kind: "shared" | "own" | "moved"; // moved: rotated from the shared key (Android 9+ refuses the shared key for it)
+  certSha256: string;
+  appName?: string; // the app with this package id, when the companion knows it
+}
+// POST /api/admin/keys/backup  KeysBackupRequest  -> KeysBackupResult (writes one encrypted file)
+// POST /api/admin/keys/restore KeysRestoreRequest -> KeysRestoreResult (adds the keys this PC lacks)
+export interface KeysBackupRequest {
+  file: string; // absolute path on the PC, chosen in a save dialog
+  password: string; // at least 8 characters; never stored or logged
+}
+export interface KeysBackupResult {
+  file: string;
+  count: number;
+  createdAt: string;
+}
+export interface KeysRestoreRequest {
+  file: string;
+  password: string;
+}
+export interface KeysRestoreResult {
+  added: string[]; // key ids written to this PC
+  same: string[]; // already here with the same certificate
+  conflicts: { id: string; reason: string }[]; // here with a different certificate: kept, never overwritten
 }
 
 // POST /api/admin/pairing/new -> AdminState (a fresh 6-digit code and, when on, a fresh Easy Connect code)

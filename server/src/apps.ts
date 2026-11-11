@@ -1,9 +1,9 @@
 // The app manager: creating apps, one Claude Code session per app, a build after every turn,
 // Git/GitHub, and the chat timeline. Every change goes out as a ServerEvent.
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, TodoItem, WorkerInfo } from "../../shared/protocol.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import type { PromptImage } from "./acp/claude-session.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
@@ -16,11 +16,13 @@ import type { Config } from "./config.ts";
 import { nowIso } from "./fs-util.ts";
 import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
+import { realGithub, shareApp, unshareApp, type GithubApi } from "./sharing.ts";
 import { appPlaybook, buildFixPrompt } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
 import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
 import { isWorkerToolCall, workerToolsMcpServer } from "./worker-http.ts";
 import { WorkerManager, type BuildChangeOutcome } from "./workers.ts";
+import { cleanTodoText, TodoLists } from "./todos.ts";
 import { isJsonObject } from "./acp/acp-client.ts";
 import { appsCliEnv, firstOverview, OVERVIEW_FILE, overviewNeedsAgent } from "./apps-cli.ts";
 import { overviewNudge } from "./playbook.ts";
@@ -134,8 +136,13 @@ export class AppManager {
   private readonly interruptedBuilds = new Set<string>();
   /** A plain sentence when the builder cannot run on this PC (no Android toolchain), else null. */
   private readonly checkToolchain: () => string | null;
+  private readonly github: GithubApi;
+  /** Apps whose sharing is being turned on or off right now (one change at a time). */
+  private readonly sharingBusy = new Set<string>();
   /** Each app's workers, when its main chat is a coordinator (config.coordinator). */
   readonly workers: WorkerManager | undefined;
+  /** The person's own to-do list per app; never given to the agent. */
+  private readonly todoLists: TodoLists;
 
   constructor(deps: {
     store: Store;
@@ -144,13 +151,16 @@ export class AppManager {
     broadcast: (event: ServerEvent) => void;
     log: (...parts: unknown[]) => void;
     checkToolchain?: () => string | null;
+    github?: GithubApi;
   }) {
+    this.github = deps.github ?? realGithub;
     this.store = deps.store;
     this.builder = deps.builder;
     this.config = deps.config;
     this.broadcast = deps.broadcast;
     this.log = deps.log;
     this.checkToolchain = deps.checkToolchain ?? (() => null);
+    this.todoLists = new TodoLists(this.store.stateDir);
     this.workers = this.config.coordinator
       ? new WorkerManager({
           config: this.config,
@@ -207,6 +217,7 @@ export class AppManager {
         }
       }
       delete app.replying;
+      this.refreshSigning(record);
       if (app.latestBuild?.status === "running") {
         app.latestBuild = { ...app.latestBuild, status: "failed", finishedAt: nowIso(), error: INTERRUPTED_BUILD };
         // Built again by itself once the server listens (startWork), not left for the person to notice.
@@ -421,6 +432,61 @@ export class AppManager {
     if (!rt.running) void this.drain(record);
   }
 
+  // ---------- the person's to-do list (never shown to the agent)
+
+  todos(id: string): TodoItem[] {
+    this.record(id);
+    return this.todoLists.list(id);
+  }
+
+  addTodo(id: string, text: string): TodoItem {
+    const record = this.record(id);
+    const clean = cleanTodoText(text);
+    if (!clean) throw new HttpError(400, "Write something first.");
+    const item = this.todoLists.add(id, clean);
+    if (!item) throw new HttpError(409, "This list is full. Remove a few done items first.");
+    this.todosChanged(record);
+    return item;
+  }
+
+  updateTodo(id: string, todoId: string, change: { done?: unknown; text?: unknown }): TodoItem {
+    const record = this.record(id);
+    if (change.done !== undefined && typeof change.done !== "boolean") throw new HttpError(400, '"done" must be true or false.');
+    if (change.text !== undefined && typeof change.text !== "string") throw new HttpError(400, '"text" must be a string.');
+    const text = typeof change.text === "string" ? cleanTodoText(change.text) : undefined;
+    if (text === "") throw new HttpError(400, "Write something first.");
+    const item = this.todoLists.update(id, todoId, { ...(typeof change.done === "boolean" ? { done: change.done } : {}), ...(text ? { text } : {}) });
+    if (!item) throw new HttpError(404, "That to-do is not on the list any more.");
+    this.todosChanged(record);
+    return item;
+  }
+
+  removeTodo(id: string, todoId: string): void {
+    const record = this.record(id);
+    if (!this.todoLists.remove(id, todoId)) throw new HttpError(404, "That to-do is not on the list any more.");
+    this.todosChanged(record);
+  }
+
+  /** Sends the item's text to the app's chat as the person's message, then ticks it off. */
+  sendTodo(id: string, todoId: string): TodoItem {
+    const record = this.record(id);
+    const item = this.todoLists.find(id, todoId);
+    if (!item) throw new HttpError(404, "That to-do is not on the list any more.");
+    this.sendMessage(id, item.text);
+    const sent = this.todoLists.update(id, todoId, { done: true, sentAt: nowIso() })!;
+    this.todosChanged(record);
+    return sent;
+  }
+
+  private todosChanged(record: AppRecord): void {
+    const open = this.todoLists.openCount(record.app.id);
+    if (open > 0) record.app.openTodos = open;
+    else delete record.app.openTodos;
+    this.broadcast({ type: "todos.updated", appId: record.app.id, todos: this.todoLists.list(record.app.id) });
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
+  }
+
   sendMessage(id: string, text: string, uploads: ImageUpload[] = []): void {
     const record = this.record(id);
     if (text.trim() === "" && uploads.length === 0) throw new HttpError(400, "The message is empty.");
@@ -463,6 +529,67 @@ export class AppManager {
       if (existsSync(path)) return { path, mimeType };
     }
     return null;
+  }
+
+  /** Which key signs this app's builds (docs/DISTRIBUTION.md); unknown with the fake builder. */
+  private refreshSigning(record: AppRecord): void {
+    if (!this.builder.keys) return;
+    try {
+      record.app.signing = this.builder.keys.kind(record.app.packageName);
+    } catch {
+      // a broken key record is reported by the next build
+    }
+  }
+
+  /**
+   * "Share with others" on or off (docs/DISTRIBUTION.md, "GitHub"). On: the code stays in the
+   * private repo, a public anyapp-<slug>-releases repo gets a README and the icon, and an app still
+   * on the shared key moves to its own key first (then builds again, so the phone gets that build).
+   */
+  async setShared(id: string, shared: boolean): Promise<App> {
+    const record = this.record(id);
+    if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
+    if (!this.config.github) throw new HttpError(409, "GitHub is turned off on this PC, so apps cannot be shared.");
+    if (this.sharingBusy.has(id)) throw new HttpError(409, "Sharing is already being changed for this app.");
+    if (shared === Boolean(record.app.sharing?.shared)) return record.app;
+    this.sharingBusy.add(id);
+    try {
+      if (shared) {
+        const { sharing, movedKey } = await shareApp(record.app, {
+          github: this.github,
+          ensureCodeRepo: () => this.ensureCodeRepo(record),
+          ...(this.builder.keys
+            ? { keys: { kind: (p: string) => this.builder.keys!.kind(p), move: async (p: string) => void (await this.builder.keys!.move(p)) } }
+            : {}),
+          iconPng: () => this.iconPng(record),
+          log: this.log,
+        });
+        record.app.sharing = sharing;
+        this.refreshSigning(record);
+        this.touch(record);
+        // A plain build (no agent turn unless it fails), so the phone gets the build with the new key.
+        if (movedKey && record.app.latestApk) this.enqueue(record, { kind: "build" });
+      } else {
+        record.app.sharing = await unshareApp(record.app, { github: this.github, log: this.log });
+        this.touch(record);
+      }
+      return record.app;
+    } finally {
+      this.sharingBusy.delete(id);
+    }
+  }
+
+  /** The app's private code repo: made now if GitHub failed when the app was created. */
+  private async ensureCodeRepo(record: AppRecord): Promise<void> {
+    if (record.app.repoUrl) return;
+    if (!existsSync(join(record.dir, ".git"))) await git.initRepo(record.dir, `Create ${record.app.name}`);
+    record.app.repoUrl = await git.createGithubRepo(record.dir, `anyapp-${record.app.slug}`);
+    this.store.save();
+  }
+
+  private iconPng(record: AppRecord): Buffer {
+    const path = this.safeIconPath(record);
+    return path ? readFileSync(path) : placeholderIconPng(record.app.name);
   }
 
   rebuild(id: string): void {
@@ -779,6 +906,7 @@ ${overviewNudge()}` : "";
         this.errorItem(record, "Could not save this version to GitHub right now; it is kept on the PC.");
       }
       record.app.latestApk = build;
+      this.refreshSigning(record);
       this.checkIcon(record);
       this.setStatus(record, "idle");
       this.broadcast({ type: "apk.ready", app: record.app });

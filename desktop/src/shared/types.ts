@@ -1,8 +1,8 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
-export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, WorkerInfo };
+export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, TodoItem, WorkerInfo };
 
 /** One self-check in the setup checklist. */
 export type CheckState = "checking" | "done" | "needed" | "working" | "skipped" | "problem";
@@ -151,6 +151,12 @@ export interface ActionResult {
   error?: string;
 }
 
+/** Back up or restore signing keys (docs/DISTRIBUTION.md): cancelled when the file dialog was closed. */
+export type KeysAction =
+  | { cancelled: true }
+  | { ok: true; file: string; count?: number; restored?: KeysRestoreResult }
+  | { ok: false; error: string };
+
 /** What the preload bridge exposes as window.anyapp. */
 export interface AnyAppBridge {
   getSnapshot(): Promise<Snapshot>;
@@ -161,6 +167,8 @@ export interface AnyAppBridge {
   /** An item of a helper's own chat (item.workerId says whose). */
   onHelperItem(listener: (item: ChatItem) => void): () => void;
   onNavigate(listener: (where: "connect-phone" | "home") => void): () => void;
+  /** An app's whole to-do list after a change (from the phone or this PC). */
+  onTodos(listener: (appId: string, todos: TodoItem[]) => void): () => void;
 
   recheck(): Promise<void>;
   claudeSignIn(): Promise<void>;
@@ -182,6 +190,10 @@ export interface AnyAppBridge {
   /** Turns Easy Connect on once when the phone step opens, if it is off. */
   easyConnectAuto(): Promise<void>;
   removeDevice(id: string): Promise<void>;
+  /** Asks where to save, then writes every signing key there, encrypted with `password`. */
+  backupKeys(password: string): Promise<KeysAction>;
+  /** Asks for a backup file, then adds the keys in it that this PC does not have. */
+  restoreKeys(password: string): Promise<KeysAction>;
 
   getMessages(appId: string): Promise<ChatItem[]>;
   getHelpers(appId: string): Promise<WorkerInfo[]>;
@@ -195,6 +207,13 @@ export interface AnyAppBridge {
   /** Builds the app again (Try again on a failed build). */
   rebuild(appId: string): Promise<ActionResult>;
   answerPermission(appId: string, requestId: string, optionId: string): Promise<ActionResult>;
+  /** The person's own to-do list for an app (the agent never sees it). */
+  getTodos(appId: string): Promise<TodoItem[]>;
+  addTodo(appId: string, text: string): Promise<ActionResult>;
+  setTodoDone(appId: string, todoId: string, done: boolean): Promise<ActionResult>;
+  removeTodo(appId: string, todoId: string): Promise<ActionResult>;
+  /** Sends the item's text to the app's chat as a message, then ticks it off. */
+  sendTodo(appId: string, todoId: string): Promise<ActionResult>;
   /** New app from this PC: the same as the phone's New app sheet (preset: Advanced, default React Native). */
   createApp(name: string, prompt: string, preset?: AppPreset): Promise<ActionResult & { app?: App }>;
 

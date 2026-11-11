@@ -11,6 +11,7 @@ import { EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
 import { serverName, startHttpServer } from "./http.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
+import { SigningKeys } from "./signing-keys.ts";
 import { Store } from "./store.ts";
 import { loadToolchain, TOOLCHAIN_MISSING } from "./toolchain.ts";
 import { warmBuilder } from "./warm.ts";
@@ -45,6 +46,7 @@ export async function main(): Promise<void> {
     checkToolchain: () => (builder.kind === "real" && !toolchain ? TOOLCHAIN_MISSING : null),
   });
   apps.recover();
+  const signing = new SigningKeys(builder, () => new Map(apps.list().map((app) => [app.packageName, app.name])), log);
 
   const http = startHttpServer({
     host: config.host,
@@ -53,9 +55,16 @@ export async function main(): Promise<void> {
     auth,
     apps,
     easyConnect,
+    signing,
     ...(process.env.ANYAPP_HOST_APK ? { hostApkPath: process.env.ANYAPP_HOST_APK } : {}),
   });
-  broadcast = http.broadcast;
+  broadcast = (event) => {
+    // A new app gets its own signing key: show it (and that it is not backed up yet) on the PC.
+    if (event.type === "app.updated") signing.refreshSoon();
+    http.broadcast(event);
+  };
+  signing.onChange = () => http.adminChanged();
+  void signing.refresh();
   auth.onChange = () => http.adminChanged();
   easyConnect.onChange = () => http.adminChanged();
   try {

@@ -21,5 +21,6 @@ export type {
   SendMessageRequest,
   ServerEvent,
   ToolCallInfo,
+  TodoItem,
   WorkerInfo,
 } from "@shared/protocol";
