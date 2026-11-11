@@ -146,3 +146,35 @@ then show the same Reload card. Friends with older native parts keep getting the
 ## Proof
 
 See "Fast lane proof" below.
+
+## Fast lane proof
+
+2026-11-11, `emulator-5560` (Android 15, shared and heavily loaded by other threads: load average
+often 20 to 40, once 383 with a system restart), my own companion (port 8813, state, apps and keys in
+`C:\aa\t\fl-*`, GitHub off, single agent per app), my phone copy `com.anyappagent.fastlane`, real
+Claude Code turns. Test apps: Tally (`com.anyapp.tally`, React Native) and FL Kotlin
+(`com.anyapp.flkotlin`). Screenshots and timing notes in `C:\aa\e2e\fast-lane\`.
+
+| What | Result |
+| ---- | ------ |
+| Builder, JavaScript-only change (CLI, warm) | Quick build 16 s (export and Hermes 12 s with TypeScript running beside it), quick update 1.1 MB, three swapped APKs signed and checked. In the companion: 7 to 10 s. A full warm Gradle build of the same app: 104 to 224 s; a new app's first build: 7 to 11 min |
+| The agent changed the icon and `app.json` in its first real turn | "Native parts changed": full build, correctly |
+| Quick update with Tally on screen ("Tap Count" heading) | Message to build done 31 s (the agent's turn about 20 s, the build 10 s); AnyAppAgent fetched and handed over the 5.5 MB update in 10.5 s (1.7 s on a later run when the emulator was calmer); Tally checked it in 1.4 s and showed "Version 3 is ready" (`12-tally-popup-ota.png`); Reload: the new heading on screen about 2 s after the tap, in place (`13-tally-after-reload.png`), trial confirmed ("started fine") |
+| The tile after it | "V3" while the installed APK is 2 (`14-tile-v3.png`) |
+| Native change (icon) with Tally on screen | Full build 212 s; AnyAppAgent downloaded the APK but did not install over the open app; Tally showed "Version 4 is ready ... A new install is ready" 19 s after the build (`15-tally-popup-apk.png`); Reload: installed 5.6 s after the tap, no prompt |
+| Reopen after that install | First try failed: the reopen came from JavaScript 16 s later, after a Home press from another thread, and Android blocked it as a background start. Fixed: AnyAppAgent's install result receiver opens the app the moment Android reports success. Retest (build 8): installed 3.3 s after Reload, Tally back on screen by itself at 11 s (`23-tally-popup-apk8.png`, `24-tally-v8-reopened.png`, tile V8 `25-tile-v8.png`) |
+| Broken quick update (`throw` at the top of the App component, build 5) | Reload: "quick update 5 failed at start ... going back", AnyAppAgent told ("did not start on the phone; it went back to 4"). First version reloaded in place and left a blank screen; changed to a restart. Retest (build 7): crash, then a fresh process on the installed version (`22-after-rollback-restart.png`); build 7 is not offered again |
+| Kotlin app, change with the app on screen | Build 78 s; "Version 2 is ready" in the Compose app (`26-kotlin-popup.png`); Reload: installed 2.3 s, reopened 6.8 s, new text showing (`27-kotlin-v2-reopened.png`) |
+| Dark mode | The card stayed light when the theme changed while it showed (React Native handles the change without recreating the activity). Fixed (redrawn on configuration change); `31-popup-dark.png` |
+| The chat | Build card "Sent as a quick update / Version 11. No install needed: tap Reload in the app", header "Version 11 is on this phone", and the agent's own "Sent as a quick update, no install needed." (`32-chat-quick-update.png`) |
+
+Time from message to change, as measured here:
+
+- **Quick update**: about 45 s on the loaded emulator (agent turn 20 s, build 10 s, hand-over 11 s,
+  Reload 2 s); the PC and phone part alone is 13 to 25 s. The agent's turn is now most of it.
+- **APK**: about 4 to 5 minutes (agent turn, Gradle 2 to 4 minutes, a 24 MB download, install 3 to
+  6 s, reopen), much longer when the shared emulator was overloaded.
+
+Not proven here: the agent's own "Sent as a quick update" sentence is its prediction from what it
+changed; once (build 10) it was a full build because I had changed the app's native loader by hand,
+and the build card said so. The build card is the truth.

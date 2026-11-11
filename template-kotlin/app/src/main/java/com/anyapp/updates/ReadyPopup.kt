@@ -3,6 +3,7 @@ package com.anyapp.updates
 import android.app.Activity
 import android.app.Application
 import android.content.BroadcastReceiver
+import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -50,6 +51,8 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
   private var front: WeakReference<Activity>? = null
   @Volatile private var laterFor = 0L
   private var shownFor = 0L
+  private var shownDark = false
+  private var lastOffer: Offer? = null
 
   private data class Offer(val kind: String, val build: Long, val host: String?)
 
@@ -60,6 +63,16 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
       installed = true
     }
     app.registerActivityLifecycleCallbacks(this)
+    // Light and dark: an activity that handles the theme change itself is not recreated, so the
+    // card is drawn again in the new colours.
+    app.registerComponentCallbacks(object : ComponentCallbacks {
+      override fun onConfigurationChanged(newConfig: Configuration) {
+        main.post { show(lastOffer) }
+      }
+
+      @Deprecated("Deprecated in Java")
+      override fun onLowMemory() {}
+    })
   }
 
   override fun onActivityResumed(activity: Activity) {
@@ -124,6 +137,7 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
   // ---------------------------------------------------------------- the card
 
   private fun show(offer: Offer?) {
+    lastOffer = offer
     val activity = front?.get() ?: return
     val decor = activity.window?.decorView as? ViewGroup ?: return
     val old = decor.findViewWithTag<View>(VIEW_TAG)
@@ -132,9 +146,11 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
       shownFor = 0
       return
     }
-    if (old != null && shownFor == offer.build) return
+    val dark = isDark(activity)
+    if (old != null && shownFor == offer.build && shownDark == dark) return
     if (old != null) decor.removeView(old)
     shownFor = offer.build
+    shownDark = dark
     decor.addView(card(activity, offer))
   }
 
@@ -143,9 +159,11 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
   private class Palette(val surface: Int, val border: Int, val text: Int, val muted: Int, val accent: Int, val onAccent: Int)
 
   // AnyAppAgent's Workbench colours (shared/theme/tokens.ts): warm paper, graphite, bottle green.
+  private fun isDark(ctx: Context) =
+    (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
   private fun palette(ctx: Context): Palette {
-    val dark = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-    return if (dark) {
+    return if (isDark(ctx)) {
       Palette(Color.parseColor("#28241F"), Color.parseColor("#4B443B"), Color.parseColor("#EEE8DD"), Color.parseColor("#BDB3A5"), Color.parseColor("#6DBB8F"), Color.parseColor("#0E2117"))
     } else {
       Palette(Color.parseColor("#FDFCF8"), Color.parseColor("#DED6C8"), Color.parseColor("#1F1B16"), Color.parseColor("#575046"), Color.parseColor("#1D6A4A"), Color.parseColor("#F7F4EC"))
