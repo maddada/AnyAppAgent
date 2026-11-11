@@ -66,6 +66,7 @@ const COMMAND_TITLES: [RegExp, string][] = [
   [/npm run bundle\b|expo export/, "Checked that the app packs up"],
   [/npm run icon\b|make-icon/, "Made the app icon"],
   [/npx expo install\b|\bnpm (install|i)\b/, "Added a part to the app"],
+  [/\banyapp\b/, "Looked at your other apps"],
   [/\bgit\b/, "Looked at the app's history"],
   [/\b(curl|wget|Invoke-WebRequest)\b/, "Downloaded something"],
   [/\b(ls|dir|cat|head|tail|grep|rg|find|Get-ChildItem|Get-Content|Select-String)\b/, "Looked at the app's files"],

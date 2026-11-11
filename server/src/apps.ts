@@ -22,6 +22,8 @@ import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from 
 import { isWorkerToolCall, workerToolsMcpServer } from "./worker-http.ts";
 import { WorkerManager, type BuildChangeOutcome } from "./workers.ts";
 import { isJsonObject } from "./acp/acp-client.ts";
+import { appsCliEnv, firstOverview, OVERVIEW_FILE, overviewNeedsAgent } from "./apps-cli.ts";
+import { overviewNudge } from "./playbook.ts";
 
 export class HttpError extends Error {
   readonly status: number;
@@ -384,6 +386,9 @@ export class AppManager {
       mkdirSync(this.config.appsDir, { recursive: true });
       this.log(`[${app.slug}] creating ${dir} with the ${this.builder.kind} builder`);
       await this.builder.createApp({ dir, name: app.name, slug: app.slug, packageName: app.packageName, preset: app.preset ?? "react-native", onLog: () => {} });
+      // A first overview.md (what the person asked for), so other apps' agents see it at once; this
+      // app's agent rewrites it on its first turn and keeps it up to date.
+      if (!existsSync(join(dir, OVERVIEW_FILE))) writeFileSync(join(dir, OVERVIEW_FILE), firstOverview(app.name, prompt));
       await git.initRepo(dir, `Create ${app.name}`);
       record.iconStamp = this.iconStamp(record);
       record.ready = true;
@@ -574,6 +579,7 @@ export class AppManager {
     const jobs = [first, ...rt.queue.filter((job): job is Job & { kind: "report" } => job.kind === "report")];
     rt.queue = rt.queue.filter((job) => job.kind !== "report");
     const stop = await this.agentTurn(record, reportPrompt(jobs.map((job) => job.text)));
+    this.workers?.saveMainNotes(record.app.id, record.dir);
     this.workers?.reported(record.app.id, jobs.map((job) => job.workerId));
     if (stop !== "cancelled") this.setStatus(record, "idle");
   }
@@ -583,12 +589,13 @@ export class AppManager {
       // The coordinator only talks and starts workers; builds follow workers' changes. Pictures go to
       // it as image blocks, and their paths on this PC too, so it can hand them to a helper's brief.
       const paths = images.length > 0 ? `\n\n(The pictures are saved on this PC at: ${images.map((i) => i.path).join(", ")}. A helper can open them by path.)` : "";
-      await this.agentTurn(record, `${text}${paths}`, images);
+      await this.agentTurn(record, `${text}${paths}${this.overviewNote(record)}`, images);
+      this.workers.saveMainNotes(record.app.id, record.dir);
       this.setStatus(record, "idle");
       return;
     }
     const before = await git.treeSnapshot(record.dir, (m) => this.log(`[${record.app.slug}] ${m}`));
-    const stopReason = await this.agentTurn(record, text, images);
+    const stopReason = await this.agentTurn(record, `${text}${this.overviewNote(record)}`, images);
     if (stopReason === "cancelled" || this.runtime(record.app.id).cancelRequested) {
       this.setStatus(record, "idle");
       return;
@@ -602,7 +609,14 @@ export class AppManager {
     await this.buildCycle(record);
   }
 
-  private async ensureSession(record: AppRecord): Promise<ClaudeSession> {
+  /** Added to the person's prompt (not shown to them) while the app has no overview.md of the agent's own. */
+  private overviewNote(record: AppRecord): string {
+    return overviewNeedsAgent(record.dir) ? `
+
+${overviewNudge()}` : "";
+  }
+
+    private async ensureSession(record: AppRecord): Promise<ClaudeSession> {
     const rt = this.runtime(record.app.id);
     if (rt.session?.alive) return rt.session;
     if (rt.starting) return rt.starting;
@@ -619,6 +633,7 @@ export class AppManager {
       : undefined;
     const session = new ClaudeSession({
       cwd: record.dir,
+      env: appsCliEnv(this.store.stateDir, record.app.id),
       ...(record.sessionId ? { resumeSessionId: record.sessionId } : {}),
       instructions: appPlaybook(appInfo),
       ...coordinated,

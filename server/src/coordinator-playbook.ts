@@ -2,7 +2,7 @@
 // Ghostex coordinator playbook (the user's own ghostex-orchestrator skill), cut down for one person
 // who is not technical and talks to one app from their phone. See docs/APP-COORDINATOR.md.
 import type { AppPreset } from "../../shared/protocol.ts";
-import { checkCommand, MEMORY_FILE } from "./playbook.ts";
+import { checkCommand, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules } from "./playbook.ts";
 
 type AppInfo = { name: string; packageName: string; dir: string; preset?: AppPreset };
 
@@ -14,7 +14,7 @@ function stack(preset: AppPreset | undefined): string {
 /** The MCP server name the coordinator's worker tools live under (tools show as mcp__workers__*). */
 export const WORKER_TOOLS_SERVER = "workers";
 /** Bump when the coordinator playbook changes enough that resumed sessions must get it again. */
-export const COORDINATOR_PLAYBOOK_VERSION = 1;
+export const COORDINATOR_PLAYBOOK_VERSION = 2; // 2: overview.md and the `anyapp` command
 /** The first line of a message that carries worker reports to the coordinator (not from the person). */
 export const REPORT_HEADER = "[Worker report]";
 
@@ -84,7 +84,12 @@ first version, and tell it to give the app an icon of its own that matches what 
 
 Memory: keep a short file ${MEMORY_FILE} in the project root with the app's goal (what the person
 wants it to do), the decisions and preferences they gave you, and what is still open. Read it when
-you need context and update it when something important changes. It is the one file you write.
+you need context and update it when something important changes.
+
+${overviewRules()}
+${MEMORY_FILE} and ${OVERVIEW_FILE} are the only files you write.
+
+${otherAppsRules("coordinator")}
 
 ${TASTE}`;
 }
@@ -115,8 +120,10 @@ Do the whole task, then end your turn with your report: two to four plain senten
 (or found), what you chose where something was unclear, and anything left open. No code or file
 names unless they matter. The coordinator may send you follow-ups later; each one is a new turn.
 
-Read ${MEMORY_FILE} when you need the app's goal and the person's earlier choices; the coordinator
-keeps it, so do not edit it.
+Read ${OVERVIEW_FILE} (what the app should do) and ${MEMORY_FILE} (the person's earlier choices) when
+you need them; the coordinator keeps both, so do not edit them.
+
+${otherAppsRules("builder")}
 
 ${TASTE}`;
 }
