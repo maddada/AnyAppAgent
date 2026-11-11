@@ -159,9 +159,9 @@ playbooks tell the agent to use it only when the person asks, and to take only w
 ## Proof (2026-11-12)
 
 `emulator-5560`, my own copies of the phone app: **AA Owner** (`com.anyappagent.change`) paired with
-my owner companion (port 8811, state `C:a	\cta\state`) and **AA Friend**
+my owner companion (port 8811, state `C:\aa\t\cta\state`) and **AA Friend**
 (`com.anyappagent.change2`) paired with a second companion standing in for the friend's PC (port
-8812, state `C:a	\ctb\state`, GitHub off). Screenshots: `C:a\e2e\change-this-app\`
+8812, state `C:\aa\t\ctb\state`, GitHub off). Screenshots: `C:\aa\e2e\change-this-app`
 (light and dark), desktop ones in `desktop\`.
 
 | Step | Result |
