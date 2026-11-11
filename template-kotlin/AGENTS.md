@@ -27,8 +27,8 @@ app/src/main/java/com/anyapp/app/
   ai/Ai.kt                 AI (chat, streaming, tools, agents) through AnyAppAgent's key
   ai/AiSetupNotice.kt      the "AI is not set up" card with a button to AnyAppAgent
   ai/AiTypes.kt            AiMessage, AiPart, AiTool, AiError ... (AI.md: the wire format, leave it)
-  feedback/                "Point at it": shake to send feedback (built in: keep it, leave it as is)
 app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service, feedback
+app/src/main/java/com/anyapp/feedback/  "Point at it": shake to send feedback (built in: keep it, leave it as is)
 app/src/main/assets/anyapp-feedback/   the feedback screen's fonts (leave them)
 app/src/main/res/values/strings.xml   app_name: the name under the icon
 app/src/main/res/raw/      sound files for alarms (adhan.mp3, beep.ogg, ...)
@@ -71,7 +71,7 @@ The Kotlin package of the code is `com.anyapp.app` in every app; only the instal
   keep Compose libraries under the BOM (no version).
 - Never put secrets or keys in the app. For AI, use `Ai` (below): never ask the person for an
   API key and never call an AI provider over the internet yourself.
-- Never remove or change the feedback feature (`feedback/`, its provider and activity in
+- Never remove or change the feedback feature (`com/anyapp/feedback/`, its provider and activity in
   `AndroidManifest.xml`, `assets/anyapp-feedback/`). See "Feedback: shake and point at it".
 
 You may change `app_name` in `strings.xml` when the user asks to rename the app.
@@ -328,7 +328,7 @@ so anyone can tell them what to change. It needs no code and works on its own:
 Never remove it, never add options to it, and never draw your own feedback screen. When a
 feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbered arrows on the
 screenshot. To also open it from a button (for example "Send feedback" in a settings screen):
-`com.anyapp.app.feedback.Feedback.open(activity)` (`LocalActivity.current` in Compose, or
+`com.anyapp.feedback.Feedback.open(activity)` (`LocalActivity.current` in Compose, or
 `LocalContext.current as Activity`). It does not open while a full-screen alarm shows.
 
 ## The app icon

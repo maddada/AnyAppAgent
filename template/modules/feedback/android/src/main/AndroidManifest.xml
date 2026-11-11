@@ -6,13 +6,13 @@
   <application>
     <!-- Starts the shake watcher when the app starts, and serves saved pictures for pasting. -->
     <provider
-      android:name="expo.modules.anyappfeedback.FeedbackProvider"
+      android:name="com.anyapp.feedback.FeedbackProvider"
       android:authorities="${applicationId}.anyappfeedback"
       android:exported="false"
       android:grantUriPermissions="true"
       />
     <activity
-      android:name="expo.modules.anyappfeedback.FeedbackActivity"
+      android:name="com.anyapp.feedback.FeedbackActivity"
       android:exported="false"
       android:excludeFromRecents="true"
       android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"

@@ -1,5 +1,5 @@
 // "Point at it": part of the feedback feature built into every app (see Feedback.kt). Keep it.
-package com.anyapp.app.feedback
+package com.anyapp.feedback
 
 import android.content.Context
 import android.content.res.Configuration

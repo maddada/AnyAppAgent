@@ -1,8 +1,9 @@
 // "Point at it": shake the phone, draw numbered arrows on a screenshot, write notes, Save.
-// Built into every app AnyAppAgent makes; keep it. The same files live in
-// template/modules/feedback (React Native) and template-kotlin/.../feedback (Kotlin): keep them
-// identical apart from the package line.
-package expo.modules.anyappfeedback
+// Built into every app AnyAppAgent makes; keep it. One Kotlin core in both templates
+// (template-kotlin/app/src/main/java/com/anyapp/feedback and
+// template/modules/feedback/android/src/main/java/com/anyapp/feedback): byte for byte the same,
+// checked by builder/test/feedback-copies.test.mjs.
+package com.anyapp.feedback
 
 import android.app.Activity
 import android.app.Application

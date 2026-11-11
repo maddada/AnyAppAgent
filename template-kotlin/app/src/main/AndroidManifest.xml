@@ -96,16 +96,16 @@
       android:exported="false"
       android:foregroundServiceType="mediaPlayback" />
 
-    <!-- "Point at it" feedback (com.anyapp.app.feedback): shake the phone, point with numbered
+    <!-- "Point at it" feedback (com.anyapp.feedback): shake the phone, point with numbered
          arrows, write notes, Save. Built into every app: keep these. The provider starts the
          shake watcher when the app starts and serves the saved pictures for pasting. -->
     <provider
-      android:name=".feedback.FeedbackProvider"
+      android:name="com.anyapp.feedback.FeedbackProvider"
       android:authorities="${applicationId}.anyappfeedback"
       android:exported="false"
       android:grantUriPermissions="true" />
     <activity
-      android:name=".feedback.FeedbackActivity"
+      android:name="com.anyapp.feedback.FeedbackActivity"
       android:exported="false"
       android:excludeFromRecents="true"
       android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
