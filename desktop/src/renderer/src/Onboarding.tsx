@@ -1,6 +1,6 @@
 // Onboarding (COMPONENTS.md 6): step rail on the left, one idea per screen on the right, footer
 // with Back and Skip or Continue. Every step checks itself and fixes itself where it can.
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight, Check, ChevronLeft, Cloud, Copy, Download, ExternalLink, KeyRound, Monitor, QrCode, Smartphone, Wrench, X } from "lucide-react";
 import type { Snapshot } from "../../shared/types.ts";
@@ -193,7 +193,7 @@ function Welcome() {
       <p className="lede">AnyAppAgent turns your ideas into real apps. You tell it what you want, on your phone or right here, and this PC does the rest.</p>
       <div className="loop">
         {loop.map(([of, title, line], i) => (
-          <div key={title} className="row" style={{ flex: 1, alignItems: "stretch" }}>
+          <Fragment key={title}>
             <div className="card loop-step">
               <span className="badge">
                 <Icon of={of} size="md" />
@@ -206,7 +206,7 @@ function Welcome() {
                 <Icon of={ArrowRight} size="sm" />
               </span>
             )}
-          </div>
+          </Fragment>
         ))}
       </div>
       <p className="label secondary" style={{ marginTop: "var(--aa-space-2xl)" }}>

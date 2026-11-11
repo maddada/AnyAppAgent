@@ -50,7 +50,13 @@ export function GetPhoneApp({ big }: { big?: boolean }) {
       </p>
       {localReady && (
         <button className="btn btn-text btn-sm" onClick={() => setUseLocal(!useLocal)}>
-          {useLocal ? "Use the download from the internet" : "Didn't download? Get it from this PC over Wi-Fi"}
+          {useLocal ? (
+            "Use the download from the internet"
+          ) : (
+            <span>
+              Didn't download? <span className="keep">Get it from this PC over Wi-Fi</span>
+            </span>
+          )}
         </button>
       )}
     </div>
