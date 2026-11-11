@@ -66,7 +66,8 @@ export type ChatItemKind =
   | "build" // an APK build started by the server
   | "error" // something failed outside the agent's own text
   | "worker" // one row per worker in the app's main chat (ChatItem.worker); upserted as it moves
-  | "stopped"; // a plain "Stopped" line where the person stopped a turn (main chat or a helper's chat)
+  | "stopped" // a plain "Stopped" line where the person stopped a turn (main chat or a helper's chat)
+  | "page"; // added: a page the agent published (ChatItem.page); the chat shows a card that opens it
 
 export interface ToolCallInfo {
   title: string; // "Edit App.tsx", "Run npm install"
@@ -107,6 +108,7 @@ export interface ChatItem {
   images?: ChatImage[];
   worker?: WorkerInfo; // on a "worker" row: the worker it stands for (tap opens its chat)
   workerId?: string; // set on the items of a worker's own chat; never on the main chat
+  page?: PageInfo; // added: on a "page" item (its text is the page's title, for older apps); upserted when answered
   createdAt: string;
   updatedAt: string;
 }
@@ -137,6 +139,38 @@ export interface WorkerInfo {
   updatedAt: string;
   finishedAt?: string; // when it last went done, failed or stopped
 }
+
+// ---------- Pages (added): self-contained HTML pages an app's agent (or one of its helpers) publishes into
+// the app's main chat, copied from Ghostex pages: explainers of a plan, mockups, and questions the person
+// answers on the page itself. The companion stores and serves them; the phone opens one in a web view and
+// the PC in a window. Answers go back to the agent as ONE message from the person whose text is
+//   <page-answers page="<id>" title="<title>">\n<pretty JSON>\n</page-answers>
+// (shared/chat/pages.ts formats and reads it; a client shows it as an answers card, not as raw text).
+
+export interface PageInfo {
+  id: string; // 32 hex characters
+  appId: string;
+  title: string;
+  // The titles of the questions it asks (its <gx-question> elements), in page order; absent or empty
+  // for a page that only shows something.
+  questions?: string[];
+  awaitsSeen?: boolean; // asks nothing: it ends with a reply box and "Mark as seen"
+  answeredAt?: string; // when the person sent its answers (or marked it seen); the page is locked after
+  seen?: boolean; // the answer was "Mark as seen"
+  from?: { workerId: string; title: string }; // a helper published it (it still shows in the main chat)
+  createdAt: string;
+}
+
+// POST /api/apps/:id/pages/:pageId/open -> PageOpenResponse. The page itself is served without a
+// Bearer token at the path it returns (the ticket in it is the grant, signed by the PC, valid for a
+// day), so a web view can load it, reload it and send its answers. Append "#gx-theme=dark" or
+// "#gx-theme=light" to open it in that theme. The page runs sandboxed (opaque origin, no cookies or
+// storage; it can only reach its own routes under that path and https).
+export interface PageOpenResponse {
+  path: string; // "/page/<pageId>/<ticket>": the page; its own routes (answers, draft, image) are under it
+  expiresAt: string;
+}
+// GET /api/apps/:id/pages -> PageInfo[] (oldest first)
 
 // ---------- HTTP (JSON). Everything except /api/health and /api/pair needs
 // `Authorization: Bearer <token>`. Errors: non-2xx with ErrorBody.
@@ -190,6 +224,8 @@ export interface CreateAppRequest {
   name: string;
   prompt: string; // what the app should do: becomes the first message to the agent
   preset?: AppPreset; // default "react-native"; an unknown value is refused with 400
+  // Added: "Ask me more": before it plans, the agent asks the person questions about the app (on a page).
+  askMore?: boolean;
 }
 
 // GET /api/apps/:id/icon -> image/png (the app's launcher icon; a generated placeholder until it has one)

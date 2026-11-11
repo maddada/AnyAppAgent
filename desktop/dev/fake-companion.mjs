@@ -19,6 +19,8 @@ const port = Number(process.env.ANYAPP_PORT ?? 8931);
 const adminToken = process.env.ANYAPP_ADMIN_TOKEN ?? "";
 const stateDir = process.env.ANYAPP_STATE_DIR;
 const now = () => new Date().toISOString();
+/** Pages of the seeded chats: id -> title (the fake serves a small stand-in page for each). */
+const fakePages = new Map();
 
 let code = "";
 function newCode() {
@@ -223,8 +225,30 @@ if (process.env.FAKE_SEED === "1") {
     if (status !== "working") push({ kind: "assistant", text: app.lastMessagePreview ?? "Working on it." });
     if (status === "error") push({ kind: "error", text: "The app could not be built after 3 tries. Tell me what to change, or ask me to try again." });
     if (status === "idle") push({ kind: "build", build: ok, text: "Ready to install" });
+    if (status === "idle") {
+      // A plan page and the person's answers to it (shared/protocol.ts PageInfo, shared/chat/pages.ts).
+      const pageId = randomBytes(16).toString("hex");
+      const page = { id: pageId, appId: app.id, title: `${name}: the plan`, questions: ["Build it?", "Which look?"], createdAt: now() };
+      push({ kind: "assistant", text: "Here is my plan:\n\n- One screen with today's five prayer times\n  - The next prayer at the top, with a countdown\n- An alarm before each prayer\n  - You set how many minutes before\n\nI made a page that shows it. Tell me there if I should build it." });
+      push({ kind: "page", text: page.title, page: { ...page, answeredAt: now() } });
+      const answers = { "Build it?": "Build it", "Build it? (note)": "Make the countdown big", "Which look?": "Calm green", "Additional notes": "Arabic names under the English ones" };
+      push({ kind: "user", text: `<page-answers page="${pageId}" title="${page.title}">\n${JSON.stringify(answers, null, 2)}\n</page-answers>` });
+      const second = { id: randomBytes(16).toString("hex"), appId: app.id, title: "Reminders: how they could work", awaitsSeen: true, createdAt: now() };
+      push({ kind: "page", text: second.title, page: second });
+      fakePages.set(pageId, page.title);
+      fakePages.set(second.id, second.title);
+    }
     seqs.set(app.id, seq);
   }
+}
+
+function fakePageHtml(title) {
+  const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title>
+<style>:root{color-scheme:light dark}body{margin:0;padding:40px 24px;font:16px/1.5 system-ui,sans-serif;background:#F3EFE7;color:#1F1B16}
+@media (prefers-color-scheme:dark){body{background:#181613;color:#EEE8DD}}main{max-width:720px;margin:0 auto}small{opacity:.7}</style></head>
+<body><main><small>FAKE COMPANION</small><h1>${esc(title)}</h1><p>The real page comes from the companion's page kit. This stand-in only proves the window opens, stays sandboxed and sends links to the browser.</p>
+<p><a href="https://example.com/">A link (opens in the browser)</a></p></main></body></html>`;
 }
 
 // ---- HTTP
@@ -262,6 +286,12 @@ const server = createServer(async (req, res) => {
   const path = url.pathname;
   try {
     if (path === "/api/health") return json(res, 200, { ok: true, name: hostname(), version: "0.1.0-fake", protocol: 1 });
+    // A page is served without a token (its ticket is the grant), sandboxed like the real one.
+    const served = path.match(/^\/page\/([0-9a-f]+)\/fake-ticket$/);
+    if (served && req.method === "GET" && fakePages.has(served[1])) {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "sandbox allow-scripts allow-forms allow-popups; default-src 'none'; style-src 'unsafe-inline'", "cache-control": "no-store" });
+      return res.end(fakePageHtml(fakePages.get(served[1])));
+    }
     if (path === "/api/pair" && req.method === "POST") {
       const body = await readBody(req);
       if (String(body.code) !== code) return json(res, 401, { error: "That code is not right." });
@@ -333,6 +363,11 @@ const server = createServer(async (req, res) => {
       json(res, 200, publicApp(app));
       setTimeout(() => void simulateTurn(app, String(body.prompt || "Make it.")), 800);
       return;
+    }
+    const pm = path.match(/^\/api\/apps\/([^/]+)\/pages\/([0-9a-f]+)\/open$/);
+    if (pm && req.method === "POST") {
+      if (!fakePages.has(pm[2])) return json(res, 404, { error: "There is no page with that id." });
+      return json(res, 200, { path: `/page/${pm[2]}/fake-ticket`, expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
     }
     const m = path.match(/^\/api\/apps\/([^/]+)(?:\/(icon|messages|apk|cancel|build))?$/);
     const app = m && apps.get(decodeURIComponent(m[1]));

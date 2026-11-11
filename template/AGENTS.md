@@ -342,6 +342,16 @@ vibration, foreground service (media playback, for alarm sound/speech), internet
 microphone) must still be **asked for in code** before use, as in the snippets. Adding a new
 permission: add it to `android.permissions` in `app.json`.
 
+## Plan first, and pages in the chat
+
+- Before you build a new app or make a large change (a new screen, a new feature, a redesign), the
+  person confirms a plan: the plan as bullets and sub-bullets in the chat, and a plan page (a picture
+  of what you will build, then "Build it?"). Start only after their yes. Small changes need no plan.
+- Pages are HTML files you show in the chat with the `show_page` tool (MCP server `pages`): a plan,
+  a mockup of a screen, how a feature would work, or questions they answer on the page. The guide
+  (the skeleton and the question kit) is named in your instructions; read it before your first page.
+- Page files never go into this project: write them in the folder the `show_page` tool names.
+
 ## When the build fails
 
 The error you receive is the useful part of the output: TypeScript errors, a Metro (bundling)

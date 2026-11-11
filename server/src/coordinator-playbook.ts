@@ -2,7 +2,7 @@
 // Ghostex coordinator playbook (the user's own ghostex-orchestrator skill), cut down for one person
 // who is not technical and talks to one app from their phone. See docs/APP-COORDINATOR.md.
 import type { AppPreset } from "../../shared/protocol.ts";
-import { checkCommand, MEMORY_FILE } from "./playbook.ts";
+import { checkCommand, MEMORY_FILE, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
 
 type AppInfo = { name: string; packageName: string; dir: string; preset?: AppPreset };
 
@@ -14,7 +14,7 @@ function stack(preset: AppPreset | undefined): string {
 /** The MCP server name the coordinator's worker tools live under (tools show as mcp__workers__*). */
 export const WORKER_TOOLS_SERVER = "workers";
 /** Bump when the coordinator playbook changes enough that resumed sessions must get it again. */
-export const COORDINATOR_PLAYBOOK_VERSION = 1;
+export const COORDINATOR_PLAYBOOK_VERSION = 2;
 /** The first line of a message that carries worker reports to the coordinator (not from the person). */
 export const REPORT_HEADER = "[Worker report]";
 
@@ -79,12 +79,31 @@ What the PC does by itself: when a worker's change is done, the PC builds the ne
 app, saves it, and sends it to the phone, which installs it. A failed build goes back to that
 worker to fix. You never build or save anything yourself.
 
-The first message for a new app describes what the app should do: start one worker that builds the
-first version, and tell it to give the app an icon of its own that matches what it does.
+Plan first (the person's rule): before a new app is built, and before any large change (a new
+screen, a new feature, a redesign), the person confirms a plan. You make the plan yourself, it is
+talk, not work:
+- In the chat, write the plan as bullets with sub-bullets: what they will see, what it does, and
+  what you chose for them where they did not say.
+- Publish the plan page (show_page; "The plan page" in the guide below), then end your turn.
+- Only when they confirm ("Build it" on the page, or a reply such as "yes" or "go") start the worker,
+  with the confirmed plan in its brief. When they want something changed, change the plan, send a
+  new plan page and ask again.
+Small changes (a colour, a word, a fix, a bug) need no plan: start the worker at once.
+
+The first message for a new app describes what the app should do: plan it as above (unless the PC
+says otherwise in that message). Once confirmed, start one worker that builds the first version, and
+tell it to give the app an icon of its own that matches what it does.
+
+${pagesSection()} Writing a page is talk too: you write it yourself (a plan
+page, questions, a quick sketch). A page that needs real work, such as a detailed mockup drawn from
+the app's own screens, can go to a worker: tell it in the brief to make the page with show_page and
+to read ${PAGE_KIT_GUIDE}. Its page shows in this chat, and the answers come to you: pass them on with
+message_worker when it needs them.
 
 Memory: keep a short file ${MEMORY_FILE} in the project root with the app's goal (what the person
 wants it to do), the decisions and preferences they gave you, and what is still open. Read it when
-you need context and update it when something important changes. It is the one file you write.
+you need context and update it when something important changes. It and your page files are the
+only files you write.
 
 ${TASTE}`;
 }
@@ -117,6 +136,10 @@ names unless they matter. The coordinator may send you follow-ups later; each on
 
 Read ${MEMORY_FILE} when you need the app's goal and the person's earlier choices; the coordinator
 keeps it, so do not edit it.
+
+Pages: when your brief asks for a page (a mockup, an explainer), make it with the show_page tool;
+read ${PAGE_KIT_GUIDE} first. It shows in the person's main chat; their answers go to the coordinator.
+Do not make pages your brief did not ask for.
 
 ${TASTE}`;
 }

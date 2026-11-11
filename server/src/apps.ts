@@ -3,8 +3,10 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppPreset, AppStatus, BuildInfo, ChatImage, ImageUpload, PageInfo, ServerEvent, WorkerInfo } from "../../shared/protocol.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
+import { answersPreview, parsePageAnswers } from "../../shared/chat/pages.ts";
+import { isPageToolCall, Pages } from "./pages.ts";
 import type { PromptImage } from "./acp/claude-session.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
@@ -16,7 +18,7 @@ import type { Config } from "./config.ts";
 import { nowIso } from "./fs-util.ts";
 import * as git from "./git.ts";
 import { placeholderIconPng } from "./icon.ts";
-import { appPlaybook, buildFixPrompt } from "./playbook.ts";
+import { appPlaybook, buildFixPrompt, firstPrompt } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
 import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
 import { isWorkerToolCall, workerToolsMcpServer } from "./worker-http.ts";
@@ -134,6 +136,8 @@ export class AppManager {
   private readonly checkToolchain: () => string | null;
   /** Each app's workers, when its main chat is a coordinator (config.coordinator). */
   readonly workers: WorkerManager | undefined;
+  /** The pages agents publish into the apps' chats (pages.ts). */
+  readonly pages: Pages;
 
   constructor(deps: {
     store: Store;
@@ -149,6 +153,16 @@ export class AppManager {
     this.broadcast = deps.broadcast;
     this.log = deps.log;
     this.checkToolchain = deps.checkToolchain ?? (() => null);
+    this.pages = new Pages({
+      stateDir: this.store.stateDir,
+      log: this.log,
+      appExists: (appId) => Boolean(this.store.find(appId)),
+      showCard: (appId, itemId, page) => {
+        const record = this.store.find(appId);
+        if (record) this.emitItem(record, { id: itemId, kind: "page", text: page.title, page });
+      },
+      deliver: (appId, text) => this.sendMessage(appId, text),
+    });
     this.workers = this.config.coordinator
       ? new WorkerManager({
           config: this.config,
@@ -160,6 +174,8 @@ export class AppManager {
           buildChange: (record, opts) => this.buildCycle(record, opts),
           report: (record, workerId, text) => this.enqueue(record, { kind: "report", workerId, text }),
           activityChanged: (record) => this.activityChanged(record),
+          pageTools: (appId, from) => this.pages.mcpServer(this.config.port, appId, from),
+          hiddenTool: isPageToolCall,
         })
       : undefined;
   }
@@ -297,7 +313,7 @@ export class AppManager {
 
   // ---------- events
 
-  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo }): void {
+  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo; page?: PageInfo }): void {
     const item = this.store.chat(record.app.id).upsert(draft);
     this.broadcast({ type: "chat.item", item });
   }
@@ -344,7 +360,7 @@ export class AppManager {
 
   // ---------- commands
 
-  create(name: string, prompt: string, preset: unknown = "react-native"): App {
+  create(name: string, prompt: string, preset: unknown = "react-native", askMore = false): App {
     const cleanName = name.trim().replace(/\s+/g, " ");
     if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native, Kotlin or Expo Exact.");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
@@ -372,7 +388,7 @@ export class AppManager {
     this.runtime(app.id).held = true;
     this.broadcast({ type: "app.updated", app });
     this.emitItem(record, { id: randomUUID(), kind: "user", text: prompt.trim() });
-    this.finishCreate(record, prompt.trim()).catch((error: unknown) => {
+    this.finishCreate(record, firstPrompt(prompt.trim(), { askMore: askMore === true, planFirst: this.config.planFirst })).catch((error: unknown) => {
       if (!record.deleted) this.log(`[${app.slug}] creation stopped:`, (error as Error).message);
     });
     return app;
@@ -430,7 +446,8 @@ export class AppManager {
     const saved = uploads.map((u) => this.saveImage(record.app.id, u));
     const images: ChatImage[] = saved.map(({ chat }) => chat);
     this.emitItem(record, { id: itemId, kind: "user", text: text.trim(), ...(images.length ? { images } : {}), ...(queued ? { queued: true } : {}) });
-    record.app.lastMessagePreview = text.trim() ? shorten(text, 140) : picturesLabel(images.length);
+    const answers = parsePageAnswers(text);
+    record.app.lastMessagePreview = answers ? shorten(answersPreview(answers), 140) : text.trim() ? shorten(text, 140) : picturesLabel(images.length);
     this.touch(record);
     this.enqueue(record, { kind: "prompt", text: text.trim(), itemId, images: saved.map(({ prompt }) => prompt) });
   }
@@ -614,21 +631,23 @@ export class AppManager {
           instructions: coordinatorPlaybook(appInfo),
           // An app made before workers resumes its session and gets the new playbook once.
           instructionsOnResume: (ready.coordinatorPlaybook ?? 0) < COORDINATOR_PLAYBOOK_VERSION,
-          mcpServers: [workerToolsMcpServer(this.config.port, record.app.id, this.workers.toolsToken)],
+          mcpServers: [workerToolsMcpServer(this.config.port, record.app.id, this.workers.toolsToken), this.pages.mcpServer(this.config.port, record.app.id)],
         }
       : undefined;
     const session = new ClaudeSession({
       cwd: record.dir,
       ...(record.sessionId ? { resumeSessionId: record.sessionId } : {}),
       instructions: appPlaybook(appInfo),
+      mcpServers: [this.pages.mcpServer(this.config.port, record.app.id)],
       ...coordinated,
       launch: claudeLaunchSpec(this.config.acpLaunch),
       askPermissions: this.config.askPermissions,
       onUpdate: (update) => {
-        if (coordinated && isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
+        if (isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
           const toolCallId = String(update["toolCallId"] ?? "");
           if (rt.hiddenTools.has(toolCallId)) return;
-          if (isWorkerToolCall(update)) {
+          // The page tools are never shown (the page's card stands for them); with helpers, neither are the worker tools.
+          if (isPageToolCall(update) || (coordinated && isWorkerToolCall(update))) {
             // Not shown (the worker row stands for it), but it ends the text before it, like any tool call.
             rt.hiddenTools.add(toolCallId);
             for (const draft of rt.translator.closeStreams()) this.emitItem(record, draft);

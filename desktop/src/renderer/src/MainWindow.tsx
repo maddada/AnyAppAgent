@@ -291,6 +291,7 @@ function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId
   const [prompt, setPrompt] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [preset, setPreset] = useState<AppPreset>(DEFAULT_PRESET);
+  const [askMore, setAskMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = name.trim().length > 0 && prompt.trim().length > 0;
@@ -299,7 +300,7 @@ function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId
     if (!ready || busy) return;
     setBusy(true);
     setError(null);
-    const r = await api.createApp(name.trim(), prompt.trim(), preset);
+    const r = await api.createApp(name.trim(), prompt.trim(), preset, askMore);
     setBusy(false);
     if (!r.ok || !r.app) return setError(r.error ?? "That didn't work. Try again.");
     onMade(r.app.id);
@@ -342,6 +343,13 @@ function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId
             }}
           />
         </label>
+        <div className="ask-more" data-testid="new-app-ask-more">
+          <span className="ask-more-text">
+            <span className="label">Ask me more</span>
+            <span className="caption secondary">The agent asks you a few questions about the app before it plans it.</span>
+          </span>
+          <Switch on={askMore} onChange={() => setAskMore(!askMore)} label="Ask me more" />
+        </div>
         <div className="advanced">
           <button type="button" className="advanced-toggle" aria-expanded={advanced} onClick={() => setAdvanced(!advanced)} data-testid="new-app-advanced">
             <span className="label">Advanced</span>
@@ -598,7 +606,7 @@ function SetupPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) =>
 // ------------------------------------------------------------------ Settings
 
 function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: () => void; disabled?: boolean; label: string }) {
-  return <button className={`switch${on ? " on" : ""}`} role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onChange} />;
+  return <button type="button" className={`switch${on ? " on" : ""}`} role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onChange} />;
 }
 
 function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) => void }) {

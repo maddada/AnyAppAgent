@@ -4,9 +4,64 @@
 // The app's own AGENTS.md (from template/ or template-kotlin/, loaded by Claude Code through the
 // project's CLAUDE.md) explains the stack, the built-in capabilities, the icon and what never to
 // touch; this playbook does not repeat it.
+import { join } from "node:path";
 import type { AppPreset } from "../../shared/protocol.ts";
+import { SERVER_DIR } from "./config.ts";
 
 export const MEMORY_FILE = "APP_MEMORY.md";
+
+/** The page kit's guide for agents: the skeleton, the question kit, the plan page (pages.ts). */
+export const PAGE_KIT_GUIDE = join(SERVER_DIR, "src", "pages", "PAGE-KIT.md");
+
+/** Pages in the chat, for every playbook (the person's request: "give HTML that explains the app"). */
+export function pagesSection(): string {
+  return `Pages: you can show the person a page in the chat with the show_page tool: one HTML file
+that explains something with a picture of it (the plan, a mockup of a screen, how a feature would
+work) and can ask questions they answer on the page itself. They open it from a card on their phone
+or PC; their answers come back as their next message, starting with <page-answers. Before you
+write your first page, read the guide: ${PAGE_KIT_GUIDE} (the skeleton, the question kit, the
+plan page). When they ask to see something, how a feature could work, or for "a page" or "HTML"
+about anything, make a page.`;
+}
+
+/** Plan first (the person's rule): confirm a plan before building a new app or a large change. */
+export function planFirstSection(): string {
+  return `Plan first: before you build a new app, and before any large change (a new screen, a new
+feature, a redesign), show the plan and wait for a yes:
+- In the chat, write the plan as bullets with sub-bullets: what they will see, what it does, and
+  what you chose for them where they did not say.
+- Publish the plan page (show_page; "The plan page" in the guide), then end your turn.
+- Start only when they confirm: "Build it" on the page, or a reply such as "yes" or "go". When they
+  want something changed, change the plan, send a new plan page and ask again.
+Small changes (a colour, a word, a fix, a bug) need no plan: just do them.`;
+}
+
+/** The first message of a new app as the agent gets it (the chat shows only the person's words). */
+export function firstPrompt(prompt: string, opts: { askMore: boolean; planFirst: boolean }): string {
+  if (opts.askMore && opts.planFirst) {
+    return `${prompt}
+
+(From the PC: this is a new app, and the person chose "Ask me more". Before you plan anything, ask
+them about the app: one question page (show_page) with the questions that matter most for what they
+want, up to 8, each with sensible choices and a recommended one. Say in one line that you have a few
+questions, then end your turn. When their answers arrive, plan as usual: the plan in bullets, the
+plan page, and wait for their yes.)`;
+  }
+  if (opts.askMore) {
+    return `${prompt}
+
+(From the PC: this is a new app, and the person chose "Ask me more". Before you build, ask them about
+the app: one question page (show_page) with the questions that matter most, up to 8. End your turn;
+build when their answers arrive.)`;
+  }
+  if (opts.planFirst) {
+    return `${prompt}
+
+(From the PC: this is a new app. Plan first: the plan in bullets in the chat, the plan page
+(show_page), then end your turn and build only after they confirm.)`;
+  }
+  return prompt;
+}
 
 /** The command an app's agent runs to check its work before ending a turn (from its AGENTS.md). */
 export function checkCommand(preset: AppPreset | undefined): string {
@@ -68,11 +123,16 @@ Taste (the person's rules for every app you make):
 - No purple gradients, no sparkle icons, nothing that looks like a generic "AI" app.
 ${iconAndAiLines(app.preset)}
 
+${planFirstSection()}
+
+${pagesSection()}
+
 Memory: keep a short file ${MEMORY_FILE} in the project root with the app's goal (what the person
 wants it to do), the decisions and preferences they gave you, and what is still open. Read it at the
 start of a turn when you need context and update it when something important changes.
 
-End every turn with one or two plain sentences that say what changed in the app.`;
+End every turn with one or two plain sentences that say what changed in the app (or, after a plan
+page, that the plan is waiting for their yes).`;
 }
 
 export function buildFixPrompt(args: { buildNumber: number; attempt: number; maxAttempts: number; error: string; preset?: AppPreset }): string {

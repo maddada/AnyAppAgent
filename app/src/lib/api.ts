@@ -2,6 +2,7 @@ import type {
   App,
   ChatItem,
   WorkerInfo,
+  PageOpenResponse,
   CreateAppRequest,
   EasyConnectPairRequest,
   ErrorBody,
@@ -115,6 +116,10 @@ export class Client {
     this.call<ChatItem[]>(`/api/apps/${encodeURIComponent(id)}/workers/${encodeURIComponent(workerId)}/messages`);
   stopHelper = (id: string, workerId: string) =>
     this.call<void>(`/api/apps/${encodeURIComponent(id)}/workers/${encodeURIComponent(workerId)}/cancel`, "POST", {});
+
+  // Pages: a fresh signed address for one page (served without a token; the ticket is the grant).
+  openPage = (id: string, pageId: string) =>
+    this.call<PageOpenResponse>(`/api/apps/${encodeURIComponent(id)}/pages/${encodeURIComponent(pageId)}/open`, "POST", {});
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;
   iconUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/icon`;

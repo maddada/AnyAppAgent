@@ -1,7 +1,7 @@
 // Drives the running desktop app for proofs, over the Chrome DevTools protocol. Start the app
 // with --remote-debugging-port=<port> (dev/proof runs only), then:
 //
-//   node dev/drive.mjs [--port 9333] shot <file.png>          window screenshot
+//   node dev/drive.mjs [--port 9333] [--target /page/] shot <file.png>   window screenshot
 //   node dev/drive.mjs [--port 9333] click "<visible text>"   clicks the first button/link with that text
 //   node dev/drive.mjs [--port 9333] eval "<js>"              runs JS in the page, prints the result (JSON)
 //   node dev/drive.mjs [--port 9333] text                     prints the visible text of the window
@@ -12,10 +12,13 @@ import WebSocket from "ws";
 const argv = process.argv.slice(2);
 const pi = argv.indexOf("--port");
 const port = pi >= 0 ? argv.splice(pi, 2)[1] : "9333";
+// --target <text>: the window whose address or title contains it (a page window: --target /page/). Default: the app's window.
+const ti = argv.indexOf("--target");
+const want = ti >= 0 ? argv.splice(ti, 2)[1] : undefined;
 const [cmd, a1, a2] = argv;
 
 const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
-const page = targets.find((t) => t.type === "page" && !t.url.startsWith("devtools"));
+const page = targets.find((t) => t.type === "page" && !t.url.startsWith("devtools") && (want ? t.url.includes(want) || t.title.includes(want) : !t.url.includes("/page/")));
 if (!page) throw new Error("no page target");
 const ws = new WebSocket(page.webSocketDebuggerUrl, { perMessageDeflate: false });
 await new Promise((r, j) => {

@@ -57,6 +57,8 @@ function startServer(label) {
       // Spare app folders of its own (the builder's default C:a\.spare is the user's).
       ...(REAL ? { ANYAPP_SPARE_DIR: join(dirname(APPS), "spare") } : {}),
       ANYAPP_GITHUB: "off",
+
+      ANYAPP_PLAN_FIRST: "off", // the script expects a build right after the first prompt (docs/PAGES.md)
       ANYAPP_COORDINATOR: "on",
       ANYAPP_FAKE_BUILD_MS: "3000",
     },

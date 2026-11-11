@@ -19,6 +19,8 @@ import {
   Square,
   FilePen,
   FileText,
+  FileQuestion,
+  FileCheck,
   Folder,
   Globe,
   ListTodo,
@@ -34,13 +36,13 @@ import {
 import type { LucideIcon } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { installApp, launchApp, phoneAbis } from "@/lib/installer";
-import type { App, ChatImage, ChatItem, PlanEntry, WorkerInfo } from "@/lib/protocol";
+import type { App, ChatImage, ChatItem, PageInfo, PlanEntry, WorkerInfo } from "@/lib/protocol";
 import { useStore } from "@/lib/store";
 import { Button } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
 import { easing, elevation, fonts, icon, motion, radius, size, space, typeStyle, useTheme, border } from "@/ui/theme";
-import { buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row } from "@shared/chat/index";
+import { buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, answerLines, pageCard, type HelperIcon, type PageAnswers, type PageCardView, type Row } from "@shared/chat/index";
 import { StateLine } from "@/ui/StateLine";
 import { Markdown } from "./Markdown";
 
@@ -59,6 +61,8 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
   if (row.type === "helper") return <HelperRow worker={row.worker} />;
   if (row.type === "stopped") return <StoppedRow label={row.label} />;
   if (row.type === "task") return <TaskCard label={row.label} text={row.text} />;
+  if (row.type === "page") return <PageCard page={row.page} />;
+  if (row.type === "answers") return <AnswersCard answers={row.answers} />;
   const item = row.item;
   switch (item.kind) {
     case "user":
@@ -746,5 +750,112 @@ function WorkingRow({ label }: { label: string }) {
         {label}
       </T>
     </LineRow>
+  );
+}
+
+// ---------- pages (shared/chat/pages.ts: copied from Ghostex pages)
+
+const PAGE_ICONS: Record<PageCardView["icon"], LucideIcon> = { "file-question": FileQuestion, "file-text": FileText, "file-check": FileCheck };
+
+/** A page the agent published: its title, what it wants from the person, and a tap that opens it. */
+export function PageCard({ page }: { page: PageInfo }) {
+  const t = useTheme();
+  const view = pageCard(page);
+  const Icon = PAGE_ICONS[view.icon];
+  const waiting = view.state === "questions" || view.state === "look";
+  const open = () => router.push({ pathname: "/page/[appId]/[pageId]", params: { appId: page.appId, pageId: page.id } });
+  return (
+    <Pressable
+      testID={`page-card-${page.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${view.title}, ${view.status}. Open the page.`}
+      onPress={open}
+      style={({ pressed }) => ({
+        borderRadius: radius.card,
+        backgroundColor: pressed ? t.selectedBg : t.surface,
+        borderWidth: border.width,
+        borderColor: t.border,
+        paddingVertical: space.md,
+        paddingHorizontal: space.md,
+        gap: space.md,
+        ...(pressed ? {} : elevation(t.mode, 1)),
+      })}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <View style={{ width: HELPER_BADGE, height: HELPER_BADGE, borderRadius: radius.button, backgroundColor: view.state === "questions" ? t.readySoft : t.surfaceSunken, alignItems: "center", justifyContent: "center" }}>
+          <Icon size={icon.size.button} color={view.state === "questions" ? t.ready : t.textSecondary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+        </View>
+        <View style={{ flex: 1, gap: space.hair }}>
+          <T variant="eyebrow" color="textTertiary">
+            Page
+          </T>
+          <T variant="name" numberOfLines={2}>
+            {view.title}
+          </T>
+          <T variant="caption" color={view.state === "questions" ? "ready" : "textSecondary"}>
+            {view.status}
+          </T>
+          {view.from ? (
+            <T variant="caption" color="textTertiary" numberOfLines={1}>
+              {view.from}
+            </T>
+          ) : null}
+        </View>
+      </View>
+      <Button testID={`page-open-${page.id}`} label={view.action} variant={waiting ? "primary" : "quiet"} small onPress={open} />
+    </Pressable>
+  );
+}
+
+/** The person's answers from a page, on their side of the chat, as a card instead of the raw message. */
+function AnswersCard({ answers }: { answers: PageAnswers }) {
+  const t = useTheme();
+  const lines = answerLines(answers.answers);
+  return (
+    <View style={{ alignItems: "flex-end" }}>
+      <View
+        testID="page-answers"
+        style={{
+          maxWidth: `${size.bubbleMaxWidthPercent}%`,
+          backgroundColor: t.bubbleBg,
+          borderTopLeftRadius: radius.bubble.topLeft,
+          borderTopRightRadius: radius.bubble.topRight,
+          borderBottomRightRadius: radius.bubble.bottomRight,
+          borderBottomLeftRadius: radius.bubble.bottomLeft,
+          paddingVertical: space.md,
+          paddingHorizontal: space.lg,
+          gap: space.sm,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}>
+          <FileCheck size={icon.size.sm - 2} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+          <T variant="eyebrow" color="textTertiary" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {answers.title}
+          </T>
+        </View>
+        {lines.map((line, i) => (
+          <View key={i} style={{ gap: space.hair }}>
+            <T variant="caption" color="textSecondary">
+              {line.label}
+            </T>
+            {line.value ? (
+              <T variant="callout" color="bubbleText" selectable>
+                {line.value}
+              </T>
+            ) : null}
+            {line.note ? (
+              <T variant="callout" color="textSecondary" selectable>
+                {line.note}
+              </T>
+            ) : null}
+          </View>
+        ))}
+        {answers.extra ? (
+          <T variant="callout" color="bubbleText" selectable>
+            {answers.extra}
+          </T>
+        ) : null}
+      </View>
+    </View>
   );
 }

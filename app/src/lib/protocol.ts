@@ -22,4 +22,6 @@ export type {
   ServerEvent,
   ToolCallInfo,
   WorkerInfo,
+  PageInfo,
+  PageOpenResponse,
 } from "@shared/protocol";

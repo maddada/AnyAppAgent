@@ -79,7 +79,9 @@ const [cmd, ...rest] = argv;
 
 // The emulator is shared with other threads: only ever send input to our own windows (and the
 // system screens our flow opens). If someone else's app is in front, bring ours back first.
-const OURS = [/com\.anyappagent/, /packageinstaller/, /permissioncontroller/, /com\.android\.settings/, /^$/];
+// UI_PACKAGE: a test build under its own package name (app.config.js, ANYAPP_ANDROID_PACKAGE).
+const PACKAGE = process.env.UI_PACKAGE || "com.anyappagent";
+const OURS = [new RegExp(`^${PACKAGE.replace(/\./g, "\\.")}$`), /packageinstaller/, /permissioncontroller/, /com\.android\.settings/, /^$/];
 function focused() {
   const out = adb("shell", "dumpsys", "window", "displays").toString("utf8");
   return (/mCurrentFocus=Window\{\S+ \S+ ([^}\s]+)/.exec(out) ?? [])[1] ?? "";
@@ -89,7 +91,7 @@ async function ensureOurs() {
     const f = focused();
     if (OURS.some((r) => r.test(f.split("/")[0]))) return;
     console.error(`(someone else's window is in front: ${f}; bringing AnyAppAgent back)`);
-    adb("shell", "am", "start", "-n", "com.anyappagent/.MainActivity");
+    adb("shell", "am", "start", "-n", `${PACKAGE}/.MainActivity`);
     await sleep(1500);
   }
   console.error("could not get AnyAppAgent to the front");

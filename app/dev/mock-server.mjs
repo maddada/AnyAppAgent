@@ -51,6 +51,17 @@ const looks = new Map(); // appId -> { color, glyph }
 const turns = new Map(); // appId -> { cancelled }
 const pendingPermissions = new Map(); // requestId -> resolve
 
+let mockPage = null; // the seeded page item (GET /page/<id>/mock serves it)
+
+const MOCK_PAGE_HTML = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Prayer Alarm: the plan</title>
+<style>:root{color-scheme:light dark}body{font:16px/1.5 system-ui;margin:0;padding:24px;background:#F3EFE7;color:#1F1B16}@media (prefers-color-scheme:dark){body{background:#181613;color:#EEE8DD}}
+h1{font-size:26px;margin:0 0 8px}ul{padding-left:20px}button{font:600 16px system-ui;padding:12px 18px;border-radius:10px;border:0;background:#1D6A4A;color:#F7F4EC}</style></head>
+<body><p style="font:500 11px monospace;letter-spacing:.9px;text-transform:uppercase;opacity:.7">Prayer Alarm, the plan</p><h1>What I will build</h1>
+<ul><li>Five prayer times for Ajman<ul><li>Worked out on the phone, offline</li></ul></li><li>Two reminders before each prayer</li></ul>
+<button id="b">Build it</button><p id="s"></p>
+<script>document.getElementById("b").onclick=function(){fetch(location.pathname+"/answers",{method:"POST",body:JSON.stringify({answers:{"Build it?":"Build it"}})}).then(function(r){document.getElementById("s").textContent=r.ok?"Answered. The agent has your answers.":"Not sent";});};</script>
+<p><a href="https://example.com/">A link that opens in the browser</a></p></body></html>`;
+
 function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24) || "app";
 }
@@ -183,6 +194,10 @@ function seed() {
   item(prayer.id, "assistant", {
     text: "Your prayer alarm for **Ajman** is ready:\n\n- Times for Fajr, Dhuhr, Asr, Maghrib and Isha, worked out on the phone\n- Each time can be moved earlier or later in *Settings*\n- Two reminders before each prayer, 30 and 10 minutes by default\n\nOpen it and allow notifications so the alarms can ring.",
   }, ago(t0 - 1));
+  // A page (shared/chat/pages.ts): the plan the agent asks the person to confirm, and an answered one.
+  mockPage = item(prayer.id, "page", { text: "Prayer Alarm: the plan", page: { id: "0f1e2d3c4b5a69788796a5b4c3d2e1f0", appId: prayer.id, title: "Prayer Alarm: the plan", questions: ["Build it?", "How should alarms sound?"], createdAt: ago(t0 - 0.05) } }, ago(t0 - 0.05));
+  item(prayer.id, "page", { text: "Reminder sounds", page: { id: "aa11bb22cc33dd44ee55ff6677889900", appId: prayer.id, title: "Reminder sounds", questions: ["Which sound?"], answeredAt: ago(t0 - 0.06), createdAt: ago(t0 - 0.06) } }, ago(t0 - 0.06));
+  item(prayer.id, "user", { text: '<page-answers page="aa11bb22cc33dd44ee55ff6677889900" title="Reminder sounds">\n{\n  "Which sound?": "Soft chime",\n  "Which sound? (note)": "not too loud at Fajr"\n}\n</page-answers>' }, ago(t0 - 0.07));
   const pb = seedBuild(prayer, 1, t0 - 3);
   item(prayer.id, "build", { build: pb }, ago(t0 - 3));
   recordBuild(prayer, pb);
@@ -355,6 +370,22 @@ const server = createServer(async (req, res) => {
       console.log(`paired: ${b.deviceName}`);
       return json(res, 200, { token, serverName: SERVER_NAME });
     }
+    // The seeded page, served without a token at its signed address (here a fixed one).
+    const pageRoute = path.match(/^\/page\/([0-9a-f]{32})\/mock(\/answers)?$/);
+    if (pageRoute && mockPage) {
+      if (!pageRoute[2]) {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-popups", "Cache-Control": "no-store" });
+        return res.end(MOCK_PAGE_HTML);
+      }
+      const b = await body(req);
+      const at = now();
+      mockPage.page = { ...mockPage.page, answeredAt: at };
+      mockPage.updatedAt = at;
+      broadcast({ type: "chat.item", item: mockPage });
+      item(mockPage.appId, "user", { text: '<page-answers page="' + mockPage.page.id + '" title="' + mockPage.page.title + '">\n' + JSON.stringify(b.answers, null, 2) + "\n</page-answers>" });
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      return res.end(JSON.stringify({ ok: true, answeredAt: at }));
+    }
     const auth = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
     if (!tokens.has(auth)) return fail(res, 401, "This phone isn't paired with this PC.");
 
@@ -433,6 +464,8 @@ const server = createServer(async (req, res) => {
         else void runTurn(app, text);
         return;
       }
+      const open = sub.match(/^pages\/([0-9a-f]{32})\/open$/);
+      if (open && req.method === "POST") return json(res, 200, { path: "/page/" + open[1] + "/mock", expiresAt: new Date(Date.now() + 86400000).toISOString() });
       if (sub === "cancel" && req.method === "POST") {
         const turn = turns.get(app.id);
         if (turn) turn.cancelled = true;

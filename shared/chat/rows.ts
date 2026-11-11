@@ -1,6 +1,7 @@
 // Turning the timeline into the rows both apps draw: runs of tool calls fold into one row (bb's
 // bundles), and the "Working" and "No new version" lines are added at the end when they apply.
-import type { App, ChatItem, WorkerInfo } from "../protocol.ts";
+import type { App, ChatItem, PageInfo, WorkerInfo } from "../protocol.ts";
+import { parsePageAnswers, type PageAnswers } from "./pages.ts";
 import { summarizeTools, toolActive } from "./tools.ts";
 
 export type Row =
@@ -14,7 +15,11 @@ export type Row =
   /** A plain "Stopped" line where the person stopped a turn. */
   | { type: "stopped"; key: string; label: string }
   /** In a helper's own chat: what the main chat asked it (its task, then follow-ups). */
-  | { type: "task"; key: string; label: string; text: string };
+  | { type: "task"; key: string; label: string; text: string }
+  /** A page the agent published (pages.ts pageCard says how it reads); tapping opens it. */
+  | { type: "page"; key: string; page: PageInfo }
+  /** The person's answers from a page (pages.ts answerLines), drawn as a card instead of the raw message. */
+  | { type: "answers"; key: string; item: ChatItem; answers: PageAnswers };
 
 /** How long the "No new version this time" line waits after the turn ends (a build may still be on its way). */
 export const REBUILD_SETTLE_MS = 5000;
@@ -36,17 +41,32 @@ export function buildRows(items: readonly ChatItem[], app: App | undefined): Row
     }
     run = [];
   };
+  // A page's card waits for the rest of its turn (the agent's text about it, its steps), so it
+  // follows the plan it shows instead of sitting above it; anything else ends the turn.
+  let pages: Row[] = [];
+  const turnText = (kind: string) => kind === "tool" || kind === "assistant" || kind === "thought" || kind === "plan";
   for (const item of items) {
+    if (!turnText(item.kind) && item.kind !== "page" && pages.length > 0) {
+      flush();
+      rows.push(...pages);
+      pages = [];
+    }
     if (item.kind === "tool") {
       run.push(item);
       continue;
     }
     flush();
+    if (item.kind === "page") {
+      if (item.page) pages.push({ type: "page", key: item.id, page: item.page });
+      continue;
+    }
     if (item.kind === "worker" && item.worker) rows.push({ type: "helper", key: item.id, worker: item.worker });
     else if (item.kind === "stopped") rows.push({ type: "stopped", key: item.id, label: item.text || "Stopped" });
+    else if (item.kind === "user" && parsePageAnswers(item.text)) rows.push({ type: "answers", key: item.id, item, answers: parsePageAnswers(item.text)! });
     else if (item.kind !== "worker") rows.push({ type: "item", key: item.id, item });
   }
   flush();
+  rows.push(...pages);
 
   const label = workingLabel(items, app);
   if (label) rows.push({ type: "working", key: "working", label });

@@ -176,3 +176,20 @@ regular field in AnyAppAgent's Settings, not a separate screen.
 - **Testing without a key:** `app/dev/fake-ai-provider.mjs` speaks both provider APIs (SSE, tool
   calls). `adb shell setprop debug.anyapp.ai.url http://10.0.2.2:<port>` points AnyAppAgent at it;
   only adb can set it, and while it is set the stored key is never sent (a placeholder is).
+
+## Pages in the chat, plan first, "Ask me more" (added 2026-11-11)
+
+The user: "the agent should always write bullet points and subpoints and give HTML that explains the
+app that it's going to build before it starts, so the user can confirm. Copy how inline HTML works in
+Ghostex", answering questions inside the page, the same page on the phone and the PC, and an "Ask me
+more" option in the New app sheet.
+
+- An app's agent (or a helper it asks) publishes a self-contained HTML page into the app's main chat
+  with the `show_page` tool (MCP server `pages`). The chat shows a card; the phone opens it in a web
+  view, the PC in a window. Ghostex's page kit (question kit, drafts, answers, Mark as seen) is copied
+  as is, with the Workbench theme. Answers reach the agent as one message (`<page-answers ...>`).
+- Pages are sandboxed: an opaque origin, no bridge into the phone app, no session token (a signed
+  ticket opens each page), fetches only to the page's own routes and https.
+- Plan first: before a new app or a large change, the plan in bullets and a plan page, then wait for
+  "Build it" or a yes. "Ask me more" adds a question page before the plan.
+- Details, routes and the protocol additions: `docs/PAGES.md`.
