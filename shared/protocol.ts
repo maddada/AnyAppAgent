@@ -288,6 +288,41 @@ export interface AdminState {
   };
   easyConnect: EasyConnectState;
   devices: PairedDevice[];
+  signing?: SigningKeysState; // absent with the fake builder (added for docs/DISTRIBUTION.md)
+}
+
+// ---------- Signing keys (docs/DISTRIBUTION.md, "Signing"). Nothing here ever holds a password or
+// a private key; certificates are public.
+export interface SigningKeysState {
+  keys: SigningKeyInfo[];
+  lastBackupAt: string | null; // ISO time of the last backup made on this PC, null if never
+  notBackedUp: string[]; // ids of keys made since the last backup (all of them if never)
+}
+export interface SigningKeyInfo {
+  id: string; // "shared" (the PC's key for apps made before per-app keys) or an app's package id
+  kind: "shared" | "own" | "moved"; // moved: rotated from the shared key (Android 9+ refuses the shared key for it)
+  certSha256: string;
+  appName?: string; // the app with this package id, when the companion knows it
+}
+// POST /api/admin/keys/backup  KeysBackupRequest  -> KeysBackupResult (writes one encrypted file)
+// POST /api/admin/keys/restore KeysRestoreRequest -> KeysRestoreResult (adds the keys this PC lacks)
+export interface KeysBackupRequest {
+  file: string; // absolute path on the PC, chosen in a save dialog
+  password: string; // at least 8 characters; never stored or logged
+}
+export interface KeysBackupResult {
+  file: string;
+  count: number;
+  createdAt: string;
+}
+export interface KeysRestoreRequest {
+  file: string;
+  password: string;
+}
+export interface KeysRestoreResult {
+  added: string[]; // key ids written to this PC
+  same: string[]; // already here with the same certificate
+  conflicts: { id: string; reason: string }[]; // here with a different certificate: kept, never overwritten
 }
 
 // POST /api/admin/pairing/new -> AdminState (a fresh 6-digit code and, when on, a fresh Easy Connect code)

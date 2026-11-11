@@ -1,12 +1,12 @@
 // AnyAppAgent desktop: runs the companion, onboarding and the main window, sits in the tray.
-import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
-import type { Checks, ImageUpload, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
+import type { Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
 import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
@@ -514,6 +514,42 @@ function ipc(): void {
   });
   ipcMain.handle("pairing:easy", (_e, enabled: boolean) => admin?.easyConnect(Boolean(enabled)));
   ipcMain.handle("devices:remove", (_e, id: string) => admin?.removeDevice(String(id)));
+  // Signing keys (docs/DISTRIBUTION.md): a file dialog here, the work in the companion.
+  const keysFilter = [{ name: "AnyAppAgent key backup", extensions: ["anyappkeys"] }];
+  // Dev and proofs only: ANYAPP_DESKTOP_DIALOG_FILE answers both file dialogs, so a script can drive them.
+  const dialogFile = env.ANYAPP_DESKTOP_DIALOG_FILE;
+  ipcMain.handle("keys:backup", async (_e, password: string): Promise<KeysAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const day = new Date().toISOString().slice(0, 10);
+    const pick = dialogFile ? { canceled: false, filePath: dialogFile } : await dialog.showSaveDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+      title: "Back up signing keys",
+      defaultPath: join(app.getPath("documents"), `AnyAppAgent keys ${day}.anyappkeys`),
+      filters: keysFilter,
+    });
+    if (pick.canceled || !pick.filePath) return { cancelled: true };
+    try {
+      const result = await admin.backupKeys(pick.filePath, String(password));
+      return { ok: true, file: result.file, count: result.count };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("keys:restore", async (_e, password: string): Promise<KeysAction> => {
+    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    const pick = dialogFile ? { canceled: false, filePaths: [dialogFile] } : await dialog.showOpenDialog(win ?? BrowserWindow.getFocusedWindow()!, {
+      title: "Restore signing keys",
+      defaultPath: app.getPath("documents"),
+      filters: keysFilter,
+      properties: ["openFile"],
+    });
+    const file = pick.filePaths[0];
+    if (pick.canceled || !file) return { cancelled: true };
+    try {
+      return { ok: true, file, restored: await admin.restoreKeys(file, String(password)) };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
   ipcMain.handle("apps:messages", (_e, appId: string) => admin?.messages(String(appId)) ?? []);
   ipcMain.handle("helpers:list", (_e, appId: string) => admin?.helpers(String(appId)) ?? []);
   ipcMain.handle("helpers:messages", (_e, appId: string, workerId: string) => admin?.helperMessages(String(appId), String(workerId)) ?? []);

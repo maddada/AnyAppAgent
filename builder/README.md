@@ -22,6 +22,7 @@ node builder/cli.mjs create C:\aa\t\sample --name "Sample"     [--slug sample] [
 node builder/cli.mjs build  C:\aa\t\sample --build-number 1     [--quiet]
 node builder/cli.mjs icon   C:\aa\t\sample
 node builder/cli.mjs warm                                       # deps cache + a spare app folder
+node builder/cli.mjs keys list | backup <file> | restore <file> | move <app dir>   # signing keys
 ```
 
 ## Tests
@@ -42,6 +43,7 @@ refuses to produce a hard-linked tree.
 | Dependency cache (`npm ci` of the template lockfile, once per lockfile) | `%USERPROFILE%\.anyappagent\cache\deps-<hash>\` |
 | Spare app folders (ready copies of the template) | `C:\aa\.spare\` (same volume as the apps; override: `ANYAPP_SPARE_DIR`) |
 | Signing key (PKCS12, RSA 3072, 100 years) and its password | `%USERPROFILE%\.anyappagent\keystore\anyapp-release.p12` + `keystore.json` (override root: `ANYAPP_HOME`) |
+| Each app's own key (made by `createApp`, or moved from the shared key by key rotation, with `lineage.bin`) | `%USERPROFILE%\.anyappagent\keystore\apps\<package id>\release.p12` + `key.json` |
 | APKs | `<app>\build\apk\<slug>-<n>.apk` (last 5 kept; `build/` is git-ignored) |
 | Build logs | `<app>\build\logs\build-<n>.log` |
 | JDK / SDK | `JAVA_HOME` / `ANDROID_HOME` if set, else `D:\tools\android\jdk` / `D:\tools\android\sdk` (docs/ENVIRONMENT.md) |
@@ -191,3 +193,21 @@ a new app 6 min 25 s; rebuild after a one-line change 61 s; APK 28.0 MB.
 
 `test/exact.test.mjs` checks the pin and the patch, creating an app (skipped without Bun or the
 checkout), and with `ANYAPP_EXACT_BUILD_TEST=1` a real build.
+
+## Signing keys
+
+Plan and proof: [docs/DISTRIBUTION.md](../docs/DISTRIBUTION.md), "Signing".
+
+- `createApp` makes the new app's own key first (`lib/keystore.mjs` `ensureAppKey`). An app with no
+  folder under `keystore\apps\` (every app made before this) keeps building with the shared key.
+- `moveAppToOwnKey({ packageName })` (CLI `keys move <dir>`) rotates a shared-key app to its own
+  key (`apksigner rotate`, rollback to the shared key off). Its later builds are signed again by
+  `lib/apksign.mjs` with shared + own + lineage (`--rotation-min-sdk-version 28`).
+- After every build each APK (full and per ABI) is checked with `apksigner verify --print-certs`
+  (and, for a moved app, `--max-sdk-version 27` and `apksigner lineage`): the certificates must be
+  exactly the expected ones, or the build fails and the APK is deleted.
+- `backupSigningKeys({ file, password })` and `restoreSigningKeys(...)` (`lib/keybackup.mjs`): one
+  file, scrypt and AES-256-GCM; restore never overwrites a different key.
+- Passwords reach `keytool` and `apksigner` only as environment variables.
+- `npm test` includes `test/keys.test.mjs` (real keytool and apksigner in a throwaway
+  `ANYAPP_HOME`, about 15 s).

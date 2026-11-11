@@ -9,7 +9,20 @@ import { existsSync, readFileSync } from "node:fs";
 import { networkInterfaces, hostname } from "node:os";
 import { join } from "node:path";
 import WebSocket from "ws";
-import type { AdminEvent, AdminState, App, AppPreset, ChatItem, ImageUpload, PairedDevice, WorkerInfo } from "../../../shared/protocol.ts";
+import type {
+  AdminEvent,
+  AdminState,
+  App,
+  AppPreset,
+  ChatItem,
+  ImageUpload,
+  KeysBackupRequest,
+  KeysBackupResult,
+  KeysRestoreRequest,
+  KeysRestoreResult,
+  PairedDevice,
+  WorkerInfo,
+} from "../../../shared/protocol.ts";
 
 const VIRTUAL_ADAPTER = /vethernet|wsl|hyper-v|virtualbox|vmware|tailscale|zerotier|docker|loopback|vpn/i;
 
@@ -87,12 +100,12 @@ export class AdminClient extends EventEmitter {
     super();
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, timeoutMs = 15_000): Promise<T> {
     const res = await fetch(`${this.base}${path}`, {
       method,
       headers: { authorization: `Bearer ${this.token}`, ...(body !== undefined ? { "content-type": "application/json" } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) {
       let message = `HTTP ${res.status}`;
@@ -317,6 +330,21 @@ export class AdminClient extends EventEmitter {
   async easyConnect(enabled: boolean): Promise<void> {
     if (!this.adminRoutes) return;
     this.setState(await this.request<AdminState>("POST", "/api/admin/easy-connect", { enabled }));
+  }
+
+  /** Signing keys (docs/DISTRIBUTION.md). The password goes only to the companion on 127.0.0.1. */
+  async backupKeys(file: string, password: string): Promise<KeysBackupResult> {
+    if (!this.adminRoutes) throw new Error("Backing up keys needs a newer AnyAppAgent companion.");
+    const result = await this.request<KeysBackupResult>("POST", "/api/admin/keys/backup", { file, password } satisfies KeysBackupRequest, 120_000);
+    await this.refreshState();
+    return result;
+  }
+
+  async restoreKeys(file: string, password: string): Promise<KeysRestoreResult> {
+    if (!this.adminRoutes) throw new Error("Restoring keys needs a newer AnyAppAgent companion.");
+    const result = await this.request<KeysRestoreResult>("POST", "/api/admin/keys/restore", { file, password } satisfies KeysRestoreRequest, 120_000);
+    await this.refreshState();
+    return result;
   }
 
   async removeDevice(id: string): Promise<void> {
