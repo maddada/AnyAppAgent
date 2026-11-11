@@ -107,6 +107,10 @@ agent", "I need to be able to view the inline HTML that was sent on the desktop 
 - New `PageInfo` (`id`, `appId`, `title`, `questions?`, `awaitsSeen?`, `answeredAt?`, `seen?`,
   `from?`, `createdAt`) and `PageOpenResponse` (`path`, `expiresAt`).
 - `CreateAppRequest` gains `askMore?: boolean`.
+- `App` gains `waitingForAnswer?: boolean`: a page with questions waits for the person (set when one is
+  published, cleared when it is answered or the person sends any message, worked out again from the
+  chat on start). The state line then says "Waiting for your answer" (the phone tile: "Your answer");
+  an update or install to tap still comes first.
 - Routes: `GET /api/apps/:id/pages`, `POST /api/apps/:id/pages/:pageId/open`, and the page's own
   `/page/<id>/<ticket>[/answers|/draft|/image]`, `/page-kit/fonts/<file>.ttf`.
 - The answers envelope `<page-answers page="..." title="...">` in a person's message.
