@@ -146,6 +146,14 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .typed .k { color: var(--aa-text-secondary); font-size: var(--aa-type-label-size); line-height: var(--aa-type-mono-line); }
 .typed .v { font-family: var(--aa-font-mono); font-size: var(--aa-type-mono-size); line-height: var(--aa-type-mono-line); color: var(--aa-text); }
 .ec-progress { padding: var(--aa-space-md) var(--aa-space-lg); display: flex; flex-direction: column; gap: var(--aa-space-sm); }
+/* The pairing and download popups: the only places a QR or a pairing code shows. */
+.dialog .pair { margin-top: var(--aa-space-lg); flex-wrap: wrap; }
+.dialog .get-phone { margin-top: var(--aa-space-md); }
+.pair-spent { display: flex; flex-direction: column; align-items: flex-start; gap: var(--aa-space-md); margin-top: var(--aa-space-lg); }
+.pair-private { margin-top: var(--aa-space-lg); }
+.code-cta { display: flex; flex-direction: column; align-items: flex-start; gap: var(--aa-space-sm); margin-top: var(--aa-space-xl); }
+.connect-row { display: flex; align-items: center; gap: var(--aa-space-xl); padding: var(--aa-space-lg); border-radius: var(--aa-radius-card); background: var(--aa-surface); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border); }
+.connect-row .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-xs); }
 
 /* ---------- main window */
 .dm { height: 100%; display: flex; }
@@ -388,6 +396,21 @@ details.adv summary { cursor: pointer; color: var(--aa-text-tertiary); font-size
 .chat-single > .chat-view, .chat-split > .chat-view { flex: 1; min-width: 0; }
 .helper-chat { display: flex; flex-direction: column; min-height: 0; height: 100%; background: var(--aa-surface); }
 .helper-chat-beside { width: clamp(320px, 42%, 440px); flex: none; border-left: var(--aa-border-width) solid var(--aa-border); }
+/* A narrow chat area: the two chats share it half and half, with tighter spacing, so both stay readable. */
+.chat-split.is-narrow > .chat-view { min-width: 0; }
+.chat-split.is-narrow .helper-chat-beside { width: 50%; }
+.chat-split.is-narrow .chat-head { padding-left: var(--aa-space-md); padding-right: var(--aa-space-md); }
+.chat-split.is-narrow .timeline { padding-left: var(--aa-space-md); padding-right: var(--aa-space-md); }
+.chat-split.is-narrow .composer { padding-left: var(--aa-space-md); padding-right: var(--aa-space-md); }
+.chat-split.is-narrow .helper-readonly { margin: 0 var(--aa-space-md); }
+/* While a helper's chat is open in a window under 1500 px, the app list folds to its icons (names on hover). */
+@media (max-width: 1500px) {
+  .apps-split.helper-open .apps-pane { width: calc(var(--aa-size-app-icon-small) + 2 * var(--aa-space-md) + 2 * var(--aa-space-sm)); }
+  .apps-split.helper-open .apps-pane-head, .apps-split.helper-open .apps-notice { display: none; }
+  .apps-split.helper-open .apps-list { padding-top: var(--aa-space-md); }
+  .apps-split.helper-open .arow { justify-content: center; padding: var(--aa-space-sm); }
+  .apps-split.helper-open .arow-main { display: none; }
+}
 .helper-chat-replace { flex: 1; min-width: 0; }
 .helper-chat .timeline { padding-left: var(--aa-space-lg); padding-right: var(--aa-space-lg); }
 .helper-head { padding-left: var(--aa-space-lg); padding-right: var(--aa-space-sm); }
