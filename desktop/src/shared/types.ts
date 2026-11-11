@@ -1,6 +1,6 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
 export type { AdminState, App, AppPreset, ChatImage, ChatItem, ImageUpload, TodoItem, WorkerInfo };
 
@@ -151,6 +151,12 @@ export interface ActionResult {
   error?: string;
 }
 
+/** Back up or restore signing keys (docs/DISTRIBUTION.md): cancelled when the file dialog was closed. */
+export type KeysAction =
+  | { cancelled: true }
+  | { ok: true; file: string; count?: number; restored?: KeysRestoreResult }
+  | { ok: false; error: string };
+
 /** What the preload bridge exposes as window.anyapp. */
 export interface AnyAppBridge {
   getSnapshot(): Promise<Snapshot>;
@@ -184,6 +190,10 @@ export interface AnyAppBridge {
   /** Turns Easy Connect on once when the phone step opens, if it is off. */
   easyConnectAuto(): Promise<void>;
   removeDevice(id: string): Promise<void>;
+  /** Asks where to save, then writes every signing key there, encrypted with `password`. */
+  backupKeys(password: string): Promise<KeysAction>;
+  /** Asks for a backup file, then adds the keys in it that this PC does not have. */
+  restoreKeys(password: string): Promise<KeysAction>;
 
   getMessages(appId: string): Promise<ChatItem[]>;
   getHelpers(appId: string): Promise<WorkerInfo[]>;

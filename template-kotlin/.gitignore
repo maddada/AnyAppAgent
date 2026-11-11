@@ -10,3 +10,12 @@ local.properties
 *.iml
 .idea/
 captures/
+
+# Signing material never lives in the app (AnyAppAgent keeps every key outside the app folder)
+*.jks
+*.keystore
+*.p12
+*.p8
+*.key
+*.pem
+lineage.bin

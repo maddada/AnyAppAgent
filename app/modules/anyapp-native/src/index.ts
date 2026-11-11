@@ -61,7 +61,10 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   /** `color`: the accent from the shared theme tokens (the small icon's tint). */
   notify(id: number, title: string, body: string, url: string | null, color: string | null): boolean;
   cancelNotification(id: number): void;
+  /** Starts the keep-alive foreground service (only allowed in front), or changes its text when it runs. */
   startKeepAlive(text: string, color: string | null): boolean;
+  /** True while the keep-alive service runs in the foreground: this process is not frozen. */
+  keepAliveRunning?(): boolean;
   stopKeepAlive(): void;
 
   // Easy Connect (docs/EASY-CONNECT.md 4.2)

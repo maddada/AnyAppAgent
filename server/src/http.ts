@@ -13,6 +13,7 @@ import type {
   EasyConnectToggleRequest,
   ErrorBody,
   HealthResponse,
+  KeysBackupRequest,
   PairedDevice,
   PairRequest,
   PairResponse,
@@ -22,6 +23,7 @@ import type {
   UpdateTodoRequest,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
+import type { SigningKeys } from "./signing-keys.ts";
 import { ADMIN_DEVICE_ID, cleanDeviceName, type Auth } from "./auth.ts";
 import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
@@ -133,6 +135,7 @@ export function startHttpServer(deps: {
   auth: Auth;
   apps: AppManager;
   easyConnect: EasyConnect;
+  signing?: SigningKeys;
   hostApkPath?: string;
 }): {
   server: Server;
@@ -203,6 +206,7 @@ export function startHttpServer(deps: {
       },
       easyConnect: easyConnect.state(),
       devices,
+      ...(deps.signing?.state() ? { signing: deps.signing.state() } : {}),
     };
   }
 
@@ -234,6 +238,12 @@ export function startHttpServer(deps: {
       await easyConnect.setEnabled(body.enabled);
       adminChanged();
       return sendJson(res, 200, adminState());
+    }
+    if (method === "POST" && (path === "/api/admin/keys/backup" || path === "/api/admin/keys/restore")) {
+      if (!deps.signing) throw new HttpError(409, "Signing keys are not available in this companion.");
+      const body = await readBody<Partial<KeysBackupRequest>>(req);
+      if (path === "/api/admin/keys/backup") return sendJson(res, 200, await deps.signing.backup(body.file, body.password));
+      return sendJson(res, 200, await deps.signing.restore(body.file, body.password));
     }
     const device = /^\/api\/admin\/devices\/([^/]+)$/.exec(path);
     if (method === "DELETE" && device) {

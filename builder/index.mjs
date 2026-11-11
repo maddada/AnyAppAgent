@@ -12,7 +12,8 @@ import path from 'node:path';
 import { ABIS, BUILDER_DIR, BUILDER_VERSION, androidEnv, findBuildTool, tool } from './lib/env.mjs';
 import { extractGradle, extractMetro, extractNpm, extractPrebuild, extractTsc, tail } from './lib/errors.mjs';
 import { CommandError, killTree, npmCommand, run } from './lib/exec.mjs';
-import { ensureKeystore } from './lib/keystore.mjs';
+import { checkSigning, signWithLineage } from './lib/apksign.mjs';
+import { ensureAppKey, signingFor } from './lib/keystore.mjs';
 import { renameWithRetry, tryLock } from './lib/lock.mjs';
 import { fillKotlinPlaceholders, KOTLIN_ICON, syncKotlinIcon } from './lib/kotlin.mjs';
 import { createExactApp, ensureExact, exactDirFor, exactEnv, extractExactError, runExactAndroidBuild } from './lib/exact.mjs';
@@ -21,6 +22,7 @@ import { claimSpare, refillSparesInBackground } from './lib/spare.mjs';
 import { DEPS_STAMP, depsHash, makeAppTree, templateHash } from './lib/template.mjs';
 
 export { PRESETS, DEFAULT_PRESET, presetOf } from './lib/presets.mjs';
+export { listSigningKeys, moveAppToOwnKey, backupSigningKeys, restoreSigningKeys, appSigningKind } from './lib/keys-api.mjs';
 
 const PACKAGE_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -47,6 +49,9 @@ export async function createApp({ dir, name, slug, packageName, preset, onLog = 
   dir = path.resolve(dir);
   if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) throw new Error(`createApp: ${dir} already exists and is not empty`);
   await fsp.mkdir(path.dirname(dir), { recursive: true });
+  // Every new app gets its own signing key (kept outside the app; the same package id always gets
+  // the same key). Made first, so a failure here leaves no half-made app folder.
+  await ensureAppKey(androidEnv().javaHome, packageName, onLog);
 
   const t0 = Date.now();
   if (preset === 'expo-exact') {
@@ -167,7 +172,6 @@ async function runBuild(dir, n, onLog, preset) {
 
   try {
     const { env, javaHome, sdk } = androidEnv();
-    const keystore = await ensureKeystore(javaHome, say);
     const kotlin = preset === 'kotlin';
     let slug;
     let packageName;
@@ -180,8 +184,12 @@ async function runBuild(dir, n, onLog, preset) {
       slug = appJson.expo?.slug ?? path.basename(dir);
       packageName = appJson.expo?.android?.package;
     }
-    say(`Building ${packageName ?? slug} #${n} (${preset}) in ${dir}`);
-    const finish = (built, parts = []) => finishApk({ built, parts, sdk, n, dir, slug, packageName, preset, t0, timings, logFile, say });
+    // The app's own key, or the shared key for apps made before per-app keys (lib/keystore.mjs).
+    const signing = await signingFor(javaHome, packageName, say);
+    const keystore = signing.gradle;
+    say(`Building ${packageName ?? slug} #${n} (${preset}, ${signing.kind} key) in ${dir}`);
+    const finish = (built, parts = []) =>
+      finishApk({ built, parts, sdk, javaHome, signing, n, dir, slug, packageName, preset, t0, timings, logFile, say });
 
     if (preset === 'expo-exact') {
       // Exact's own Android build (Rust, then Gradle), with the builder's init script for the
@@ -359,7 +367,7 @@ async function runBuild(dir, n, onLog, preset) {
  * Checks the built APK (versionCode, package id), copies it to build/apk/ and fingerprints it,
  * with its per-ABI APKs (`parts`, [{ abi, path }]) as `variants`.
  */
-async function finishApk({ built, parts = [], sdk, n, dir, slug, packageName, preset, t0, timings, logFile, say }) {
+async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, slug, packageName, preset, t0, timings, logFile, say }) {
   const badging = await readBadging(sdk, built);
   if (badging && badging.versionCode !== n) {
     throw new BuildError(`APK versionCode is ${badging.versionCode}, expected ${n} (the builder's init script did not apply)`);
@@ -374,12 +382,27 @@ async function finishApk({ built, parts = [], sdk, n, dir, slug, packageName, pr
   await fsp.mkdir(outDir, { recursive: true });
   const apkPath = path.join(outDir, `${slug}-${n}.apk`);
   await fsp.copyFile(built, apkPath);
-  const variants = [];
+  const copies = [];
   for (const part of parts) {
     const out = path.join(outDir, `${slug}-${n}-${part.abi}.apk`);
     await fsp.copyFile(part.path, out);
+    copies.push({ abi: part.abi, out });
+  }
+  // A moved app is signed again with its key rotation lineage; then every APK must carry exactly
+  // the expected certificates (docs/DISTRIBUTION.md, "Signing").
+  for (const apk of [apkPath, ...copies.map((c) => c.out)]) {
+    try {
+      if (signing.resign) await signWithLineage(javaHome, sdk, apk, signing.resign);
+      await checkSigning(javaHome, sdk, apk, signing.expect);
+    } catch (e) {
+      await fsp.rm(apk, { force: true });
+      throw new BuildError(`Signing check failed: ${e.message}`);
+    }
+  }
+  const variants = [];
+  for (const { abi, out } of copies) {
     const data = await fsp.readFile(out);
-    variants.push({ abi: part.abi, apkPath: out, sizeBytes: data.length, sha256: crypto.createHash('sha256').update(data).digest('hex') });
+    variants.push({ abi, apkPath: out, sizeBytes: data.length, sha256: crypto.createHash('sha256').update(data).digest('hex') });
   }
   await pruneApks(outDir, KEEP_APKS);
   const buf = await fsp.readFile(apkPath);
@@ -395,6 +418,7 @@ async function finishApk({ built, parts = [], sdk, n, dir, slug, packageName, pr
     versionCode: n,
     packageName: badging?.packageName ?? packageName,
     preset,
+    signing: { kind: signing.kind, certSha256: signing.certSha256 },
     durationMs,
     timings,
     logPath: logFile,

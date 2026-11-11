@@ -9,6 +9,10 @@
 //   node dev/ui.mjs key <BACK|HOME|ENTER|...>
 //   any command: --serial <emulator-55xx> (else ANYAPP_ADB_SERIAL, else emulator-5560)
 //
+// The app it drives (and the only app it sends input to, besides the system screens its flow
+// opens): ANYAPP_UI_PACKAGE, default com.anyappagent. A thread testing its own copy of the app
+// (for example com.anyappagent.fsd) sets it, so it never taps into another thread's copy.
+//
 // adb: always the Android SDK's (ANDROID_HOME, else D:\tools\android\sdk). Never the `adb` on PATH:
 // an older adb there (1.0.39) restarts the shared adb server and breaks every other thread.
 import { execFileSync } from "node:child_process";
@@ -79,7 +83,11 @@ const [cmd, ...rest] = argv;
 
 // The emulator is shared with other threads: only ever send input to our own windows (and the
 // system screens our flow opens). If someone else's app is in front, bring ours back first.
-const OURS = [/com\.anyappagent/, /packageinstaller/, /permissioncontroller/, /com\.android\.settings/, /^$/];
+const PACKAGE = process.env.ANYAPP_UI_PACKAGE || "com.anyappagent";
+const OURS = [(name) => name === PACKAGE, /packageinstaller/, /permissioncontroller/, /com\.android\.settings/, /^$/].map((r) =>
+  typeof r === "function" ? r : (name) => r.test(name),
+);
+const isOurs = (window) => OURS.some((test) => test(window.split("/")[0]));
 function focused() {
   const out = adb("shell", "dumpsys", "window", "displays").toString("utf8");
   return (/mCurrentFocus=Window\{\S+ \S+ ([^}\s]+)/.exec(out) ?? [])[1] ?? "";
@@ -87,15 +95,21 @@ function focused() {
 async function ensureOurs() {
   for (let i = 0; i < 3; i++) {
     const f = focused();
-    if (OURS.some((r) => r.test(f.split("/")[0]))) return;
-    console.error(`(someone else's window is in front: ${f}; bringing AnyAppAgent back)`);
-    adb("shell", "am", "start", "-n", "com.anyappagent/.MainActivity");
+    if (isOurs(f)) return;
+    console.error(`(someone else's window is in front: ${f}; bringing ${PACKAGE} back)`);
+    try {
+      adb("shell", "am", "start", "-n", `${PACKAGE}/com.anyappagent.MainActivity`);
+    } catch {
+      break; // not installed: nothing to bring back
+    }
     await sleep(1500);
   }
-  console.error("could not get AnyAppAgent to the front");
+  console.error(`could not get ${PACKAGE} to the front`);
   process.exit(2);
 }
 if (["tap", "longpress", "type", "key", "clear"].includes(cmd) || (cmd === "shot" && !process.env.UI_ANY_WINDOW)) await ensureOurs();
+// Reading is harmless, but reading another thread's app would mislead: say so.
+if (["dump", "wait"].includes(cmd) && !isOurs(focused())) console.error(`(note: the window in front is ${focused()}, not ${PACKAGE})`);
 
 switch (cmd) {
   case "tap": {
