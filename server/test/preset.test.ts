@@ -61,6 +61,8 @@ describe("app presets", () => {
     expect(kotlin).toContain("native Android app (Kotlin, Jetpack Compose");
     expect(kotlin).toContain(":app:compileReleaseKotlin");
     expect(kotlin).not.toContain("npm run check");
+    expect(kotlin).toContain("the Ai object in ai/Ai.kt");
+    expect(kotlin).not.toContain("src/lib/ai.ts");
     expect(appPlaybook({ name: "T", packageName: "com.anyapp.t", dir: "d" })).toContain("npm run check");
     expect(buildFixPrompt({ buildNumber: 2, attempt: 1, maxAttempts: 3, error: "e", preset: "kotlin" })).toContain(":app:compileReleaseKotlin");
   });

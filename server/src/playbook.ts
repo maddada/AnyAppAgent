@@ -13,6 +13,11 @@ export function checkCommand(preset: AppPreset | undefined): string {
   return preset === "kotlin" ? "./gradlew --console=plain -q :app:compileReleaseKotlin" : "npm run check";
 }
 
+/** Where an app's AI client lives (AGENTS.md, "AI"). */
+function aiFile(preset: AppPreset | undefined): string {
+  return preset === "kotlin" ? "the Ai object in ai/Ai.kt" : "src/lib/ai.ts";
+}
+
 function stackLine(preset: AppPreset | undefined): string {
   return preset === "kotlin"
     ? "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native."
@@ -49,7 +54,7 @@ Taste (the person's rules for every app you make):
 - On your first turn give the app an icon of its own that matches what it does (see "The app
   icon" in AGENTS.md), never the starter icon.
 - When they ask for anything AI (a chat, an assistant, smart suggestions, an agent that does things
-  in the app), use the built-in AI through AnyAppAgent ("AI" in AGENTS.md, src/lib/ai.ts). Never ask
+  in the app), use the built-in AI through AnyAppAgent ("AI" in AGENTS.md, ${aiFile(app.preset)}). Never ask
   them for an API key and never call an AI service directly.
 
 Memory: keep a short file ${MEMORY_FILE} in the project root with the app's goal (what the person

@@ -24,6 +24,9 @@ app/src/main/java/com/anyapp/app/
   notify/Notifications.kt  notification permission and notifyNow
   alarms/Alarms.kt         exact alarms with sound + spoken text, work while the app is closed
   alarms/*.kt              the machinery behind Alarms.kt (leave it unless a feature needs it)
+  ai/Ai.kt                 AI (chat, streaming, tools, agents) through AnyAppAgent's key
+  ai/AiSetupNotice.kt      the "AI is not set up" card with a button to AnyAppAgent
+  ai/AiTypes.kt            AiMessage, AiPart, AiTool, AiError ... (AI.md: the wire format, leave it)
 app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service
 app/src/main/res/values/strings.xml   app_name: the name under the icon
 app/src/main/res/raw/      sound files for alarms (adhan.mp3, beep.ogg, ...)
@@ -49,7 +52,8 @@ The Kotlin package of the code is `com.anyapp.app` in every app; only the instal
   what Android and Compose already have. If you must, add one line to `dependencies` in
   `app/build.gradle.kts` with an exact version that exists on Google Maven or Maven Central, and
   keep Compose libraries under the BOM (no version).
-- Never put secrets or keys in the app.
+- Never put secrets or keys in the app. For AI, use `Ai` (below): never ask the person for an
+  API key and never call an AI provider over the internet yourself.
 
 You may change `app_name` in `strings.xml` when the user asks to rename the app.
 
@@ -182,6 +186,78 @@ val permission = rememberNotificationPermission()   // in a composable
 if (!permission.granted) PrimaryButton("Turn on reminders", onClick = { permission.request() })
 Notifications.notifyNow(context, "Saved", "Your list was saved")
 ```
+
+### AI: chat, streaming, tools and agents (Claude or OpenRouter, through AnyAppAgent)
+
+Use this whenever the person asks for anything AI: a chat, summaries, smart suggestions, reading a
+photo, an assistant that does things in the app. The person adds their AI key once in AnyAppAgent's
+Settings; this app never sees the key. AnyAppAgent sends the requests, shows usage per app and can
+switch AI off for this app. Nothing to install or declare.
+
+```kotlin
+import com.anyapp.app.ai.*
+
+// 1. Show the setup card while AI is not ready (no key yet, or AI switched off for this app).
+val aiStatus by rememberAiStatus()               // refreshes when the app comes back to the front
+AiSetupNotice(aiStatus)                          // shows nothing when AI is ready
+
+// All calls are suspend functions: run them in a coroutine.
+val scope = rememberCoroutineScope()
+val context = LocalContext.current
+
+// 2. One question
+scope.launch { val answer = Ai.ask(context, "Suggest a name for a cat", system = "Answer in one line.") }
+
+// 3. A conversation, streamed: show text as it arrives
+var messages by remember { mutableStateOf(listOf<AiMessage>()) }
+var live by remember { mutableStateOf("") }
+scope.launch {
+  val next = messages + AiMessage.user(input)
+  val reply = Ai.chat(context, next, system = "You are a friendly cooking helper.", onText = { live += it })
+  messages = next + reply.message                // always keep reply.message, not just the text
+}
+
+// 4. An agent with tools: the AI calls your functions until it is done
+val addItem = AiTool(
+  name = "add_item",
+  description = "Add an item to the shopping list",
+  parameters = JSONObject("""{"type":"object","properties":{"name":{"type":"string"},"qty":{"type":"number"}},"required":["name"]}"""),
+) { input -> addToList(input.getString("name"), input.optInt("qty", 1)); "added" }
+scope.launch {
+  val result = Ai.runAgent(
+    context, tools = listOf(addItem),
+    prompt = "Add what I need for pancakes",
+    system = "You manage the shopping list. Use the tools.",
+    maxSteps = 6,                                 // AI turns before it stops (default 8)
+    onText = { live += it },
+    onToolCall = { step = "Adding ${it.input.optString("name")}" },
+  )
+  result.text; result.messages                    // the final answer; the whole conversation to keep
+}
+
+// 5. Images in: base64 (no data: prefix), in a user message
+Ai.chat(context, listOf(AiMessage.user(AiPart.Image(base64, "image/jpeg"), AiPart.Text("What plant is this?"))))
+
+// Errors: every call can throw AiError
+try { Ai.ask(context, "Hi") } catch (e: AiError) {
+  if (e.needsSetup) setupCode = e.code else problem = aiProblemText(e.code)   // AiSetupNotice(null, code = setupCode)
+}
+```
+
+- Always handle "not ready": show `AiSetupNotice` (with `code = e.code` after an `AiError` with
+  `needsSetup`) where the AI feature would be, and keep the rest of the app working without AI.
+  Its button opens AnyAppAgent's settings. Never show a key field in this app.
+- Stream long answers with `onText` (it runs on the main thread, so it can set Compose state).
+  Cancelling the coroutine (`job.cancel()`) stops the answer.
+- Keep tools small and safe: the AI decides when to call them, so never give it a tool that
+  deletes or spends without the person confirming in the UI.
+- Limits set by AnyAppAgent: about 30 AI calls a minute and 3 at once per app (`AiError` code
+  `limit`), answers up to `maxTokens` (default 8192). An agent step is one call.
+- Images: let the person pick one with `rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia())`,
+  scale it down (`BitmapFactory` + `Bitmap.createScaledBitmap`, JPEG quality 70), then base64 it
+  (`android.util.Base64.NO_WRAP`). Keep images small, a few MB at most.
+- Save conversations with `Store` (as JSON: `AiMessage.toJson()`) if the person should find them again.
+- The wire format under `Ai` is in `AI.md`; app code never needs it.
 
 ### Also at hand (Android itself, no library)
 
