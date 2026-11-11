@@ -163,6 +163,12 @@ function MainChat({ app, icon, online, headerExtra }: { app: App; icon?: string;
             {rows.map((r) => (
               <ChatRow key={r.key} row={r} app={app} />
             ))}
+            {chat.loaded && rows.length === 0 ? (
+              <div className="chat-empty" data-testid="chat-empty">
+                <span className="heading">No messages yet</span>
+                <span className="label">Ask for a change below, and the new version goes to your phone.</span>
+              </div>
+            ) : null}
           </div>
         </div>
         {!pinned && (
@@ -349,7 +355,8 @@ function Composer({ app, online, onSent, registerDrop }: { app: App; online: boo
         </div>
       </div>
       <p className="caption composer-hint">
-        {state.button === "queue" ? "The agent is busy: this waits its turn. " : ""}Enter to send, Shift+Enter for a new line. Paste or drop pictures to add them.
+        {state.button === "queue" ? <span className="keep">The agent is busy: this waits its turn. </span> : ""}
+        <span className="keep">Enter to send, Shift+Enter for a new line.</span> <span className="keep">Paste or drop pictures to add them.</span>
       </p>
     </form>
   );

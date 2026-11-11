@@ -57,13 +57,15 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
             <button
               key={id}
               className={`nav-i${page === id ? " is-active" : ""}`}
+              aria-label={label}
+              title={label}
               onClick={() => {
                 setOpenApp(null);
                 setPage(id);
               }}
             >
               <Icon of={of} size="button" />
-              {label}
+              <span className="nav-label">{label}</span>
               {id === "setup" && attention > 0 && (
                 <span className="nav-count" title={`${attention} need you`}>
                   <Icon of={CircleAlert} px={15} />
@@ -130,7 +132,7 @@ function SideStatus({ s }: { s: Snapshot }) {
         ? [<span style={{ color: "var(--aa-problem)" }}><Icon of={CircleAlert} px={15} /></span>, "Needs attention", c.message]
         : [<Spinner />, c.phase === "restarting" ? "Restarting" : "Starting", "Getting ready to make apps"];
   return (
-    <div className="side-status caption">
+    <div className="side-status caption" title={`${title}. ${line}`}>
       {mark}
       <div>
         <strong>{title}</strong>
@@ -374,21 +376,23 @@ function NewAppDialog({ onClose, onMade }: { onClose: () => void; onMade: (appId
 function PhonesPanel({ s }: { s: Snapshot }) {
   const devices = s.admin?.devices ?? [];
   return (
-    <div className="panel">
+    <div className="panel panel-wide">
       <div className="eyebrow">{devices.length > 1 ? "Your phones" : "Your phone"}</div>
       {devices.length === 0 ? (
         <p className="label secondary">No phone connected yet.</p>
       ) : (
-        devices.map((d) => (
-          <div key={d.id} className="phone-row">
-            <Icon of={Smartphone} size="md" />
-            <div>
-              <strong className="body">{d.name}</strong>
-              <span className="label">{d.connected ? "Connected, seen just now" : d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : "Paired"}</span>
-              <span className="label">{viaWords(d.via)}</span>
+        <div className="phone-list">
+          {devices.map((d) => (
+            <div key={d.id} className="phone-row">
+              <Icon of={Smartphone} size="md" />
+              <div>
+                <strong className="body">{d.name}</strong>
+                <span className="label">{d.connected ? "Connected, seen just now" : d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : "Paired"}</span>
+                <span className="label">{viaWords(d.via)}</span>
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+        </div>
       )}
     </div>
   );
@@ -420,7 +424,7 @@ function PhonesPage({ s, onConnect }: { s: Snapshot; onConnect: () => void }) {
   const [error, setError] = useState<string | null>(null);
   return (
     <div className="page">
-      <header className="dm-head" style={{ paddingBottom: 0 }}>
+      <header className="dm-head">
         <div>
           <h1 className="title">Phones</h1>
           <p className="dm-sub callout">The phones that can ask this PC for apps.</p>
@@ -560,7 +564,7 @@ function setupRows(s: Snapshot): SetupRow[] {
 function SetupPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) => void }) {
   return (
     <div className="page">
-      <header className="dm-head" style={{ paddingBottom: 0 }}>
+      <header className="dm-head">
         <div>
           <h1 className="title">Setup</h1>
           <p className="dm-sub callout">Everything this PC needs to make apps for your phone. It checks itself.</p>
@@ -572,9 +576,11 @@ function SetupPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) =>
       <section className="list">
         {setupRows(s).map((r) => (
           <div key={r.key} className="srow">
-            <Icon of={r.icon} size="md" />
+            <span className="badge">
+              <Icon of={r.icon} size="md" />
+            </span>
             <div className="srow-main">
-              <span className="body">{r.title}</span>
+              <span className="heading">{r.title}</span>
               <StateLine state={r.state} text={r.sub} />
             </div>
             {r.state !== "ready" && r.state !== "working" && r.step && (
@@ -601,7 +607,7 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
   const [apk, setApk] = useState(s.settings.phoneApkPath);
   return (
     <div className="page">
-      <header className="dm-head" style={{ paddingBottom: 0 }}>
+      <header className="dm-head">
         <h1 className="title">Settings</h1>
       </header>
       <section className="list">
@@ -668,7 +674,7 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
             void api.setSetting("phoneApkPath", apk.trim());
           }}
         >
-          <input className="field" style={{ flex: 1 }} value={apk} placeholder="Phone app file (found by itself when empty)" onChange={(e) => setApk(e.target.value)} />
+          <input className="field field-small" style={{ flex: 1 }} value={apk} placeholder="Phone app file (found by itself when empty)" onChange={(e) => setApk(e.target.value)} />
           <button className="btn btn-quiet btn-sm" type="submit" disabled={apk.trim() === s.settings.phoneApkPath}>
             Save
           </button>
