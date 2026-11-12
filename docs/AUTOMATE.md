@@ -128,7 +128,7 @@ card from that record.
 | Time and prayer times | `AlarmManager.setExactAndAllowWhileIdle`, `USE_EXACT_ALARM` (granted to side-loaded apps), boot receiver | Never (granted) | `at`, `prayer`, `every`, `now`, `prayerTimes` | First slice |
 | Speak, notify | `TextToSpeech` on the alarm stream (heard in Do Not Disturb), notification channels, `POST_NOTIFICATIONS` | Notifications: on the card of the first automation that notifies | `speak`, `notify` | First slice |
 | Do Not Disturb | `NotificationManager.setInterruptionFilter(PRIORITY)` with a timed restore alarm; `ACCESS_NOTIFICATION_POLICY` | Card: "Allow" opens the Do Not Disturb access page, one switch | `doNotDisturb.on/off/isOn` | First slice |
-| Bluetooth, Wi-Fi, charging | A listener foreground service (type `connectedDevice`) with runtime receivers for ACL connect/disconnect, network callbacks, `ACTION_POWER_CONNECTED`; `BLUETOOTH_CONNECT` (Nearby devices) | Card of the first automation using it | `bluetooth('Car')`, `wifi('Home')`, `charging()` triggers | M2 |
+| Bluetooth, Wi-Fi, charging | `ListenerService`: a foreground service of type `connectedDevice` (its Android 14 prerequisite `CHANGE_NETWORK_STATE` is granted without asking) with receivers for `ACTION_POWER_CONNECTED/DISCONNECTED` and Bluetooth `ACTION_ACL_CONNECTED/DISCONNECTED`, and a Wi-Fi `NetworkCallback` (with `FLAG_INCLUDE_LOCATION_INFO` for the name). It runs only while an automation that is on uses one of these triggers (the runtime calls `listen()` in every plan), shows "Listening for ..." with Stop all, restarts after a reboot, and starts the headless runner with `{ event }` | Card: "A small notice while it listens"; Bluetooth asks Nearby devices; a Wi-Fi name asks Location, all the time (Android shows Wi-Fi names only then) | `charging({ plugged? })`, `wifi({ connected?, network? })`, `bluetooth({ connected?, device? })` | M2 (built) |
 | Notifications from other apps | `NotificationListenerService`; side-loaded apps need "Allow restricted settings" in App info first (Android 13+) | Card: a short walkthrough (App info, then the listener switch) | `notificationFrom('WhatsApp', { text? })` trigger | M3 |
 | Location (arrive, leave) | `LocationManager.addProximityAlert` (no Play services needed) or the fused geofencing API; `ACCESS_BACKGROUND_LOCATION` ("Allow all the time") | Card | `arrive('Mosque')`, `leave(...)`, places saved in the app | M4 |
 | The app in front | `UsageStatsManager` events (`PACKAGE_USAGE_STATS`, one switch), polled by the listener service only while an automation needs it | Card | `appOpened('YouTube', { forMinutes? })` | M5 |
@@ -193,7 +193,7 @@ The first version is all nine powers. In working days, one thread:
 | # | What | Days |
 | --- | --- | --- |
 | M1 | First slice (this): the app made through AnyAppAgent, the fence and runtime, all safety rails and the Advanced toggle, time and prayer times, speak and notify, Do Not Disturb | 2 (done) |
-| M2 | Bluetooth, Wi-Fi and charging triggers: the listener service (always-on notice with Stop all), Nearby devices | 2 |
+| M2 | Bluetooth, Wi-Fi and charging triggers: the listener service (always-on notice with Stop all), Nearby devices | 2 (built) |
 | M3 | Notifications from other apps: the listener service, the restricted-settings walkthrough | 1.5 |
 | M4 | Location arrive and leave: places in the app, proximity alerts, "Allow all the time" walkthrough | 1.5 |
 | M5 | The app in front (usage access) | 1 |
@@ -257,3 +257,39 @@ notification with Allow and Don't allow) and turning the safety locks off (the w
 locks were kept on). The emulator restarted with a software GPU ran at load 20 to 30, and its first
 boot after the restart called the old adb on PATH (the emulator inherits the user's PATH), which
 restarted the shared adb server for a minute.
+
+## The rails proof and M2 (2026-11-12, later)
+
+The user asked to prove the safety rails before M2, then M2. Same setup (`emulator-5560`, my
+companion on 8824, my phone copy). Screenshots `C:\aa\e2e\automate\4x-*`, `5x-*`, `6x-*`.
+
+**Ask before sending.** "Two test automations to try the safety rails" made Web check (07:00,
+`web.get('https://example.com')`, then a notification) and Minute tick (every 1 minute), quick
+build 7. Web check's card: "Fetch from example.com (asks you first, every time)" (`41-*`). Try it
+now: the notification "Web check wants to fetch from example.com", Don't allow / Allow (`42-*`);
+Don't allow: "You said no: nothing was sent", the notification after the fetch never came (`43-*`);
+again with Allow: fetched, "example.com answered with status 200" (`44-*`). The real 07:00 run
+asked too (`52-ask-before-sending-dark.png`); nobody answered.
+
+Found there: the question waits up to 2 minutes but a run is capped at 60 s, so the hard limit
+ended the unanswered run first and the log said "took too long" (`53-*`), honest about nothing
+sent but not about why. Fixed (version 8): a run's clock pauses while it waits for the person,
+and a refusal is logged as "<name> did not send anything" with "You said no" or "No answer in
+time", kind `blocked`, not a failure.
+
+**Safety locks off.** With the locks on, Minute tick is "Problem: every() cannot be more often than
+every 15 minutes (safety lock)" (`40-*`). Settings, Advanced, the switch, the warning, Turn off
+(`45-*`, `46-*`): Minute tick turned on by itself ("Without a card: the safety locks are off") and
+ran every minute, 06:54, 06:55, 06:56 (`47-*`, `48-*`). Locks back on: Minute tick is a Problem
+again and its wake-up is gone (`49-*`, `50-*`). Dark: `51-*` to `53-*`.
+
+**The name in one place.** The app's visible name is its own name under the icon (app.json
+`expo.name`, which a rename in AnyAppAgent already changes): JavaScript reads it through
+`src/automate/brand.ts` (`APP_NAME`), Kotlin through the app's label (`Notices.appName`). No
+screen or message writes the name out; the app's AGENTS.md says so. The running notice now shows
+the automation's name instead of its id.
+
+**M2.** Built as above (`ListenerService.kt`, triggers in `src/automate/triggers.ts`, the card's
+new needs in `card.ts`, the API in `automations/api.d.ts` and the fence's list). It reached the app
+as one full build (8, 144 s, the new service and permissions), installed by my phone copy without
+a prompt; the next automations using the new triggers were a quick build again (9, 17 s).

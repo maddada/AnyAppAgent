@@ -3,7 +3,7 @@
 // fence found in its code); "You asked for" is the agent's sentence, labelled as such.
 import { useFocusEffect, useNavigation, type StaticScreenProps } from '@react-navigation/native';
 import { useCallback, useEffect, useState } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { AppState, PermissionsAndroid, StyleSheet, Text, View } from 'react-native';
 
 import * as Native from '../../modules/automate';
 import { NEED_LABEL, type Need } from '@/automate/card';
@@ -22,6 +22,9 @@ type Props = StaticScreenProps<{ id: string }>;
 function needReady(n: Need): boolean {
   if (n === 'dnd') return Native.dnd.hasAccess();
   if (n === 'notifications') return Native.canNotify();
+  if (n === 'listening') return Native.canNotify();
+  if (n === 'nearby') return Native.hasPermission('android.permission.BLUETOOTH_CONNECT');
+  if (n === 'locationAlways') return Native.hasPermission('android.permission.ACCESS_FINE_LOCATION') && Native.hasPermission('android.permission.ACCESS_BACKGROUND_LOCATION');
   return Native.canExact();
 }
 
@@ -60,7 +63,13 @@ export function AutomationScreen({ route }: Props) {
 
   const allow = async (n: Need) => {
     if (n === 'dnd') await Native.dnd.openSettings();
-    if (n === 'notifications') await ensureNotificationPermission();
+    if (n === 'notifications' || n === 'listening') await ensureNotificationPermission();
+    if (n === 'nearby') await PermissionsAndroid.request('android.permission.BLUETOOTH_CONNECT');
+    if (n === 'locationAlways') {
+      // Android asks in two steps: while in use first, then "Allow all the time" in Settings.
+      const fine = await PermissionsAndroid.request('android.permission.ACCESS_FINE_LOCATION');
+      if (fine === 'granted') await PermissionsAndroid.request('android.permission.ACCESS_BACKGROUND_LOCATION');
+    }
     setRefresh((x) => x + 1);
   };
   const run = (fn: () => Promise<unknown>) => async () => {

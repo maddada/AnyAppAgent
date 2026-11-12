@@ -5,13 +5,21 @@ import * as Native from '../../modules/automate';
 import { LIMITS, isPrivateHost } from './limits';
 import { prayerTimesFor, ajmanDay, PRAYER_KEYS, ajmanClock } from './prayer';
 import { getState, update } from './store';
-import { makeAt, makeEvery, makePrayer, ScriptError } from './triggers';
+import { makeAt, makeBluetooth, makeCharging, makeEvery, makePrayer, makeWifi, ScriptError } from './triggers';
+import { APP_NAME } from './brand';
 import { load, save } from '@/lib/storage';
 
 const BLOCKED = new Set(['constructor', 'prototype', '__proto__', '__defineGetter__', '__defineSetter__', '__lookupGetter__', '__lookupSetter__', 'caller', 'callee', 'arguments']);
 
 /** How long a run waits for speech to finish before it goes on. */
 const SPEAK_WAIT_MS = 15_000;
+
+/** The person said no (or did not answer) to sending: nothing was sent. */
+export class RefusedError extends Error {
+  constructor(public readonly reason: 'no' | 'no answer') {
+    super(reason === 'no' ? 'You said no: nothing was sent.' : 'No answer in time: nothing was sent.');
+  }
+}
 
 export class StoppedError extends Error {
   constructor() {
@@ -95,11 +103,13 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
       if (recent.length >= LIMITS.sendsPerHour) throw new ScriptError(`More than ${LIMITS.sendsPerHour} sends in an hour (safety lock).`);
       const what = method === 'GET' ? `fetch from ${host}` : `send to ${host}`;
       line(`Asked you: ${what}`);
+      // The run's clock stops while it waits for the person: a slow answer is not a slow script.
+      const asked = Date.now();
       const answer = await Native.ask(`${ctx.name} wants to ${what}`, method === 'POST' ? `It sends: ${String(typeof body === 'string' ? body : JSON.stringify(body)).slice(0, 160)}` : url, LIMITS.askMs);
-      if (answer !== 'allow') {
-        line(answer === 'deny' ? 'You said no: nothing was sent' : 'No answer: nothing was sent');
-        throw new ScriptError(answer === 'deny' ? 'You said no.' : 'No answer in time.');
-      }
+      ctx.deadline += Date.now() - asked;
+      if (Native.isStopped()) throw new StoppedError();
+      if (answer !== 'allow') throw new RefusedError(answer === 'deny' ? 'no' : 'no answer');
+      line('You allowed it');
       await update((s) => ({ ...s, recentSends: [...recent, Date.now()] }));
     }
     const payload = body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body);
@@ -123,11 +133,25 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
 
   const memoryKey = `automate.memory.${ctx.automation}`;
 
+  // A refused trigger (every 1 minute while the locks are on) becomes a marker, so the card still
+  // shows the automation's own name with the reason, instead of a bare error.
+  const trigger = (make: () => unknown) => {
+    try {
+      return make();
+    } catch (e) {
+      if (e instanceof ScriptError) return Object.freeze({ kind: 'invalid', problem: e.message });
+      throw e;
+    }
+  };
+
   return Object.freeze({
     automation: (definition: unknown) => definition,
-    at: (time: unknown, options?: { days?: unknown }) => makeAt(time, options),
-    prayer: (name: unknown, options?: { before?: unknown; after?: unknown }) => makePrayer(name, options),
-    every: (interval?: { minutes?: unknown; hours?: unknown }) => makeEvery(interval, ctx.locksOff),
+    at: (time: unknown, options?: { days?: unknown }) => trigger(() => makeAt(time, options)),
+    prayer: (name: unknown, options?: { before?: unknown; after?: unknown }) => trigger(() => makePrayer(name, options)),
+    every: (interval?: { minutes?: unknown; hours?: unknown }) => trigger(() => makeEvery(interval, ctx.locksOff)),
+    charging: (options?: { plugged?: unknown }) => trigger(() => makeCharging(options)),
+    wifi: (options?: { connected?: unknown; network?: unknown }) => trigger(() => makeWifi(options)),
+    bluetooth: (options?: { connected?: unknown; device?: unknown }) => trigger(() => makeBluetooth(options)),
 
     speak: async (text: unknown, options?: { language?: unknown }) => {
       gate('speak');
@@ -162,7 +186,7 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
     notify: async (title: unknown, body?: unknown) => {
       gate('notify');
       const t = String(title ?? '').slice(0, 120);
-      if (!Native.canNotify()) throw new ScriptError('Notifications are off for Appwin Automate: allow them on its card.');
+      if (!Native.canNotify()) throw new ScriptError(`Notifications are off for ${APP_NAME}: allow them on its card.`);
       line(`Showed "${t}"`);
       await Native.notifyNow(t, body === undefined ? undefined : String(body).slice(0, 400), ctx.automation);
     },

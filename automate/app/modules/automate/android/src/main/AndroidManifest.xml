@@ -9,6 +9,16 @@
   <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
   <!-- A run is a short foreground service with a "Running ... / Stop all" notification. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <!-- M2: listening for the charger, Wi-Fi and Bluetooth (a connectedDevice foreground service;
+       CHANGE_NETWORK_STATE is its Android 14 prerequisite and is granted without asking).
+       Bluetooth names need Nearby devices, Wi-Fi names Location all the time: asked on the card. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+  <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
   <application>
     <receiver android:name="expo.modules.appwinautomate.TriggerReceiver" android:exported="false" />
@@ -21,6 +31,10 @@
         <action android:name="android.intent.action.TIME_SET" />
       </intent-filter>
     </receiver>
+    <service
+      android:name="expo.modules.appwinautomate.ListenerService"
+      android:exported="false"
+      android:foregroundServiceType="connectedDevice" />
     <service
       android:name="expo.modules.appwinautomate.AutomateTaskService"
       android:exported="false"

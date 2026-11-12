@@ -59,6 +59,9 @@ The whole API (types and comments: `automations/api.d.ts`):
 | `at('07:30', { days? })` | Every day at a local time; `days: ['mon', 'fri']` limits it |
 | `prayer('fajr' \| 'sunrise' \| 'dhuhr' \| 'asr' \| 'maghrib' \| 'isha', { before?, after? })` | At an Ajman prayer time (UAE Awqaf), minutes before or after |
 | `every({ minutes } \| { hours })` | Repeating, at least every 15 minutes |
+| `charging({ plugged? })` | The charger plugged in (default) or unplugged |
+| `wifi({ connected?, network? })` | Wi-Fi connects (default) or drops; `network` is its name (then the card also asks for Location, all the time) |
+| `bluetooth({ connected?, device? })` | A Bluetooth device connects (default) or disconnects; `device` is part of its name (Nearby devices is asked on the card) |
 | `speak(text, { language? })` | Says it aloud on the alarm volume (heard in Do Not Disturb) |
 | `notify(title, body?)` | A notification |
 | `doNotDisturb.on({ minutes? })`, `.off()`, `.isOn()` | Do Not Disturb (alarms still sound); with `minutes` it ends by itself |
@@ -81,14 +84,18 @@ saying which line and why, and that message comes back to you):
   worked out at run time shows as "something worked out when it runs".
 - `says` is the person's request in one plain sentence: the card shows it as "You asked for".
 - Never log or speak what the person wrote elsewhere or who they are.
+- The app's name is never written out in screens or messages: use `APP_NAME` from
+  `src/automate/brand.ts` (it is the name under the icon, so a rename changes it everywhere).
 - Leave `src/automate/`, `tools/automate-fence.js`, `babel.config.js` and `modules/automate/`
   alone for an automation: they are the runtime and its safety rails. Change them only for a
   change to the app itself, and never weaken a safety rail unless the person asks for exactly that.
 
+While an automation that is on uses `charging`, `wifi` or `bluetooth`, a small "Listening for ..."
+notice stays (Android needs it to keep listening); it carries Stop all.
+
 **What is not in this version yet** (say so in one line and offer to add it, as a change to the
-app that needs a new install): Bluetooth, Wi-Fi and charging triggers, notifications from other
-apps, location (arrive and leave), the app in front, Accessibility (read the screen and tap), and
-Shizuku powers. `docs/AUTOMATE.md` in AnyAppAgent has the plan for each.
+app that needs a new install): notifications from other apps, location (arrive and leave), the app
+in front, Accessibility (read the screen and tap), and Shizuku powers. `docs/AUTOMATE.md` in AnyAppAgent has the plan for each.
 
 **How it reaches the phone**: an automation is JavaScript only, so it goes out as a quick update
 (the fast lane, no install). Do not touch `app.json`, `package.json`, `assets/` or native code for

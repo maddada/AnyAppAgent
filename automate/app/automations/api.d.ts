@@ -3,14 +3,14 @@
 // The runtime behind it is src/automate/api.ts; the fence that enforces it is
 // tools/automate-fence.js. Read AGENTS.md, "Automations", before writing one.
 
-/** One thing that starts an automation. Make them with at(), prayer() or every(). */
-type AutomationTrigger = { readonly kind: 'at' | 'prayer' | 'every'; readonly [key: string]: unknown };
+/** One thing that starts an automation. Make them with at(), prayer(), every(), charging(), wifi() or bluetooth(). */
+type AutomationTrigger = { readonly kind: 'at' | 'prayer' | 'every' | 'charging' | 'wifi' | 'bluetooth'; readonly [key: string]: unknown };
 
 type PrayerName = 'fajr' | 'sunrise' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 
 /** What started this run. */
 type AutomationEvent = {
-  /** A short label of the trigger: "maghrib", "07:30", "every 30 minutes", or "test" for Try it now. */
+  /** A short label of the trigger: "maghrib", "07:30", "every 30 minutes", "charger in", "Home connected", or "test" for Try it now. */
   trigger: string;
   /** When the trigger was due (on the pretend clock while testing). */
   at: Date;
@@ -51,6 +51,22 @@ declare function prayer(name: PrayerName, options?: { before?: number; after?: n
 
 /** Again and again, every so many minutes or hours (at least 15 minutes while the safety locks are on). */
 declare function every(interval: { minutes?: number; hours?: number }): AutomationTrigger;
+
+/** When the charger is plugged in (default) or, with { plugged: false }, unplugged. */
+declare function charging(options?: { plugged?: boolean }): AutomationTrigger;
+
+/**
+ * When the phone connects to Wi-Fi (default) or, with { connected: false }, loses it. `network` is
+ * the Wi-Fi's name; with a name the person also allows Location, all the time (Android shows Wi-Fi
+ * names only then). Without a name it is any Wi-Fi.
+ */
+declare function wifi(options?: { connected?: boolean; network?: string }): AutomationTrigger;
+
+/**
+ * When a Bluetooth device connects (default) or, with { connected: false }, disconnects. `device`
+ * is part of its name ("Car" matches "My Car Audio"). Needs Nearby devices (asked on the card).
+ */
+declare function bluetooth(options?: { connected?: boolean; device?: string }): AutomationTrigger;
 
 // ---------- Powers (each one shows on the card, and asks Android once for what it needs)
 

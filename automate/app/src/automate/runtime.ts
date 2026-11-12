@@ -6,12 +6,13 @@ import { AppState } from 'react-native';
 
 import * as Native from '../../modules/automate';
 import { automations as compiledList } from '../../automations';
-import { buildApi, clockNow, StoppedError, type RunContext } from './api';
+import { buildApi, clockNow, RefusedError, StoppedError, type RunContext } from './api';
+import { APP_NAME } from './brand';
 import { actionLines, diffLines, needsOf, type Need } from './card';
 import { LIMITS, UNLOCKED_RUN_MS } from './limits';
 import { ajmanClock } from './prayer';
 import { addLog, getLog, getState, ready, update, updateAuto, useStoreVersion, type CardAction, type State } from './store';
-import { describeTrigger, nextOf, ScriptError, triggerLabel, type Trigger } from './triggers';
+import { describeTrigger, isEventTrigger, matches, nextOf, ScriptError, triggerLabel, type EventKind, type PhoneEvent, type Trigger } from './triggers';
 import { diary } from '@/lib/diary';
 
 /** What the fence turns each automations/<id>.ts into (tools/automate-fence.js). */
@@ -48,7 +49,7 @@ export type Status = 'new' | 'on' | 'off' | 'changed' | 'broken';
 const compiled = compiledList as unknown as Compiled[];
 
 function isTrigger(t: unknown): t is Trigger {
-  return !!t && typeof t === 'object' && ['at', 'prayer', 'every'].includes((t as { kind?: string }).kind ?? '');
+  return !!t && typeof t === 'object' && ['at', 'prayer', 'every', 'charging', 'wifi', 'bluetooth'].includes((t as { kind?: string }).kind ?? '');
 }
 
 function defineScript(c: Compiled, ctx: RunContext): Definition {
@@ -57,7 +58,9 @@ function defineScript(c: Compiled, ctx: RunContext): Definition {
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 60) : c.id;
   const says = typeof raw.says === 'string' ? raw.says.trim().slice(0, 400) : '';
   const when = Array.isArray(raw.when) ? raw.when : [raw.when];
-  if (!when.length || !when.every(isTrigger)) throw new ScriptError('"when" needs at(), prayer() or every().');
+  const refused = when.find((t) => (t as { kind?: string } | undefined)?.kind === 'invalid') as { problem?: string } | undefined;
+  if (refused) throw Object.assign(new ScriptError(refused.problem ?? 'A trigger was refused.'), { scriptName: name });
+  if (!when.length || !when.every(isTrigger)) throw Object.assign(new ScriptError('"when" needs at(), prayer() or every().'), { scriptName: name });
   if (typeof raw.run !== 'function') throw new ScriptError('"run" must be a function.');
   return { name, says, triggers: when as Trigger[], run: raw.run as Definition['run'] };
 }
@@ -72,9 +75,10 @@ export function loadAll(locksOff = getState().locksOff): Loaded[] {
     const base = { id: c.id, hash: c.hash, source: c.source, powers: c.powers, actions: c.actions, lines: actionLines(c.actions), needs: needsOf(c.actions) };
     try {
       const d = defineScript(c, loadingContext(c.id, locksOff));
-      return { ...base, name: d.name, says: d.says, triggers: d.triggers, when: d.triggers.map(describeTrigger) };
+      return { ...base, needs: needsOf(c.actions, d.triggers), name: d.name, says: d.says, triggers: d.triggers, when: d.triggers.map(describeTrigger) };
     } catch (e) {
-      return { ...base, name: c.id, says: '', triggers: [], when: [], error: e instanceof Error ? e.message : String(e) };
+      const name = (e as { scriptName?: string }).scriptName ?? c.id;
+      return { ...base, name, says: '', triggers: [], when: [], error: e instanceof Error ? e.message : String(e) };
     }
   });
 }
@@ -124,7 +128,7 @@ export async function sync(): Promise<void> {
         lines: isNew ? ['Check its card to turn it on'] : ['It does not run until you check the new version', ...diffSummary(l)],
       });
       await updateAuto(l.id, (x) => ({ ...x, noticedHash: l.hash }));
-      await tell(isNew ? `New automation: ${l.name}` : `${l.name} changed`, isNew ? 'Check its card to turn it on.' : 'Check it to keep it running.');
+      await tell(isNew ? `New automation: ${l.name}` : `${l.name} changed`, isNew ? `Check its card in ${APP_NAME} to turn it on.` : 'Check it to keep it running.');
     }
   }
   await plan();
@@ -140,30 +144,35 @@ export async function plan(): Promise<void> {
   await ready();
   if (Native.isStopped()) {
     await Native.disarmAll();
+    await Native.listen([]);
     return;
   }
   const s = getState();
   const wanted = new Set<string>();
+  const listen = new Set<EventKind>();
   for (const l of loadAll(s.locksOff)) {
     if (statusOf(l, s) !== 'on') continue;
+    for (const t of l.triggers) if (isEventTrigger(t)) listen.add(t.kind);
     const pretend = s.pretend?.automation === l.id ? s.pretend : undefined;
     if (pretend) {
       // Already fired (the run is under way): never arm it again, or it would run twice.
       if (pretend.due - pretend.offset > Date.now()) {
-        await Native.arm(l.id, pretend.due - pretend.offset, { automation: l.id, due: pretend.due, trigger: 'pretend clock', test: true });
+        await Native.arm(l.id, pretend.due - pretend.offset, { automation: l.id, name: l.name, due: pretend.due, trigger: 'pretend clock', test: true });
         wanted.add(l.id);
       }
       continue;
     }
     const next = nextOf(l.triggers, Date.now());
     if (!next) continue;
-    await Native.arm(l.id, next.due, { automation: l.id, due: next.due, trigger: triggerLabel(next.trigger) });
+    await Native.arm(l.id, next.due, { automation: l.id, name: l.name, due: next.due, trigger: triggerLabel(next.trigger) });
     wanted.add(l.id);
   }
   for (const a of await Native.armed()) if (!wanted.has(a.id)) await Native.disarm(a.id);
+  // The listener (charger, Wi-Fi, Bluetooth) runs only while an automation that is on needs it.
+  await Native.listen([...listen].sort());
 }
 
-type Payload = { automation?: string; due?: number; trigger?: string; test?: boolean; plan?: boolean };
+type Payload = { automation?: string; due?: number; trigger?: string; test?: boolean; plan?: boolean; event?: PhoneEvent };
 
 /** Android woke the app (modules/automate TriggerReceiver -> headless task): run what is due. */
 export async function runFromNative(data: { payload?: string } | undefined): Promise<void> {
@@ -174,11 +183,26 @@ export async function runFromNative(data: { payload?: string } | undefined): Pro
     p = {};
   }
   await ready();
+  if (p.event) {
+    await runEvent(p.event);
+    return;
+  }
   if (p.plan || !p.automation) {
     await sync();
     return;
   }
   await runOne(p.automation, { trigger: p.trigger ?? 'trigger', due: p.due ?? Date.now(), test: !!p.test, manual: false });
+}
+
+/** The phone reported an event (charger, Wi-Fi, Bluetooth): run every automation it starts. */
+export async function runEvent(e: PhoneEvent): Promise<void> {
+  await ready();
+  const s = getState();
+  for (const l of loadAll(s.locksOff)) {
+    if (statusOf(l, s) !== 'on') continue;
+    const hit = l.triggers.find((t) => matches(t, e));
+    if (hit) await runOne(l.id, { trigger: triggerLabel(hit), due: Date.now(), test: false, manual: false });
+  }
 }
 
 /** Try it now: runs the automation at once, through every safety rail. */
@@ -236,38 +260,55 @@ async function runOne(id: string, how: { trigger: string; due: number; test: boo
     offset: pretend && !how.manual ? pretend.offset : 0,
   };
   const event = Object.freeze({ trigger: how.trigger === 'pretend clock' ? (l.triggers[0] ? triggerLabel(l.triggers[0]) : 'test') : how.trigger, at: new Date(how.due), test: how.test });
-  let kind: 'ran' | 'error' | 'stop' = 'ran';
+  let kind: 'ran' | 'error' | 'stop' | 'refused' = 'ran';
   let problem = '';
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
   try {
     const d = defineScript(c, ctx);
+    // Checked every half second against ctx.deadline, which moves on while the run waits for the person.
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new ScriptError('The run took too long and was stopped (safety lock).')), Math.max(0, ctx.deadline - Date.now()));
+      timer = setInterval(() => {
+        if (Date.now() > ctx.deadline) reject(new ScriptError('The run took too long and was stopped (safety lock).'));
+      }, 500);
     });
     await Promise.race([Promise.resolve(d.run(event)), timeout]);
   } catch (e) {
     if (e instanceof StoppedError) kind = 'stop';
+    else if (e instanceof RefusedError) kind = 'refused';
     else kind = 'error';
     problem = e instanceof Error ? e.message : String(e);
   } finally {
-    if (timer) clearTimeout(timer);
+    if (timer) clearInterval(timer);
   }
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   const when = pretend && !how.manual ? `on the pretend clock (${ajmanClock(how.due)} in Ajman)` : how.manual ? 'Try it now' : `at ${how.trigger}`;
   await update((x) => ({
     ...x,
     recentAllRuns: [...all, started],
-    autos: { ...x.autos, [id]: { ...(x.autos[id] ?? { on: false }), recentRuns: [...recent, started], lastRun: started, lastResult: kind === 'ran' ? 'ok' : 'error' } },
+    autos: { ...x.autos, [id]: { ...(x.autos[id] ?? { on: false }), recentRuns: [...recent, started], lastRun: started, lastResult: kind === 'ran' ? 'ok' : kind === 'refused' ? 'skipped' : 'error' } },
     pretend: pretend && !how.manual ? undefined : x.pretend,
   }));
   await addLog({
-    kind: kind === 'stop' ? 'stop' : kind,
+    kind: kind === 'stop' ? 'stop' : kind === 'refused' ? 'blocked' : kind,
     automation: id,
     test: how.test,
-    title: kind === 'ran' ? `${l.name} ran, ${when}` : kind === 'stop' ? `${l.name} stopped: Stop all` : `${l.name} failed, ${when}`,
+    title:
+      kind === 'ran'
+        ? `${l.name} ran, ${when}`
+        : kind === 'stop'
+          ? `${l.name} stopped: Stop all`
+          : kind === 'refused'
+            ? `${l.name} did not send anything, ${when}`
+            : `${l.name} failed, ${when}`,
     lines: [...ctx.lines, ...(problem ? [problem] : []), `Took ${secs} s`],
   });
-  diary(kind === 'ran' ? `${l.name} ran (${ctx.lines.length} steps)` : `${l.name} ${kind === 'stop' ? 'stopped by Stop all' : `failed: ${problem.slice(0, 120)}`}`);
+  diary(
+    kind === 'ran'
+      ? `${l.name} ran (${ctx.lines.length} steps)`
+      : kind === 'refused'
+        ? `${l.name} did not send: ${problem.slice(0, 80)}`
+        : `${l.name} ${kind === 'stop' ? 'stopped by Stop all' : `failed: ${problem.slice(0, 120)}`}`,
+  );
   await plan();
 }
 

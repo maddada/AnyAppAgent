@@ -17,7 +17,9 @@ object Notices {
   private const val CH_SHOW = "automate_show"
   private const val CH_RUN = "automate_running"
   private const val CH_ASK = "automate_ask"
+  private const val CH_LISTEN = "automate_listening"
   const val RUNNING_ID = 7301
+  const val LISTENING_ID = 7304
   private const val STOPPED_ID = 7302
   const val ACTION_STOP_ALL = "expo.modules.appwinautomate.STOP_ALL"
   const val ACTION_ANSWER = "expo.modules.appwinautomate.ANSWER"
@@ -35,12 +37,18 @@ object Notices {
     if (nm.getNotificationChannel(CH_RUN) == null) {
       nm.createNotificationChannel(NotificationChannel(CH_RUN, "Running an automation", NotificationManager.IMPORTANCE_LOW))
     }
+    if (nm.getNotificationChannel(CH_LISTEN) == null) {
+      nm.createNotificationChannel(NotificationChannel(CH_LISTEN, "Listening for the charger, Wi-Fi or Bluetooth", NotificationManager.IMPORTANCE_MIN))
+    }
     if (nm.getNotificationChannel(CH_ASK) == null) {
       nm.createNotificationChannel(NotificationChannel(CH_ASK, "Questions before sending", NotificationManager.IMPORTANCE_HIGH))
     }
   }
 
   fun canNotify(c: Context) = nm(c).areNotificationsEnabled()
+
+  /** The app's own name (under its icon): the one place it is set is app.json "expo.name". */
+  fun appName(c: Context): String = c.applicationInfo.loadLabel(c.packageManager).toString()
 
   private fun icon(c: Context): Int {
     val custom = c.resources.getIdentifier("notification_icon", "drawable", c.packageName)
@@ -64,7 +72,21 @@ object Notices {
     return NotificationCompat.Builder(c, CH_RUN)
       .setSmallIcon(icon(c))
       .setContentTitle("Running an automation")
-      .setContentText(if (label != null) "Appwin Automate: $label" else "Appwin Automate")
+      .setContentText(if (label != null) "${appName(c)}: $label" else appName(c))
+      .setOngoing(true)
+      .setSilent(true)
+      .setContentIntent(openApp(c))
+      .addAction(stopAllAction(c))
+      .build()
+  }
+
+  fun listening(c: Context, kinds: Set<String>): Notification {
+    channels(c)
+    val what = kinds.sorted().map { if (it == "wifi") "Wi-Fi" else if (it == "bluetooth") "Bluetooth" else "the charger" }
+    return NotificationCompat.Builder(c, CH_LISTEN)
+      .setSmallIcon(icon(c))
+      .setContentTitle("Listening for ${what.joinToString(", ")}")
+      .setContentText(appName(c))
       .setOngoing(true)
       .setSilent(true)
       .setContentIntent(openApp(c))
@@ -91,7 +113,7 @@ object Notices {
     val n = NotificationCompat.Builder(c, CH_SHOW)
       .setSmallIcon(icon(c))
       .setContentTitle("Everything stopped")
-      .setContentText("No automation runs until you resume them in Appwin Automate.")
+      .setContentText("No automation runs until you resume them in ${appName(c)}.")
       .setAutoCancel(true)
       .setContentIntent(openApp(c))
       .build()

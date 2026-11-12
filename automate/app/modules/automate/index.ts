@@ -26,6 +26,9 @@ type Native = {
   isStopped(): boolean;
   stopAll(): Promise<void>;
   resume(): Promise<void>;
+
+  listen(kinds: string[]): Promise<void>;
+  hasPermission(name: string): boolean;
 };
 
 const native = requireNativeModule<Native>('AppwinAutomate');
@@ -60,6 +63,11 @@ export const isStopped = () => native.isStopped();
 /** Stops everything at once: no automation runs, every wake-up is cancelled, Do Not Disturb this app turned on goes off, speech stops. */
 export const stopAll = () => native.stopAll();
 export const resume = () => native.resume();
+
+/** Starts the listener for these events ('bluetooth', 'charging', 'wifi'), or stops it for none. */
+export const listen = (kinds: string[]) => native.listen(kinds);
+/** Whether Android granted this permission (android.permission.*). */
+export const hasPermission = (name: string) => native.hasPermission(name);
 
 function safeJson(s: string): Record<string, unknown> {
   try {
