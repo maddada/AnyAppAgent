@@ -42,7 +42,7 @@ class AnyappUpdatesModule : Module() {
     Function("channel") { AppUpdater.channel(ctx) }
     Function("setChannel") { channel: String -> AppUpdater.setChannel(ctx, channel) }
 
-    // "Change this app" (AnyAppAgent docs/CHANGE-THIS-APP.md): whether the row shows here (the
+    // "Change this app" (Kiwimake docs/CHANGE-THIS-APP.md): whether the row shows here (the
     // owner's phone always; others unless the owner hid it), and its tap.
     AsyncFunction("changeVisible") { ChangeThisApp.visible(ctx) }
     Function("changeOwner") { ChangeThisApp.owner(ctx) }

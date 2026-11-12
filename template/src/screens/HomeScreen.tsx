@@ -9,7 +9,7 @@ const appName = Constants.expoConfig?.name ?? 'My App';
 const version = Constants.expoConfig?.version ?? '1.0.0';
 
 const steps = [
-  { title: 'Describe it', text: 'Tell AnyAppAgent what this app should do, in your own words.' },
+  { title: 'Describe it', text: 'Tell Kiwimake what this app should do, in your own words.' },
   { title: 'It gets built', text: 'Your PC makes the new version while you wait.' },
   { title: 'It updates here', text: 'The new version installs over this one. Nothing to set up.' },
 ];

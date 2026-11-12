@@ -29,7 +29,7 @@ async function git(dir: string, args: string[], timeoutMs?: number): Promise<Run
 async function identity(dir: string): Promise<string[]> {
   const name = (await git(dir, ["config", "user.name"])).stdout.trim();
   const email = (await git(dir, ["config", "user.email"])).stdout.trim();
-  return [...(name ? [] : ["-c", "user.name=AnyAppAgent"]), ...(email ? [] : ["-c", "user.email=anyappagent@localhost"])];
+  return [...(name ? [] : ["-c", "user.name=Kiwimake"]), ...(email ? [] : ["-c", "user.email=anyappagent@localhost"])];
 }
 
 /** The app's own branch (usually main). */

@@ -17,7 +17,7 @@ export interface DownloadOptions {
   checksum?: string;
 }
 
-const USER_AGENT = "AnyAppAgent-Desktop";
+const USER_AGENT = "Kiwimake-Desktop";
 
 export async function fetchText(url: string, signal?: AbortSignal): Promise<string> {
   const res = await fetch(url, { signal, headers: { "user-agent": USER_AGENT } });

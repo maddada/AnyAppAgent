@@ -3,9 +3,9 @@
 The user (12 Nov 2026): "We need to also add web app building, which we host for the user and keep
 in Appwin. Those would still work without needing to install an APK."
 
-Today AnyAppAgent (being renamed **Appwin.ai**; this file says Appwin) makes only Android apps: the
+Today Kiwimake makes only Android apps: the
 React Native and Kotlin templates, APKs, and the fast lane. This file plans a second kind of app: a
-**web app** that Appwin builds, hosts at its own address, and opens on the phone without an install.
+**web app** that Kiwimake builds, hosts at its own address, and opens on the phone without an install.
 
 Status: **the agreed plan** (decisions of 12 Nov 2026, section 7), nothing built, no account made,
 nothing spent. Facts were checked on the web
@@ -18,13 +18,13 @@ Family circle page (`C:\aa\ideas\family-circle.html`).
 1. **Same codebase**: a web app is the React Native template with Expo's web target switched on, so
    one app can be web, Android, or both, and "Make it an Android app too" is a switch, not a rewrite.
 2. **Hosted by us on Cloudflare**: one Worker plus one R2 bucket serves every app at its own
-   address, `prayertimes-mohamad.appwin.app` (a separate domain for people's apps, one subdomain
+   address, `prayertimes-mohamad.<apps domain>` (a separate domain for people's apps, one subdomain
    per app so apps never share storage). About **$0 a month at 10 and 100 people, about $6 at 1000**.
-3. **On the phone**: a tile in Appwin's grid that opens the app full screen in a WebView, "Add to
+3. **On the phone**: a tile in Kiwimake's grid that opens the app full screen in a WebView, "Add to
    home screen" as a pinned shortcut, and offline through a service worker. In any browser it is
    the same address.
 4. **Data stays in the browser** in the first version (private, offline, nothing stored by us);
-   shared data between people and devices (a per-app store in Convex, sign-in with Appwin) is the
+   shared data between people and devices (a per-app store in Convex, sign-in with Kiwimake) is the
    next step, +5 days.
 5. **About 15 days** for the first version in PC mode once the cloud's Convex project and sign-in
    exist (+3 days if web apps go first), and +1.5 days to add it to cloud mode.
@@ -54,7 +54,7 @@ What changes in `template/`:
   app today) or `["android", "web"]`. Not a new preset: the same React Native preset. Kotlin and
   Expo Exact apps stay Android only.
 - **Each native module gets a web file** (`modules/<name>/index.web.ts`, which Metro picks for web):
-  `ai` (the Appwin bridge, section 3), `alarms` (while the page is open only; the playbook says what
+  `ai` (the Kiwimake bridge, section 3), `alarms` (while the page is open only; the playbook says what
   it cannot do), `camera` (the browser's camera through `getUserMedia`, or a file input with
   `capture`), `updates` (the service worker's update check and the Reload card), `diary` (a small
   ring in `localStorage`), `feedback` and `abilities` (what the browser has).
@@ -70,25 +70,25 @@ What changes in `template/`:
 
 ### How it opens
 
-**Inside the Appwin phone app:**
+**Inside the Kiwimake phone app:**
 
 - A tile in the home grid like any app, with a small globe mark and the version ("V7").
 - **Open** shows the app full screen in a WebView screen (`app/src/app/web/[id].tsx`;
   `react-native-webview` 14 is already in `app/`), with a thin bar only when you pull down (Back to
-  Appwin, Reload, Share the address). **Change it** opens the chat, as for every app.
+  Kiwimake, Reload, Share the address). **Change it** opens the chat, as for every app.
 - **Add to home screen**: an Android pinned shortcut (`ShortcutManager.requestPinShortcut`) with the
-  app's icon and name, which opens Appwin straight on that app's web screen. It looks and starts like
+  app's icon and name, which opens Kiwimake straight on that app's web screen. It looks and starts like
   an installed app; it needs no "install unknown apps" permission and no APK. (A person who prefers
   Chrome can also open the address there and use Chrome's own Install, which makes a real PWA.)
 - **Offline**: the service worker caches every file of the current version, so the app opens with
   no internet once it has been opened once. Android's WebView supports service workers, so this
-  works inside Appwin as it does in Chrome. Data kept in the browser (section 3) works offline too.
+  works inside Kiwimake as it does in Chrome. Data kept in the browser (section 3) works offline too.
 - **Each app has its own storage** because each app has its own address (its own origin). Inside one
   WebView, browsers keep `localStorage`, IndexedDB and service workers per origin, so one app can
-  never read another's data. That is why paths like `appwin.ai/a/<app>` are not recommended (section 2).
+  never read another's data. That is why paths like `kiwimake.ai/a/<app>` are not recommended (section 2).
 
 **In any browser**: the same address on any phone, tablet or computer, with Add to home screen from
-the browser's menu. Someone without Appwin uses it like any website.
+the browser's menu. Someone without Kiwimake uses it like any website.
 
 ### What a web app cannot do (compared with an APK)
 
@@ -104,7 +104,7 @@ The plan page and the agent say this in plain words when the person asks for one
 | Reading SMS, call log, other apps, contacts in bulk | Yes (with permission) | No |
 | Bluetooth, NFC | Yes | Partly (Chrome only, the page must be open) |
 | Camera, microphone, location, vibration, speech | Yes | Yes, with the browser's permission prompt |
-| AI for your apps | Through Appwin's proxy | Inside Appwin through the same proxy; in a plain browser not in the first version |
+| AI for your apps | Through Kiwimake's proxy | Inside Kiwimake through the same proxy; in a plain browser not in the first version |
 | Crash catcher, What changed, Reload card | Yes | Yes (web versions, section 4) |
 | The diary the agent reads | Yes | Not in the first version (it lives in the browser) |
 | Install needed | Yes, and "install unknown apps" once | **No** |
@@ -114,33 +114,34 @@ The plan page and the agent say this in plain words when the person asks for one
 
 ### The address
 
-Recommended: **`<app>-<owner>.appwin.app`**, for example `prayertimes-mohamad.appwin.app`.
+Recommended: **`<app>-<owner>.<apps domain>`**, for example `prayertimes-mohamad.<apps domain>`. The apps
+domain is still to be picked (not `kiwimake.ai`, see below).
 
 - **One subdomain per app**, so each app is its own origin: separate storage, separate service
   worker, separate permissions (a camera allowed for one app is not allowed for another).
-- **One level deep** (`a-b.appwin.app`, not `a.b.appwin.app`): Cloudflare's free Universal SSL
+- **One level deep** (`a-b.<apps domain>`, not `a.b.<apps domain>`): Cloudflare's free Universal SSL
   certificate covers the root and "first-level subdomains"; deeper names "are not covered and will
   not serve a valid certificate" without Advanced Certificate Manager and Total TLS
   (https://developers.cloudflare.com/ssl/edge-certificates/universal-ssl/limitations/). So
-  `<slug>.<user>.appwin.ai` from the brief would cost extra; `<slug>-<user>` does not.
-- **A separate domain for people's apps** (`appwin.app` or similar, about $15 a year), not
-  `appwin.ai` itself. Apps run code an agent wrote from anyone's prompt: if one is used for phishing,
-  Safe Browsing can flag the whole domain, and `appwin.ai` carries the circles' invite links, the
+  `<slug>.<user>.kiwimake.ai` from the brief would cost extra; `<slug>-<user>` does not.
+- **A separate domain for people's apps** (the name is still to be picked, about $15 a year), not
+  `kiwimake.ai` itself. Apps run code an agent wrote from anyone's prompt: if one is used for phishing,
+  Safe Browsing can flag the whole domain, and `kiwimake.ai` carries the circles' invite links, the
   App Link proof and later the sign-in pages. GitHub keeps people's sites on `github.io` for the same
   reason. Later the domain goes on the Public Suffix List, so browsers treat every app as its own
   site for cookies too (it takes weeks to land, so it is not in the first version).
 - `<owner>` is the person's short handle, picked once at sign-in (default from their name). Names
-  are unique; a few are reserved (`www`, `api`, `app`, `admin`, `mail`, `appwin`, and so on). A
+  are unique; a few are reserved (`www`, `api`, `app`, `admin`, `mail`, `kiwimake`, and so on). A
   renamed app keeps its old address forwarding for 90 days.
-- Not recommended: `appwin.ai/a/<app>` (every app in one origin: apps could read each other's data,
+- Not recommended: `kiwimake.ai/a/<app>` (every app in one origin: apps could read each other's data,
   and service workers would clash).
 
 ### Where the built site lives: three options checked
 
 | | **Cloudflare Worker + R2** (recommended) | Convex static hosting | GitHub Pages from the app's repo |
 | --- | --- | --- | --- |
-| How | One Worker on the route `*.appwin.app/*` with a proxied wildcard DNS record, reading each app's files from one R2 bucket | The `@convex-dev/static-hosting` component: files in Convex storage, served "through HTTP actions" with "Automatic fallback to index.html" (https://www.convex.dev/components/static-hosting) | The built site pushed to a `gh-pages` branch of `anyapp-<slug>` |
-| Many apps, one per address | Yes: the Worker reads the host name. Wildcard proxied records are on every plan (https://developers.cloudflare.com/dns/manage-dns-records/reference/wildcard-dns-records/) and `*.` routes match every subhost (https://developers.cloudflare.com/workers/configuration/routing/routes/) | Built for one site per deployment at `<deployment>.convex.site`; many apps on many hosts would need our own routing and Cloudflare in front anyway (custom domains are not on Convex's Free and Starter plans, https://www.convex.dev/pricing) | One address per person, `<login>.github.io/anyapp-<slug>`: all of a person's apps share one origin, and it is not "kept in Appwin" |
+| How | One Worker on the route `*.<apps domain>/*` with a proxied wildcard DNS record, reading each app's files from one R2 bucket | The `@convex-dev/static-hosting` component: files in Convex storage, served "through HTTP actions" with "Automatic fallback to index.html" (https://www.convex.dev/components/static-hosting) | The built site pushed to a `gh-pages` branch of `anyapp-<slug>` |
+| Many apps, one per address | Yes: the Worker reads the host name. Wildcard proxied records are on every plan (https://developers.cloudflare.com/dns/manage-dns-records/reference/wildcard-dns-records/) and `*.` routes match every subhost (https://developers.cloudflare.com/workers/configuration/routing/routes/) | Built for one site per deployment at `<deployment>.convex.site`; many apps on many hosts would need our own routing and Cloudflare in front anyway (custom domains are not on Convex's Free and Starter plans, https://www.convex.dev/pricing) | One address per person, `<login>.github.io/anyapp-<slug>`: all of a person's apps share one origin, and it is not "kept in Kiwimake" |
 | The code repo stays private | Yes | Yes | **No on GitHub Free**: Pages needs a public repo on Free; private repos need GitHub Pro, Team or Enterprise, and the site is public anyway (https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site, https://github.com/orgs/community/discussions/22817) |
 | Rules | Ours | Ours | Pages "is not intended for or allowed to be used as a free web-hosting service to run your online business ... providing commercial software as a service (SaaS)"; soft 100 GB a month, 10 builds an hour, 1 GB per site (https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits) |
 | Cost per request | Worker requests: Free 100,000 a day; Paid $5 a month with 10 million included, then $0.30 a million (https://developers.cloudflare.com/workers/platform/pricing/). R2: 10 GB, 1M writes and 10M reads a month free, then $0.015 a GB-month, $4.50 and $0.36 a million; **egress free** (https://developers.cloudflare.com/r2/pricing/) | Every file served is a function call (1M free, then $2.20 a million) and egress (1 GB free, then $0.132 a GB) on Starter | Free |
@@ -164,7 +165,7 @@ Companion (PC mode) or runner (cloud mode)
   -> PUT the missing files straight to R2 (files/<sha256>)  nothing else is uploaded
   -> Convex: webPublish.finish(...)                       writes sites/<appId>/<build>.json (path -> sha256)
                                                           and moves "current" for the app's host
-Browser or Appwin's WebView: https://prayertimes-mohamad.appwin.app/...
+Browser or Kiwimake's WebView: https://prayertimes-mohamad.<apps domain>/...
   -> Worker: host -> appId and current build (R2 object, cached at the edge for 30 s)
            -> path -> sha256 (the build's file list, cached) -> R2 files/<sha256>
            -> index.html for unknown paths (one-page apps); our 404 page for unknown hosts
@@ -181,7 +182,7 @@ Browser or Appwin's WebView: https://prayertimes-mohamad.appwin.app/...
 - **Ready in seconds**: an export plus a few uploads, no Gradle and no install. This is the fast lane
   for every web change.
 - One more account: a free Cloudflare account, the same one the Family circle plan already uses for
-  `appwin.ai`'s DNS, plus R2 (asks for a card even on its free tier).
+  `kiwimake.ai`'s DNS, plus R2 (asks for a card even on its free tier).
 
 ### Costs
 
@@ -223,7 +224,7 @@ GitHub repo (cloud mode) or on their PC (PC mode). But a web bundle is easier to
   already guards published APKs). A hit refuses the publish and names the file: anything in a web
   bundle is public to anyone with the address.
 - The person can delete a site (all its versions) at any time; deleting an app deletes its site.
-- Settings says it in one line: "Appwin keeps your web app's built files so it can run. Your code
+- Settings says it in one line: "Kiwimake keeps your web app's built files so it can run. Your code
   stays on your GitHub (or your PC)."
 
 ## 3. Data
@@ -232,18 +233,18 @@ GitHub repo (cloud mode) or on their PC (PC mode). But a web bundle is easier to
 
 | | **First version: in the browser only** (recommended) | Next: shared data in Convex (+5 days) |
 | --- | --- | --- |
-| How | The template's `storage.ts` (AsyncStorage, which uses `localStorage` on web) and IndexedDB for bigger things. The app asks the browser to keep it (`navigator.storage.persist()`) | A small per-app document store in Appwin's Convex: `appData` rows (`appId`, `space`, `collection`, `docId`, `data`, `updatedBy`), with live queries through a tiny `src/lib/shared.ts` (`useShared`, `put`, `remove`) |
+| How | The template's `storage.ts` (AsyncStorage, which uses `localStorage` on web) and IndexedDB for bigger things. The app asks the browser to keep it (`navigator.storage.persist()`) | A small per-app document store in Kiwimake's Convex: `appData` rows (`appId`, `space`, `collection`, `docId`, `data`, `updatedBy`), with live queries through a tiny `src/lib/shared.ts` (`useShared`, `put`, `remove`) |
 | Good for | Personal apps: a tally, a tea timer, a diary | A family shopping list, a shared chore chart, scores between friends |
 | Offline | Fully | Reads the last copy; writes wait for the connection |
-| Across devices | No: each browser and Appwin's WebView have their own copy | Yes |
+| Across devices | No: each browser and Kiwimake's WebView have their own copy | Yes |
 | What we store | Nothing | The app's data, never its code |
 | Also for APKs | No | Yes: the same API works in Android apps through the Convex React Native client |
 
 ### Sign-in for the app's own users
 
 - First version: **none**. An app with data in the browser needs no account.
-- With shared data: **"Sign in with Appwin"** (the Google or email code sign-in the cloud and circles
-  already plan, Convex Auth), one tap inside Appwin's WebView (the phone app passes a short-lived
+- With shared data: **"Sign in with Kiwimake"** (the Google or email code sign-in the cloud and circles
+  already plan, Convex Auth), one tap inside Kiwimake's WebView (the phone app passes a short-lived
   token through the bridge), a normal sign-in page in a plain browser. A **space** is who shares the
   data: "just me", "this circle", or "anyone with this link" (an unguessable share code). The owner
   sets the default in the app's Settings; the agent never invents another login system.
@@ -257,10 +258,10 @@ GitHub repo (cloud mode) or on their PC (PC mode). But a web bundle is easier to
   Limit 50 MB per app at first.
 - The Worker keeps no logs of who opened what beyond Cloudflare's own counts. No analytics in the
   apps; the noindex header keeps them out of search engines.
-- AI: the key never reaches a browser. Inside Appwin, a web app asks through a small bridge
-  (`window.appwin.ai`, injected only into the owner's own apps' web screens), and Appwin calls its
+- AI: the key never reaches a browser. Inside Kiwimake, a web app asks through a small bridge
+  (`window.kiwimake.ai`, injected only into the owner's own apps' web screens), and Kiwimake calls its
   existing AI proxy path with the person's key, with the same per-app switch, limits and usage line
-  as Android apps. In a plain browser the AI parts say "Open this in Appwin to use AI" (a hosted AI
+  as Android apps. In a plain browser the AI parts say "Open this in Kiwimake to use AI" (a hosted AI
   proxy on the owner's key is a later question).
 
 ## 4. Both modes, and how every feature works for web apps
@@ -274,7 +275,7 @@ The companion builds, the phone shows, our hosting serves.
    `{ distDir, files: [{ path, size, sha256 }], sizeBytes }`. TypeScript is checked as for APKs; a
    failed build goes back to the agent (up to 3 times), as today. An app with both targets runs both
    builds; the web one finishes first and goes live first.
-2. The companion publishes it through Convex (section 2). For that the PC needs an **Appwin
+2. The companion publishes it through Convex (section 2). For that the PC needs an **Kiwimake
    account**: the desktop's onboarding gets an optional step, "Sign in to put web apps online", the
    same sign-in the Family circle page puts on a paired phone ("signs in just for circles"). The
    companion keeps a publish token that can do nothing but publish this person's web apps; it is
@@ -282,7 +283,7 @@ The companion builds, the phone shows, our hosting serves.
 3. The chat's build card: "Your web app is live" with the address, Open and Share. The phone's tile
    updates, and an open copy shows the Reload card.
 4. Without an account, or offline, the web app still builds and the owner's phone opens it from the
-   companion (`GET /api/apps/:id/web/*`, the same auth as `/apk`, inside Appwin only). The card says
+   companion (`GET /api/apps/:id/web/*`, the same auth as `/apk`, inside Kiwimake only). The card says
    "Not online yet: sign in on your PC to give it an address."
 
 ### Cloud mode
@@ -313,15 +314,15 @@ version (the image gets the web packages warm; the runner learns the targets).
 ### Change this app
 
 - The "This app" section in the web app's Settings works as on Android. Who sees what:
-  - **The owner inside Appwin**: Change this app opens the app's chat (through the bridge).
-  - **The owner in a browser**: a link to `appwin.ai/open/<appId>`, which opens Appwin on the chat
+  - **The owner inside Kiwimake**: Change this app opens the app's chat (through the bridge).
+  - **The owner in a browser**: a link to `kiwimake.ai/open/<appId>`, which opens Kiwimake on the chat
     (an App Link) or says how to get it.
   - **Anyone else**: Suggest a change goes **straight into the owner's From others inbox** through
     Convex (no share text to forward: the Family circle page recommends the same for shelf apps),
     with a name field and a limit of 5 a day per browser. Make my own version works as today from a
     shared app's published code zip (`docs/CHANGE-THIS-APP.md`), and the copy can be web, Android or
     both.
-- Without Appwin, the explanation sheet from Android, as a web page.
+- Without Kiwimake, the explanation sheet from Android, as a web page.
 
 ### Sharing and circles
 
@@ -329,7 +330,7 @@ version (the image gets the web packages warm; the runner learns the targets).
   sends the link (and a QR on the PC). This removes the hardest step for family members.
 - "Share with others" for a web app means only "show Change this app to others and publish the code
   zip with each version" (the code zip still goes to the public releases repo as today, never to us).
-- **Circles**: a web app on a circle's shelf shows **Open** instead of Install; opening it in Appwin
+- **Circles**: a web app on a circle's shelf shows **Open** instead of Install; opening it in Kiwimake
   adds its tile; updates need nothing (the next open is the new version). Private sites ("only this
   circle") come after the first version (section 7, decision 3).
 
@@ -359,11 +360,11 @@ Android when the request needs a power from section 1's table, web otherwise.
 **In**: the template's web target and module stubs; PWA (manifest, service worker, offline); the web
 Reload card; `buildWeb` with the secrets scan and no source maps; the Cloudflare Worker and R2 with
 content-addressed files; Convex publish calls and the address table; PC mode publishing with an
-Appwin sign-in on the desktop; the phone's web tile, WebView screen, pinned shortcut and AI bridge;
+Kiwimake sign-in on the desktop; the phone's web tile, WebView screen, pinned shortcut and AI bridge;
 versions, instant undo, What changed, crash reports from every visitor; Change this app with
 suggestions straight to From others; sharing by address; the plan page's Web, Android or Both.
 
-**Out (next)**: shared data in Convex and Sign in with Appwin for the app's users (+5); cloud mode
+**Out (next)**: shared data in Convex and Sign in with Kiwimake for the app's users (+5); cloud mode
 (+1.5, after the cloud's first version); private sites, only me or only a circle (+3, a signed
 cookie checked by the Worker); web push notifications (+3); "Make it an Android app too" and "Put it
 on the web too" buttons (+2; the agent can do it by hand before); circles' Open on the shelf (with
@@ -377,12 +378,12 @@ the Public Suffix List entry.
 | 2 | Builder: `buildWeb`, source maps dropped, the file list, CLI `build-web`, tests | 1.5 |
 | 3 | Hosting: the Worker (host routing, caches, headers, one-page fallback, 404), R2 layout, Convex tables (`webSites`, `webBuilds`), `webPublish.begin` and `finish` with signed PUT URLs, addresses and handles, delete a site, fair-use counters | 2.5 |
 | 4 | Companion and desktop: the publish token after sign-in, publishing after each build, instant go back and undo, the build card, the local preview route, the desktop's address, Open and QR; protocol additions | 2.5 |
-| 5 | Phone: the web tile, the WebView screen, pinned shortcuts, the bridge (AI, Change this app, back to Appwin), the plan page's switch | 2.5 |
-| 6 | Proof: a web app made from the phone on `emulator-5560` (a Tally or a shopping list), opened in Appwin and in Chrome, a change arriving with the Reload card, offline, Go back, a crash reaching the chat, a suggestion from a browser landing in From others; screenshots light and dark | 1 |
+| 5 | Phone: the web tile, the WebView screen, pinned shortcuts, the bridge (AI, Change this app, back to Kiwimake), the plan page's switch | 2.5 |
+| 6 | Proof: a web app made from the phone on `emulator-5560` (a Tally or a shopping list), opened in Kiwimake and in Chrome, a change arriving with the Reload card, offline, Go back, a crash reaching the chat, a suggestion from a browser landing in From others; screenshots light and dark | 1 |
 | | **First version, PC mode** | **15 days, about 3 weeks** |
-| | If web apps go before the cloud: the Convex project and Appwin sign-in (Convex Auth) built here first | +3 |
+| | If web apps go before the cloud: the Convex project and Kiwimake sign-in (Convex Auth) built here first | +3 |
 | | Cloud mode | +1.5 |
-| | Shared data and Sign in with Appwin | +5 |
+| | Shared data and Sign in with Kiwimake | +5 |
 | | Private sites | +3 |
 | | Web push notifications | +3 |
 
@@ -403,14 +404,14 @@ The user took every recommendation (Q360).
    fallback if the spike finds React Native Web too heavy.
 2. **Address**: a separate domain for people's apps, one subdomain per app,
    `<app>-<owner>.<apps domain>` (about $15 a year). The domain name is the user's to pick when it is
-   bought; `appwin.app` is the working name.
+   bought; it is not picked yet.
 3. **Who can open a web app**: anyone with the address, not listed in search engines, in the first
    version. Private sites (only me, only a circle) come next (+3 days).
-4. **Data**: in the browser only in the first version. Shared data in Convex with Sign in with Appwin
+4. **Data**: in the browser only in the first version. Shared data in Convex with Sign in with Kiwimake
    comes next (+5 days), for Android apps too.
 5. **Every successful build goes live** at the app's address, as every build reaches the owner's
    phone today; Go back is instant. A separate Testing address can come later.
-6. **PC users sign in to Appwin to put web apps online**: free, the same sign-in as circles and the
+6. **PC users sign in to Kiwimake to put web apps online**: free, the same sign-in as circles and the
    cloud. Without it a web app opens only on the owner's phone through the PC.
 7. **Hosting is free** to the person, with fair-use limits (10 web apps each, a soft cap of opens per
    app).

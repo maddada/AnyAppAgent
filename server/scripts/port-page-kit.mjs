@@ -1,7 +1,7 @@
 // Copies the page kit from Ghostex (C:\dev\Ghostex, the user's own project, read only) into
 // server/src/pages/kit/: the page API, the question kit (style and script) and the fit rules, as
 // Ghostex's server injects them into every published page (server/src/visual_pages/{theme,kit,fit}.rs).
-// The theme is AnyAppAgent's own (kit/theme.html, Workbench), so it is not copied.
+// The theme is Kiwimake's own (kit/theme.html, Workbench), so it is not copied.
 //
 //   node server/scripts/port-page-kit.mjs [path to Ghostex]
 //
@@ -32,7 +32,7 @@ const EDITS = {
   ],
   "kit-script.html": [
     ["This Ghostex can't send answers from a page; type them in the chat.", "This page can't send answers here; type them in the chat."],
-    // Every AnyAppAgent page is written for this kit, marker or not (the theme switch shows on all).
+    // Every Kiwimake page is written for this kit, marker or not (the theme switch shows on all).
     [`function isV2(){var m=document.querySelector('meta[name="ghostex-page" i]');return!!m&&(m.getAttribute("content")||"").trim().toLowerCase()==="v2";}`, "function isV2(){return true;}"],
   ],
 };

@@ -39,7 +39,7 @@ object Notifications {
     }
   }
 
-  /** A PendingIntent that opens AnyAppAgent, optionally with a deep link the JS side handles. */
+  /** A PendingIntent that opens Kiwimake, optionally with a deep link the JS side handles. */
   fun openAppIntent(context: Context, requestCode: Int, url: String?): PendingIntent? {
     val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: return null
     launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)

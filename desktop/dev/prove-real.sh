@@ -3,7 +3,7 @@
 # starts the app, plays a phone (pairs with the 6-digit code, creates an app over HTTP), lets the
 # app capture screens, then checks that quitting the app also stopped the companion.
 #   bash dev/prove-real.sh <screens-folder>
-# APP_CMD runs another build of the app, e.g. APP_CMD=dist/win-unpacked/AnyAppAgent.exe (packaged).
+# APP_CMD runs another build of the app, e.g. APP_CMD=dist/win-unpacked/Kiwimake.exe (packaged).
 # PROOF_PORT and PROOF_DIR pick another port and folder name.
 set -u
 OUT="${1:?screens folder}"

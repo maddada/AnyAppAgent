@@ -1,4 +1,4 @@
-# AnyAppAgent builder
+# Kiwimake builder
 
 Plain ESM (Node 20+), no dependencies, no build step. Implements the `builder/` contract in
 [docs/SPEC.md](../docs/SPEC.md):
@@ -184,8 +184,8 @@ pin once upstream has the fixes.
 - **buildApk**: `bun <exact>/scripts/agent-android.mjs build <app> --apk` (Rust for
   `aarch64-linux-android`, then Gradle 9.8), then the same APK checks as the other presets.
 - **Not there yet**: no launcher icon (Exact's Android shell has none, `getIconPath` returns null),
-  no AI through AnyAppAgent (an Exact app's data runs in Hermes behind Exact's data seam; reaching
-  AnyAppAgent's bound service needs an Android native data module, which Exact does not document
+  no AI through Kiwimake (an Exact app's data runs in Hermes behind Exact's data seam; reaching
+  Kiwimake's bound service needs an Android native data module, which Exact does not document
   yet), arm64 only (the emulator runs it through Android's arm64 translation).
 
 Measured on this PC: `exact setup` (already set up) 2 min 20 s; `createApp` 0.9 s; first build of

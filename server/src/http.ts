@@ -236,7 +236,7 @@ export function startHttpServer(deps: {
   }
 
   async function adminRoute(req: IncomingMessage, res: ServerResponse, path: string, method: string): Promise<void> {
-    if (!auth.isAdmin(bearer(req))) return sendError(res, 401, "Only the AnyAppAgent desktop app may do this.");
+    if (!auth.isAdmin(bearer(req))) return sendError(res, 401, "Only the Kiwimake desktop app may do this.");
     if (method === "GET" && path === "/api/admin/state") return sendJson(res, 200, adminState());
     if (method === "POST" && path === "/api/admin/pairing/new") {
       auth.newCode();
@@ -296,10 +296,10 @@ export function startHttpServer(deps: {
     }
     if ((method === "GET" || method === "HEAD") && path === "/download/anyappagent.apk") {
       const apk = deps.hostApkPath;
-      if (!apk || !existsSync(apk)) return sendError(res, 404, "The AnyAppAgent phone app is not available from this PC yet.");
+      if (!apk || !existsSync(apk)) return sendError(res, 404, "The Kiwimake phone app is not available from this PC yet.");
       return sendFileWithRange(req, res, apk, {
         "Content-Type": "application/vnd.android.package-archive",
-        "Content-Disposition": 'attachment; filename="anyappagent.apk"',
+        "Content-Disposition": 'attachment; filename="Kiwimake.apk"',
       });
     }
     if (method === "POST" && path === "/api/pair") {

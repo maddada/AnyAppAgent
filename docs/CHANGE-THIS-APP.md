@@ -14,23 +14,23 @@ The user picked, on `C:\aa\ideas\change-this-app.html` (2026-11-12):
   fully separate app (new id, package, signing key, repo and name), installed beside the original,
   and nothing flows between them by itself. Any app's agent can be asked to copy something from
   another app (`anyapp copy`).
-- **Q243, someone without AnyAppAgent: the explanation in the app, then GitHub** (option A). The
+- **Q243, someone without Kiwimake: the explanation in the app, then GitHub** (option A). The
   sheet keeps one plain line for the cloud service planned for people without a PC (no button yet).
 
 ## What each person sees
 
 | Who taps Change this app | What happens |
 | --- | --- |
-| The owner (the app is in their PC's list) | AnyAppAgent opens on the app's chat |
-| Someone with a new enough AnyAppAgent, paired with a PC | "Prayer Times is Mohamad's app": Suggest a change to Mohamad, or Make my own version |
-| Someone with AnyAppAgent, no PC | The same sheet with Suggest a change; one line says an own version needs a PC (and that a no-PC way with cloud credits is planned) |
-| Someone without AnyAppAgent | The app's own explanation sheet: what AnyAppAgent is, what an own version needs (this phone, a Windows PC that stays on, a Claude account, about 20 minutes), Get AnyAppAgent (its latest release on GitHub), Suggest a change to Mohamad, Not now |
+| The owner (the app is in their PC's list) | Kiwimake opens on the app's chat |
+| Someone with a new enough Kiwimake, paired with a PC | "Prayer Times is Mohamad's app": Suggest a change to Mohamad, or Make my own version |
+| Someone with Kiwimake, no PC | The same sheet with Suggest a change; one line says an own version needs a PC (and that a no-PC way with cloud credits is planned) |
+| Someone without Kiwimake | The app's own explanation sheet: what Kiwimake is, what an own version needs (this phone, a Windows PC that stays on, a Claude account, about 20 minutes), Get Kiwimake (its latest release on GitHub), Suggest a change to Mohamad, Not now |
 
 ## In the generated apps
 
 - **React Native**: `src/screens/SettingsScreen.tsx` (new, reached from the starter Home screen's
   Settings link) ends with `ThisAppSection` from `src/components/ChangeThisApp.tsx`: Change this
-  app, Version, Made by <owner> with AnyAppAgent. `ChangeThisAppRow` alone is there for a settings
+  app, Version, Made by <owner> with Kiwimake. `ChangeThisAppRow` alone is there for a settings
   list of the app's own design.
 - **Kotlin**: `ui/ThisApp.kt` (`ThisAppSection`, `ChangeThisAppRow`, `SettingsScreen`), with
   `Route.Settings` in `MainActivity` and a Settings button on the starter screen.
@@ -48,7 +48,7 @@ The user picked, on `C:\aa\ideas\change-this-app.html` (2026-11-12):
 
 ### The link
 
-The row opens AnyAppAgent with the action `com.anyappagent.action.CHANGE` and
+The row opens Kiwimake with the action `com.anyappagent.action.CHANGE` and
 
 ```
 anyappagent://change?package=com.anyapp.prayertimes&name=Prayer%20Times&owner=Mohamad
@@ -56,11 +56,11 @@ anyappagent://change?package=com.anyapp.prayertimes&name=Prayer%20Times&owner=Mo
 ```
 
 - `repo` is read from the app's update feed (only a shared app has one), `owner` from the build.
-- Only AnyAppAgent versions with this feature declare the action (`ChangeLinkActivity`, which hands
-  the link to the router at `/change`), so an older AnyAppAgent on the phone is never opened with a
+- Only Kiwimake versions with this feature declare the action (`ChangeLinkActivity`, which hands
+  the link to the router at `/change`), so an older Kiwimake on the phone is never opened with a
   link it does not know: the app then shows its own explanation sheet. The emulator holds a dozen
   older copies; this is what keeps them out.
-- With several AnyAppAgent copies, the app opens the one that installed it, else
+- With several Kiwimake copies, the app opens the one that installed it, else
   `com.anyappagent`, else the first. Android 11+ package visibility: the templates query the action.
 
 ### Who sees the row
@@ -73,14 +73,14 @@ The PC writes two string resources into every build (Gradle properties through
 | `anyapp_change_owner` | The owner's name ("Mohamad"): Git's `user.name` first word on the PC, else the Windows user name; changeable in the desktop Share dialog ("Your name in your apps"), one for the PC |
 | `anyapp_change_others` | `0` when the owner switched "Show Change this app to others" off; absent (on) by default |
 
-With the switch off the row shows only on the owner's phone: the app asks its AnyAppAgent's
+With the switch off the row shows only on the owner's phone: the app asks its Kiwimake's
 provider `content://<host>.updates/owns/<package>` (1 when the package is in the paired PC's list,
 which the phone keeps in step with `setOwnApps`; only the app asking about itself gets an answer).
 The switch takes effect with the app's next version.
 
 ## Suggest a change
 
-The message, the same from AnyAppAgent and from the app's own sheet (`shared/chat/suggestions.ts`,
+The message, the same from Kiwimake and from the app's own sheet (`shared/chat/suggestions.ts`,
 Kotlin `ChangeThisApp.suggestionText`):
 
 ```
@@ -88,11 +88,11 @@ Ahmad suggests a change to Prayer Times:
 
 Bigger numbers, I can't read Isha.
 
-If you made Prayer Times with AnyAppAgent, share this message to AnyAppAgent or paste it there.
+If you made Prayer Times with Kiwimake, share this message to Kiwimake or paste it there.
 anyapp-suggestion: com.anyapp.prayertimes 37
 ```
 
-It goes through Android's share menu. The owner shares it into AnyAppAgent (the share-in screen
+It goes through Android's share menu. The owner shares it into Kiwimake (the share-in screen
 hands a suggestion to the inbox instead of "Like this, but mine"), or copies it and taps
 Paste a suggestion (phone: the app's sheet, From others; desktop: From others in the app's header).
 The last line files it under the right app (a forwarded message with extra lines around it, or one
@@ -153,7 +153,7 @@ playbooks tell the agent to use it only when the person asks, and to take only w
 
 - The cloud service for people without a PC (paid with cloud API tokens, `docs/CLOUD.md`): the
   sheet's line "No PC? A way to change apps without one, using cloud credits, is planned." and the
-  same line on AnyAppAgent's change screen without a PC are its place.
+  same line on Kiwimake's change screen without a PC are its place.
 - A suggestion arriving by itself (a server or the Family circle idea) instead of a forwarded text.
 
 ## Proof (2026-11-12)
@@ -167,7 +167,7 @@ my owner companion (port 8811, state `C:\aa\t\cta\state`) and **AA Friend**
 | Step | Result |
 | --- | --- |
 | Owner companion, GitHub off: new app "Prayer Times" through the companion (real agent turn, real build) | The agent kept the template's Settings screen; build 1 (430 s) |
-| Prayer Times installed by adb while no AnyAppAgent with this feature was on the phone (a dozen older copies were) | Settings: Change this app, Version, "Made by Mohamad" (`01-settings-row-*`). The row opened the app's own sheet (`02-sheet-no-anyappagent-*`), Suggest a change opened its form (`03-*`) |
+| Prayer Times installed by adb while no Kiwimake with this feature was on the phone (a dozen older copies were) | Settings: Change this app, Version, "Made by Mohamad" (`01-settings-row-*`). The row opened the app's own sheet (`02-sheet-no-anyappagent-*`), Suggest a change opened its form (`03-*`) |
 | Owner copy installed it (installer of record), the row | "change: com.anyapp.prayertimes is this person's own app; opening its chat": the app's chat (`04-owner-lands-in-chat-*`) |
 | Friend copy as installer, the row | "Prayer Times is Mohamad's app" with Suggest a change and Make my own version (disabled: not shared yet) (`05-friend-choices-light`) |
 | Friend: Ahmad, "Bigger numbers please, I cannot read Isha at night", Send | Android's share menu with exactly the message of `shared/chat/suggestions.ts` (`06-*`, `07-*`); Copy stood in for a messenger (one emulator) |
@@ -180,7 +180,7 @@ my owner companion (port 8811, state `C:\aa\t\cta\state`) and **AA Friend**
 | Owner: "Add a sixth row, Tahajjud", build 3, Publish 1.1 | Release `v1.1-b3` with its code |
 | Friend's version, asked "Mohamad added a Tahajjud row in his newest Prayer Times. Copy that row from his app into mine." | Its agent ran `anyapp copy maddada/anyapp-prayertimes-releases` (scratch copy `prayertimes-1-1-...`), brought the row in, quick build 2; on the phone "Prayer Times (Ahmad's)" shows Tahajjud (`14-clone-home-*`) |
 
-Found and fixed during the proof: older AnyAppAgent copies do not know the change link, so apps now
+Found and fixed during the proof: older Kiwimake copies do not know the change link, so apps now
 look for `com.anyappagent.action.CHANGE` (only new versions declare it); a second tap of the row
 reused the change screen still showing "Sent" (it now starts from the choices); the desktop header
 squeezed the app's name to one letter (From others is icon-only, with its count). `app/dev/ui.mjs`
@@ -189,6 +189,6 @@ now resolves the launcher activity (a copy under another package keeps the first
 Not proven on the device: the "Show Change this app to others" switch off (the row hidden on a
 friend's phone, still shown on the owner's through `owns/<package>`); the Kotlin preset's row and
 sheet on a phone (the Kotlin template app was built with them, not run); sharing a suggestion into
-AnyAppAgent through the share-in screen (it landed on main after my phone copies were built; the
+Kiwimake through the share-in screen (it landed on main after my phone copies were built; the
 Paste path was used). Tests: `shared/chat` 63, `server` 119 (11 new in `test/change.test.ts`),
 `builder` adopt and copies tests, `desktop` 58, typechecks.

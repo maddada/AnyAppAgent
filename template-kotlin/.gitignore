@@ -11,7 +11,7 @@ local.properties
 .idea/
 captures/
 
-# Signing material never lives in the app (AnyAppAgent keeps every key outside the app folder)
+# Signing material never lives in the app (Kiwimake keeps every key outside the app folder)
 *.jks
 *.keystore
 *.p12

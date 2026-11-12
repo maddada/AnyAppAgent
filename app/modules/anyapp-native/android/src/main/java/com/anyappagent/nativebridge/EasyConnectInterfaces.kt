@@ -1,7 +1,7 @@
 // Copied from Ghostex apps/mobile/app/modules/ghostex-native/android/src/main/java/expo/modules/
 // ghostexnative/GhostexTailcatInterfaces.kt (same owner). Only the package, the bridge's Java
 // package (dev.anyappagent, see build-android-bridge.mjs) and the log tag changed. Put it in the
-// AnyAppAgent app's native module and change the package line to that module's package.
+// Kiwimake app's native module and change the package line to that module's package.
 package com.anyappagent.nativebridge
 
 import android.util.Log

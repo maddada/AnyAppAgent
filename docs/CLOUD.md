@@ -1,7 +1,7 @@
-# AnyAppAgent Cloud: the plan
+# Kiwimake Cloud: the plan
 
-A cloud version of AnyAppAgent for **anyone who does not want to install the PC app**. The person
-installs only AnyAppAgent on the phone, signs in with Google or a code by email, connects their
+A cloud version of Kiwimake for **anyone who does not want to install the PC app**. The person
+installs only Kiwimake on the phone, signs in with Google or a code by email, connects their
 GitHub, tops up dollar credit, and makes and changes apps exactly as today: the chat is in the phone
 app, the APK or quick update arrives on the phone. The agent and the builds run on rented cloud
 machines, one per thread. The app's code lives in a private repo on **the person's own GitHub**;
@@ -13,7 +13,7 @@ checked on the web on **12 Nov 2026**; each has its source link. Not legal advic
 the texts and the one line that leaves any doubt.
 
 What the user decided (it overrides `C:\aa\ideas\cloud-changes.html` and the first draft of this
-file): chat in the AnyAppAgent phone app, Google or a code by email, Convex for most things, one
+file): chat in the Kiwimake phone app, Google or a code by email, Convex for most things, one
 instabox.sh box per thread behind a small interface, signing keys stored encrypted in Convex,
 storage free to the person. **People pay in credits** (decisions of 12 Nov 2026, third round): a
 monthly plan (Starter $12 for 30 credits, Pro $25 for 70, Max $60 for 180; yearly at 10 times the
@@ -77,7 +77,7 @@ those end users (credits that bundle AI, machine time and builds, sold at a marg
    800,000 apps". Anything sells plans with monthly credits ($19 for 20K credits, $199 for 200K,
    "Can purchase more credits", https://www.createanything.com/pricing); neither page mentions an
    Anthropic key of the user's own.
-   That is AnyAppAgent Cloud's shape: an app builder for non-coders, on the SDK, paid from credit.
+   That is Kiwimake Cloud's shape: an app builder for non-coders, on the SDK, paid from credit.
    Bolt (https://claude.com/customers/bolt) is "Built by StackBlitz and powered by the Claude Agent
    SDK" for its users, "More than 10,000 users have already uploaded their own design systems to
    Bolt".
@@ -100,10 +100,10 @@ to name the SDK; the docs' policy pages have changed several times in 2026.
   `claude` binary from `@anthropic-ai/claude-agent-sdk-<platform>-<arch>`), unmodified, on our Console
   API key.
 - **Never call it "Claude Code"** in the product, the store listing or the site. Allowed: "Claude
-  Agent", or "AnyAppAgent, powered by Claude". No Claude Code look-alike visuals.
+  Agent", or "Kiwimake, powered by Claude". No Claude Code look-alike visuals.
 - **No claude.ai sign-in in the cloud** (the ACP adapter offers `--cli auth login --claudeai`: not
   shown in cloud mode). Their own API key is fine.
-- **Credits buy app changes, never Claude** (D.4). A credit is the price of AnyAppAgent's service as
+- **Credits buy app changes, never Claude** (D.4). A credit is the price of Kiwimake's service as
   a whole. No token price, token allowance, model price list or per-model cost is shown or sold;
   no API endpoint, general chat or prompt box outside app building is paid from credits; the agent
   only builds and changes the person's own apps. The margin is on our product, not on "the
@@ -220,7 +220,7 @@ margin** and show no token price. Anything (on the Agent SDK) sells 20K credits 
 (https://docs.lovable.dev/introduction/subscription-plans.md), Bolt (on the Agent SDK) its own
 "tokens" from $25 a month (https://bolt.new/pricing), Rork about 100 messages for $20 to $25 (third-party
 figures, https://vp0.com/blogs/rork-pricing-plans-2026/). That is
-the model AnyAppAgent Cloud follows (section 2).
+the model Kiwimake Cloud follows (section 2).
 
 ### What that means for each way of paying for AI
 
@@ -249,7 +249,7 @@ https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultr
   linked Claude Console organization".
 
 So an Ultra (or Max) subscriber can make a Console API key that draws on that credit and paste it
-into AnyAppAgent Cloud (way B). Whether our service running the agent with their key counts as
+into Kiwimake Cloud (way B). Whether our service running the agent with their key counts as
 "when you run them yourself" is not settled (no one is asking Anthropic); if not, the key still
 works, it is just billed to their Console balance.
 
@@ -365,7 +365,7 @@ Before a change runs the person sees what it will likely use:
 ## 3. The architecture
 
 ```
- AnyAppAgent on the phone             Convex (one deployment, US East)        Box provider (Instabox first)
+ Kiwimake on the phone             Convex (one deployment, US East)        Box provider (Instabox first)
  Sign in (Google / email code) ---->  auth: users, sessions
  Connect GitHub (browser)      ---->  GitHub App: user token (encrypted)
  Home grid, chat, Settings     <===>  live queries + mutations
@@ -386,7 +386,7 @@ Before a change runs the person sees what it will likely use:
 
 ### The phone app
 
-The same AnyAppAgent APK gets a second way in. First run asks **"Make apps in the cloud"** (sign in)
+The same Kiwimake APK gets a second way in. First run asks **"Make apps in the cloud"** (sign in)
 or **"Use my PC"** (today's pairing and Easy Connect). One mode per install in the first version.
 
 - Cloud mode setup is two short steps: sign in, connect GitHub. The 3 free credits let the person
@@ -423,7 +423,7 @@ Deployment in **US East** (standard price; Instabox is in the US anyway).
 We do not store code. Each cloud app has a **private repo `anyapp-cloud-<slug>`** on the person's
 own GitHub account (the `cloud` in the name keeps it apart from a PC app's `anyapp-<slug>`).
 
-- **Connecting**: a **GitHub App** ("AnyAppAgent Cloud"), not an OAuth app. The person installs it
+- **Connecting**: a **GitHub App** ("Kiwimake Cloud"), not an OAuth app. The person installs it
   on their account from the phone (a browser page, then back to the app). Why a GitHub App:
   - The box only ever gets an **installation token for one repo, Contents write only, that expires
     after 1 hour** (GitHub lets us narrow a token to named repositories and permissions). If the
@@ -924,7 +924,7 @@ pricing (+1.5), the provider interface (+0.5).
 
 ## 11. Accounts and keys: one task for the user
 
-Do these in order. Put every value into a **1Password item named `AnyAppAgent Cloud (dev)`**, one
+Do these in order. Put every value into a **1Password item named `Kiwimake Cloud (dev)`**, one
 field per value (or into the file the coordinator names), and tell the coordinator it is there.
 **Never paste a key, secret or private key in a chat.** Steps marked **Spike** are needed before
 milestone 0 starts; **Later** can wait.
@@ -947,7 +947,7 @@ milestone 0 starts; **Later** can wait.
    (https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultra-and-team-plans).
    Hand over: the key (`sk-ant-...`).
 5. **GitHub App** (Spike, free). At https://github.com/settings/apps/new create an app:
-   - Name `AnyAppAgent Cloud Dev`, homepage `https://github.com/<your login>`.
+   - Name `Kiwimake Cloud Dev`, homepage `https://github.com/<your login>`.
    - Callback URL `https://<name>.convex.site/github/callback` (the deployment from step 2, with
      `.convex.site`); tick "Expire user authorization tokens" and "Request user authorization
      (OAuth) during installation".

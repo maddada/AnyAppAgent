@@ -1,5 +1,5 @@
 // "Like this, but mine" (C:\aa\ideas\ideas.html, Q15): a screenshot, a picture or a link shared
-// into AnyAppAgent from another app's share sheet. The native side copies the pictures into the
+// into Kiwimake from another app's share sheet. The native side copies the pictures into the
 // cache (modules/anyapp-native, ShareFiles.kt); this keeps the newest share until it is sent or
 // dropped, and opens the screen for it (src/app/like-this.tsx).
 import { router } from "expo-router";
@@ -11,7 +11,7 @@ export const useSharedIn = create<{ item: SharedItem | null }>(() => ({ item: nu
 
 let listening = false;
 
-/** Reads a share AnyAppAgent was opened with or received while running, and opens its screen. */
+/** Reads a share Kiwimake was opened with or received while running, and opens its screen. */
 export async function takeShare(): Promise<void> {
   if (!AnyAppNative?.takeSharedItem) return;
   if (!listening) {

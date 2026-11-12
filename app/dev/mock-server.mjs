@@ -531,7 +531,7 @@ function broadcast(event) {
 seed();
 server.listen(PORT, "0.0.0.0", () => {
   const ips = Object.values(networkInterfaces()).flat().filter((i) => i && i.family === "IPv4" && !i.internal).map((i) => i.address);
-  console.log(`AnyAppAgent mock PC on port ${PORT}${toolchain() ? "" : " (no Android build-tools: builds can't make new APKs)"}`);
+  console.log(`Kiwimake mock PC on port ${PORT}${toolchain() ? "" : " (no Android build-tools: builds can't make new APKs)"}`);
   console.log(`  pairing code: ${CODE}`);
   console.log(`  emulator:     10.0.2.2:${PORT}`);
   for (const ip of ips) console.log(`  QR text:      anyappagent://pair?url=${encodeURIComponent(`http://${ip}:${PORT}`)}&code=${CODE}`);

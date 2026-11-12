@@ -23,11 +23,11 @@ import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * "Change this app" when AnyAppAgent is not on this phone (AnyAppAgent docs/CHANGE-THIS-APP.md).
- * Same file in every AnyAppAgent template: do not edit it in an app.
+ * "Change this app" when Kiwimake is not on this phone (Kiwimake docs/CHANGE-THIS-APP.md).
+ * Same file in every Kiwimake template: do not edit it in an app.
  *
- * A bottom sheet drawn by the app itself, so it works offline: what AnyAppAgent is, honestly what an
- * own version needs (a Windows PC and a Claude plan), Get AnyAppAgent (its latest release on
+ * A bottom sheet drawn by the app itself, so it works offline: what Kiwimake is, honestly what an
+ * own version needs (a Windows PC and a Claude plan), Get Kiwimake (its latest release on
  * GitHub), and Suggest a change to the owner (a short text through Android's share menu).
  */
 class ChangeSheet : Activity() {
@@ -45,7 +45,7 @@ class ChangeSheet : Activity() {
 
   private fun isDark() = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
-  // AnyAppAgent's Workbench colours (shared/theme/tokens.ts): warm paper, graphite, bottle green.
+  // Kiwimake's Workbench colours (shared/theme/tokens.ts): warm paper, graphite, bottle green.
   private fun palette(): Palette = if (isDark()) {
     Palette(c("#181613"), c("#211E1A"), c("#332F29"), c("#4B443B"), c("#EEE8DD"), c("#BDB3A5"), c("#9B9184"), c("#6DBB8F"), c("#0E2117"))
   } else {
@@ -98,7 +98,7 @@ class ChangeSheet : Activity() {
     body.addView(text("Change this app", 22f, p.text, font("BricolageGrotesque-Display-ExtraBold", Typeface.BOLD)))
     if (!suggesting) {
       body.addView(text(
-        "$app was made with AnyAppAgent. You describe a change in plain words (\"bigger text\", \"add a reminder\") and an AI agent rebuilds the app for you.",
+        "$app was made with Kiwimake. You describe a change in plain words (\"bigger text\", \"add a reminder\") and an AI agent rebuilds the app for you.",
         15f, p.muted, font("BricolageGrotesque-Text-Regular", Typeface.NORMAL), top = 8f,
       ))
       body.addView(text("To make your own version you need:", 15f, p.text, font("BricolageGrotesque-Text-SemiBold", Typeface.BOLD), top = 16f))
@@ -109,7 +109,7 @@ class ChangeSheet : Activity() {
         "No PC? A way to change apps without one, using cloud credits, is planned. Until then you can suggest a change to $ownerName.",
         13f, p.faint, font("BricolageGrotesque-Text-Regular", Typeface.NORMAL), top = 14f,
       ))
-      body.addView(button("Get AnyAppAgent", primary = true, top = 18f) {
+      body.addView(button("Get Kiwimake", primary = true, top = 18f) {
         runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ChangeThisApp.GET_ANYAPPAGENT_URL))) }
       })
       body.addView(button(if (owner.isEmpty()) "Suggest a change" else "Suggest a change to $owner", primary = false, top = 8f) {

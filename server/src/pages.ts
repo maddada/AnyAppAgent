@@ -27,7 +27,7 @@ const KIT_DIR = join(SERVER_DIR, "src", "pages", "kit");
 const FONTS_DIR = join(REPO_DIR, "shared", "theme", "fonts");
 
 let builtinBlock: string | undefined;
-/** The block Ghostex puts at the start of every page's <head>, with AnyAppAgent's theme. */
+/** The block Ghostex puts at the start of every page's <head>, with Kiwimake's theme. */
 function builtin(): string {
   if (builtinBlock) return builtinBlock;
   const read = (name: string) => readFileSync(join(KIT_DIR, name), "utf8").trim();

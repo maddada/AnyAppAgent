@@ -35,12 +35,12 @@ export interface InstallStatusEvent {
   packageName?: string | null;
 }
 
-/** Something shared into AnyAppAgent from another app ("Like this, but mine"). */
+/** Something shared into Kiwimake from another app ("Like this, but mine"). */
 export interface SharedItem {
   /** EXTRA_TEXT: often a link, sometimes a line of text around one. */
   text: string | null;
   subject: string | null;
-  /** Pictures copied into AnyAppAgent's cache (file:// uris), at most 6. */
+  /** Pictures copied into Kiwimake's cache (file:// uris), at most 6. */
   pictures: { uri: string; mimeType: string; width: number; height: number }[];
   /** Shared files that were not pictures, too large, or unreadable. */
   skipped: number;
@@ -50,13 +50,13 @@ type Events = {
   onInstallStatus: (event: InstallStatusEvent) => void;
   /** The phone's network changed (debounced 750 ms). */
   onNetworkChanged: () => void;
-  /** An app made with AnyAppAgent crashed (docs/VERSIONS.md): takeWaitingCrashes() has its report. */
+  /** An app made with Kiwimake crashed (docs/VERSIONS.md): takeWaitingCrashes() has its report. */
   onAppCrash: (event: { packageName: string }) => void;
   /** An app answered requestDiary: `diary` is a JSON array of { at, text }. */
   onAppDiary: (event: { packageName: string; requestId: string; diary: string }) => void;
   /** An app reported the version it runs, or a quick update it refused or rolled back. */
   onAppReport: (event: { packageName: string }) => void;
-  /** Something was shared into AnyAppAgent while it was running: takeSharedItem() has it. */
+  /** Something was shared into Kiwimake while it was running: takeSharedItem() has it. */
   onShareIn: () => void;
 };
 
@@ -77,7 +77,7 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   reopenInstallPrompt?(): boolean;
   /** Build.SUPPORTED_ABIS, best first ("arm64-v8a", ...). Missing on builds before it was added. */
   supportedAbis?(): string[];
-  /** Apps followed from a share link: AnyAppAgent handles their updates (docs/DISTRIBUTION.md stage 5). */
+  /** Apps followed from a share link: Kiwimake handles their updates (docs/DISTRIBUTION.md stage 5). */
   setFollowedApps?(packageNames: string[]): void;
   /** The person's own apps (this PC's list): their "Change this app" row always shows (docs/CHANGE-THIS-APP.md). */
   setOwnApps?(packageNames: string[]): void;
@@ -88,7 +88,7 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   /** Hands an app a quick update ("ota", the file at `path`) or tells it an APK is ready ("apk"). */
   setAppReady?(packageName: string, kind: "ota" | "apk", build: number, path: string | null): Promise<boolean>;
   clearAppReady?(packageName: string): void;
-  /** Opens the app again the moment its next install succeeds (natively, while AnyAppAgent is on screen). */
+  /** Opens the app again the moment its next install succeeds (natively, while Kiwimake is on screen). */
   reopenAfterInstall?(packageName: string): boolean;
   /** True while the app is on screen (it says so; apps made before the fast lane never do). */
   appInFront?(packageName: string): boolean;
@@ -104,7 +104,7 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   takeWaitingCrashes?(): string;
   /** Asks an app for its diary (answer: onAppDiary); false when the app is not on this phone. */
   requestDiary?(packageName: string, requestId: string): boolean;
-  /** The share AnyAppAgent was opened with or received last, once (null after). Missing on older builds. */
+  /** The share Kiwimake was opened with or received last, once (null after). Missing on older builds. */
   takeSharedItem?(): Promise<SharedItem | null>;
   /**
    * Opens Android's share sheet with the app's installed APK, named "<appName>.apk". Rejects with a
@@ -113,7 +113,7 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   shareApk?(packageName: string, appName: string, title: string): Promise<boolean>;
   /** Android's save screen for the same file ("Save to Files"): true when saved, false when cancelled. */
   saveApk?(packageName: string, appName: string): Promise<boolean>;
-  /** Resolves after `ms`, also while AnyAppAgent is behind another screen (JS timers wait for it to return). */
+  /** Resolves after `ms`, also while Kiwimake is behind another screen (JS timers wait for it to return). */
   delay?(ms: number): Promise<void>;
   /** Starts the keep-alive foreground service (only allowed in front), or changes its text when it runs. */
   startKeepAlive(text: string, color: string | null): boolean;

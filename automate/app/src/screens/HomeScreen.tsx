@@ -1,4 +1,4 @@
-// Appwin Automate's first screen: the automations, Stop all, today's prayer times in Ajman, and
+// Automate's first screen: the automations, Stop all, today's prayer times in Ajman, and
 // the way to make a new automation (Change this app: the one place to type).
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';

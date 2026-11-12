@@ -41,7 +41,7 @@ export class ApiError extends Error {
   }
 }
 
-export const UNREACHABLE = "Can't reach your PC. Check that AnyAppAgent is running on it and that both are on the same Wi-Fi.";
+export const UNREACHABLE = "Can't reach your PC. Check that Kiwimake is running on it and that both are on the same Wi-Fi.";
 
 async function request<T>(
   baseUrl: string,

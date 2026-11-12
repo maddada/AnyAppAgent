@@ -1,5 +1,5 @@
 // App root: navigation, theme and one-time setup. Add screens to `RootStack` below.
-// Appwin Automate: the automation runtime lives in src/automate (see AGENTS.md, "Automations").
+// Automate: the automation runtime lives in src/automate (see AGENTS.md, "Automations").
 import { DarkTheme, DefaultTheme, createNavigationContainerRef, createStaticNavigation, type StaticParamList } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -38,7 +38,7 @@ declare global {
 const Navigation = createStaticNavigation(RootStack);
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-// Crashes reach AnyAppAgent, which offers the person a fix (src/lib/crash.ts). Keep this first.
+// Crashes reach Kiwimake, which offers the person a fix (src/lib/crash.ts). Keep this first.
 installCrashCatcher();
 
 export default function App() {

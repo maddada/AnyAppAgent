@@ -13,10 +13,10 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 /**
- * Files in and out of AnyAppAgent through Android's share sheet.
+ * Files in and out of Kiwimake through Android's share sheet.
  * - In ("Like this, but mine"): a screenshot, a picture or a link shared from another app. The
- *   pictures are copied into AnyAppAgent's cache while the grant Android gave the activity lasts.
- * - Out ("Send app"): the installed APK of an app made with AnyAppAgent, copied under the app's
+ *   pictures are copied into Kiwimake's cache while the grant Android gave the activity lasts.
+ * - Out ("Send app"): the installed APK of an app made with Kiwimake, copied under the app's
  *   own name ("Kettle Timer.apk") and handed to the share sheet. Only that one file, read only.
  */
 object ShareFiles {
@@ -147,7 +147,7 @@ object ShareFiles {
     }
     if (!info.splitSourceDirs.isNullOrEmpty()) throw SendException("split", "This app is installed in parts, so it cannot be sent as one file.")
     val source = File(info.sourceDir)
-    if (!source.canRead()) throw SendException("unreadable", "Android did not let AnyAppAgent read this app.")
+    if (!source.canRead()) throw SendException("unreadable", "Android did not let Kiwimake read this app.")
     val dir = File(context.cacheDir, "send-app")
     dir.deleteRecursively()
     dir.mkdirs()

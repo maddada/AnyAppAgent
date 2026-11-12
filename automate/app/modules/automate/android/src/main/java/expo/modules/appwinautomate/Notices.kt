@@ -12,7 +12,7 @@ import androidx.core.app.NotificationCompat
 import expo.modules.kotlin.Promise
 import java.util.concurrent.ConcurrentHashMap
 
-/** Appwin Automate's notifications: what automations show, the running notice, and the ask-before-sending question. Every one carries Stop all. */
+/** Automate's notifications: what automations show, the running notice, and the ask-before-sending question. Every one carries Stop all. */
 object Notices {
   private const val CH_SHOW = "automate_show"
   private const val CH_RUN = "automate_running"

@@ -1,4 +1,4 @@
-# Outlines the wordmark "AnyAppAgent" from Bricolage Grotesque Display ExtraBold into SVG paths,
+# Outlines the wordmark "Kiwimake" from Bricolage Grotesque Display ExtraBold into SVG paths,
 # so the wordmark needs no font. Run once after changing the font or the tracking:
 #   python tools/make-wordmark.py        (needs fontTools: pip install fonttools)
 import os
@@ -8,7 +8,7 @@ from fontTools.pens.transformPen import TransformPen
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT = os.path.join(ROOT, "fonts", "BricolageGrotesque-Display-ExtraBold.ttf")
-TEXT = "AnyAppAgent"
+TEXT = "Kiwimake"
 TRACKING = -0.025  # em, same as tokens.look.wordmarkLetterSpacing
 SIZE = 100  # font size in SVG units
 
@@ -39,7 +39,7 @@ height = cap + descent * 0.95 + 4
 view = f"0 {top:.1f} {width:.1f} {height:.1f}"
 
 
-def svg(fill, title="AnyAppAgent"):
+def svg(fill, title="Kiwimake"):
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view}" width="{width:.0f}" height="{height:.0f}">'
         f"<title>{title}</title><path fill=\"{fill}\" d=\"{path}\"/></svg>\n"
@@ -62,7 +62,7 @@ def lockup(fill, mark_bg, mark_fg):
     s = mark_size / 108
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 {top:.1f} {total_w:.1f} {height:.1f}" width="{total_w:.0f}" height="{height:.0f}">'
-        f"<title>AnyAppAgent</title>"
+        f"<title>Kiwimake</title>"
         f'<g transform="translate(0 {mark_y:.2f}) scale({s:.4f})">'
         f'<rect width="108" height="108" rx="26" fill="{mark_bg}"/>'
         f'<g fill="{mark_fg}"><rect x="27" y="27" width="24" height="24" rx="6"/><rect x="57" y="27" width="24" height="24" rx="6"/><rect x="27" y="57" width="24" height="24" rx="6"/></g>'

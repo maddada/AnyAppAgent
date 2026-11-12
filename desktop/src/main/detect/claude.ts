@@ -74,7 +74,7 @@ export function interpretClaudeStatus(stdout: string): ClaudeCheck {
 
 export async function detectClaude(cli: string | undefined, runner: Runner, env: NodeJS.ProcessEnv = process.env): Promise<ClaudeCheck> {
   if (!cli) {
-    return { state: "problem", summary: "The Claude part of AnyAppAgent is missing. Reinstalling AnyAppAgent fixes this.", error: "claude CLI not found" };
+    return { state: "problem", summary: "The Claude part of Kiwimake is missing. Reinstalling Kiwimake fixes this.", error: "claude CLI not found" };
   }
   const result = await runner(cli, ["auth", "status", "--json"], { env, timeoutMs: 15_000 });
   // `auth status` exits 1 when signed out but still prints the JSON.

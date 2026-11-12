@@ -19,16 +19,16 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Updates for people the app is shared with (AnyAppAgent docs/DISTRIBUTION.md, stage 4). Same file
- * in every AnyAppAgent template: do not edit it in an app.
+ * Updates for people the app is shared with (Kiwimake docs/DISTRIBUTION.md, stage 4). Same file
+ * in every Kiwimake template: do not edit it in an app.
  *
  * The PC writes the app's feed address into the build (`anyapp_update_feed`, empty until the app
  * is shared). The app reads that update.json from GitHub when it opens (at most every 6 hours)
  * and once a day in the background, and when a newer build is out it shows one notification. A tap
  * opens [UpdateActivity], which downloads, checks and installs it.
  *
- * When AnyAppAgent is on the phone and handles this app (the owner's phone, or a friend who added
- * it in AnyAppAgent), the app stays silent: AnyAppAgent shows the update instead.
+ * When Kiwimake is on the phone and handles this app (the owner's phone, or a friend who added
+ * it in Kiwimake), the app stays silent: Kiwimake shows the update instead.
  */
 object AppUpdater {
   const val HOST_ACTION = "com.anyappagent.action.UPDATES"
@@ -110,7 +110,7 @@ object AppUpdater {
     Log.i(TAG, "check: " + when (state) {
       is State.Available -> "build ${state.update.build} (${state.update.version}) is available"
       is State.Problem -> state.message
-      is State.HandledByAnyAppAgent -> "AnyAppAgent handles this app's updates"
+      is State.HandledByAnyAppAgent -> "Kiwimake handles this app's updates"
       is State.UpToDate -> "up to date"
       is State.Off -> "off"
     })
@@ -204,10 +204,10 @@ object AppUpdater {
     return MessageDigest.getInstance("SHA-256").digest(cert.toByteArray()).joinToString("") { "%02x".format(it) }
   }
 
-  // ---------------------------------------------------------------- AnyAppAgent first
+  // ---------------------------------------------------------------- Kiwimake first
 
   /**
-   * True when an AnyAppAgent on this phone says it handles this app's updates (it installed it, or
+   * True when a Kiwimake on this phone says it handles this app's updates (it installed it, or
    * the person added the app there). Then this app shows nothing of its own: one notification only.
    */
   fun handledByAnyAppAgent(ctx: Context): Boolean {

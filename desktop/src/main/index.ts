@@ -1,4 +1,4 @@
-// AnyAppAgent desktop: runs the companion, onboarding and the main window, sits in the tray.
+// Kiwimake desktop: runs the companion, onboarding and the main window, sits in the tray.
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
@@ -30,7 +30,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
 
 // Tests and screenshots use their own settings folder (fresh onboarding) without touching the real one.
-if (env.ANYAPP_DESKTOP_USERDATA) app.setPath("userData", env.ANYAPP_DESKTOP_USERDATA);
+// Otherwise the settings folder keeps its old name (%APPDATA%\AnyAppAgent) after the rename to
+// Kiwimake: Electron names it after productName, and the settings and the single-instance lock
+// (one copy running at a time, `--quit`) live there.
+app.setPath("userData", env.ANYAPP_DESKTOP_USERDATA || join(app.getPath("appData"), "AnyAppAgent"));
 if (env.ANYAPP_DESKTOP_THEME === "dark" || env.ANYAPP_DESKTOP_THEME === "light") nativeTheme.themeSource = env.ANYAPP_DESKTOP_THEME;
 
 const paths = resolvePaths({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath(), env });
@@ -75,7 +78,7 @@ const githubSignIn = new GitHubSignIn(paths.toolsDir);
 let installer: ToolsInstaller | undefined;
 const icons: Record<string, string> = {};
 const iconVersions: Record<string, number> = {};
-/** The AnyAppAgent phone app (APK) the companion serves for the install QR: the setting first, then the usual places. */
+/** The Kiwimake phone app (APK) the companion serves for the install QR: the setting first, then the usual places. */
 function phoneApk(): string | undefined {
   return firstExisting([settings.phoneApkPath || undefined, env.ANYAPP_HOST_APK || undefined, ...paths.phoneApkCandidates]);
 }
@@ -408,7 +411,7 @@ async function pairingView(): Promise<PairingView> {
       ...base,
       kind: "easy-connect",
       qrSvg: await qrSvg(s.easyConnect.code),
-      // For a phone that cannot scan: the same code as a link the AnyAppAgent app opens.
+      // For a phone that cannot scan: the same code as a link the Kiwimake app opens.
       easyConnectLink: `anyappagent://pair?ec=${s.easyConnect.code}`,
     };
   return { ...base, kind: "same-network", qrSvg: await qrSvg(s.pairing.qrPayload) };
@@ -471,7 +474,7 @@ function createWindow(show: boolean): void {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    title: "AnyAppAgent",
+    title: "Kiwimake",
     icon: appIcon(),
     backgroundColor: dark ? themeColor.dark.bg : themeColor.light.bg,
     autoHideMenuBar: true,
@@ -491,7 +494,7 @@ function createWindow(show: boolean): void {
     event.preventDefault();
     win?.hide();
     if (!settings.closeHintShown && Notification.isSupported()) {
-      new Notification({ title: "AnyAppAgent is still running", body: "Your PC keeps making apps for your phone. Find AnyAppAgent next to the clock.", icon: appIcon("icon-256.png") }).show();
+      new Notification({ title: "Kiwimake is still running", body: "Your PC keeps making apps for your phone. Find Kiwimake next to the clock.", icon: appIcon("icon-256.png") }).show();
       setSetting("closeHintShown", true);
     }
   });
@@ -518,16 +521,16 @@ function updateTray(): void {
   if (!tray) return;
   const status = companion.status;
   const label = status.phase === "running" ? "Ready to make apps" : status.phase === "failed" ? "Needs attention" : "Starting…";
-  tray.setToolTip(`AnyAppAgent: ${label}`);
+  tray.setToolTip(`Kiwimake: ${label}`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: `AnyAppAgent: ${label}`, enabled: false },
+      { label: `Kiwimake: ${label}`, enabled: false },
       { type: "separator" },
-      { label: "Open AnyAppAgent", click: () => showWindow() },
+      { label: "Open Kiwimake", click: () => showWindow() },
       { label: "Connect a phone", click: () => showWindow("connect-phone") },
       { type: "separator" },
       { label: "Start with Windows", type: "checkbox", checked: settings.startWithWindows, click: (item) => setSetting("startWithWindows", item.checked) },
-      { label: "Quit AnyAppAgent", click: () => app.quit() },
+      { label: "Quit Kiwimake", click: () => app.quit() },
     ]),
   );
 }
@@ -615,15 +618,15 @@ function ipc(): void {
     }
   });
   // Signing keys (docs/DISTRIBUTION.md): a file dialog here, the work in the companion.
-  const keysFilter = [{ name: "AnyAppAgent key backup", extensions: ["anyappkeys"] }];
+  const keysFilter = [{ name: "Kiwimake key backup", extensions: ["anyappkeys"] }];
   // Dev and proofs only: ANYAPP_DESKTOP_DIALOG_FILE answers both file dialogs, so a script can drive them.
   const dialogFile = env.ANYAPP_DESKTOP_DIALOG_FILE;
   ipcMain.handle("keys:backup", async (_e, password: string): Promise<KeysAction> => {
-    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    if (!admin) return { ok: false, error: "Kiwimake is still starting. Try again in a moment." };
     const day = new Date().toISOString().slice(0, 10);
     const pick = dialogFile ? { canceled: false, filePath: dialogFile } : await dialog.showSaveDialog(win ?? BrowserWindow.getFocusedWindow()!, {
       title: "Back up signing keys",
-      defaultPath: join(app.getPath("documents"), `AnyAppAgent keys ${day}.anyappkeys`),
+      defaultPath: join(app.getPath("documents"), `Kiwimake keys ${day}.anyappkeys`),
       filters: keysFilter,
     });
     if (pick.canceled || !pick.filePath) return { cancelled: true };
@@ -635,7 +638,7 @@ function ipc(): void {
     }
   });
   ipcMain.handle("keys:restore", async (_e, password: string): Promise<KeysAction> => {
-    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
+    if (!admin) return { ok: false, error: "Kiwimake is still starting. Try again in a moment." };
     const pick = dialogFile ? { canceled: false, filePaths: [dialogFile] } : await dialog.showOpenDialog(win ?? BrowserWindow.getFocusedWindow()!, {
       title: "Restore signing keys",
       defaultPath: app.getPath("documents"),
@@ -658,8 +661,8 @@ function ipc(): void {
     return pick.canceled || !pick.filePaths[0] ? null : pick.filePaths[0];
   };
   ipcMain.handle("backup:on", async (_e, password: string): Promise<BackupAction> => {
-    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
-    const folder = await pickFolder("Where should AnyAppAgent keep your backup? A OneDrive or USB folder is best.");
+    if (!admin) return { ok: false, error: "Kiwimake is still starting. Try again in a moment." };
+    const folder = await pickFolder("Where should Kiwimake keep your backup? A OneDrive or USB folder is best.");
     if (!folder) return { cancelled: true };
     try {
       return { ok: true, state: await admin.backupSetup({ enabled: true, folder, password: String(password) }) };
@@ -669,7 +672,7 @@ function ipc(): void {
   });
   ipcMain.handle("backup:off", async (): Promise<BackupAction> => {
     try {
-      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      if (!admin) throw new Error("Kiwimake is still starting.");
       return { ok: true, state: await admin.backupSetup({ enabled: false }) };
     } catch (error) {
       return { ok: false, error: (error as Error).message };
@@ -677,15 +680,15 @@ function ipc(): void {
   });
   ipcMain.handle("backup:run", async (): Promise<BackupAction> => {
     try {
-      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      if (!admin) throw new Error("Kiwimake is still starting.");
       return { ok: true, state: await admin.backupRun() };
     } catch (error) {
       return { ok: false, error: (error as Error).message };
     }
   });
   ipcMain.handle("backup:restore", async (_e, password: string): Promise<BackupAction> => {
-    if (!admin) return { ok: false, error: "AnyAppAgent is still starting. Try again in a moment." };
-    const folder = await pickFolder("Pick the folder that holds your AnyAppAgent backup");
+    if (!admin) return { ok: false, error: "Kiwimake is still starting. Try again in a moment." };
+    const folder = await pickFolder("Pick the folder that holds your Kiwimake backup");
     if (!folder) return { cancelled: true };
     try {
       return { ok: true, restored: await admin.backupRestore(folder, String(password)) };
@@ -700,7 +703,7 @@ function ipc(): void {
   // Chat actions answer { ok, error } with a plain sentence instead of throwing across IPC.
   const chatAction = (run: (client: AdminClient) => Promise<unknown>) => async () => {
     try {
-      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      if (!admin) throw new Error("Kiwimake is still starting.");
       const value = await run(admin);
       return { ok: true, ...(value && typeof value === "object" ? { app: value } : {}) };
     } catch (error) {
@@ -740,7 +743,7 @@ function ipc(): void {
   });
   ipcMain.handle("suggestions:file", async (_e, text: string) => {
     try {
-      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      if (!admin) throw new Error("Kiwimake is still starting.");
       const r = await admin.fileSuggestion(String(text ?? ""));
       return { ok: true, appId: r.app.id };
     } catch (error) {
@@ -787,7 +790,7 @@ function ipc(): void {
   // A page an agent published: a fresh ticket from the companion, then its own window over the app.
   ipcMain.handle("pages:open", async (_e, appId: string, pageId: string, title?: string) => {
     try {
-      if (!admin) throw new Error("AnyAppAgent is still starting.");
+      if (!admin) throw new Error("Kiwimake is still starting.");
       const { path } = await admin.openPage(String(appId), String(pageId));
       if (typeof path !== "string" || !path.startsWith("/page/")) throw new Error("The companion did not give an address for this page.");
       openPageWindow({ appId: String(appId), pageId: String(pageId), title: String(title ?? ""), baseUrl: admin.baseUrl, path, ...(win ? { parent: win } : {}), icon: appIcon() });
@@ -818,7 +821,7 @@ function ipc(): void {
 if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
   app.quit();
 } else {
-  // `AnyAppAgent.exe --quit` asks the running app to quit the normal way (as Quit in the tray does), for updates.
+  // `Kiwimake.exe --quit` asks the running app to quit the normal way (as Quit in the tray does), for updates.
   app.on("second-instance", (_e, argv) => (argv.includes("--quit") ? app.quit() : showWindow()));
   app.setAppUserModelId("com.anyappagent.desktop");
 

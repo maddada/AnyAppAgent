@@ -18,11 +18,11 @@ import java.security.cert.CertificateFactory
 import java.util.zip.ZipFile
 
 /**
- * Quick updates (AnyAppAgent docs/FAST-LANE.md). Same file in every AnyAppAgent template: do not
+ * Quick updates (Kiwimake docs/FAST-LANE.md). Same file in every Kiwimake template: do not
  * edit it in an app.
  *
  * A quick update is a new JavaScript bundle and its pictures, made by the PC when a change needed
- * no native work. AnyAppAgent hands it over ([ReadyPopup], [HostLink]); this file checks it and
+ * no native work. Kiwimake hands it over ([ReadyPopup], [HostLink]); this file checks it and
  * decides which bundle the app starts with:
  *
  * - **Checked before anything runs:** ota.json must be signed by the key this app is signed with
@@ -31,7 +31,7 @@ import java.util.zip.ZipFile
  *   every file must match its SHA-256. Anything else is refused and never unpacked.
  * - **Rollback:** the first start of a new bundle is a trial. A fatal JavaScript error during the
  *   trial, or a trial start that never got going (the app died before [CONFIRM_AFTER_MS]), marks
- *   it bad: the app goes back to the last good bundle (or the APK's own) and tells AnyAppAgent.
+ *   it bad: the app goes back to the last good bundle (or the APK's own) and tells Kiwimake.
  * - A newer APK replaces all of it: quick updates older than or as old as the installed APK, or
  *   made for other native code, are dropped.
  *
@@ -338,7 +338,7 @@ object Ota {
     }
   }
 
-  /** Remembers a refused update so it is not offered again, and tells AnyAppAgent. */
+  /** Remembers a refused update so it is not offered again, and tells Kiwimake. */
   @Synchronized
   fun refuse(ctx: Context, build: Long, why: String) {
     Log.w(TAG, "quick update $build refused: $why")

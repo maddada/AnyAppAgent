@@ -1,5 +1,5 @@
 #!/bin/sh
-# AnyAppAgent: kept as Ghostex wrote it, for reference. AnyAppAgent builds the bridge with
+# Kiwimake: kept as Ghostex wrote it, for reference. Kiwimake builds the bridge with
 # ../build-android-bridge.mjs (Java package dev.anyappagent, output in %USERPROFILE%\.anyappagent\tools).
 # Builds the gomobile tailcat bridge and stages the artifacts into the mobile
 # app's native module. Requires: Go, gomobile (go install

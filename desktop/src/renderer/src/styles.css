@@ -1,4 +1,4 @@
-/* Desktop layout and components on the shared AnyAppAgent theme (shared/theme). Every colour,
+/* Desktop layout and components on the shared Kiwimake theme (shared/theme). Every colour,
    font, size, radius, space, shadow and duration is a --aa-* variable from theme.css (generated
    from tokens.ts); the specs are shared/theme/COMPONENTS.md. Layout numbers with no token yet are
    marked "no token". */
@@ -324,6 +324,8 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .apps-pane { width: calc(var(--aa-size-sidebar-width) + var(--aa-space-3xl)); /* the aside width, no token */ flex: none; display: flex; flex-direction: column; min-height: 0; border-right: var(--aa-border-width) solid var(--aa-border); }
 /* The head's edges line up with the rows' icons and their right-hand text (list padding + row padding). */
 .apps-pane-head { display: flex; align-items: center; justify-content: space-between; gap: var(--aa-space-md); min-height: var(--aa-size-chat-header-height); padding: 0 calc(var(--aa-space-sm) + var(--aa-space-md)); margin-bottom: var(--aa-space-sm); flex: none; }
+/* "Your apps" stays on one line beside the longer "Make a kiwi" button. */
+.apps-pane-head .title-small, .apps-pane-head .btn { white-space: nowrap; }
 .apps-notice { margin: 0 var(--aa-space-sm) var(--aa-space-sm); padding: var(--aa-space-md); flex-direction: column; align-items: stretch; gap: var(--aa-space-sm); }
 .apps-list { flex: 1; overflow-y: auto; padding: 0 var(--aa-space-sm) var(--aa-space-lg); display: flex; flex-direction: column; gap: var(--aa-space-hair); }
 .arow { width: 100%; display: flex; align-items: center; gap: var(--aa-space-md); padding: var(--aa-space-sm) var(--aa-space-md); border-radius: var(--aa-radius-button); text-align: left; }
@@ -390,7 +392,7 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .fld > .label { color: var(--aa-text-secondary); }
 .field-multi { height: auto; padding: var(--aa-space-md) var(--aa-space-lg); resize: vertical; line-height: var(--aa-type-body-line); min-height: calc(var(--aa-type-body-line) * 4 + 2 * var(--aa-space-md)); }
 
-/* ---------- AnyAppAgent for the phone: the GitHub release QR */
+/* ---------- Kiwimake for the phone: the GitHub release QR */
 .get-phone { display: flex; flex-direction: column; align-items: flex-start; gap: var(--aa-space-sm); }
 .get-phone-line { max-width: calc(var(--aa-size-reading-width) / 2); }
 .get-phone.big { gap: var(--aa-space-md); }

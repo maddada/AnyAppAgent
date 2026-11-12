@@ -1,4 +1,4 @@
-# AnyAppAgent (the Android app)
+# Kiwimake (the Android app)
 
 Expo SDK 58, React Native 0.88, TypeScript, Android only, side-loaded. Package `com.anyappagent`.
 It talks to the PC companion (`../server`) through `../shared/protocol.ts`.

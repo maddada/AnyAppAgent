@@ -69,7 +69,7 @@ agent", "I need to be able to view the inline HTML that was sent on the desktop 
   Ghostex's own, copied by `node server/scripts/port-page-kit.mjs` (it only changes a few sentences
   that name Ghostex, shows the theme switch on every page, and adds `window.anyapp` as the same
   object as `window.ghostex`). Run it again to take a newer Ghostex kit.
-- `theme.html` is AnyAppAgent's: the Workbench colours under Ghostex's token names, light and dark,
+- `theme.html` is Kiwimake's: the Workbench colours under Ghostex's token names, light and dark,
   Bricolage Grotesque and IBM Plex Mono, and Ghostex's bootstrap (`#gx-theme=light|dark` in the
   address sets the theme; links open outside). `workbench.html` tunes the kit's headings, eyebrow,
   ribbon and badges to Workbench.

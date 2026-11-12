@@ -1,4 +1,4 @@
-// "Like this, but mine" (C:\aa\ideas\ideas.html, Q15): something shared into AnyAppAgent from
+// "Like this, but mine" (C:\aa\ideas\ideas.html, Q15): something shared into Kiwimake from
 // another app. Make a new app from it, or change one of the person's apps; their words say what to
 // keep and what to change; the pictures ride in the message as in the chat, the link as text.
 import { useMemo, useState } from "react";
@@ -99,7 +99,7 @@ export default function LikeThis() {
       {!item ? (
         <View style={{ padding: size.screenGutter, gap: space.lg }}>
           <T variant="body" color="textSecondary">
-            Nothing was shared. In another app, tap Share on a screenshot, a picture or a link, then pick AnyAppAgent.
+            Nothing was shared. In another app, tap Share on a screenshot, a picture or a link, then pick Kiwimake.
           </T>
           <Button label="Back to your apps" variant="quiet" onPress={close} />
         </View>

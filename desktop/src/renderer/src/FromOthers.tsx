@@ -1,5 +1,5 @@
 // "From others" (docs/CHANGE-THIS-APP.md): suggestions people sent the owner about an app, as text
-// (WhatsApp, SMS, email). Pasted here (or shared into AnyAppAgent on the phone), they are filed under
+// (WhatsApp, SMS, email). Pasted here (or shared into Kiwimake on the phone), they are filed under
 // the right app by the companion. Open in chat puts the words in the app's composer to send or edit.
 import { useEffect, useState } from "react";
 import { Inbox, MessageCircle, X } from "lucide-react";
@@ -81,7 +81,7 @@ export function FromOthersDialog({ app, onClose, onOpenApp }: { app: App; onClos
           <div className="srow">
             <div className="srow-main">
               <span className="body">No suggestions yet</span>
-              <span className="sub">People with {app.name} can tap Change this app in its settings and send you a suggestion as a message. Paste it below, or share it to AnyAppAgent on your phone.</span>
+              <span className="sub">People with {app.name} can tap Change this app in its settings and send you a suggestion as a message. Paste it below, or share it to Kiwimake on your phone.</span>
             </div>
           </div>
         ) : (

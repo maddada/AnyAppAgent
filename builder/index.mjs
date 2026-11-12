@@ -1,4 +1,4 @@
-// AnyAppAgent builder: makes apps from a template and builds their signed release APKs.
+// Kiwimake builder: makes apps from a template and builds their signed release APKs.
 // Two presets: 'react-native' (template/, the default) and 'kotlin' (template-kotlin/).
 // Contract (docs/SPEC.md):
 //   createApp({ dir, name, slug, packageName, preset?, onLog? }) -> Promise<void>
@@ -108,7 +108,7 @@ export async function adoptApp({ src, dir, name, slug, packageName, onLog = noop
   src = path.resolve(src);
   dir = path.resolve(dir);
   const preset = presetOf(src);
-  if (!preset) throw new Error('This is not an app made with AnyAppAgent (no app.json or anyapp.json).');
+  if (!preset) throw new Error('This is not an app made with Kiwimake (no app.json or anyapp.json).');
   if (preset === 'expo-exact') throw new Error('Expo Exact apps cannot be copied into an own version yet.');
   if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) throw new Error(`adoptApp: ${dir} already exists and is not empty`);
   await ensureAppKey(androidEnv().javaHome, packageName, onLog);

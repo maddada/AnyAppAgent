@@ -1,6 +1,6 @@
-// AI (Claude or OpenRouter) through AnyAppAgent. The person adds their AI key once, in
-// AnyAppAgent's Settings; every app made with AnyAppAgent can then use it. This app never sees
-// the key: requests go to AnyAppAgent on the same phone, which adds the key, counts usage and
+// AI (Claude or OpenRouter) through Kiwimake. The person adds their AI key once, in
+// Kiwimake's Settings; every app made with Kiwimake can then use it. This app never sees
+// the key: requests go to Kiwimake on the same phone, which adds the key, counts usage and
 // lets the person switch AI off per app. Usage: AGENTS.md, "AI".
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
@@ -46,10 +46,10 @@ export type AiReply = {
 
 /**
  * Why AI is not available. Show <AiSetupNotice status={...} /> for these.
- * - not_set_up: no AI key in AnyAppAgent yet
- * - app_off: the person switched AI off for this app in AnyAppAgent
- * - no_anyappagent: AnyAppAgent is not on this phone
- * - not_reachable / not_allowed: AnyAppAgent could not be reached or refused this app
+ * - not_set_up: no AI key in Kiwimake yet
+ * - app_off: the person switched AI off for this app in Kiwimake
+ * - no_anyappagent: Kiwimake is not on this phone
+ * - not_reachable / not_allowed: Kiwimake could not be reached or refused this app
  */
 export type AiNotReadyReason = 'not_set_up' | 'app_off' | 'no_anyappagent' | 'not_reachable' | 'not_allowed';
 
@@ -66,7 +66,7 @@ export class AiError extends Error {
     this.code = code;
     this.name = 'AiError';
   }
-  /** True when the fix is in AnyAppAgent (add a key, switch the app on): show AiSetupNotice. */
+  /** True when the fix is in Kiwimake (add a key, switch the app on): show AiSetupNotice. */
   get needsSetup(): boolean {
     return ['not_set_up', 'app_off', 'no_anyappagent', 'not_allowed', 'bad_key', 'no_credit'].includes(this.code);
   }
@@ -99,7 +99,7 @@ export function useAiStatus(): { status: AiStatus | null; refresh: () => void } 
   return { status, refresh };
 }
 
-/** Opens AnyAppAgent's settings, where the AI key is added and each app is switched on or off. */
+/** Opens Kiwimake's settings, where the AI key is added and each app is switched on or off. */
 export function openAiSetup(): boolean {
   return AiNative.openSetup();
 }
@@ -108,15 +108,15 @@ export function openAiSetup(): boolean {
 export function aiProblemText(code: string): string {
   switch (code) {
     case 'not_set_up':
-      return 'AI is not set up: open AnyAppAgent to add a key.';
+      return 'AI is not set up: open Kiwimake to add a key.';
     case 'app_off':
-      return 'AI is switched off for this app in AnyAppAgent.';
+      return 'AI is switched off for this app in Kiwimake.';
     case 'no_anyappagent':
-      return 'AI needs the AnyAppAgent app on this phone.';
+      return 'AI needs the Kiwimake app on this phone.';
     case 'not_allowed':
-      return 'AnyAppAgent did not let this app use AI.';
+      return 'Kiwimake did not let this app use AI.';
     case 'bad_key':
-      return 'The AI key was not accepted. Check it in AnyAppAgent.';
+      return 'The AI key was not accepted. Check it in Kiwimake.';
     case 'no_credit':
       return 'The AI account is out of credit.';
     case 'busy':
@@ -206,7 +206,7 @@ export function chat(opts: {
     });
     AiNative.start(id, request).catch(() => {
       finish();
-      reject(new AiError('not_reachable', 'Could not reach AnyAppAgent.'));
+      reject(new AiError('not_reachable', 'Could not reach Kiwimake.'));
     });
   });
 }

@@ -3,7 +3,7 @@ package com.anyapp.app.ai
 import org.json.JSONArray
 import org.json.JSONObject
 
-// The types of "AI through AnyAppAgent" (wire format: AI.md beside AGENTS.md, the same as the
+// The types of "AI through Kiwimake" (wire format: AI.md beside AGENTS.md, the same as the
 // React Native template's modules/ai/README.md). Usage: AGENTS.md, "AI".
 
 /** One piece of a message. */
@@ -85,8 +85,8 @@ data class AiAgentResult(val text: String, val messages: List<AiMessage>, val st
 
 /**
  * Whether AI can be used. When not [ready], [reason] is one of:
- * "not_set_up" (no key in AnyAppAgent yet), "app_off" (switched off for this app),
- * "no_anyappagent" (AnyAppAgent is not on this phone), "not_reachable", "not_allowed".
+ * "not_set_up" (no key in Kiwimake yet), "app_off" (switched off for this app),
+ * "no_anyappagent" (Kiwimake is not on this phone), "not_reachable", "not_allowed".
  */
 data class AiStatus(val ready: Boolean, val reason: String? = null, val provider: String? = null, val model: String? = null)
 
@@ -95,17 +95,17 @@ data class AiStatus(val ready: Boolean, val reason: String? = null, val provider
  * "bad_request", "too_big", "cancelled", "disconnected", "internal".
  */
 class AiError(val code: String, message: String) : Exception(message) {
-  /** True when the fix is in AnyAppAgent (add a key, switch the app on): show AiSetupNotice. */
+  /** True when the fix is in Kiwimake (add a key, switch the app on): show AiSetupNotice. */
   val needsSetup: Boolean get() = code in setOf("not_set_up", "app_off", "no_anyappagent", "not_allowed", "bad_key", "no_credit")
 }
 
 /** Plain words for a person, for any AiError code or not-ready reason. */
 fun aiProblemText(code: String): String = when (code) {
-  "not_set_up" -> "AI is not set up: open AnyAppAgent to add a key."
-  "app_off" -> "AI is switched off for this app in AnyAppAgent."
-  "no_anyappagent" -> "AI needs the AnyAppAgent app on this phone."
-  "not_allowed" -> "AnyAppAgent did not let this app use AI."
-  "bad_key" -> "The AI key was not accepted. Check it in AnyAppAgent."
+  "not_set_up" -> "AI is not set up: open Kiwimake to add a key."
+  "app_off" -> "AI is switched off for this app in Kiwimake."
+  "no_anyappagent" -> "AI needs the Kiwimake app on this phone."
+  "not_allowed" -> "Kiwimake did not let this app use AI."
+  "bad_key" -> "The AI key was not accepted. Check it in Kiwimake."
   "no_credit" -> "The AI account is out of credit."
   "busy" -> "The AI is busy right now. Try again in a moment."
   "limit" -> "Too many AI requests in a short time. Wait a moment."

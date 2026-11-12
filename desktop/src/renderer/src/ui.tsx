@@ -23,7 +23,7 @@ export function Wordmark() {
   return (
     <div className="wordmark">
       <Mark />
-      <span>AnyAppAgent</span>
+      <span>Kiwimake</span>
     </div>
   );
 }

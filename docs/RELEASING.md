@@ -1,14 +1,16 @@
-# Releasing AnyAppAgent
+# Releasing Kiwimake
 
-A release is a GitHub release on `maddada/AnyAppAgent` with three files. Their names never change,
-because the desktop app's download QR and the README link to
-`https://github.com/maddada/AnyAppAgent/releases/latest/download/<name>`:
+A release is a GitHub release on `maddada/AnyAppAgent` with three files. The desktop app's
+download QR and the README link to `https://github.com/maddada/AnyAppAgent/releases/latest/download/<name>`,
+so the phone APKs keep their old names for good (desktop apps already installed download
+`AnyAppAgent.apk`, even after the rename to Kiwimake). The installer is `Kiwimake-Setup.exe` from
+0.3.0 on (0.2.0 and earlier published it as `AnyAppAgent-Setup.exe`; nothing downloads it by name):
 
 | File | What |
 | --- | --- |
 | `AnyAppAgent.apk` | The phone app, arm64-v8a only (nearly every phone). |
 | `AnyAppAgent-universal.apk` | The phone app, arm64-v8a and x86_64 (emulator, x86 tablets). |
-| `AnyAppAgent-Setup.exe` | The Windows installer (electron-builder names it `AnyAppAgent-Setup-<version>.exe`; upload it renamed). |
+| `Kiwimake-Setup.exe` | The Windows installer (electron-builder names it `Kiwimake-Setup-<version>.exe`; upload it renamed). |
 
 ## The phone app's release key
 
@@ -46,7 +48,7 @@ node app/scripts/release-key.mjs create              only ever once; refuses if 
 Debug and test builds (`npm run apk` without `--release`, `expo run:android`) do not use it: they
 keep the debug key, so the copies other work installs on the emulator are unchanged.
 
-Apps made by AnyAppAgent are not signed with this key. They use the keys the companion makes on
+Apps made by Kiwimake are not signed with this key. They use the keys the companion makes on
 the user's PC (`builder/lib/keystore.mjs`, `docs/DISTRIBUTION.md`).
 
 ## Versions
@@ -66,7 +68,7 @@ toolchain from `docs/ENVIRONMENT.md`:
 cd app;     npm ci; npm run typecheck; npm run lint
 node scripts/build-apk.mjs --clean --release   # prints both APKs with size and sha256
 cd ..\desktop; npm ci; npm run typecheck; npm test
-npm run dist                                   # dist\AnyAppAgent-Setup-<version>.exe
+npm run dist                                   # dist\Kiwimake-Setup-<version>.exe
 ```
 
 `build-apk.mjs --release` reads the key and password (above), loads
@@ -86,13 +88,13 @@ apksigner verify --print-certs app\dist\AnyAppAgent.apk   # SHA-256 digest must 
 
 1. Install `AnyAppAgent-universal.apk` on the emulator (`docs/ENVIRONMENT.md`), pair it with a
    companion of your own (own port and state folder), and let it receive an app.
-2. Run the installed desktop app (or `desktop\dist\win-unpacked\AnyAppAgent.exe` from the build)
+2. Run the installed desktop app (or `desktop\dist\win-unpacked\Kiwimake.exe` from the build)
    against a test state folder and check it starts and its companion answers.
 3. Tag the commit (`git tag -a v<version>`), push main and the tag, then:
 
 ```powershell
-gh release create v<version> --repo maddada/AnyAppAgent --title "AnyAppAgent <version>" --notes-file notes.md `
-  app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk "AnyAppAgent-Setup.exe"
+gh release create v<version> --repo maddada/AnyAppAgent --title "Kiwimake <version>" --notes-file notes.md `
+  app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk "Kiwimake-Setup.exe"
 ```
 
 4. Check that each `releases/latest/download/<name>` link returns the new file (size and sha256).

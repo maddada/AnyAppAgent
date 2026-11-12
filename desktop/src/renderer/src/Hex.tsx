@@ -37,7 +37,7 @@ function viewOf(hex: HexCheck): View {
     case "notRunning":
       return { tone: "todo", title: "Hex isn't open", line: "Dictation needs Hex open. Turn on Open at login in Hex so it starts with your PC." };
     case "noModels":
-      return { tone: "todo", title: "Hex has no speech model yet", line: "In Hex's settings, under Models, download one. AnyAppAgent finds it by itself." };
+      return { tone: "todo", title: "Hex has no speech model yet", line: "In Hex's settings, under Models, download one. Kiwimake finds it by itself." };
     case "ready":
       return { tone: "ready", title: "Hex is ready", line: `Click the microphone in a chat, or press ${DICTATE_HOTKEY}. Tap to start and tap to stop, or hold and let go.` };
     default:

@@ -11,9 +11,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Crash reports and diaries from apps made with AnyAppAgent (docs/VERSIONS.md). An app sends them
+ * Crash reports and diaries from apps made with Kiwimake (docs/VERSIONS.md). An app sends them
  * only to the app that installed it, with a `sender` PendingIntent: Android stamps who created it,
- * so the sender cannot be faked. A report is accepted only from an app this AnyAppAgent installed
+ * so the sender cannot be faked. A report is accepted only from an app this Kiwimake installed
  * itself (Android's install source record).
  *
  * Crashes wait in a small queue (at most 20) until the JavaScript side sends them to the PC; a

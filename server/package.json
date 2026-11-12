@@ -2,7 +2,7 @@
   "name": "anyappagent-server",
   "version": "0.1.0",
   "private": true,
-  "description": "AnyAppAgent PC companion: pairing, one Claude Code ACP session per app, Git/GitHub, APK builds.",
+  "description": "Kiwimake PC companion: pairing, one Claude Code ACP session per app, Git/GitHub, APK builds.",
   "type": "module",
   "bin": {
     "anyappagent": "./bin/anyappagent.mjs"

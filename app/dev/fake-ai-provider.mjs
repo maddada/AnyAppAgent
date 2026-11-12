@@ -1,5 +1,5 @@
 // A local fake AI provider for testing "AI for your apps" without a real key or credit.
-// Speaks both APIs AnyAppAgent's proxy uses, streamed (SSE), with tool calls:
+// Speaks both APIs Kiwimake's proxy uses, streamed (SSE), with tool calls:
 //   POST /v1/messages                 Claude (Anthropic Messages API)
 //   POST /api/v1/chat/completions     OpenRouter (OpenAI-style chat completions)
 //

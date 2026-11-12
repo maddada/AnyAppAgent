@@ -26,7 +26,7 @@ import java.security.MessageDigest
  * The update box (AppUpdater): what is new, a progress bar, and one button. Opened from the
  * notification it starts downloading at once. The download is checked (size, SHA-256, package,
  * build number and signing key) before Android is asked to install it. Same file in every
- * AnyAppAgent template; plain Android views, so it works in every preset.
+ * Kiwimake template; plain Android views, so it works in every preset.
  */
 class UpdateActivity : Activity() {
   companion object {
@@ -114,7 +114,7 @@ class UpdateActivity : Activity() {
             if (start) startDownload() else showStatus("A new version is ready (${mb(state.update.apk.size)}).", busy = false, button = "Update")
           }
           is AppUpdater.State.UpToDate -> showStatus("You have the newest version.", busy = false, button = "Close")
-          is AppUpdater.State.HandledByAnyAppAgent -> showStatus("Updates for this app come through AnyAppAgent.", busy = false, button = "Close")
+          is AppUpdater.State.HandledByAnyAppAgent -> showStatus("Updates for this app come through Kiwimake.", busy = false, button = "Close")
           is AppUpdater.State.Off -> showStatus("This app is not shared, so it has no updates here.", busy = false, button = "Close")
           is AppUpdater.State.Problem -> showStatus(state.message, busy = false, button = buttonFor(state.message))
         }

@@ -1,4 +1,4 @@
-# AnyAppAgent Kotlin starter
+# Kiwimake Kotlin starter
 
 The native Android starter every Kotlin app is copied from (the "Kotlin" preset of the New app
 sheet). Kotlin, Jetpack Compose, Material 3; built by `builder/` into a signed release APK of a

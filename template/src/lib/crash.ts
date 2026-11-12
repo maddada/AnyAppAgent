@@ -1,4 +1,4 @@
-// Crash catcher: when the app crashes, AnyAppAgent on the phone shows "<app> crashed. Fix it?" and
+// Crash catcher: when the app crashes, Kiwimake on the phone shows "<app> crashed. Fix it?" and
 // one tap sends the crash to the app's agent. Set up in App.tsx (installCrashCatcher, CrashBoundary,
 // setCurrentScreen): leave that in place. Native crashes are caught by modules/diary by itself.
 //

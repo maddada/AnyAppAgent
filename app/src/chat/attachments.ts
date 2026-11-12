@@ -46,7 +46,7 @@ export async function pickFromGallery(room: number): Promise<Attachment[]> {
 /** One photo from the camera. */
 export async function takePhoto(): Promise<Attachment[]> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permission.granted) throw new Error("AnyAppAgent may not use the camera. Allow it in the phone's settings.");
+  if (!permission.granted) throw new Error("Kiwimake may not use the camera. Allow it in the phone's settings.");
   const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 1 });
   if (result.canceled) return [];
   return Promise.all(result.assets.slice(0, 1).map((a) => prepare(a.uri, a.width, a.height)));

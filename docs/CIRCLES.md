@@ -6,15 +6,15 @@ members share, one **invite link**, and the people on it. This file is the agree
 built, **right after the cloud's first version** (`docs/CLOUD.md`), alongside cloud sharing. Status:
 **the agreed plan, nothing built, nothing signed up for.**
 
-The product name is not final (Appwin.ai is the working name, under review). The domain is written
-**appwin.ai** here and follows the final name; see "The name" below for what that touches.
+The product name is **Kiwimake** (decided 2026-11-12) and its domain is **kiwimake.ai** (being
+bought); see "The name" below for what that touches.
 
 What it builds on:
 
 - `docs/CLOUD.md`: Convex (one deployment, US East), Convex Auth (Google or an email code), the
   `users` table, Convex file storage, the rule "we do not store code".
 - `docs/DISTRIBUTION.md`: "Share with others" (a public, releases-only GitHub repo per app), the
-  release and `update.json` format, the updater in every app, and AnyAppAgent taking over updates
+  release and `update.json` format, the updater in every app, and Kiwimake taking over updates
   of shared apps (stage 5).
 - `docs/CHANGE-THIS-APP.md`: Suggest a change, the owner's From others inbox, "Make my own version",
   and the code zip carried by every public release.
@@ -28,7 +28,7 @@ Q351 and Q352.
 | Q | Decision |
 | - | -------- |
 | Q350 | All recommendations as drawn on the page, except where this table says otherwise. |
-| Q351 | appwin.ai sits on Cloudflare's free plan, which forwards `/c/*` and `/.well-known/*` to Convex **without a redirect**, so Android App Links verify. |
+| Q351 | kiwimake.ai sits on Cloudflare's free plan, which forwards `/c/*` and `/.well-known/*` to Convex **without a redirect**, so Android App Links verify. |
 | Q352 | **Sign in to join** (Google or an email code): the cloud account, the same one for cloud and circles. |
 | Q353 (changed) | **Both, by how the app is shared.** The user: "If the app is public we do A (since it's on a public GitHub repo); if the app is private and shared only with this group, then B." A public app sits on the shelf as an unlisted link to its public GitHub releases. A private app shared only with a circle has its APKs (and quick update bundles) stored in Convex behind the circle, downloadable only by members. |
 | Q354 | Every member who has shared apps can put them on the shelf; the admin can take any app off. |
@@ -46,12 +46,12 @@ The mockups are on the page above (all in the Workbench look, `shared/theme/`):
    page has "Invite people" (the link, Copy link, Stop this link, "Lasts 7 days, up to 10 people,
    anyone with it can join", a QR) and "Your apps on this shelf" (one switch per app). The phone app
    has the same page; its link goes out through Android's share menu.
-2. **Phone, link tapped, AnyAppAgent installed**: it opens on **Join "Yahia family"?** (who invited
+2. **Phone, link tapped, Kiwimake installed**: it opens on **Join "Yahia family"?** (who invited
    you, how many people and apps), "Your name in this circle", two plain lines (they see your name
    and the apps you share; nobody sees what you install or use), Continue with Google, Use an email
    code, Not now.
-3. **Phone, link tapped, no AnyAppAgent**: a small page served by Convex: who invited you, "Get
-   AnyAppAgent" (Android asks once to allow installs from the browser), "tap the invite link
+3. **Phone, link tapped, no Kiwimake**: a small page served by Convex: who invited you, "Get
+   Kiwimake" (Android asks once to allow installs from the browser), "tap the invite link
    again", or "install one app" from the circle's public apps.
 4. **The circle's shelf** (Shelf and People tabs): tiles grouped "From Mohamad", "From Sara", each
    with Open, Install or Update. Tapping an app shows its sheet with install progress and Suggest a
@@ -61,16 +61,16 @@ The mockups are on the page above (all in the Workbench look, `shared/theme/`):
 ## 1. How a link reaches the app
 
 ```
- Member taps https://appwin.ai/c/K7Q2M9XT
-   Android, AnyAppAgent installed:  App Link verified -> opens AnyAppAgent on Join
+ Member taps https://kiwimake.ai/c/K7Q2M9XT
+   Android, Kiwimake installed:  App Link verified -> opens Kiwimake on Join
    Android, not installed:           browser -> Cloudflare (free) -> Convex HTTP action -> the invite page
 ```
 
-- **Cloudflare, free plan.** appwin.ai's DNS and a small Worker live in a free Cloudflare account.
-  The Worker is attached to exactly two routes, `appwin.ai/c/*` and `appwin.ai/.well-known/*`, and
+- **Cloudflare, free plan.** kiwimake.ai's DNS and a small Worker live in a free Cloudflare account.
+  The Worker is attached to exactly two routes, `kiwimake.ai/c/*` and `kiwimake.ai/.well-known/*`, and
   **fetches** the same path from the Convex deployment (`https://<name>.convex.site`) and returns the
   answer as it is: no redirect, same status, same headers. (Convex's own custom domains need its Pro
-  plan, $25 a month; that was the other choice in Q351.) Any other path on appwin.ai is not part of
+  plan, $25 a month; that was the other choice in Q351.) Any other path on kiwimake.ai is not part of
   circles. The Worker never sees more than Convex already serves publicly.
 - **Convex HTTP actions** (`cloud/convex/http.ts`) serve three things:
   - `GET /c/:code`: the invite page (HTML, no scripts needed), with Open Graph tags so a chat shows
@@ -82,9 +82,9 @@ The mockups are on the page above (all in the Workbench look, `shared/theme/`):
     redirect**, which is why the Worker forwards and does not redirect. It names `com.anyappagent` and
     the phone app's own release key certificate (`0b0621e6...702fd7`, `docs/RELEASING.md`; the key
     exists since 0.2.0). Debug copies on the emulator are signed with another key and get no App
-    Link: they take the code from the page's "Open in AnyAppAgent" button (a `anyappagent://join?code=`
+    Link: they take the code from the page's "Open in Kiwimake" button (a `anyappagent://join?code=`
     link) or the "Have a code?" field on the first screen.
-- **The phone app** declares an intent filter for `https://appwin.ai/c/` with `autoVerify`, and a
+- **The phone app** declares an intent filter for `https://kiwimake.ai/c/` with `autoVerify`, and a
   `/join/:code` route (the router already handles `anyappagent://` links, such as `change`).
 - **If verification fails** on some phone (it can be switched off per app in Android's settings),
   the link opens the page, and the page has the same button. Nothing breaks, it costs one tap.
@@ -150,7 +150,7 @@ Notes:
 
 ### Join
 
-1. Tapping the link opens AnyAppAgent on Join (section 1). Join calls `/c/:code/preview` and shows
+1. Tapping the link opens Kiwimake on Join (section 1). Join calls `/c/:code/preview` and shows
    the circle. The person signs in if they are not (Continue with Google or Use an email code), types
    their name (prefilled from the account), and taps Join.
 2. `circles.join(code, name)` checks the invite (not stopped, not expired, `uses < maxUses`, the
@@ -158,7 +158,7 @@ Notes:
    one mutation, so two people cannot both take the last place.
 3. The shelf opens. The admin gets one quiet push ("Nana joined Yahia family") only if they turned it
    on; it is off by default.
-4. **Without AnyAppAgent**: the page offers **Get AnyAppAgent** (the latest phone release on GitHub,
+4. **Without Kiwimake**: the page offers **Get Kiwimake** (the latest phone release on GitHub,
    `https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent.apk`, `docs/RELEASING.md`),
    and "tap the invite link again". It also lists the circle's **public** apps (name, who shared it,
    size) with an Install link to each app's public GitHub release, so one app can be had without
@@ -173,7 +173,7 @@ Notes:
     Nothing is uploaded. It needs at least one published version; if there is none the switch asks to
     Publish first.
   - **The app is private** (not shared with others): the switch says "Only people in your circles can
-    get this. Their phones download it from AnyAppAgent's cloud, not from GitHub." Turning it on
+    get this. Their phones download it from Kiwimake's cloud, not from GitHub." Turning it on
     makes a `shares` row of kind `private` and uploads the app's latest published build (section 4).
   - An app that is public **and** on a shelf is a `public` share: the shelf is only a listing of it.
 - **Unlisted** means what it says: a public app's releases repo is public on GitHub, so anyone who
@@ -191,21 +191,21 @@ Notes:
 
 ### Install and update
 
-- **Public share**: AnyAppAgent does what stage 5 of `docs/DISTRIBUTION.md` describes: reads the
+- **Public share**: Kiwimake does what stage 5 of `docs/DISTRIBUTION.md` describes: reads the
   feed from GitHub itself, downloads the APK for the phone's ABI from the releases repo, checks size,
   SHA-256 and signer, and installs through `app/src/lib/installer.ts`. **This is the piece stage 5
-  left unbuilt** ("following a friend's app from a share link inside AnyAppAgent"): the shelf is
-  where it lives. The app's own updater stays quiet because AnyAppAgent says it handles that package.
+  left unbuilt** ("following a friend's app from a share link inside Kiwimake"): the shelf is
+  where it lives. The app's own updater stays quiet because Kiwimake says it handles that package.
 - **Private share**: the same steps, but the file comes from Convex through a gated endpoint
   (section 4), and **the app has no GitHub feed in it**, so its own updater has nothing to check and
-  stays silent: updates of a private app come only through AnyAppAgent and the circle. (This is
-  consistent: nobody can be in a circle without AnyAppAgent.)
-- **Updates**: while AnyAppAgent is open, Convex live queries show a new build at once. When it is
+  stays silent: updates of a private app come only through Kiwimake and the circle. (This is
+  consistent: nobody can be in a circle without Kiwimake.)
+- **Updates**: while Kiwimake is open, Convex live queries show a new build at once. When it is
   closed, a push says so (section 5), and the daily background check of the stage 5 job remains as the
   fallback. One notification per app and build (its id is the package and the build number), so a
   push and the local check never show it twice.
 - **Quick updates** (`docs/FAST-LANE.md`): a private app's published build can carry its quick update
-  zip. AnyAppAgent hands it to the app exactly as it does for the owner's own apps (the Reload card).
+  zip. Kiwimake hands it to the app exactly as it does for the owner's own apps (the Reload card).
 
 ### Suggest a change (Q355)
 
@@ -216,7 +216,7 @@ For a shelf app it goes straight in:
    `suggestions.send(shareId, text)`. The message has the same format as the share text, including its
    last line `anyapp-suggestion: <package> <build>`, so the filing code that reads it today reads it
    unchanged.
-2. The owner's AnyAppAgent has a live query on `suggestions.forMe`. For each new one it files it into
+2. The owner's Kiwimake has a live query on `suggestions.forMe`. For each new one it files it into
    From others: with a PC, through the existing `POST /api/suggestions` (`FileSuggestionRequest`) on the
    paired companion; for a cloud app, into the cloud app's inbox in Convex. It then sets `filedAt`.
    If the owner's phone is closed it waits in Convex and arrives when the phone opens (or the push
@@ -276,9 +276,9 @@ an `appBuilds` row with `channel: "testing"` that only people who switched that 
 ## 5. Push notifications through Firebase Cloud Messaging (Q356)
 
 "Sara shared Quran notes" and "Workout 1.3 is ready" arrive as soon as they happen, even with
-AnyAppAgent closed.
+Kiwimake closed.
 
-- **Registering.** After the person joins their first circle (not at install), AnyAppAgent asks for
+- **Registering.** After the person joins their first circle (not at install), Kiwimake asks for
   Android's notification permission with a plain line of why, gets its FCM token (`google-services.json`
   in the phone app's build, the Firebase library or `expo-notifications` with the device push token),
   and calls `devices.register`. The token is renewed when it changes and dropped when the person signs
@@ -293,7 +293,7 @@ AnyAppAgent closed.
   minutes, and several apps shared at once become one line ("Sara shared 3 apps"). Settings has a
   switch per kind and a mute per circle. A push opens the circle's shelf on that app.
 - **Phones without Google Play services** (some Huawei and custom ROM phones) get no push. They
-  still get everything when AnyAppAgent opens and from the daily background check, as without push.
+  still get everything when Kiwimake opens and from the daily background check, as without push.
   The emulator image is Google APIs (`docs/ENVIRONMENT.md`), so push can be tried there.
 - **Privacy.** A push carries the app's name, the sharer's name and the circle, which go through
   Google's FCM like any push. No code, no file and no install information is in one.
@@ -309,7 +309,7 @@ Everything on top of the cloud plan, a month:
 | Cloudflare in front | $0 (free plan; the Worker's free allowance is 100,000 requests a day, to confirm in the spike; an invite page view or a Join is one request) |
 | Firebase Cloud Messaging | $0 (Spark plan; FCM has no per-message charge) |
 | GitHub, public apps | $0 (public releases, as today) |
-| The domain | appwin.ai: .ai sells for at least 2 years, about $160 up front at Cloudflare's $80 a year (already in the cloud plan; the final name's domain replaces it) |
+| The domain | kiwimake.ai: .ai sells for at least 2 years, about $160 up front at Cloudflare's $80 a year (already in the cloud plan) |
 | Resend, email codes from our own address | The cloud's account; its free tier covers a family. Verifying the domain there is the only new step. |
 
 **Worked example for private storage.** One private app is about 45 MB per build (the arm64 APK
@@ -332,10 +332,10 @@ with private apps it becomes "about $0 to a few cents a month at family scale".
 
 ## 7. The name
 
-Appwin.ai is the working name and is under review. Circles touch the name in four places, so decide
-the final name **before milestone 0**:
+The name is Kiwimake (decided 2026-11-12). Circles touch the name in four places, all of them
+with kiwimake.ai:
 
-- the domain (`appwin.ai` in the link, the Cloudflare zone, the Resend sender);
+- the domain (`kiwimake.ai` in the link, the Cloudflare zone, the Resend sender);
 - the phone app's manifest (the host of the App Link intent filter) and `assetlinks.json`;
 - the Firebase project's display name and the notification text;
 - the wording of the invite page and Join screen.
@@ -388,11 +388,10 @@ sign-in.
 
 These come on top of the cloud's list (`docs/CLOUD.md` section 11); the cloud's Convex, Google
 sign-in and Resend accounts are reused. Do them in order before milestone 0. **Put every value in the
-1Password item `AnyAppAgent Cloud (dev)`** and never paste a key in a chat.
+1Password item `Kiwimake Cloud (dev)`** and never paste a key in a chat.
 
-1. **Decide the final product name** (section 7), then **buy the domain** (appwin.ai or the final
-   name's), about $160 up front for the first 2 years of a `.ai`. Buying it at **Cloudflare**
-   Registrar puts its DNS there at once.
+1. **Buy the domain** kiwimake.ai (the name is decided, section 7), about $160 up front for the
+   first 2 years of a `.ai`. Buying it at **Cloudflare** Registrar puts its DNS there at once.
 2. **A Cloudflare account** (free plan) at https://dash.cloudflare.com/sign-up. Add the domain if it
    was bought elsewhere. Make one **API token** with "Workers Scripts: Edit", "Workers Routes: Edit"
    and "Zone DNS: Edit", for that one zone only, and hand over the token and the account id. (A thread
@@ -421,8 +420,8 @@ light and dark):
 
 | Step | Expected |
 | ---- | -------- |
-| `pm get-app-links` and a real tap on `https://appwin.ai/c/<code>` | The phone app opens on Join (a debug copy: the page's button) |
-| The same link in the emulator browser with no phone app | The invite page, with Get AnyAppAgent and the public apps |
+| `pm get-app-links` and a real tap on `https://kiwimake.ai/c/<code>` | The phone app opens on Join (a debug copy: the page's button) |
+| The same link in the emulator browser with no phone app | The invite page, with Get Kiwimake and the public apps |
 | Expired, stopped, full and used-up links | Each says so, on the page and on Join |
 | A second account joins; both see 2 people | Counts and names correct; nothing about installs anywhere |
 | A public app on the shelf, installed and then updated by a new publish | Installs from its GitHub release; one notification; no double prompt from the app's own updater |

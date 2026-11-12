@@ -12,11 +12,11 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 
 /**
- * Keeps AnyAppAgent's process (and so its connection to the PC, the Easy Connect tunnel included)
+ * Keeps Kiwimake's process (and so its connection to the PC, the Easy Connect tunnel included)
  * alive while the PC is working on an app and while an APK is on its way to the phone: a process
  * with a foreground service is never frozen by Android, so a download that started in front
  * carries on, and one that starts in the background (an update announced while it runs) works.
- * Android only lets it START while AnyAppAgent is in front; once running, its text is changed
+ * Android only lets it START while Kiwimake is in front; once running, its text is changed
  * with [update] (no new start needed, so that also works from the background).
  */
 class KeepAliveService : Service() {

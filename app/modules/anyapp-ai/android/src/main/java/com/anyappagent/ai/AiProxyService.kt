@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
- * The local AI proxy that apps made with AnyAppAgent bind to (action com.anyappagent.action.AI).
+ * The local AI proxy that apps made with Kiwimake bind to (action com.anyappagent.action.AI).
  * The app sends a neutral chat request; this service checks who sent it (AiTrust), whether the
  * app is switched on and within its limits, adds the key, calls the provider and streams the
  * answer back. The key never leaves this process.
@@ -108,16 +108,16 @@ class AiProxyService : Service() {
 
     val who = AiTrust.check(this, uid)
     if (who is AiTrust.Result.Refused) {
-      return fail(replyTo, id, "not_allowed", "Only apps made with AnyAppAgent can use its AI key.")
+      return fail(replyTo, id, "not_allowed", "Only apps made with Kiwimake can use its AI key.")
     }
     val pkg = (who as AiTrust.Result.Allowed).packageName
     AiStore.touch(this, pkg)
     val cfg = AiStore.config(this)
     val key = if (cfg != null) AiStore.readKey(this) else null
-    if (cfg == null || key == null) return fail(replyTo, id, "not_set_up", "AI is not set up: open AnyAppAgent to add a key.")
+    if (cfg == null || key == null) return fail(replyTo, id, "not_set_up", "AI is not set up: open Kiwimake to add a key.")
     if (!AiStore.app(this, pkg).enabled) {
       AiStore.countRefused(this, pkg)
-      return fail(replyTo, id, "app_off", "AI is switched off for this app in AnyAppAgent.")
+      return fail(replyTo, id, "app_off", "AI is switched off for this app in Kiwimake.")
     }
     if (running.keys.count { it.startsWith("$uid:") } >= MAX_IN_FLIGHT_PER_APP) {
       return fail(replyTo, id, "limit", "This app is already waiting for ${MAX_IN_FLIGHT_PER_APP} answers. Try again when they finish.")
@@ -145,7 +145,7 @@ class AiProxyService : Service() {
         if (e.code != "cancelled") send(replyTo, id, JSONObject().put("type", "error").put("code", e.code).put("message", e.message))
         else send(replyTo, id, JSONObject().put("type", "error").put("code", "cancelled").put("message", "Stopped."))
       } catch (e: Exception) {
-        send(replyTo, id, JSONObject().put("type", "error").put("code", "internal").put("message", "Something went wrong in AnyAppAgent."))
+        send(replyTo, id, JSONObject().put("type", "error").put("code", "internal").put("message", "Something went wrong in Kiwimake."))
       } finally {
         running.remove(k)
         AiStore.countTokens(this, pkg, call.inputTokens, call.outputTokens)

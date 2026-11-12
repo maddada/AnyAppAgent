@@ -14,7 +14,7 @@ function colorBlock(map, elevation) {
 export function renderThemeCss(t) {
   const out = [];
   out.push(
-    "/* AnyAppAgent theme (" + t.themeName + "). GENERATED from tokens.ts by tools/gen-theme-css.mjs.",
+    "/* Kiwimake theme (" + t.themeName + "). GENERATED from tokens.ts by tools/gen-theme-css.mjs.",
     "   Do not edit by hand: change tokens.ts, run `node tools/gen-theme-css.mjs`, then `node --test tools/`.",
     "   Light is the default; dark follows the OS unless data-aa-theme=\"light\" or \"dark\" is set on <html>.",
     "   Any element can also carry data-aa-theme to render one mode inside the other. */",

@@ -69,7 +69,7 @@ pwsh -NoProfile -File C:\dev\AnyAppAgent\scripts\start-emulator.ps1   # optional
 - **AVD `anyapp2`**, **adb serial `emulator-5562`** (console port fixed at 5562). Same profile and
   image as `anyapp` (Pixel 7, API 35 Google APIs x86_64, 4 GB RAM, 4 cores, 12 GB data, hardware
   GPU). Files: `D:\tools\android\avd\anyapp2.avd` and `anyapp2.ini`.
-- **It is for the end-to-end run** (AnyAppAgent installed, paired with the companion, building the
+- **It is for the end-to-end run** (Kiwimake installed, paired with the companion, building the
   prayer alarm app), so that run has a device no other thread is driving. Other work stays on
   `anyapp` (`emulator-5560`).
 - Start it (idempotent, same detached launch as `anyapp`):

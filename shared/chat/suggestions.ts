@@ -1,22 +1,22 @@
 // "Change this app" (docs/CHANGE-THIS-APP.md): a suggestion someone sends the person who made an
 // app, as plain text through Android's share menu (WhatsApp, SMS, email). The same words come from
-// AnyAppAgent on a friend's phone and from the app's own explanation sheet (Kotlin,
+// Kiwimake on a friend's phone and from the app's own explanation sheet (Kotlin,
 // com.anyapp.updates.ChangeSheet writes exactly this format; keep them the same). The owner shares
-// the message into AnyAppAgent or pastes it on the PC, and it is filed under the right app by the
+// the message into Kiwimake or pastes it on the PC, and it is filed under the right app by the
 // last line, which names the app's package.
 //
 //   Ahmad suggests a change to Prayer Times:
 //
 //   Bigger numbers, I can't read Isha.
 //
-//   If you made Prayer Times with AnyAppAgent, share this message to AnyAppAgent or paste it there.
+//   If you made Prayer Times with Kiwimake, share this message to Kiwimake or paste it there.
 //   anyapp-suggestion: com.anyapp.prayertimes 37
 
 export const SUGGESTION_MARK = "anyapp-suggestion:";
 const PACKAGE = "[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+";
 const MARK_LINE = new RegExp(`^\\s*${SUGGESTION_MARK}\\s*(${PACKAGE})(?:\\s+(\\d{1,10}))?\\s*$`, "im");
 const HEADER = /^\s*(.{1,60}?) suggests a change to (.{1,80}?):\s*$/i;
-const FOOTER = /^\s*If you made .* with AnyAppAgent\b/i;
+const FOOTER = /^\s*If you made .* with Kiwimake\b/i;
 
 /** At most this many characters of the suggestion itself are kept. */
 export const SUGGESTION_MAX = 2000;
@@ -54,7 +54,7 @@ export function suggestionText(d: SuggestionDraft): string {
     "",
     body,
     "",
-    `If you made ${app} with AnyAppAgent, share this message to AnyAppAgent or paste it there.`,
+    `If you made ${app} with Kiwimake, share this message to Kiwimake or paste it there.`,
     `${SUGGESTION_MARK} ${d.packageName}${build}`,
   ].join("\n");
 }

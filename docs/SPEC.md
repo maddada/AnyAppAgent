@@ -1,6 +1,6 @@
-# AnyAppAgent: what we are building
+# Kiwimake: what we are building
 
-AnyAppAgent is an Android app, side-loaded only (never published to a store), for making other
+Kiwimake is an Android app, side-loaded only (never published to a store), for making other
 Android apps from the phone. The user has app ideas but does not want to sit at the PC: they type a
 prompt on the phone, an agent on their PC builds the app, and the finished APK arrives on the phone
 and installs over the previous version. It must be dead simple for a regular, non-technical user.
@@ -25,9 +25,9 @@ and installs over the previous version. It must be dead simple for a regular, no
 | `server/`   | The PC companion: pairing, one Claude Code session per app, Git/GitHub, builds.  |
 | `template/` | The React Native (Expo) starter every new app is copied from.                    |
 | `template-kotlin/` | The native Android starter (Kotlin, Compose) for the "Kotlin" preset.     |
-| `template-exact/` | AnyAppAgent's files for the "Expo Exact" preset (alpha; apps come from `exact new`). |
+| `template-exact/` | Kiwimake's files for the "Expo Exact" preset (alpha; apps come from `exact new`). |
 | `builder/`  | Creates an app from the template and builds its signed APK.                      |
-| `app/`      | The AnyAppAgent Android app itself (React Native, Expo).                         |
+| `app/`      | The Kiwimake Android app itself (React Native, Expo).                         |
 | `docs/`     | This file and `ENVIRONMENT.md` (Android toolchain and emulator on this PC).       |
 | `.reference/` | Reference checkouts (bb). Read only, git-ignored, never imported from.         |
 
@@ -64,7 +64,7 @@ folder(s).
 - **Git and GitHub**: each app is its own Git repository, with a private GitHub repository named
   `anyapp-<slug>` created through the `gh` CLI (already signed in on this PC). If GitHub fails, the
   app still works locally and the chat says so in one line.
-- **Permissions**: AnyAppAgent may ask for any Android permission that makes the flow smoother
+- **Permissions**: Kiwimake may ask for any Android permission that makes the flow smoother
   (installing packages, querying and launching packages, notifications, foreground service,
   cleartext HTTP to the PC). It is never going to a store.
 - **Where apps live on the PC**: `C:\aa\apps\<slug>` by default (short on purpose: React Native
@@ -85,7 +85,7 @@ folder(s).
   by itself, fixes what it can with one click, and lets them skip what is optional.
 - **Easy Connect, copied from Ghostex** (`C:\dev\Ghostex`, the user's own project; read only):
   the phone pairs with the desktop by scanning one QR code and then reaches it from anywhere, not
-  only on the same Wi-Fi, with nothing else to install. In AnyAppAgent it carries only the
+  only on the same Wi-Fi, with nothing else to install. In Kiwimake it carries only the
   companion's HTTP and WebSocket port (no SSH, no terminal): chat, app list, and the APKs going
   back to the phone. The design, and the contract between the desktop side and the phone side,
   live in `docs/EASY-CONNECT.md`. The same-network path (address plus 6-digit code) stays as the
@@ -134,10 +134,10 @@ thread's report.
 
 ## Proof that it works
 
-The finished system is proven on the Android emulator: AnyAppAgent is installed there, paired with
+The finished system is proven on the Android emulator: Kiwimake is installed there, paired with
 the companion on this PC, and used (through its own UI) to create a Muslim prayer alarm app for
 Ajman, UAE: correct prayer times, each time adjustable by the user, and two announcements before
-each prayer at offsets the user sets. The APK arrives and installs through AnyAppAgent, and a
+each prayer at offsets the user sets. The APK arrives and installs through Kiwimake, and a
 second prompt produces an update that installs over it.
 
 ## Sharing this PC
@@ -150,16 +150,16 @@ existing AVD named `ghostex` belongs to another project: do not use or change it
 
 The user: "I wanna add a ai token (Claude or open router) in AnyAppAgent and then all my sub apps
 can use it to call ai, because I want my sub apps to support ai agents". And: the key is a
-regular field in AnyAppAgent's Settings, not a separate screen.
+regular field in Kiwimake's Settings, not a separate screen.
 
-- **The key lives only in AnyAppAgent** (`app/modules/anyapp-ai`): one field in Settings, "AI for
+- **The key lives only in Kiwimake** (`app/modules/anyapp-ai`): one field in Settings, "AI for
   your apps". Claude (`sk-ant-`) or OpenRouter (`sk-or-`) is detected from the key, or picked.
   Stored encrypted (AES-256-GCM, key in the Android Keystore), never read back into JavaScript
   (Settings shows only the last 4 characters). Default models: `claude-opus-5-5` (Claude),
   `anthropic/claude-opus-5.5` (OpenRouter); changeable. "Save and test" makes one tiny real call.
-- **Apps use it through a local proxy, never the key.** AnyAppAgent exports a bound service
+- **Apps use it through a local proxy, never the key.** Kiwimake exports a bound service
   (`AiProxyService`, action `com.anyappagent.action.AI`, Messenger). An app sends a neutral chat
-  request (text, images, tools); AnyAppAgent adds the key, calls the provider, streams the answer
+  request (text, images, tools); Kiwimake adds the key, calls the provider, streams the answer
   back (text pieces, tool calls, done/error) and counts tokens. Wire format:
   `template/modules/ai/README.md`. The app-side API is `template/src/lib/ai.ts` (`chat`, `ask`,
   `runAgent`, `useAiStatus`, `AiSetupNotice`), documented in `template/AGENTS.md`, "AI".
@@ -167,27 +167,27 @@ regular field in AnyAppAgent's Settings, not a separate screen.
   chatty app cannot leak it (logs, crash reports, a WebView, its own backups), removing the key or
   switching an app off takes effect at once for every app, and usage per app and limits can be
   enforced in one place. Streaming and tool use work through it, so apps can run agent loops.
-- **Who may call it: a certificate check, not an Android signature permission.** AnyAppAgent is
+- **Who may call it: a certificate check, not an Android signature permission.** Kiwimake is
   signed with the React Native debug key (public, the same in every RN project), while generated
   apps are signed with the PC's own key (`builder/lib/keystore.mjs`, `CN=AnyAppAgent`). So a
-  `signature` permission would refuse every generated app, and signing AnyAppAgent with the PC key
+  `signature` permission would refuse every generated app, and signing Kiwimake with the PC key
   is impossible because each user's PC makes its own key. Instead the service identifies the caller
   by the Binder UID Android attaches to every message and allows only apps whose signing
-  certificate equals that of an app AnyAppAgent installed itself (learned from Android's install
+  certificate equals that of an app Kiwimake installed itself (learned from Android's install
   source record). Any other app, including one with a `com.anyapp.*` name signed with another key,
   is refused (`not_allowed`).
 - **Limits and cost:** per app an on/off switch and a usage line (calls, tokens) in the same
   Settings group; per app at most 3 requests at once and 30 a minute; `maxTokens` default 8192,
   capped at 32000; requests up to 12 MB.
 - **Testing without a key:** `app/dev/fake-ai-provider.mjs` speaks both provider APIs (SSE, tool
-  calls). `adb shell setprop debug.anyapp.ai.url http://10.0.2.2:<port>` points AnyAppAgent at it;
+  calls). `adb shell setprop debug.anyapp.ai.url http://10.0.2.2:<port>` points Kiwimake at it;
   only adb can set it, and while it is set the stored key is never sent (a placeholder is).
 
 ## Sharing apps and updates (added 2026-11-11)
 
 The user: "i want to make the app have distribution features built in ... you can send updates
 through github to people ... integrate each app that i create with github so i can upload it there".
-Decided: an updater in every app with AnyAppAgent handling updates first when it is on the phone,
+Decided: an updater in every app with Kiwimake handling updates first when it is on the phone,
 private repos with a "Share with others" switch that makes a public releases-only repo, and one
 signing key per app. The plan, the stages and their proofs: `docs/DISTRIBUTION.md`. Since stage 1,
 new apps are signed with their own key (`%USERPROFILE%\.anyappagent\keystore\apps\<package id>`);
@@ -239,14 +239,14 @@ more" option in the New app sheet.
 
 The user picked "Fast lane" and "Bundle swap builds" (`C:\aa\ideas\ideas.html`, Q19, Q20) and asked
 for "a button that appears like a pop-up on the app itself that says 'Reload'" for both quick
-updates and new APKs, so they never have to go back to AnyAppAgent to get a change.
+updates and new APKs, so they never have to go back to Kiwimake to get a change.
 
 - After every turn the builder decides by the app's native fingerprint: only JavaScript changed
   means a quick build in seconds (no Gradle): the last APK with the new bundle and version code
   (bundle swap), plus a quick update signed with the app's own key. Anything native means the
   full build, as before. Kotlin and Expo Exact apps always get the full build.
-- AnyAppAgent hands a quick update to the app; inside every app a "Version N is ready" card with
-  Reload starts it in place (or installs a new APK through AnyAppAgent and opens the app again).
+- Kiwimake hands a quick update to the app; inside every app a "Version N is ready" card with
+  Reload starts it in place (or installs a new APK through Kiwimake and opens the app again).
   A quick update that fails at start rolls back by itself. Tiles show the version that runs.
 - The playbooks and the templates' AGENTS.md explain it, and the chat says "Sent as a quick update,
   no install needed" when that is what happened.
@@ -258,7 +258,7 @@ The user picked "Versions and undo", "What changed card", "Crash catcher" and "A
 read" from the ideas page. Every build is a version the person can go back to (built again as a new,
 higher version, so it installs over the current one and keeps the app's data) or undo; each new
 version arrives with up to three plain lines (Changed, Try it, Good to know) the agent writes with
-its `describe_change` tool; generated apps catch their crashes and hand them to AnyAppAgent, which
+its `describe_change` tool; generated apps catch their crashes and hand them to Kiwimake, which
 shows "Tea Timer crashed. Fix it?" and sends the report to the app's agent on a tap; and apps keep a
 small private diary on the phone that the agent reads with `read_diary` (phone and PC only). The
 decisions, the Android wire format and the protocol additions: `docs/VERSIONS.md`.
@@ -285,7 +285,7 @@ The user picked "Never lose your apps", "Usage meter" and "Keep my apps healthy"
 
 The user picked "Like this, but mine" (Q15) and "Send it in WhatsApp" (Q39) from `C:\aa\ideas\ideas.html`.
 
-- **Like this, but mine**: AnyAppAgent is in Android's share sheet for pictures (one or several)
+- **Like this, but mine**: Kiwimake is in Android's share sheet for pictures (one or several)
   and text (links). Sharing opens one screen (`app/src/app/like-this.tsx`): what was shared, "Make
   a new app" (a name) or "Change one of my apps" (pick it), a box "What to keep and what to change",
   then the message goes to that app's agent with the pictures attached (as in the chat) and the link
@@ -314,19 +314,19 @@ but their own version of it ... everything is separate. I can ask my agent to co
 else"), and the explanation in the app, then GitHub (Q243).
 
 - Every app's Settings ends with "This app": **Change this app**, its version, "Made by <owner>
-  with AnyAppAgent". The owner lands in the app's chat; anyone else can suggest a change (a text
+  with Kiwimake". The owner lands in the app's chat; anyone else can suggest a change (a text
   through the share menu, filed into the owner's "From others" inbox) or, with a paired PC, make
-  their own version (a separate app from the published code). Without AnyAppAgent the app explains
-  itself and links to AnyAppAgent's latest release.
+  their own version (a separate app from the published code). Without Kiwimake the app explains
+  itself and links to Kiwimake's latest release.
 - Shared apps' releases carry their code (`<slug>-source.zip`, without the app's notes about the
   owner, `.env` files or keys). "Show Change this app to others" in the Share dialog.
 - `anyapp copy` lets any app's agent take something from another app, only on request.
 - Details, the link, the message format and the protocol additions: `docs/CHANGE-THIS-APP.md`.
 
-## Appwin Automate (added 2026-11-12)
+## Automate (added 2026-11-12)
 
 The user answered `C:\aa\ideas\any-tasker.html`: automations you just describe, as a separate app
-AnyAppAgent makes and keeps (**Appwin Automate**, a normal app in the grid), written by the agent as
+Kiwimake makes and keeps (**Automate**, a normal app in the grid), written by the agent as
 scripts, typed in the app's one Change this app box, with every safety rail (a card before on, ask
 before sending, run log, Stop all, hard limits, and a Settings, Advanced toggle that turns the locks
 off) and all nine powers in the first version. Automations are JavaScript only, so they arrive
@@ -335,3 +335,23 @@ through the fast lane, never as a new APK unless a new native power is needed.
 - The app's starter: `automate/app` (made through New app with one message, `automate/README.md`).
 - Design, the fence around scripts, the powers, milestones and the proof: `docs/AUTOMATE.md`.
 - No protocol, server, builder or phone app change.
+
+## The name: Kiwimake (added 2026-11-12)
+
+The product is **Kiwimake** (domain kiwimake.ai, being bought). The things people make are
+**kiwis** ("Make me a kiwi", "Share your kiwi"). Earlier working names: AnyAppAgent, then Appwin.
+
+- **Renamed: everything a person sees.** The phone app's label and screens, the desktop app's
+  window, tray, installer (`Kiwimake-Setup.exe` from 0.3.0) and shortcuts, the "Made by ... with
+  Kiwimake" line and "Get Kiwimake" in generated apps, share texts, notifications, the playbooks
+  and templates' AGENTS.md (so agents say Kiwimake), the docs.
+- **"Kiwi" in the UI** only on the button that makes a new app: **Make a kiwi** (the phone's tile
+  and sheet title, the desktop's button and dialog title). Everywhere else it stays "app".
+- **Kept, because installs, pairing and updates depend on them:** package ids (`com.anyappagent`,
+  `com.anyapp.<slug>`), signing keys and their `CN=AnyAppAgent` subjects, the desktop app id
+  `com.anyappagent.desktop` and its settings folder `%APPDATA%\AnyAppAgent`, the state folder
+  `%USERPROFILE%\.anyappagent`, port 8787, the `anyapp` command, the `anyappagent://` link scheme,
+  protocol names, the repo `maddada/AnyAppAgent` and its folder names, environment variables, the
+  backup folder name `AnyAppAgent backup`, and the phone APK release assets `AnyAppAgent.apk` and
+  `AnyAppAgent-universal.apk` (installed desktop apps download `latest/download/AnyAppAgent.apk`).
+- The separate domain for people's web apps (`docs/WEB-APPS.md`) is still to be picked.

@@ -1,5 +1,5 @@
 // "Point at it": shake the phone, draw numbered arrows on a screenshot, write notes, Save.
-// Built into every app AnyAppAgent makes; keep it. One Kotlin core in both templates
+// Built into every app Kiwimake makes; keep it. One Kotlin core in both templates
 // (template-kotlin/app/src/main/java/com/anyapp/feedback and
 // template/modules/feedback/android/src/main/java/com/anyapp/feedback): byte for byte the same,
 // checked by builder/test/feedback-copies.test.mjs.

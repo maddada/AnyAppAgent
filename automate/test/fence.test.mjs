@@ -1,6 +1,6 @@
 // Tests for the fence around automation scripts (automate/app/tools/automate-fence.js), through
 // Babel with Expo's preset, as Metro runs it. Needs an app folder with node_modules (any
-// AnyAppAgent React Native app, or a copy of template/ after npm ci):
+// Kiwimake React Native app, or a copy of template/ after npm ci):
 //
 //   APP_DIR=C:/aa/apps/appwinautomate node --test "automate/test/*.test.mjs"
 import assert from 'node:assert/strict';

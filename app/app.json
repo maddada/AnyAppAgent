@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "AnyAppAgent",
+    "name": "Kiwimake",
     "slug": "anyappagent",
     "scheme": "anyappagent",
     "version": "0.2.0",
@@ -43,14 +43,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "AnyAppAgent uses the camera to scan the code your PC shows."
+          "cameraPermission": "Kiwimake uses the camera to scan the code your PC shows."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "AnyAppAgent lets you send pictures to the agent that makes your app.",
-          "cameraPermission": "AnyAppAgent uses the camera to scan the code your PC shows and to take pictures for your apps."
+          "photosPermission": "Kiwimake lets you send pictures to the agent that makes your app.",
+          "cameraPermission": "Kiwimake uses the camera to scan the code your PC shows and to take pictures for your apps."
         }
       ],
       [

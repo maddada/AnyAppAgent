@@ -1,4 +1,4 @@
-// AnyAppAgent wire contract between the PC companion (server/) and the Android app (app/).
+// Kiwimake wire contract between the PC companion (server/) and the Android app (app/).
 // TYPES ONLY: no runtime values in this file, so both sides can `import type` from it.
 // Changes must be additive, and every change is listed in the thread's final report.
 
@@ -292,8 +292,8 @@ export interface AppVersion {
 //   item whose BuildInfo.restoredFrom is set). 409 + ErrorBody while the app is busy, 404 for an unknown version.
 // POST /api/apps/:id/undo -> App (202): goes back to the version before the newest one (409 when there is none).
 
-// ---------- Crash catcher (added, docs/VERSIONS.md). An app made with AnyAppAgent that crashes (or shows its
-// "something went wrong" screen) tells AnyAppAgent on the phone, which sends the report here when connected.
+// ---------- Crash catcher (added, docs/VERSIONS.md). An app made with Kiwimake that crashes (or shows its
+// "something went wrong" screen) tells Kiwimake on the phone, which sends the report here when connected.
 
 export interface CrashReport {
   kind: "crash" | "error"; // crash: the app closed; error: it caught the error and showed its error screen
@@ -381,7 +381,7 @@ export interface EasyConnectPairRequest {
 // Disconnect) and the PC forgets the phone at once, as DELETE /api/admin/devices/:id does: its token stops
 // working, its Easy Connect key leaves the allow-list and its socket closes.
 
-// GET /download/anyappagent.apk (no token) -> the AnyAppAgent phone app's own APK, for the desktop's
+// GET /download/anyappagent.apk (no token) -> the Kiwimake phone app's own APK, for the desktop's
 // install QR (the companion serves the file named by its env var ANYAPP_HOST_APK; 404 + ErrorBody when unset)
 
 // GET /api/apps -> App[]
@@ -397,7 +397,7 @@ export interface CreateAppRequest {
   askMore?: boolean;
   // Added: pictures for the first message (the same limits as SendMessageRequest.images). An older PC ignores them.
   images?: ImageUpload[];
-  // Added: shared into AnyAppAgent from another app ("Like this, but mine"): the PC adds a short
+  // Added: shared into Kiwimake from another app ("Like this, but mine"): the PC adds a short
   // note for the agent (make it like the picture or link, with the person's changes; open a link
   // if it can, otherwise say what it could not see).
   sharedIn?: boolean;
@@ -669,7 +669,7 @@ export interface BackupRestoreResult {
 }
 
 // ---------- Change this app (docs/CHANGE-THIS-APP.md)
-// Every app has a "Change this app" row in its settings. It opens AnyAppAgent on the phone with
+// Every app has a "Change this app" row in its settings. It opens Kiwimake on the phone with
 // anyappagent://change?package=&name=&owner=&repo=&build=&version=&screen= (shared/chat/suggestions.ts).
 
 export interface AppChangeSettings {

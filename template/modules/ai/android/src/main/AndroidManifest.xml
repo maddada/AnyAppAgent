@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <!-- AI goes through AnyAppAgent on this phone (it holds the key): the app must be able to see it
+  <!-- AI goes through Kiwimake on this phone (it holds the key): the app must be able to see it
        (Android 11+ package visibility) to bind to its AI service and to open its settings. -->
   <queries>
     <package android:name="com.anyappagent" />

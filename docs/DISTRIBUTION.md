@@ -8,7 +8,7 @@ with others requires public repo tho".
 
 Decided on the page `C:\aa\ideas\distribution.html` (2026-11-11):
 
-- **Q54, updates:** an updater in every app, and AnyAppAgent handles updates first when it is on
+- **Q54, updates:** an updater in every app, and Kiwimake handles updates first when it is on
   the phone (option C).
 - **Q55, repos:** every new app gets a private repo. "Share with others" makes a second, public,
   releases-only repo; the code stays private.
@@ -22,7 +22,7 @@ Quick updates (over the air) and the Reload popup inside every app build on this
 
 ```
 Your phone (every build, as today)
-  you ask for a change -> PC builds and signs -> push to private repo -> AnyAppAgent installs it
+  you ask for a change -> PC builds and signs -> push to private repo -> Kiwimake installs it
 
 Other people's phones (only what you publish)
   Publish version -> GitHub release on the public releases repo (APKs + update.json)
@@ -38,7 +38,7 @@ Other people's phones (only what you publish)
 | 2 | Per-app private repo as today, plus "Share with others": creates and fills the public releases-only repo (README, no code), secrets scan of what goes public | `server/`, `shared/protocol.ts` | Built, proven, in main |
 | 3 | Publish a version: GitHub release on the releases repo with the APKs already built and `update.json`; Testing channel as a pre-release; Pull back | `server/`, `shared/protocol.ts` | Built, proven, in main |
 | 4 | The updater module in the templates: check, notification, one-tap download, SHA-256 check, PackageInstaller install, honest states | `template/`, `template-kotlin/`, `builder/`, `server/` | Built, proven, in main; not in Expo Exact yet |
-| 5 | AnyAppAgent takes over updates of shared apps when it is on the phone, with no double prompts | `app/` | Built, proven, in main; following a friend's app from a share link inside AnyAppAgent is not built yet |
+| 5 | Kiwimake takes over updates of shared apps when it is on the phone, with no double prompts | `app/` | Built, proven, in main; following a friend's app from a share link inside Kiwimake is not built yet |
 | 6 | The controls on the PC and the phone: Publish, Share with others, link and QR, downloads per version, channel, key backup | `desktop/`, `app/`, `server/` | Built and proven ("Stage 6 proof") |
 
 Each stage ends with a proof on `emulator-5560` and test GitHub repos that are deleted afterwards.
@@ -84,7 +84,7 @@ phone accepts it.
   `env:` references. Keys live only under `%USERPROFILE%\.anyappagent\keystore`, never in an app
   folder, so they are never committed; the templates' `.gitignore` also drops `*.p12`, `*.jks`,
   `*.keystore` as a second guard.
-- **The AI proxy** trusts an app by its signing certificate, learned when AnyAppAgent installed
+- **The AI proxy** trusts an app by its signing certificate, learned when Kiwimake installed
   it. A new app's own certificate is learned the same way the shared one was. Stage 5 adds:
   accept an app whose signing history (`signingCertificateHistory`) holds a trusted certificate,
   so a moved app keeps AI even when its rotated update was installed by its own updater.
@@ -237,34 +237,34 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
 - **Notification:** "<App> <version> is ready. Tap to update." with the notes. Its own channel
   ("Updates"), so it can be switched off alone. A quiet line inside the app too.
 - **Tap:** downloads with progress (cancellable), checks size and SHA-256, then installs with a
-  PackageInstaller session (the code AnyAppAgent's `anyapp-native` already has), with the
+  PackageInstaller session (the code Kiwimake's `anyapp-native` already has), with the
   `ACTION_VIEW` intent as the fallback. The first time, Android asks to allow this app to install
   updates (`REQUEST_INSTALL_PACKAGES`, once per app).
 - **States, in plain words:** Up to date; Version 1.4 is ready; Updating to 1.4 (18 of 42 MB); Tap
   Update in Android's box to finish; Allow <App> to install updates; nothing at all when offline
   (only "Check now" says "Couldn't check, no internet"); The download was damaged, trying again;
   This update can't replace your copy, ask whoever shared it for a new link (never loops).
-- **The owner's phone:** AnyAppAgent already installs every build, so the release is never newer
+- **The owner's phone:** Kiwimake already installs every build, so the release is never newer
   than what is installed and the app's updater stays silent.
 - The updater knows its feed from a build-time value the builder writes (`anyapp.json` or
   `app.json` extra), set only when the app is shared. An app that is not shared never checks.
 - Expo Exact (`template-exact/`): the updater goes in if Exact's native module support allows a
-  Kotlin module; otherwise Exact apps update only through AnyAppAgent (stage 5) until it does.
+  Kotlin module; otherwise Exact apps update only through Kiwimake (stage 5) until it does.
 
-## 5. AnyAppAgent first (stage 5)
+## 5. Kiwimake first (stage 5)
 
-- AnyAppAgent shows shared apps it did not build (a friend's app, or the owner's app on a friend's
+- Kiwimake shows shared apps it did not build (a friend's app, or the owner's app on a friend's
   phone) in its grid when the person adds the share link, and watches their `update.json`.
-- When AnyAppAgent is on the phone, the app's updater asks it first (a bound service like the AI
-  proxy, `com.anyappagent.action.UPDATES`): if AnyAppAgent says it handles this package, the app
-  shows no notification of its own. One notification, from AnyAppAgent, one install.
-- AnyAppAgent's own phone app is signed with the React Native debug key, which is public. Before
-  AnyAppAgent updates itself from GitHub it needs a real release key (a one-time reinstall for
+- When Kiwimake is on the phone, the app's updater asks it first (a bound service like the AI
+  proxy, `com.anyappagent.action.UPDATES`): if Kiwimake says it handles this package, the app
+  shows no notification of its own. One notification, from Kiwimake, one install.
+- Kiwimake's own phone app is signed with the React Native debug key, which is public. Before
+  Kiwimake updates itself from GitHub it needs a real release key (a one-time reinstall for
   every current user). Its desktop app can use `electron-updater` with the GitHub provider.
 
 ## 6. Where each control lives (stage 6)
 
-| Control | Desktop | Phone (AnyAppAgent) |
+| Control | Desktop | Phone (Kiwimake) |
 | ------- | ------- | ------------------- |
 | Publish a version | App page: Publish version (notes drafted by the app's agent, channel) | App sheet: Publish this version |
 | Share with others | Switch on the app page and in the Publish sheet | Same switch |
@@ -321,7 +321,7 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
 - When: on open, at most every 6 hours (the slot is claimed before the check, so two starts check
   once), and a daily JobScheduler job when online (it needs `ACCESS_NETWORK_STATE`, which the first
   try lacked: `SecurityException`). Note: force-stopping an app cancels its jobs until it opens again.
-- Before notifying, it asks AnyAppAgent (stage 5); then: compare `build` with `versionCode`, skip a
+- Before notifying, it asks Kiwimake (stage 5); then: compare `build` with `versionCode`, skip a
   `blocked` build, refuse a feed whose `signer` is not this app's key, pick the APK for the phone's
   first ABI, else the full one.
 - One notification per build ("<App> <version> is ready", the notes), channel "App updates". A tap
@@ -333,25 +333,25 @@ React Native and Expo Exact it is wrapped as an Expo module, like `template/modu
 - Plain words for every state; a download from another key or of another app offers Close, not
   Try again.
 - Expo Exact apps do not have the updater yet (their native module support was not looked at);
-  they still get updates on the owner's phone through AnyAppAgent.
+  they still get updates on the owner's phone through Kiwimake.
 
 ### As built (stage 5)
 
-- `app/modules/anyapp-native`: an exported `UpdatesProvider` (authority `<AnyAppAgent's package>.updates`)
+- `app/modules/anyapp-native`: an exported `UpdatesProvider` (authority `<Kiwimake's package>.updates`)
   and an exported `UpdatesHostService` with the action `com.anyappagent.action.UPDATES`, which only
-  lets apps find AnyAppAgent (Android 11+ package visibility: the templates query that action).
-- An app asks `content://<host>.updates/handles/<its package>`; the answer is 1 when AnyAppAgent
+  lets apps find Kiwimake (Android 11+ package visibility: the templates query that action).
+- An app asks `content://<host>.updates/handles/<its package>`; the answer is 1 when Kiwimake
   installed it (it is the installer of record: the owner's phone, where every build comes from the
-  PC) or the package is in AnyAppAgent's "followed" list (`setFollowedApps`, for a later "Add a
+  PC) or the package is in Kiwimake's "followed" list (`setFollowedApps`, for a later "Add a
   shared app"). The provider answers only the app that asks about itself (the caller's package
   must be the package asked about), so no app learns anything about another.
-- Because hosts are found by the action, a copy of AnyAppAgent under another package (as in the
+- Because hosts are found by the action, a copy of Kiwimake under another package (as in the
   proof) works the same.
 - AI proxy (`AiTrust`): an app whose signing history (Android's key rotation record) holds a
   trusted certificate is trusted too, so a moved app keeps AI after its own updater installed the
   rotated build.
-- Not built: "Add a shared app" in AnyAppAgent for a friend who has AnyAppAgent (it would add the
-  package to the followed list and watch its feed). Without it, a friend's AnyAppAgent does not
+- Not built: "Add a shared app" in Kiwimake for a friend who has Kiwimake (it would add the
+  package to the followed list and watch its feed). Without it, a friend's Kiwimake does not
   handle the friend's copy, and the app's own updater does the work, as in stage 4.
 
 ### As built (stage 6)
@@ -391,11 +391,11 @@ from the public link (no installer of record).
 
 | Step | Result |
 | ---- | ------ |
-| After pairing | AnyAppAgent offered build 6 by itself; Android asked once ("Do you want to update this app?", AnyAppAgent did not install the copy there); after it `installerPackageName=com.anyappagent.dist` |
+| After pairing | Kiwimake offered build 6 by itself; Android asked once ("Do you want to update this app?", Kiwimake did not install the copy there); after it `installerPackageName=com.anyappagent.dist` |
 | The provider asked by the shell for that app | `handles=0` (only the app itself gets an answer) |
-| The app's own daily check | `check: AnyAppAgent handles this app's updates`; no notification |
-| Build 7 on the PC, also published to GitHub as 1.4 | AnyAppAgent installed it by itself (no prompt now that it is the installer) with its own notification "Getting Dist Friend Test onto your phone"; `versionCode=7` |
-| The app's own check after that | Still "AnyAppAgent handles this app's updates", 0 notifications from the app: one update, one notification, through AnyAppAgent |
+| The app's own daily check | `check: Kiwimake handles this app's updates`; no notification |
+| Build 7 on the PC, also published to GitHub as 1.4 | Kiwimake installed it by itself (no prompt now that it is the installer) with its own notification "Getting Dist Friend Test onto your phone"; `versionCode=7` |
+| The app's own check after that | Still "Kiwimake handles this app's updates", 0 notifications from the app: one update, one notification, through Kiwimake |
 
 ## Stage 4 proof
 

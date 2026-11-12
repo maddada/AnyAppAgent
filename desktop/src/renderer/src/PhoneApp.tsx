@@ -1,4 +1,4 @@
-// Getting AnyAppAgent itself onto the phone: a QR code for the phone app on this project's public
+// Getting Kiwimake itself onto the phone: a QR code for the phone app on this project's public
 // GitHub release (works on any network, with only the phone's camera). The same-Wi-Fi download
 // from this PC stays as a fallback for when the release cannot be reached. The QR shows only in its
 // popup (GetPhoneAppDialog), never straight on a screen.
@@ -42,7 +42,7 @@ export function GetPhoneApp({ big }: { big?: boolean }) {
   const qr = big ? sizeTokens.qr * 1.5 : sizeTokens.qr;
   return (
     <div className={`get-phone${big ? " big" : ""}`} data-testid="get-phone-app">
-      {svg ? <QrPlate svg={svg} size={qr} label="Download AnyAppAgent for your phone" /> : <Spinner />}
+      {svg ? <QrPlate svg={svg} size={qr} label="Download Kiwimake for your phone" /> : <Spinner />}
       <p className="label secondary get-phone-line">
         {showLocal
           ? "Your phone must be on the same Wi-Fi as this PC. Scan this with its camera, then open the downloaded file and allow installing."
@@ -66,7 +66,7 @@ export function GetPhoneApp({ big }: { big?: boolean }) {
 /** The download popup: the only place the phone app's QR shows. */
 export function GetPhoneAppDialog({ onClose }: { onClose: () => void }) {
   return (
-    <Dialog title="Get AnyAppAgent on a phone" onClose={onClose}>
+    <Dialog title="Get Kiwimake on a phone" onClose={onClose}>
       <GetPhoneApp big />
     </Dialog>
   );

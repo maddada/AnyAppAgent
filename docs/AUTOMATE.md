@@ -1,14 +1,16 @@
-# Appwin Automate: automations you just describe
+# Automate: automations you just describe
 
 The user answered the page `C:\aa\ideas\any-tasker.html` (it was called "Any Tasker" there) on
-2026-11-12. The product is being renamed to Appwin.ai (not final): code ids and package names stay
-as they are, and only this app's visible text says "Appwin Automate".
+2026-11-12. The product is now called Kiwimake (it was Appwin, a working name, when this was
+built): code ids and package names stay as they are, and only this app's visible text says
+"Automate". Why "Automate" and not "Kiwimake Automate": it is one of the person's own apps, named
+by what it does like every other, and "Kiwimake Automate" is cut short under a launcher icon.
 
 ## The user's answers
 
 | Question | Answer |
 | --- | --- |
-| Where | A separate app, **Appwin Automate**, one of the apps AnyAppAgent makes and keeps: a normal app in the grid with its own repo, key, versions and fast-lane updates. Not part of AnyAppAgent itself |
+| Where | A separate app, **Automate**, one of the apps Kiwimake makes and keeps: a normal app in the grid with its own repo, key, versions and fast-lane updates. Not part of Kiwimake itself |
 | How a prompt becomes an automation | **Scripts** (option C): "because they're creating the app basically". The agent writes each automation as a script the app runs |
 | Where to prompt | One place: the app's **Change this app**. The person types once; the agent either adds or edits an automation, or changes the app itself. No second prompt box |
 | Safety rails | **All of them**: a card before an automation turns on, ask before sending anything, a run log, Stop all, hard limits. Plus a toggle in Settings, Advanced, that turns the safety locks off, with a clear warning, off by default |
@@ -18,7 +20,7 @@ as they are, and only this app's visible text says "Appwin Automate".
 
 ## The design in five lines
 
-1. Appwin Automate is an ordinary AnyAppAgent app (React Native preset) made from a starter kept in
+1. Automate is an ordinary Kiwimake app (React Native preset) made from a starter kept in
    this repo (`automate/app`); each automation is one TypeScript file in its `automations/` folder.
 2. A Babel plugin (the fence) checks and wraps every script at build time: only the automation API,
    no imports or globals, guarded dynamic access and loops, and a record of every power call.
@@ -31,7 +33,7 @@ as they are, and only this app's visible text says "Appwin Automate".
 
 ## What the person sees
 
-1. In Appwin Automate, **New automation** (or Settings, Change this app) opens AnyAppAgent at this
+1. In Automate, **New automation** (or Settings, Change this app) opens Kiwimake at this
    app's chat. They type "At Maghrib, turn on Do Not Disturb for 20 minutes and say 'Maghrib time'".
 2. The agent writes `automations/maghrib-quiet.ts`; the PC sends it as a quick update (seconds, no
    install). The app shows "Version 3 is ready", Reload.
@@ -48,7 +50,7 @@ as they are, and only this app's visible text says "Appwin Automate".
 ## Where it lives
 
 - **The starter**: `automate/app/` in this repo, the files that make a fresh React Native app into
-  Appwin Automate (its `AGENTS.md`, `overview.md`, the runtime, the native module, the screens, the
+  Automate (its `AGENTS.md`, `overview.md`, the runtime, the native module, the screens, the
   icon). It is not a preset: the app is made the normal way (New app), and its first message asks
   the agent to copy the starter in. So it has everything every app has (repo, own key, versions,
   fast lane, Change this app, crash catcher, diary) and nothing in the server or builder knows it
@@ -153,12 +155,12 @@ later version lists powers no automation uses any more, so the person can switch
 
 ## One prompt box
 
-There is no prompt box in Appwin Automate. **New automation** and Settings, **Change this app**
-open AnyAppAgent at the app's chat (the existing Change this app row, `openChange`). The app's
-`AGENTS.md` starts with "Appwin Automate: read this first": every message is either an automation
+There is no prompt box in Automate. **New automation** and Settings, **Change this app**
+open Kiwimake at the app's chat (the existing Change this app row, `openChange`). The app's
+`AGENTS.md` starts with "Automate: read this first": every message is either an automation
 (add or change one file in `automations/`, nothing else, no plan page) or a change to the app (as
 usual); when in doubt it is an automation; one short question when it is unclear which automation.
-The agent ends an automation turn with "Open Appwin Automate and check its card to turn it on".
+The agent ends an automation turn with "Open Automate and check its card to turn it on".
 
 ## Shipping: the fast lane
 
@@ -172,7 +174,7 @@ service) is the only thing that needs a new APK: plan the powers' native parts i
 
 ## Publishing and clones
 
-Nothing special: Share with others and Publish (`docs/DISTRIBUTION.md`) put Appwin Automate on
+Nothing special: Share with others and Publish (`docs/DISTRIBUTION.md`) put Automate on
 GitHub releases with its code (`docs/CHANGE-THIS-APP.md`). Someone else's "Make my own version"
 gives them a separate clone (own package, key and repo) with the published automations in it; their
 agent changes theirs, and nothing flows back. A clone's automations start as "Check it" on their
@@ -182,7 +184,7 @@ apps").
 
 ## Developer verification
 
-Not now (the user's call). What keeps it light: install Appwin Automate once (one APK, Advanced flow
+Not now (the user's call). What keeps it light: install Automate once (one APK, Advanced flow
 or ADB when verification arrives in 2027); afterwards automations are quick updates, which are not
 installs, so they never meet verification. Each new native power batch is one more install.
 
@@ -192,7 +194,7 @@ The first version is all nine powers. In working days, one thread:
 
 | # | What | Days |
 | --- | --- | --- |
-| M1 | First slice (this): the app made through AnyAppAgent, the fence and runtime, all safety rails and the Advanced toggle, time and prayer times, speak and notify, Do Not Disturb | 2 (done) |
+| M1 | First slice (this): the app made through Kiwimake, the fence and runtime, all safety rails and the Advanced toggle, time and prayer times, speak and notify, Do Not Disturb | 2 (done) |
 | M2 | Bluetooth, Wi-Fi and charging triggers: the listener service (always-on notice with Stop all), Nearby devices | 2 (built) |
 | M3 | Notifications from other apps: the listener service, the restricted-settings walkthrough | 1.5 |
 | M4 | Location arrive and leave: places in the app, proximity alerts, "Allow all the time" walkthrough | 1.5 |
@@ -220,7 +222,7 @@ fast lane.
 | Where | What |
 | --- | --- |
 | `automate/app/` | The starter: `AGENTS.md` (routing and the automation rules), `overview.md`, `index.ts` (headless task), `babel.config.js`, `tools/automate-fence.js`, `automations/` (`api.d.ts`, `index.ts`), `src/automate/` (runtime, API, store, triggers, card, limits, prayer times), `src/screens/` (Home, the card, Run log, Settings with Advanced), `modules/automate/` (Kotlin: wake-ups, headless runner, Do Not Disturb, speech, notices, ask, Stop all), the icon and theme |
-| `automate/README.md` | The one message that makes the app through AnyAppAgent |
+| `automate/README.md` | The one message that makes the app through Kiwimake |
 | `docs/AUTOMATE.md` | This file |
 
 No change to `shared/protocol.ts`, the server, the builder or the phone app.
@@ -233,21 +235,21 @@ turns. Screenshots: `C:\aa\e2e\automate\`.
 
 | Step | Result |
 | --- | --- |
-| New app "Appwin Automate" through the companion with the message in `automate/README.md` | The agent copied the starter and kept its own `overview.md`; build 1 full (272 s, new native module and icon). It noticed a later fix in the starter and copied it: build 2 quick (11 s). In the grid, installed by my phone copy (versionCode 2, `01-*`, `02-*`, `03-home-empty-light.png`) |
-| New automation in the app | Opens AnyAppAgent at this app's chat: the one prompt box (`04-*`) |
-| "At Maghrib, turn on Do Not Disturb for 20 minutes and say Maghrib time" | The agent treated it as an automation: one file `automations/maghrib-quiet.ts` and a line in `index.ts`, "Open Appwin Automate and check its card". Build 3 quick (9 s), 91 s from Send to ready. "Version 3 is ready", Reload; the installed APK stayed versionCode 2 with the same install time (`05-*` to `08-*`) |
+| New app "Automate" through the companion with the message in `automate/README.md` | The agent copied the starter and kept its own `overview.md`; build 1 full (272 s, new native module and icon). It noticed a later fix in the starter and copied it: build 2 quick (11 s). In the grid, installed by my phone copy (versionCode 2, `01-*`, `02-*`, `03-home-empty-light.png`) |
+| New automation in the app | Opens Kiwimake at this app's chat: the one prompt box (`04-*`) |
+| "At Maghrib, turn on Do Not Disturb for 20 minutes and say Maghrib time" | The agent treated it as an automation: one file `automations/maghrib-quiet.ts` and a line in `index.ts`, "Open Automate and check its card". Build 3 quick (9 s), 91 s from Send to ready. "Version 3 is ready", Reload; the installed APK stayed versionCode 2 with the same install time (`05-*` to `08-*`) |
 | The card | "Check it"; When, It will ("Say "Maghrib time" aloud", "Turn on Do Not Disturb for 20 minutes") drawn from the code, You asked for, It needs (Do Not Disturb access: Allow), Hard limits; Turn it on disabled until Ready (`09-*`, `10-*`) |
 | Turn it on | Android has an exact alarm for 17:34:00 (Maghrib in Ajman), `exactAllowReason=policy_permission` (`11-*`) |
 | Pretend clock, app in the background | The real path: the alarm fired, "Background started FGS: Allowed ... ALARM_MANAGER_WHILE_IDLE", the headless task ran the script, the run log has it (`13-*`, `14-*`) |
 | First run | Failed: the emulator's voice engine did not start ("Failed creating TTS session: TimeoutException"). That runtime wrote "Said ..." before speaking, so the entry shows "Said" next to "Speech is not available" (`16-*`); fixed since version 4: the line is written only after the voice finished, otherwise "Could not say ..." |
 | Second run | The voice started but never reported finishing on the overloaded emulator (load 22 to 28); the 60-second hard limit stopped the run, as it should (`17-*`). Since version 5 speech is best effort: one retry, at most 15 s, then a note, and the run goes on |
-| Third run (05:44 the emulator went down; restarted at 06:23 with a software GPU) | Succeeded, app in the background: "Said "Maghrib time"", "Do Not Disturb on until 06:55", 4.3 s (`19-*`). Android: `zen_mode=1`, the rule "Managed by Appwin Automate" (priority, alarms allowed), the restore alarm at 06:55:00, 20 minutes later (`15-dnd-on-shade-light.png`, `18-*`) |
+| Third run (05:44 the emulator went down; restarted at 06:23 with a software GPU) | Succeeded, app in the background: "Said "Maghrib time"", "Do Not Disturb on until 06:55", 4.3 s (`19-*`). Android: `zen_mode=1`, the rule "Managed by Automate" (priority, alarms allowed), the restore alarm at 06:55:00, 20 minutes later (`15-dnd-on-shade-light.png`, `18-*`) |
 | Stop all | Confirm, then "Everything is stopped": Do Not Disturb off at once (`zen_mode=0`), no wake-up of the app left pending (the trigger and the timed restore both cancelled) (`20-*`, `21-*`); Resume brought the automation back |
 | Second prompt: "Make the Maghrib one 30 minutes instead of 20, and also show a notification saying Quiet time started" | The agent edited the same file; build 6 quick (9 s), quick update 6 handed over (5.3 MB) once my phone copy was running again; Reload. The APK still versionCode 2, installed 05:16:04: no new install. Home: "Changed: check it", and no wake-up armed (a changed script does not run) (`22-*`, `23-*`) |
 | The changed card | "Turn on Do Not Disturb for 30 minutes" and "Show a notification" marked new, the 20-minute line struck through; a new need, Notifications: Allow, asked only now (Android's prompt) (`24-*`, `25-*`, `26-*`). "Keep it on with this version": the 17:34 alarm is back (`27-*`) |
 | Dark | Home, the card, the run log, Settings with Advanced, and the safety locks warning (kept on) (`30-*` to `35-*`) |
 Both fixes reached the app as quick updates 4 and 5 (the agent copied them from the starter on
-request). Found on the way: an app can be killed when another AnyAppAgent copy on the phone dies
+request). Found on the way: an app can be killed when another Kiwimake copy on the phone dies
 ("depends on provider com.anyappagent.dictate ... in dying proc"), template behaviour. Android's
 Do Not Disturb access page stayed blank on the overloaded emulator, so access was granted with
 `cmd notification allow_dnd` (the same switch).
@@ -284,7 +286,7 @@ ran every minute, 06:54, 06:55, 06:56 (`47-*`, `48-*`). Locks back on: Minute ti
 again and its wake-up is gone (`49-*`, `50-*`). Dark: `51-*` to `53-*`.
 
 **The name in one place.** The app's visible name is its own name under the icon (app.json
-`expo.name`, which a rename in AnyAppAgent already changes): JavaScript reads it through
+`expo.name`, which a rename in Kiwimake already changes): JavaScript reads it through
 `src/automate/brand.ts` (`APP_NAME`), Kotlin through the app's label (`Notices.appName`). No
 screen or message writes the name out; the app's AGENTS.md says so. The running notice now shows
 the automation's name instead of its id.

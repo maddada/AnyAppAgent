@@ -42,7 +42,7 @@ class InstallException(message: String) : CodedException("ERR_INSTALL", message,
 class EasyConnectException(message: String) : CodedException("ERR_EASY_CONNECT", message, null)
 
 /**
- * AnyAppAgent's own native bridge: everything about other apps on this phone.
+ * Kiwimake's own native bridge: everything about other apps on this phone.
  * - installing an APK (PackageInstaller session, with a system-intent fallback)
  * - is a package installed and which versionCode, launching it, opening its settings
  * - notifications ("Prayer Alarm is ready") and the keep-alive service
@@ -58,7 +58,7 @@ class AnyAppNativeModule : Module() {
   private val prompts = ConcurrentHashMap<Int, Intent>()
 
   /**
-   * Prompts opened inside AnyAppAgent's own task with startActivityForResult: session id ->
+   * Prompts opened inside Kiwimake's own task with startActivityForResult: session id ->
    * (the activity that opened it, its request code), so finishActivity can close exactly that
    * prompt when its session ends or times out (an abandoned session's prompt otherwise stayed on
    * screen and covered the next app's prompt).
@@ -75,7 +75,7 @@ class AnyAppNativeModule : Module() {
   /** "Save to Files": the APK copy and the JS promise, while Android's save screen is open. */
   @Volatile private var pendingSave: Pair<File, Promise>? = null
 
-  /** The newest share that arrived while AnyAppAgent was running (onNewIntent), until JS takes it. */
+  /** The newest share that arrived while Kiwimake was running (onNewIntent), until JS takes it. */
   @Volatile private var sharedIntent: Intent? = null
 
   override fun definition() = ModuleDefinition {
@@ -83,7 +83,7 @@ class AnyAppNativeModule : Module() {
 
     Events("onInstallStatus", "onNetworkChanged", "onAppReport", "onAppCrash", "onAppDiary", "onShareIn")
 
-    // Shared into AnyAppAgent while it runs ("Like this, but mine"): JS takes it with takeSharedItem.
+    // Shared into Kiwimake while it runs ("Like this, but mine"): JS takes it with takeSharedItem.
     OnNewIntent { intent ->
       if (ShareFiles.isShare(intent)) {
         sharedIntent = intent
@@ -157,8 +157,8 @@ class AnyAppNativeModule : Module() {
 
     /**
      * Shows Android's install prompt again for a session still waiting for the person (Android
-     * blocks it when AnyAppAgent is not in front, and another prompt can cover it). True when one
-     * was opened. Called when AnyAppAgent comes back to the front.
+     * blocks it when Kiwimake is not in front, and another prompt can cover it). True when one
+     * was opened. Called when Kiwimake comes back to the front.
      */
     Function("reopenInstallPrompt") {
       val sessionId = pending.keys.firstOrNull { prompts.containsKey(it) } ?: return@Function false
@@ -176,7 +176,7 @@ class AnyAppNativeModule : Module() {
     }
 
     /** The ABIs this phone runs, best first (Build.SUPPORTED_ABIS), to pick the smallest APK. */
-    // AnyAppAgent first (docs/DISTRIBUTION.md stage 5): apps followed from a share link.
+    // Kiwimake first (docs/DISTRIBUTION.md stage 5): apps followed from a share link.
     // "Change this app" (docs/CHANGE-THIS-APP.md): the person's own apps, so their row always shows.
     Function("setOwnApps") { packageNames: List<String> ->
       UpdatesProvider.setOwn(context, packageNames)
@@ -194,7 +194,7 @@ class AnyAppNativeModule : Module() {
 
     /**
      * Hands an app what is ready for it: kind "ota" (the quick update file at [path], checked by the
-     * app itself before it runs) or "apk" (its Reload popup then asks AnyAppAgent to install it).
+     * app itself before it runs) or "apk" (its Reload popup then asks Kiwimake to install it).
      */
     AsyncFunction("setAppReady") { packageName: String, kind: String, build: Double, path: String? ->
       UpdatesProvider.setReady(context, packageName, kind, build.toLong(), path?.let { toFile(it) })
@@ -267,7 +267,7 @@ class AnyAppNativeModule : Module() {
      * an "onInstallStatus" event with status "pendingUserAction" is sent.
      *
      * [answerWithinMs]: how long to wait for Android's final answer after the commit (a
-     * confirmation nobody sees, for example one Android blocked while AnyAppAgent was in the
+     * confirmation nobody sees, for example one Android blocked while Kiwimake was in the
      * background, used to keep the install queue waiting for good). Past it the session is
      * abandoned and the promise resolves with status "timeout".
      */
@@ -302,7 +302,7 @@ class AnyAppNativeModule : Module() {
       startActivity(intent)
     }
 
-    /** Posts a "ready" notification; tapping it opens AnyAppAgent with [url]. */
+    /** Posts a "ready" notification; tapping it opens Kiwimake with [url]. */
     Function("notify") { id: Int, title: String, body: String, url: String?, color: String? ->
       val ctx = context
       if (!NotificationManagerCompat.from(ctx).areNotificationsEnabled()) return@Function false
@@ -327,7 +327,7 @@ class AnyAppNativeModule : Module() {
 
     // ---------- the share sheet: "Like this, but mine" in, "Send app" out
 
-    /** What was shared into AnyAppAgent (the newest share, or the one it was opened with), once; null when nothing. */
+    /** What was shared into Kiwimake (the newest share, or the one it was opened with), once; null when nothing. */
     AsyncFunction("takeSharedItem") {
       val intent = sharedIntent ?: appContext.currentActivity?.intent
       sharedIntent = null
@@ -355,7 +355,7 @@ class AnyAppNativeModule : Module() {
     AsyncFunction("saveApk") { packageName: String, appName: String, promise: Promise ->
       val activity = appContext.currentActivity
       if (activity == null) {
-        promise.reject(CodedException("ERR_SAVE_APP", "Open AnyAppAgent and try again.", null))
+        promise.reject(CodedException("ERR_SAVE_APP", "Open Kiwimake and try again.", null))
         return@AsyncFunction
       }
       val file = try {
@@ -399,7 +399,7 @@ class AnyAppNativeModule : Module() {
       }
     }
 
-    /** A timer that also runs while AnyAppAgent is in the background (Android's install prompt in front). */
+    /** A timer that also runs while Kiwimake is in the background (Android's install prompt in front). */
     AsyncFunction("delay") { ms: Double, promise: Promise ->
       Handler(Looper.getMainLooper()).postDelayed({ promise.resolve(null) }, ms.toLong().coerceIn(0L, 10L * 60 * 1000))
     }
@@ -515,7 +515,7 @@ class AnyAppNativeModule : Module() {
     val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
     params.setSize(file.length())
     if (Build.VERSION.SDK_INT >= 31) {
-      // Updates to apps this phone got from AnyAppAgent install without asking again.
+      // Updates to apps this phone got from Kiwimake install without asking again.
       params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
     }
     if (Build.VERSION.SDK_INT >= 26) {
@@ -567,7 +567,7 @@ class AnyAppNativeModule : Module() {
   }
 
   /**
-   * Opens Android's prompt for a session. From an activity it opens in AnyAppAgent's own task (no
+   * Opens Android's prompt for a session. From an activity it opens in Kiwimake's own task (no
    * NEW_TASK) with startActivityForResult, so [closePrompt] can finish it; without one, in its own task.
    */
   private fun showPrompt(sessionId: Int, confirm: Intent) {

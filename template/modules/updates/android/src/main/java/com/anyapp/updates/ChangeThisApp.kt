@@ -8,24 +8,24 @@ import android.os.Build
 import android.util.Log
 
 /**
- * "Change this app" (AnyAppAgent docs/CHANGE-THIS-APP.md). Same file in every AnyAppAgent template:
+ * "Change this app" (Kiwimake docs/CHANGE-THIS-APP.md). Same file in every Kiwimake template:
  * do not edit it in an app.
  *
  * Every app has a "Change this app" row in its settings. A tap:
- * - with AnyAppAgent on this phone: opens it with anyappagent://change?package=...&name=...&owner=...
- *   &repo=...&build=...&version=...&screen=... AnyAppAgent works out the rest: the owner lands in this
+ * - with Kiwimake on this phone: opens it with anyappagent://change?package=...&name=...&owner=...
+ *   &repo=...&build=...&version=...&screen=... Kiwimake works out the rest: the owner lands in this
  *   app's chat; anyone else can suggest a change, or make their own version on their own PC;
- * - without AnyAppAgent: [ChangeSheet], drawn here so it works offline: what AnyAppAgent is, what an
- *   own version needs, Get AnyAppAgent, and Suggest a change (a text through the share menu).
+ * - without Kiwimake: [ChangeSheet], drawn here so it works offline: what Kiwimake is, what an
+ *   own version needs, Get Kiwimake, and Suggest a change (a text through the share menu).
  *
  * The PC writes two values into the build: `anyapp_change_owner` (the owner's name) and
  * `anyapp_change_others` ("0" when only the owner's phone shows the row). The owner's phone is the
- * one whose AnyAppAgent has this app in its list (`owns/<this package>` on its provider).
+ * one whose Kiwimake has this app in its list (`owns/<this package>` on its provider).
  */
 object ChangeThisApp {
   private const val TAG = "AnyAppChange"
   const val ANYAPPAGENT_PACKAGE = "com.anyappagent"
-  /** Declared only by AnyAppAgent versions that know anyappagent://change (older copies are skipped). */
+  /** Declared only by Kiwimake versions that know anyappagent://change (older copies are skipped). */
   const val CHANGE_ACTION = "com.anyappagent.action.CHANGE"
   const val GET_ANYAPPAGENT_URL = "https://github.com/maddada/AnyAppAgent/releases/latest"
 
@@ -56,7 +56,7 @@ object ChangeThisApp {
   fun version(ctx: Context): String = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" }.getOrDefault("")
 
   /**
-   * The AnyAppAgent to open: the one that installed this app, else the usual package, else any copy
+   * The Kiwimake to open: the one that installed this app, else the usual package, else any copy
    * on the phone (found by its action, so a test copy under another package works the same).
    */
   fun hosts(ctx: Context): List<String> = runCatching {
@@ -74,7 +74,7 @@ object ChangeThisApp {
     return hosts.firstOrNull { it == installer } ?: hosts.firstOrNull { it == ANYAPPAGENT_PACKAGE } ?: hosts.first()
   }
 
-  /** True when an AnyAppAgent on this phone made this app (it is in its list). IPC: off the main thread. */
+  /** True when a Kiwimake on this phone made this app (it is in its list). IPC: off the main thread. */
   fun isMine(ctx: Context): Boolean = hosts(ctx).any { host ->
     runCatching {
       ctx.contentResolver.query(Uri.parse("content://$host.updates/owns/${ctx.packageName}"), null, null, null, null)?.use { c ->
@@ -96,7 +96,7 @@ object ChangeThisApp {
     screen?.takeIf { it.isNotBlank() }?.let { appendQueryParameter("screen", it.take(40)) }
   }.build()
 
-  /** The row's tap: AnyAppAgent when it is on the phone, else the explanation sheet. */
+  /** The row's tap: Kiwimake when it is on the phone, else the explanation sheet. */
   fun open(activity: Activity, screen: String? = "settings") {
     val host = host(activity)
     if (host != null) {
@@ -109,15 +109,15 @@ object ChangeThisApp {
         return
       }
     }
-    Log.i(TAG, "no AnyAppAgent here: the explanation sheet")
+    Log.i(TAG, "no Kiwimake here: the explanation sheet")
     activity.startActivity(Intent(activity, ChangeSheet::class.java))
   }
 
   // ---------------------------------------------------------------- the suggestion text
 
   /**
-   * The suggestion message, exactly as AnyAppAgent writes it (shared/chat/suggestions.ts): the owner
-   * shares it into AnyAppAgent or pastes it on the PC, and the last line files it under this app.
+   * The suggestion message, exactly as Kiwimake writes it (shared/chat/suggestions.ts): the owner
+   * shares it into Kiwimake or pastes it on the PC, and the last line files it under this app.
    */
   fun suggestionText(ctx: Context, from: String, text: String): String {
     val who = from.replace('\u2014', ',').replace(Regex("[\\r\\n]+"), " ").trim().take(60).ifEmpty { "Someone" }
@@ -129,7 +129,7 @@ object ChangeThisApp {
       "",
       body,
       "",
-      "If you made $app with AnyAppAgent, share this message to AnyAppAgent or paste it there.",
+      "If you made $app with Kiwimake, share this message to Kiwimake or paste it there.",
       "anyapp-suggestion: ${ctx.packageName}${if (b > 0) " $b" else ""}",
     ).joinToString("\n")
   }

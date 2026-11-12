@@ -1,4 +1,4 @@
-# AnyAppAgent components
+# Kiwimake components
 
 The exact spec of the components the Android app (`app/`) and the desktop app (`desktop/`) share,
 written in tokens from `tokens.ts`. `system.html` renders every one of them, numbered as here, in
@@ -156,7 +156,7 @@ light and dark.
 - Plate, `space.md` below: fill `color.qrBg`, padding `space.md`, `radius.card`, inner line
   `color.border`. Modules `color.qrFg`, `size.qr` square (never below 120), finder patterns with
   rounded corners. Dark modules on light paper in both modes, so every phone camera reads it.
-- Under it: `type.label` `color.textSecondary` ("Open AnyAppAgent on the phone and scan this
+- Under it: `type.label` `color.textSecondary` ("Open Kiwimake on the phone and scan this
   code."), then a small quiet block button for the fallback ("Use a code instead").
 
 ## 8. Progress and state line

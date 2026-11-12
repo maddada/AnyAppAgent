@@ -1,5 +1,5 @@
 // Hex 3 (anomalyco/hex, https://anoma.ly/hex/), the free dictation app that turns speech into text
-// on this PC. AnyAppAgent records the microphone itself and asks Hex's authenticated local API to
+// on this PC. Kiwimake records the microphone itself and asks Hex's authenticated local API to
 // transcribe it, the way Ghostex does (C:\dev\Ghostex: server/src/voice_agent/speech/hex.rs for
 // the API, server/src/managed_tools/hex.rs for finding and installing Hex).
 //
@@ -94,8 +94,8 @@ export function readDiscovery(dir: string): DiscoveryResult {
 
 export function versionMessage(version: string): string {
   const theirs = Number.parseInt(version, 10);
-  if (Number.isFinite(theirs) && theirs < Number(API_VERSION)) return `This Hex is too old for AnyAppAgent. Update Hex, then try again.`;
-  return `This Hex is newer than AnyAppAgent knows. Update AnyAppAgent, then try again.`;
+  if (Number.isFinite(theirs) && theirs < Number(API_VERSION)) return `This Hex is too old for Kiwimake. Update Hex, then try again.`;
+  return `This Hex is newer than Kiwimake knows. Update Kiwimake, then try again.`;
 }
 
 export interface HexModel {
@@ -285,7 +285,7 @@ export function stripEscapes(line: string): string {
  * line. Resolves when it finishes; rejects with its last lines when it fails.
  */
 export async function installHex(opts: { onLine: (line: string) => void; fetcher?: typeof fetch; signal?: AbortSignal }): Promise<void> {
-  if (process.platform !== "win32") throw new Error(`AnyAppAgent installs Hex only on Windows. Download it from ${HEX_SITE}`);
+  if (process.platform !== "win32") throw new Error(`Kiwimake installs Hex only on Windows. Download it from ${HEX_SITE}`);
   const res = await (opts.fetcher ?? fetch)(WINDOWS_INSTALLER, { signal: AbortSignal.timeout(60_000) }).catch(() => {
     throw new Error("Couldn't reach Hex's website. Check the internet connection, then try again.");
   });

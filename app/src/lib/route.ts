@@ -37,7 +37,7 @@ export function routeBaseUrl(pairing: Pairing, options: { reset?: boolean } = {}
 
 /** Opens (or reuses) the tunnel and returns http://127.0.0.1:<localPort> once the PC answers. */
 export async function dialEasyConnect(address: string, port: number, reset: boolean): Promise<string> {
-  if (!AnyAppNative) throw new RouteError("Easy Connect needs the AnyAppAgent app, not a preview.");
+  if (!AnyAppNative) throw new RouteError("Easy Connect needs the Kiwimake app, not a preview.");
   const started = Date.now();
   const took = () => `${((Date.now() - started) / 1000).toFixed(1)} s`;
   if (reset) await AnyAppNative.easyConnectStop().catch(() => undefined);

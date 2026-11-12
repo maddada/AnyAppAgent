@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <!-- Updates for people the app is shared with (com.anyapp.updates, AnyAppAgent docs/DISTRIBUTION.md):
-       the app installs its own new version, checks once a day when online, and asks AnyAppAgent
+  <!-- Updates for people the app is shared with (com.anyapp.updates, Kiwimake docs/DISTRIBUTION.md):
+       the app installs its own new version, checks once a day when online, and asks Kiwimake
        first whether it handles this app (then the app stays silent). -->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -16,7 +16,7 @@
     </intent>
   </queries>
   <application>
-    <!-- "Change this app" when AnyAppAgent is not on the phone (com.anyapp.updates.ChangeSheet): keep it. -->
+    <!-- "Change this app" when Kiwimake is not on the phone (com.anyapp.updates.ChangeSheet): keep it. -->
     <activity
       android:name="com.anyapp.updates.ChangeSheet"
       android:exported="false"
@@ -36,7 +36,7 @@
     <receiver
       android:name="com.anyapp.updates.InstallReceiver"
       android:exported="false" />
-    <!-- AnyAppAgent says a new version of this app is ready (quick update or APK): the Reload
+    <!-- Kiwimake says a new version of this app is ready (quick update or APK): the Reload
          popup (com.anyapp.updates.ReadyPopup, docs/FAST-LANE.md). -->
     <receiver
       android:name="com.anyapp.updates.ReadyReceiver"
