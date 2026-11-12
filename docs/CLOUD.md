@@ -16,8 +16,8 @@ What the user decided (it overrides `C:\aa\ideas\cloud-changes.html` and the fir
 file): chat in the AnyAppAgent phone app, Google or a code by email, Convex for most things, one
 instabox.sh box per thread behind a small interface, signing keys stored encrypted in Convex,
 storage free to the person. **People pay in credits** (decisions of 12 Nov 2026, third round): a
-monthly plan (Starter $12 for 30 credits, Pro $25 for 70, Max $60 for 180), extra credit at $10 for
-20, and 3 free credits every month. A credit bundles everything a change needs (the agent, the
+monthly plan (Starter $12 for 30 credits, Pro $25 for 70, Max $60 for 180; yearly at 10 times the
+monthly price), extra credit at $10 for 20 with or without a plan, and 3 free credits every month. A credit bundles everything a change needs (the agent, the
 machine, the build, delivery to the phone) and the person never sees tokens, machine time or our
 costs. The agent runs on the **Claude Agent SDK** (today's agent, the ACP adapter built on it) with
 **our own Anthropic API key**. People with their own Anthropic key take the **Own key plan, $6 a
@@ -273,27 +273,37 @@ Lovable, Anything, Bolt and Rork price (section 1).
 
 ### Plans
 
-| Plan | Price a month | Credits a month | Per credit |
-| ---- | ------------- | --------------- | ---------- |
-| Free | $0 | 3 | |
-| Starter | **$12** | **30** | $0.40 |
-| Pro | **$25** | **70** | $0.36 |
-| Max | **$60** | **180** | $0.33 |
-| Own key | **$6** | none needed: changes are unlimited on their own Anthropic key, fair use 30 box hours a month | |
+| Plan | Monthly | Yearly (two months free) | Credits a month | Per credit, monthly / yearly |
+| ---- | ------- | ------------------------ | --------------- | ---------------------------- |
+| Free | $0 | | 3 | |
+| Starter | **$12** | **$120** ($10 a month) | **30** | $0.40 / $0.33 |
+| Pro | **$25** | **$250** ($20.83 a month) | **70** | $0.36 / $0.30 |
+| Max | **$60** | **$600** ($50 a month) | **180** | $0.33 / $0.28 |
+| Own key | **$6** | **$60** ($5 a month) | none needed: changes are unlimited on their own Anthropic key, fair use 30 box hours a month | |
+
+- **Yearly plans** cost 10 times the monthly price, paid up front, from the first version. Their
+  credits are **given monthly** (30, 70 or 180 on each monthly date of the year), not all at once:
+  one rollover and expiry rule for every plan, our AI cost follows the money month by month (no
+  year of credits spent in the first week and then disputed), and a person who wants more in one
+  month buys extra credit. Cancelling a yearly plan takes effect at the end of the year.
 
 - **Extra credit**: **$10 for 20 credits** ($0.50 each), a one-off Stripe Checkout, valid 12 months.
   Anyone signed in can buy it, with or without a plan, so a light user can pay as they go.
 - **Card fees are inside the prices**: no fee is added at checkout.
 - **Free credit**: 3 credits a month, given when the account is first used in that month (so dormant
   accounts cost nothing), expiring at the end of the month, no rollover. One free allowance per
-  GitHub account (every account must connect GitHub). 3 credits make about three small changes or
-  one change in a few files; a new app (about 4.3 credits) needs a plan or extra credit.
+  GitHub account (every account must connect GitHub). 3 credits make about three small changes, one
+  change in a few files, or the first app (below).
+- **The first new app uses at most 3 credits**, on every plan, Free included, so the free credit
+  alone can make one (it costs us about $0.86, so the cap gives away about $0.26 once per person).
+  Its estimate says "3 credits". Later new apps are metered as usual.
 - **Rollover**: unused plan credits roll over **one month** while the plan is active, then expire.
   Extra credit lasts 12 months. Credits are spent **closest to expiry first**: this month's free
   credit, then last month's plan credit, then this month's, then extra credit.
 - **Changing plan**: an upgrade starts now (Stripe prorates the price) and adds the new plan's
   credits for the rest of the month pro rata; a downgrade or cancel takes effect at the end of the
-  month. Credits already given stay until they expire; a cancelled account is on Free after that.
+  month (the year, on a yearly plan). Monthly to yearly is an upgrade; yearly to monthly starts when
+  the year ends. Credits already given stay until they expire; a cancelled account is on Free after that.
 - **Refunds**: credits are not refunded as money. A change that fails through our fault (the box or
   the build service, not the app's own code) has its credits given back by hand in the first
   version.
@@ -574,38 +584,47 @@ first draft):
 
 | Table | Fields (short) | Indexes |
 | ----- | -------------- | ------- |
-| `subscriptions` | `userId`, `plan` ("free", "starter", "pro", "max", "ownKey"), `stripeSubscriptionId?`, `status` ("active", "pastDue", "cancelled"), `periodStart`, `periodEnd`, `cancelAtPeriodEnd`, `boxSecondsThisPeriod` (Own key fair use) | `by_user`, `by_stripe_id` |
+| `subscriptions` | `userId`, `plan` ("free", "starter", "pro", "max", "ownKey"), `interval` ("month" or "year"), `stripeSubscriptionId?`, `status` ("active", "pastDue", "cancelled"), `periodStart`, `periodEnd` (a month or a year), `nextGrantAt` (the next monthly grant), `cancelAtPeriodEnd`, `boxSecondsThisMonth` (Own key fair use, reset at each monthly grant), `firstAppDone` | `by_user`, `by_stripe_id`, `by_next_grant` |
 | `grants` | `userId`, `source` ("free", "plan", "extra", "refund", "adjust"), `millicredits` (given), `remaining`, `grantedAt`, `expiresAt`, `stripePaymentId?`, `period?` | `by_user_expires` (spending order), `by_expires` (the expiry job) |
 | `ledger` | `userId`, `kind` ("grant", "spend", "expire", "refund", "adjust"), `millicredits` (plus or minus), `grantId`, `changeId?`, `usageIds?` | `by_user_at`, `by_change` |
 | `balances` | `userId`, `millicredits` (the sum of unexpired grants' `remaining`, changed in the same mutation as `grants` and `ledger`) | `by_user` |
 
-The plan prices and credits (`PLANS`: Starter $12 and 30, Pro $25 and 70, Max $60 and 180, Own key
-$6), the extra credit pack ($10 for 20), the free allowance (3) and the cost basis live in one
-config file in `cloud/`, so a price change is one edit.
+The plan prices and credits (`PLANS`: Starter $12 or $120 a year and 30, Pro $25 or $250 and 70,
+Max $60 or $600 and 180, Own key $6 or $60), the extra credit pack ($10 for 20), the free allowance
+(3), the first app cap (3) and the cost basis live in one config file in `cloud/`, so a price change
+is one edit.
 
 **Grants:**
 
 - **Free**: when an account on Free (or any plan) first opens the app or starts a change in a month,
   a `free` grant of 3 credits is written if none exists for that month; it expires at the month's
   end (UTC). One per GitHub account.
-- **Plan**: Stripe's `invoice.paid` for the subscription writes a `plan` grant of that plan's
-  credits, expiring at the end of the **next** period (one month of rollover). Upgrades add a pro
-  rata grant at once.
+- **Plan**: a `plan` grant of that plan's credits is written each month, expiring at the end of the
+  **next** month (one month of rollover). For a monthly plan Stripe's `invoice.paid` writes it; for
+  a yearly plan `invoice.paid` writes the first one and sets `nextGrantAt`, and a Convex cron
+  (hourly, on `by_next_grant`) writes the other eleven on each monthly date while the subscription
+  is active. Upgrades add a pro rata grant at once.
 - **Extra**: Checkout's `checkout.session.completed` writes an `extra` grant of 20 credits,
-  expiring in 12 months.
+  expiring in 12 months. Any signed-in account can buy it, with or without a plan.
 - **Expiry**: a daily Convex cron writes an `expire` row for each grant past `expiresAt` with credits
   left, and lowers the balance in the same mutation.
 
 **Spending**: after each turn the runner reports its usage; one mutation prices it, converts it to
 millicredits, takes them from the user's grants in `by_user_expires` order (closest to expiry first),
 writes the `spend` rows with the grant and change ids, and lowers the balance. On the Own key plan
-the box's seconds are added to `boxSecondsThisPeriod` instead; past 30 hours each box hour costs half
+the box's seconds are added to `boxSecondsThisMonth` instead; past 30 hours each box hour costs half
 a credit, spent the same way.
+
+**The first app cap**: the change that creates a person's first app (while `firstAppDone` is false)
+stops taking credits at 3 (3,000 millicredits); what it costs above that is written as an `adjust`
+row against our cost, not the person's credits, and `firstAppDone` is set when it ends. The credit
+gate asks only for 3 credits for that change.
 
 **Money in**: Stripe Billing subscriptions for the plans and Stripe Checkout for extra credit (the
 `@convex-dev/stripe` component handles the webhooks). Card fees are inside our prices: about $0.65
-on Starter, $1.03 on Pro, $2.04 on Max, $0.47 on Own key and $0.59 on an extra credit pack (2.9%
-plus 30 cents, a US card; 1% more for international cards). A failed renewal moves the subscription
+on Starter, $1.03 on Pro, $2.04 on Max, $0.47 on Own key and $0.59 on an extra credit pack; on the
+yearly plans $3.78, $7.55, $17.70 and $2.04 a year (2.9% plus 30 cents, a US card; 1% more for
+international cards). A failed renewal moves the subscription
 to "pastDue": its next grant waits, credits already given stay.
 
 **Who pays nothing**: an account that never pays gets its 3 free credits a month and nothing more.
@@ -704,33 +723,45 @@ Assumptions:
 - **Free accounts**: 3 free accounts in use for every paying person, each using all 3 free credits
   ($0.60 of our cost), so **$1.80 per paying person**. Free accounts that do not open the app that
   month get no credits and cost nothing.
+- **The first app cap**: as many new accounts a month as there are paying people, each giving away
+  about $0.26 once, so **$0.26 per paying person** a month.
 - Fixed fees without machine usage (counted per person above): Instabox Pro $20 (its $20 of
   included usage covers up to about 100 people) or Builder $100 at 1000; Convex $0, about $3, about
   $30; the key service, domain, email codes and GitHub App about $1.
 
-| A month, everyone paying on Starter, typical use | 10 people | 100 people | 1000 people |
-| ------- | --------- | ---------- | ----------- |
-| Plans paid | $120 | $1,200 | $12,000 |
-| Card fees | $6.50 | $65 | $650 |
-| AI and machines for paying people (16 credits, $3.26 each) | $33 | $326 | $3,260 |
-| Free credit (30, 300, 3000 free accounts, $0.60 each) | $18 | $180 | $1,800 |
-| Instabox plan, Convex, the rest | $21 | $24 | $131 |
-| **What we keep** | about **$42** | about **$605** | about **$6,159** |
-| The same if every paying person uses all 30 credits ($6.00 each) | about $14 | about $331 | about $3,419 |
+| A month, everyone paying on Starter, typical use | Monthly ($12) |  |  | Yearly ($120, so $10 a month) |  |  |
+| ------- | --------- | ---------- | ----------- | --------- | ---------- | ----------- |
+| People paying | 10 | 100 | 1000 | 10 | 100 | 1000 |
+| Plans paid | $120 | $1,200 | $12,000 | $100 | $1,000 | $10,000 |
+| Card fees ($0.65 a month; yearly $0.32) | $6.50 | $65 | $650 | $3 | $32 | $315 |
+| AI and machines for paying people (16 credits, $3.26 each) | $33 | $326 | $3,260 | $33 | $326 | $3,260 |
+| Free credit (3 free accounts per payer, $0.60 each) | $18 | $180 | $1,800 | $18 | $180 | $1,800 |
+| The first app cap ($0.26 per payer) | $3 | $26 | $260 | $3 | $26 | $260 |
+| Instabox plan, Convex, the rest | $21 | $24 | $131 | $21 | $24 | $131 |
+| **What we keep** | about **$39** | about **$579** | about **$5,899** | about **$23** | about **$413** | about **$4,234** |
+| The same if every payer uses all 30 credits ($6.00 each) | about $12 | about $305 | about $3,159 | about minus $5 | about $139 | about $1,494 |
 
-| A month, everyone on the Own key plan | 10 people | 100 people | 1000 people |
-| ------- | --------- | ---------- | ----------- |
-| Plans paid ($6) | $60 | $600 | $6,000 |
-| Card fees ($0.47 each) | $5 | $47 | $470 |
-| Machines (about $0.10 each; $1.02 at full fair use) | $1 | $10 | $100 |
-| Instabox plan, Convex, the rest | $21 | $24 | $131 |
-| **What we keep** | about **$33** | about **$519** | about **$5,299** |
+Pro and Max keep more per person at full use (yearly Pro about $4.10, yearly Max about $10.50 a
+month after the free tier and the cap); yearly Starter at full use is the thinnest plan, about $1.63
+a person. Yearly money arrives up front, so cash comes early, but it is earned month by month.
 
-**The development budget** (about $3,000 a month of profit): reached at about **500 paying people**
-with typical use, about **900** if every one of them uses every credit. At 100 people the business
-keeps about $330 to $605 a month; $3,000 at 100 people would take about $37 a month from each.
+| A month, everyone on the Own key plan | Monthly ($6) |  |  | Yearly ($60, so $5 a month) |  |  |
+| ------- | --------- | ---------- | ----------- | --------- | ---------- | ----------- |
+| People paying | 10 | 100 | 1000 | 10 | 100 | 1000 |
+| Plans paid | $60 | $600 | $6,000 | $50 | $500 | $5,000 |
+| Card fees ($0.47 a month; yearly $0.17) | $5 | $47 | $470 | $2 | $17 | $170 |
+| Machines (about $0.10 each; $1.02 at full fair use) | $1 | $10 | $100 | $1 | $10 | $100 |
+| Instabox plan, Convex, the rest | $21 | $24 | $131 | $21 | $24 | $131 |
+| **What we keep** | about **$33** | about **$519** | about **$5,299** | about **$26** | about **$449** | about **$4,599** |
+
+**The development budget** (about $3,000 a month of profit): reached at about **520 paying people**
+on monthly Starter with typical use (about **950** if every one of them uses every credit), and at
+about **720** if all of them pay yearly (about 1,900 at full use). A real mix of plans lands between.
+At 100 people the business keeps about $140 to $579 a month; $3,000 at 100 people would take about
+$37 a month from each.
 The free tier is the cost to watch: each active free account costs up to $0.60 a month, so about 13
-active free accounts per paying person (9 if paying people use every credit) eat the whole profit. If that
+active free accounts per paying person on monthly Starter (10 on yearly Starter) eat the whole profit
+at typical use. If that
 happens, the allowance is lowered or tied to activity (one constant).
 
 Instabox's paused disk is the one cost that grows fastest if boxes are not snapshotted;
@@ -863,7 +894,7 @@ new boxes restored from GitHub; the app grid with `com.anyappcloud.<slug>` packa
 app as an **Opus 5.5 high orchestrator** with helpers at three levels in the same box; plan first
 and pages; builds and quick updates to the phone; versions and undo; What changed; crash reports;
 **AI on our Anthropic key through the Agent SDK** (way E) or **their own Anthropic API key** (way B,
-the Own key plan); **credits**: the Free, Starter, Pro, Max and Own key plans as Stripe
+the Own key plan); **credits**: the Free, Starter, Pro, Max and Own key plans, monthly and yearly, as Stripe
 subscriptions, extra credit by Stripe Checkout, the free monthly credit, rollover and expiry (test
 mode until launch); **estimates** in credits (under the message box, on the plan card, per app) and
 actuals per change; signing keys encrypted in
@@ -998,12 +1029,9 @@ Anthropic credit (none with Max or Ultra credit).
 - **Q13** (the platform fee's size) is closed: there is no separate platform fee; the margin is in
   the credit price (Q12).
 
-Still open (the defaults above stand until answered):
-
-- **Q17. A first app on the free tier**: 3 free credits do not cover a new app (about 4.3). Keep it
-  (people see a plan is needed to make an app), or let a person's first new app use at most 3
-  credits (costs us about $0.26 more once)?
-- **Q18. Extra credit without a plan**: allowed in this plan (pay as you go for light users), or
-  only for people on a plan, as Lovable does?
-- **Q19. Yearly plans**: offer them at two months free, as Lovable, Anything and Replit do, or not
-  in the first version?
+- **Q17, first app**: a person's **first new app uses at most 3 credits**, on every plan, so the free
+  tier can make one (about $0.26 given away once per person).
+- **Q18, extra credit**: **$10 for 20 credits, with or without a plan**, valid 12 months.
+- **Q19, yearly plans**: from the first version, **10 times the monthly price** (Starter $120, Pro
+  $250, Max $600, Own key $60), paid up front; **credits given monthly**, not all at once, so
+  rollover and expiry stay one rule and our cost follows the money (section 2).
