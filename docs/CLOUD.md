@@ -1283,6 +1283,47 @@ from Android emulator" on the desktop), unlinked it, and answered the desktop's 
 account, which cannot be signed into again) and the page's Google and email sign-in (they need a
 person's Google account or inbox).
 
+**Milestone 8, what ran (12 Nov 2026):** `cloud/convex/moves.ts` and the companion's
+`server/src/cloud-move.ts`. A move is one `moves` row; the PC does each step through its PC link
+(`/pc/move/*`, the `move` scope) and Convex records it, so starting the same move again resumes it
+from its row. **To the cloud:** Convex makes the Convex row (same package name, `place: "pc"`
+until the end) and `anyapp-cloud-<slug>` with the person's user token; the companion commits
+what is open, pushes `HEAD` with its whole history using a one-repo token (only in its own git
+child's environment, now `gitWithToken` in `server/src/git.ts`, shared with the runner), and
+Convex checks on GitHub that `main` is that commit before the step counts; the key goes up as the
+keystore bytes, password and alias sealed to Convex's transport key for this move
+(`appkey-move:<moveId>`), into an envelope like a new app's; the main chat (not helpers' own
+chats) and the to-dos go in batches; `finish` needs all three steps, takes the PC's highest build
+number and last version, and turns the row into the cloud's. The PC keeps a read-only copy
+(`App.move`, sends refused with "This app moved to the cloud"); the phone's grid shows the cloud's
+app instead. Only an app with its own key moves: one on the PC's older shared key, or with a
+rotated key (a lineage file), is refused with a sentence. **To the PC:** refused while a change
+runs; the companion clones with a one-repo token, takes the key sealed to a one-time key it made
+for this request (`appkey-down:<moveId>`) and imports it into the builder's keystore, imports the
+chat and to-dos, adds the app with its next build above the cloud's, then the row becomes
+`place: "pc"` and its box goes; a read-only copy from an earlier move is removed only after that.
+A move that stops halfway shows why on the app (and after a PC restart, "The PC stopped during
+the move"); Move again resumes it. Cloud chat sends are refused while an app moves or once it is
+the PC's. Move is on the phone's app sheet (both ways, with a short confirm card whose buttons sit
+below the text) and in the desktop's app header (to the cloud; the move back starts on the phone,
+which lists the cloud apps). `shared/protocol.ts` additions (additive): `App.move`, `AppMove`,
+`MoveRequest`, the two move routes. Proven: 4 Convex tests, 3 companion tests (a local bare repo
+as GitHub), and live (`C:/aa/e2e/cloud-build/m8/`): Tip Jar, made from the template on my proof
+companion (real builder, its own `ANYAPP_HOME`) and built there as version 1, installed on the
+emulator, moved to the cloud from the phone's sheet in 6 s (`maddada/anyapp-cloud-tipjar`); a
+change sent from the phone ("Made in the cloud" under the title) ran in a fresh box that restored
+the app from GitHub with its chat, and built version 2 signed with the key that came from the PC
+(certificate `2e3676e3...` on both APKs, same package, version code 2); then moved back to the PC
+(10 chat rows, the cloud's commits on top of the PC's history) and built version 3 there.
+All three APKs carry the same certificate and package with version codes 1, 2 and 3, and versions 2
+and 3 hold the cloud's change (version 1 does not), so each installs over the last with its data.
+**Not run:** installing versions 2 and 3 on the emulator (the shared emulator stopped at 16:57
+during the cloud build and would not start again from this session), and the desktop's Move
+button live (built and type-checked; the same companion route as the phone's). The cloud change
+used 1.8 credits (dev grant). Gaps found: a moved app carries no icon until the cloud builds (it
+shows its letter), and the cloud's Rebuild goes through a helper agent outside any change, so it
+is not metered (to fix with milestone 10's rate limits).
+
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account
 sheet and one grid (+1.5), the PC link (+1, which circles and web apps then reuse), moving apps

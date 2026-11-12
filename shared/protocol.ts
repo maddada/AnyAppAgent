@@ -243,6 +243,7 @@ export interface ChatItem {
   id: string; // stable: an update to the same item reuses the id (upsert)
   appId: string;
   seq: number; // strictly increasing per app, orders the timeline (assigned when the item is created; an update keeps it)
+  madeInCloud?: boolean; // added (cloud milestone 9): a row of a change made in the cloud while the PC was off, pulled back
   kind: ChatItemKind;
   text?: string; // user, assistant, thought, error; on a build item: its latest progress line
   streaming?: boolean; // true while text is still growing

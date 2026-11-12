@@ -31,6 +31,7 @@ import type * as lib_transport from "../lib/transport.js";
 import type * as moves from "../moves.js";
 import type * as pages from "../pages.js";
 import type * as pclinks from "../pclinks.js";
+import type * as pcoff from "../pcoff.js";
 import type * as runner from "../runner.js";
 import type * as signing from "../signing.js";
 import type * as stripe from "../stripe.js";
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   moves: typeof moves;
   pages: typeof pages;
   pclinks: typeof pclinks;
+  pcoff: typeof pcoff;
   runner: typeof runner;
   signing: typeof signing;
   stripe: typeof stripe;

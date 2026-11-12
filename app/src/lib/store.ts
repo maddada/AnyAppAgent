@@ -174,6 +174,8 @@ export function sortedApps(apps: Record<string, App>): App[] {
   // A PC copy that moved to the cloud is read-only there; the grid shows the cloud's app instead.
   return Object.values(apps)
     .filter((a) => !(a.move?.to === "cloud" && a.move.state === "done"))
+    // The cloud's row of a PC app (a change while the PC is off) opens from its chat, not the grid.
+    .filter((a) => !(isCloudId(a.id) && a.cloud?.place === "pc"))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 }
 

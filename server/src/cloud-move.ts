@@ -136,7 +136,9 @@ export class CloudMover {
     }
 
     step("Handing it to the cloud");
-    await link.call("/pc/move/finish", { moveId, buildHigh });
+    // The version on the phone: its number and when (no files: the next build is the cloud's).
+    const last = app.latestApk ? { number: app.latestApk.number, status: app.latestApk.status, startedAt: app.latestApk.startedAt, finishedAt: app.latestApk.finishedAt } : undefined;
+    await link.call("/pc/move/finish", { moveId, buildHigh, ...(last ? { latestApk: last } : {}) });
     this.set(appId, { to: "cloud", state: "done", at: new Date().toISOString(), cloudAppId: start.appId });
     log(`[${app.slug}] moved to the cloud; this PC keeps a read-only copy`);
   }

@@ -73,9 +73,9 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
   const item = row.item;
   switch (item.kind) {
     case "user":
-      return <UserMessage item={item} />;
+      return <InCloud item={item}><UserMessage item={item} /></InCloud>;
     case "assistant":
-      return <AssistantMessage item={item} />;
+      return <InCloud item={item}><AssistantMessage item={item} /></InCloud>;
     case "thought":
       return <ThoughtRow item={item} />;
     case "tool":
@@ -85,7 +85,7 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
     case "permission":
       return <PermissionCard item={item} />;
     case "build":
-      return <BuildCard item={item} app={app} />;
+      return <InCloud item={item}><BuildCard item={item} app={app} /></InCloud>;
     case "error":
       return <ErrorRow item={item} />;
     case "crash":
@@ -96,6 +96,19 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
       return null;
   }
 });
+
+/** A row of a change made in the cloud while the PC was off, pulled back (docs/CLOUD.md section 3). */
+function InCloud({ item, children }: { item: ChatItem; children: React.ReactNode }) {
+  if (!item.madeInCloud) return <>{children}</>;
+  return (
+    <View testID="made-in-cloud">
+      <T variant="caption" color="textTertiary" style={{ marginBottom: space.xs }}>
+        Made in the cloud
+      </T>
+      {children}
+    </View>
+  );
+}
 
 function Glyph({ icon: Icon, color }: { icon: LucideIcon; color: string }) {
   return <Icon size={icon.size.sm} color={color} strokeWidth={icon.stroke} absoluteStrokeWidth />;

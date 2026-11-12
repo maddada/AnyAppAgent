@@ -15,6 +15,7 @@ import { askForNotificationsOnce, loadChat } from "@/lib/session";
 import { appAction, drafts, useStore, placeOf, useClientFor, useOnlineFor } from "@/lib/store";
 import { isCloudId } from "@/lib/cloud";
 import { BoxNote, EstimateLine } from "@/ui/CloudBits";
+import { CloudRowLoader, PcOffOffer } from "@/ui/PcOff";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Sheet, useKeyboardHeight } from "@/ui/Sheet";
@@ -405,8 +406,9 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
           <StateLine kind="problem" label={error} role="caption" lines={0} />
         </View>
       ) : null}
-      {app && placeOf(app) === "pc" && !online ? <PcOffLine /> : null}
+      {app && placeOf(app) === "pc" && !online ? <PcOffOffer app={app} text={text} onSent={() => setText("")} /> : null}
       {isCloudId(appId) ? <BoxNote appId={appId} /> : null}
+      {isCloudId(appId) && !app ? <CloudRowLoader appId={appId} /> : null}
       <DictationNote dictation={dictation} style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }} />
       {tray ? (
         <View testID="attach-tray" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, paddingBottom: space.sm }}>
@@ -525,10 +527,3 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
 }
 
 /** A PC app whose PC is off (docs/CLOUD.md, "My PC is off"): the message waits for it. */
-function PcOffLine() {
-  return (
-    <View testID="pc-off-line" style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }}>
-      <StateLine kind="idle" label="Your PC is off. Your message goes when it is back on." role="caption" lines={2} />
-    </View>
-  );
-}

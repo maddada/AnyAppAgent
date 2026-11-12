@@ -456,7 +456,7 @@ export class AppManager {
 
   // ---------- events
 
-  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo; page?: PageInfo; crash?: CrashInfo; diary?: DiaryReadInfo }): void {
+  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo; page?: PageInfo; crash?: CrashInfo; diary?: DiaryReadInfo; madeInCloud?: boolean }): void {
     const item = this.store.chat(record.app.id).upsert(draft);
     this.broadcast({ type: "chat.item", item });
   }
@@ -714,10 +714,41 @@ export class AppManager {
     return record.app;
   }
 
+  /**
+   * Changes made in the cloud while the PC was off (keep-ready.ts): their chat rows join this chat
+   * after what is here, marked "Made in the cloud", each once.
+   */
+  importCloudItems(id: string, items: ChatItem[]): void {
+    const record = this.record(id);
+    const chat = this.store.chat(id);
+    for (const item of [...items].sort((a, b) => a.seq - b.seq)) {
+      const itemId = `cloud-${item.id}`;
+      if (chat.get(itemId)) continue;
+      const { id: _id, appId: _app, seq: _seq, createdAt: _c, updatedAt: _u, ...rest } = item;
+      this.emitItem(record, { ...(rest as ChatDraft), id: itemId, madeInCloud: true });
+    }
+    this.touch(record);
+  }
+
+  /** The cloud built above this PC: the next build here goes above it (it installs over the cloud's). */
+  raiseBuildNumber(id: string, high: number): void {
+    const record = this.record(id);
+    if ((record.app.latestBuild?.number ?? 0) >= high) return;
+    const now = nowIso();
+    record.app.latestBuild = { number: high, status: "succeeded", startedAt: now, finishedAt: now };
+    record.app.updatedAt = now;
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
+  }
+
+  /** One place at a time (keep-ready.ts): a change made in the cloud comes back before one here. */
+  beforeChange: ((app: App) => void) | undefined;
+
   /** A copy that moved to the cloud is read-only here: it is changed in the cloud now. */
   private writable(record: AppRecord): void {
     if (record.app.move?.to === "cloud" && record.app.move.state === "done") throw new HttpError(409, "This app moved to the cloud. Change it there.");
     if (record.app.move?.state === "running") throw new HttpError(409, "This app is moving to the cloud. Try again when it is done.");
+    this.beforeChange?.(record.app);
   }
 
   adoptCloudApp(app: App, dir: string, chat: ChatItem[]): App {

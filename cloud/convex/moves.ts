@@ -204,8 +204,8 @@ export const chatForPc = internalQuery({
  * next build above the PC's highest); to the PC, the row becomes "pc" and its box goes.
  */
 export const finish = internalMutation({
-  args: { moveId: v.string(), userId: v.id('users'), buildHigh: v.optional(v.number()), pcAppId: v.optional(v.string()) },
-  handler: async (ctx, { moveId, userId, buildHigh, pcAppId }) => {
+  args: { moveId: v.string(), userId: v.id('users'), buildHigh: v.optional(v.number()), pcAppId: v.optional(v.string()), latestApk: v.optional(v.any()) },
+  handler: async (ctx, { moveId, userId, buildHigh, pcAppId, latestApk }) => {
     const m = await moveOf(ctx, moveId, userId);
     const missing = (['code', 'key', 'chat'] as const).filter((s) => !m.steps[s]);
     if (missing.length) throw new Error(`The move is not done yet: ${missing.join(', ')} still to go.`);
@@ -213,7 +213,9 @@ export const finish = internalMutation({
     const now = Date.now();
     if (m.kind === 'toCloud') {
       const high = Math.max(app.buildHigh, buildHigh ?? 0);
-      await ctx.db.patch(app._id, { place: 'cloud', buildHigh: high, status: 'idle', updatedAt: now });
+      // The version on the phone now (built on the PC): the tile says so until the cloud builds the next.
+      const last = latestApk && typeof latestApk === 'object' && typeof (latestApk as { number?: unknown }).number === 'number' ? latestApk : undefined;
+      await ctx.db.patch(app._id, { place: 'cloud', buildHigh: high, status: 'idle', ...(last && !app.latestApk ? { latestApk: last, latestBuild: last } : {}), updatedAt: now });
       await ctx.db.patch(m._id, { state: 'done', endedAt: now, steps: { ...m.steps, buildNumber: high } });
     } else {
       await ctx.db.patch(app._id, { place: 'pc', pcLinkId: m.pcLinkId, ...(pcAppId ? { pcAppId } : {}), updatedAt: now });

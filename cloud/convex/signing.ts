@@ -77,6 +77,29 @@ export const storeMovedKey = internalMutation({
   },
 });
 
+/** A kept-ready PC app's key (pcoff.ts), sealed by the companion for this app: kept like a moved key. */
+export const storeReadyKey = internalMutation({
+  args: { appId: v.id('apps'), box: sealedArg, certSha256: v.string() },
+  handler: async (ctx, { appId, box, certSha256 }) => {
+    const app = (await ctx.db.get(appId))!;
+    if (!/^[0-9a-f]{64}$/.test(certSha256)) throw new Error('bad certificate hash');
+    const have = await ctx.db.query('keys').withIndex('by_app', (q) => q.eq('appId', app._id)).first();
+    if (have) {
+      if (have.certSha256 === certSha256) return { certSha256, stored: false };
+      throw new Error('This app already has a different signing key in the cloud; a key is never replaced.');
+    }
+    const plain = await openWith(await transportKey(), box as Sealed, `appkey-ready:${appId}`);
+    const inner = JSON.parse(new TextDecoder().decode(plain)) as { p12: string; storePassword: string; keyAlias: string };
+    plain.fill(0);
+    if (!inner.p12 || !inner.storePassword || !inner.keyAlias) throw new Error('That key is not complete.');
+    const payload = new TextEncoder().encode(JSON.stringify({ p12: inner.p12, storePassword: inner.storePassword, keyAlias: inner.keyAlias }));
+    const e = await envelopeSeal(payload, aadOf(app._id, app.packageName));
+    payload.fill(0);
+    await ctx.db.insert('keys', { appId: app._id, userId: app.userId, packageName: app.packageName, certSha256, ...e, at: Date.now() });
+    return { certSha256, stored: true };
+  },
+});
+
 /** The app's key envelope for a move to a PC (the http action opens it and seals it to the PC's one-time key). */
 export const keyForMove = internalQuery({
   args: { appId: v.id('apps') },

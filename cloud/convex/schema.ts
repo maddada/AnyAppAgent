@@ -59,6 +59,11 @@ export default defineSchema({
     place: v.union(v.literal('cloud'), v.literal('pc')),
     pcLinkId: v.optional(v.id('pcLinks')),
     pcAppId: v.optional(v.string()),
+    // Milestone 9 (pcoff.ts): a PC app kept ready for changes while its PC is off (code pushed
+    // after every version, key up once), and a change made in the cloud not pulled back yet.
+    keptReady: v.optional(v.boolean()),
+    readyAt: v.optional(v.number()),
+    pcOff: v.optional(v.object({ since: v.number(), fromSeq: v.number() })),
     // The highest build number either place made (the next build is above it).
     buildHigh: v.number(),
     // owner/anyapp-cloud-<slug>

@@ -91,7 +91,8 @@ export const send = mutation({
     const user = await requireUser(ctx);
     const app = await ownApp(ctx, user._id, appId);
     // Moving apps (moves.ts): an app made on a PC now is changed there; one moving waits.
-    if (app.place !== 'cloud') throw new Error('This app is made on your PC now. Change it there.');
+    // A PC app with a change made in the cloud while its PC is off (pcoff.ts) takes follow-ups here too.
+    if (app.place !== 'cloud' && !(app.keptReady && app.pcOff)) throw new Error('This app is made on your PC now. Change it there.');
     const moving = await ctx.db.query('moves').withIndex('by_app', (q) => q.eq('appId', app._id)).filter((q) => q.eq(q.field('state'), 'running')).first();
     if (moving) throw new Error('This app is moving between your PC and the cloud. Try again when it is done.');
     const thread = await threadOf(ctx, app._id);

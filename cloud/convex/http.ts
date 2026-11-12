@@ -371,6 +371,7 @@ pcRoute('/pc/move/finish', 'move', async (ctx, req, pc) => {
         userId: pc.userId,
         ...(typeof b.buildHigh === 'number' ? { buildHigh: b.buildHigh } : {}),
         ...(field(b, 'pcAppId') ? { pcAppId: field(b, 'pcAppId') } : {}),
+        ...(b.latestApk && typeof b.latestApk === 'object' ? { latestApk: b.latestApk } : {}),
       }),
     );
   } catch (e) {
@@ -381,6 +382,75 @@ pcRoute('/pc/move/fail', 'move', async (ctx, req, pc) => {
   const b = await bodyOf(req);
   await ctx.runMutation(internal.moves.fail, { moveId: field(b, 'moveId'), userId: pc.userId, error: field(b, 'error') || 'stopped' });
   return json(200, { ok: true });
+});
+
+// ---- Changes while the PC is off (milestone 9, pcoff.ts): kept-ready apps and pulling back. ----
+
+pcRoute('/pc/ready', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const presets = ['react-native', 'kotlin', 'expo-exact'] as const;
+  const preset = presets.find((p) => p === field(b, 'preset'));
+  let r;
+  try {
+    r = await ctx.runMutation(internal.pcoff.ready, {
+      userId: pc.userId,
+      linkId: pc.linkId,
+      pcAppId: field(b, 'pcAppId'),
+      name: field(b, 'name'),
+      slug: field(b, 'slug'),
+      packageName: field(b, 'packageName'),
+      ...(preset ? { preset } : {}),
+      buildHigh: Number(b.buildHigh) || 0,
+    });
+  } catch (e) {
+    return json(409, { error: sentence(e) });
+  }
+  if (r.off || r.inCloud) return json(200, r);
+  const repo = await ctx.runAction(internal.github.createAppRepo, { appId: r.appId });
+  if (!repo) return json(409, { error: 'Could not make the app repo on your GitHub. Connect GitHub again.' });
+  return json(200, { ...r, repo });
+});
+
+async function readyRow(ctx: ActionCtx, pc: PcAuth, appId: string) {
+  return ctx.runQuery(internal.pcoff.rowOfPcApp, { userId: pc.userId, appId });
+}
+
+pcRoute('/pc/ready/repo-token', 'move', async (ctx, req, pc) => {
+  const app = await readyRow(ctx, pc, field(await bodyOf(req), 'appId'));
+  const t = await ctx.runAction(internal.github.repoTokenForApp, { appId: app._id });
+  return 'error' in t ? json(409, { error: t.error }) : json(200, t);
+});
+pcRoute('/pc/ready/code', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const app = await readyRow(ctx, pc, field(b, 'appId'));
+  const commit = field(b, 'commit');
+  if (!/^[0-9a-f]{40}$/.test(commit)) return json(400, { error: 'commit is needed' });
+  const t = await ctx.runAction(internal.github.repoTokenForApp, { appId: app._id });
+  if ('error' in t) return json(409, { error: t.error });
+  const res = await fetch(`https://api.github.com/repos/${t.repo}/commits/main`, { headers: { Authorization: `Bearer ${t.token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'kiwimake-cloud' } });
+  const head = res.ok ? ((await res.json()) as { sha?: string }).sha : undefined;
+  if (head !== commit) return json(409, { error: `GitHub does not have that commit on main yet (${res.status}).` });
+  await ctx.runMutation(internal.pcoff.setPushed, { appId: app._id, commit });
+  return json(200, { ok: true });
+});
+pcRoute('/pc/ready/key', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const app = await readyRow(ctx, pc, field(b, 'appId'));
+  try {
+    return json(200, await ctx.runMutation(internal.signing.storeReadyKey, { appId: app._id, box: b.box as { epk: string; iv: string; ct: string }, certSha256: field(b, 'certSha256') }));
+  } catch (e) {
+    return json(409, { error: sentence(e) });
+  }
+});
+pcRoute('/pc/pull-back/list', 'move', async (ctx, _req, pc) => json(200, { apps: await ctx.runQuery(internal.pcoff.toPullBack, { userId: pc.userId, linkId: pc.linkId }) }));
+pcRoute('/pc/pull-back/chat', 'move', async (ctx, req, pc) => {
+  const app = await readyRow(ctx, pc, field(await bodyOf(req), 'appId'));
+  return json(200, await ctx.runQuery(internal.pcoff.pullBackChat, { appId: app._id }));
+});
+pcRoute('/pc/pull-back/done', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const app = await readyRow(ctx, pc, field(b, 'appId'));
+  return json(200, await ctx.runMutation(internal.pcoff.pulledBack, { appId: app._id, commit: field(b, 'commit') }));
 });
 
 export default http;

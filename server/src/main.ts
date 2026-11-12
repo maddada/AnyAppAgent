@@ -7,6 +7,7 @@ import { installAppsCli } from "./apps-cli.ts";
 import { Auth } from "./auth.ts";
 import { CloudLink } from "./cloud-link.ts";
 import { builderKeys, CloudMover } from "./cloud-move.ts";
+import { KeepReady } from "./keep-ready.ts";
 import { loadBuilder } from "./builder.ts";
 import { loadConfig } from "./config.ts";
 import { EasyConnect } from "./easy-connect/controller.ts";
@@ -58,6 +59,9 @@ export async function main(): Promise<void> {
   // Moving apps between this PC and the cloud (docs/CLOUD.md section 3), through the PC link.
   const mover = new CloudMover({ apps, link: account, keys: builderKeys(builder), appsDir: config.appsDir, log });
   mover.recover();
+  // "Use the cloud when my PC is off" (docs/CLOUD.md section 3): apps kept ready, changes pulled back.
+  const keepReady = new KeepReady({ apps, link: account, keys: builderKeys(builder), log });
+  apps.beforeChange = (app) => keepReady.guard(app);
 
   const http = startHttpServer({
     account,
@@ -75,10 +79,13 @@ export async function main(): Promise<void> {
   broadcast = (event) => {
     // A new app gets its own signing key: show it (and that it is not backed up yet) on the PC.
     if (event.type === "app.updated") signing.refreshSoon();
+    // A new version: its code (and the key, once) goes to the cloud for changes while the PC is off.
+    if (event.type === "apk.ready") void keepReady.keep(event.app.id);
     http.broadcast(event);
   };
   signing.onChange = () => http.adminChanged();
   account.onChange = (info) => {
+    if (info.state === "linked") void keepReady.keepAll();
     http.broadcast({ type: "account.updated", account: info });
     http.adminChanged();
   };
@@ -101,6 +108,9 @@ export async function main(): Promise<void> {
   }
   easyConnect.init();
   account.start();
+  // Changes made in the cloud while this PC was off come back now, and every few minutes.
+  setTimeout(() => void keepReady.keepAll(), 10_000).unref?.();
+  setInterval(() => void keepReady.pullBackAll(), 5 * 60_000).unref?.();
   apps.startWork();
   if (builder.kind === "real") warmBuilder(config.appsDir, log);
 

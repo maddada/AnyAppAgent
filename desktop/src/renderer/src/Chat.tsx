@@ -537,6 +537,15 @@ const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App }) {
   if (row.type === "page") return <PageCard page={row.page} />;
   if (row.type === "answers") return <AnswersCard item={row.item} answers={row.answers} />;
   const item = row.item;
+  // A row of a change made in the cloud while this PC was off, pulled back (docs/CLOUD.md section 3).
+  if (item.madeInCloud && (item.kind === "user" || item.kind === "assistant")) {
+    return (
+      <div data-testid="made-in-cloud">
+        <div className="label secondary">Made in the cloud</div>
+        {item.kind === "user" ? <UserMessage item={item} /> : item.text ? <Markdown text={item.text} /> : null}
+      </div>
+    );
+  }
   switch (item.kind) {
     case "user":
       return <UserMessage item={item} />;
