@@ -62,6 +62,7 @@ The whole API (types and comments: `automations/api.d.ts`):
 | `charging({ plugged? })` | The charger plugged in (default) or unplugged |
 | `wifi({ connected?, network? })` | Wi-Fi connects (default) or drops; `network` is its name (then the card also asks for Location, all the time) |
 | `bluetooth({ connected?, device? })` | A Bluetooth device connects (default) or disconnects; `device` is part of its name (Nearby devices is asked on the card) |
+| `notification({ app?, text? })` | A notification from another app (`app`: part of its name) that mentions `text`; the notification is in `event.notification` (notification access is asked on the card) |
 | `speak(text, { language? })` | Says it aloud on the alarm volume (heard in Do Not Disturb) |
 | `notify(title, body?)` | A notification |
 | `doNotDisturb.on({ minutes? })`, `.off()`, `.isOn()` | Do Not Disturb (alarms still sound); with `minutes` it ends by itself |
@@ -83,7 +84,9 @@ saying which line and why, and that message comes back to you):
   from these calls in the code, so a literal shows as "Say "Maghrib time" aloud", while a value
   worked out at run time shows as "something worked out when it runs".
 - `says` is the person's request in one plain sentence: the card shows it as "You asked for".
-- Never log or speak what the person wrote elsewhere or who they are.
+- Never log or speak what the person wrote elsewhere or who they are. `event.notification` is someone's
+  message: use it to decide what to do; do not `log()`, `speak()` or send it unless the person asked
+  for exactly that ("read my WhatsApp messages aloud").
 - The app's name is never written out in screens or messages: use `APP_NAME` from
   `src/automate/brand.ts` (it is the name under the icon, so a rename changes it everywhere).
 - Leave `src/automate/`, `tools/automate-fence.js`, `babel.config.js` and `modules/automate/`
@@ -94,8 +97,7 @@ While an automation that is on uses `charging`, `wifi` or `bluetooth`, a small "
 notice stays (Android needs it to keep listening); it carries Stop all.
 
 **What is not in this version yet** (say so in one line and offer to add it, as a change to the
-app that needs a new install): notifications from other apps, location (arrive and leave), the app
-in front, Accessibility (read the screen and tap), and Shizuku powers. `docs/AUTOMATE.md` in Kiwimake has the plan for each.
+app that needs a new install): location (arrive and leave), the app in front, Accessibility (read the screen and tap), and Shizuku powers. `docs/AUTOMATE.md` in Kiwimake has the plan for each.
 
 **How it reaches the phone**: an automation is JavaScript only, so it goes out as a quick update
 (the fast lane, no install). Do not touch `app.json`, `package.json`, `assets/` or native code for

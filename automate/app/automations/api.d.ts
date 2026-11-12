@@ -3,8 +3,8 @@
 // The runtime behind it is src/automate/api.ts; the fence that enforces it is
 // tools/automate-fence.js. Read AGENTS.md, "Automations", before writing one.
 
-/** One thing that starts an automation. Make them with at(), prayer(), every(), charging(), wifi() or bluetooth(). */
-type AutomationTrigger = { readonly kind: 'at' | 'prayer' | 'every' | 'charging' | 'wifi' | 'bluetooth'; readonly [key: string]: unknown };
+/** One thing that starts an automation. Make them with at(), prayer(), every(), charging(), wifi(), bluetooth() or notification(). */
+type AutomationTrigger = { readonly kind: 'at' | 'prayer' | 'every' | 'charging' | 'wifi' | 'bluetooth' | 'notification'; readonly [key: string]: unknown };
 
 type PrayerName = 'fajr' | 'sunrise' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 
@@ -16,6 +16,11 @@ type AutomationEvent = {
   at: Date;
   /** True when this run comes from Try it now or the pretend clock. */
   test: boolean;
+  /**
+   * For notification(): the notification that started this run. Private: use it to decide, never
+   * log(), speak() or send it unless the person asked for exactly that.
+   */
+  notification?: { app: string; title: string; text: string };
 };
 
 type AutomationDefinition = {
@@ -67,6 +72,13 @@ declare function wifi(options?: { connected?: boolean; network?: string }): Auto
  * is part of its name ("Car" matches "My Car Audio"). Needs Nearby devices (asked on the card).
  */
 declare function bluetooth(options?: { connected?: boolean; device?: string }): AutomationTrigger;
+
+/**
+ * When a notification comes from another app. `app` is part of its name ("WhatsApp"), `text` a
+ * word or name it must mention ("Mum", in its title or text). The person allows notification
+ * access once (asked on the card). The notification is in event.notification.
+ */
+declare function notification(options?: { app?: string; text?: string }): AutomationTrigger;
 
 // ---------- Powers (each one shows on the card, and asks Android once for what it needs)
 

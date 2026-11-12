@@ -4,7 +4,7 @@
 import type { CardAction } from './store';
 import type { Trigger } from './triggers';
 
-export type Need = 'notifications' | 'dnd' | 'exact' | 'listening' | 'nearby' | 'locationAlways';
+export type Need = 'notifications' | 'dnd' | 'exact' | 'listening' | 'nearby' | 'locationAlways' | 'notificationAccess';
 
 function text(v: unknown): string | null {
   return typeof v === 'string' ? v : null;
@@ -59,6 +59,7 @@ export function needsOf(actions: CardAction[], triggers: Trigger[] = []): Need[]
     if (t.kind === 'charging' || t.kind === 'wifi' || t.kind === 'bluetooth') needs.add('listening');
     if (t.kind === 'bluetooth') needs.add('nearby');
     if (t.kind === 'wifi' && t.network) needs.add('locationAlways');
+    if (t.kind === 'notification') needs.add('notificationAccess');
   }
   for (const a of actions) {
     if (a.call === 'notify') needs.add('notifications');
@@ -73,6 +74,10 @@ export const NEED_LABEL: Record<Need, { title: string; why: string }> = {
   dnd: { title: 'Do Not Disturb access', why: 'One switch in Settings, so it can turn Do Not Disturb on and off' },
   listening: { title: 'A small notice while it listens', why: 'Android needs it to keep listening for the charger, Wi-Fi or Bluetooth. Stop all is on it' },
   nearby: { title: 'Nearby devices', why: 'To see which Bluetooth device connects' },
+  notificationAccess: {
+    title: 'Notification access',
+    why: 'To see notifications from other apps. If Android says "Restricted setting": App info, the three dots, Allow restricted settings, then try again',
+  },
   locationAlways: { title: 'Location, all the time', why: 'Android shows Wi-Fi names only with it (the app does not track where you are)' },
 };
 

@@ -30,6 +30,7 @@ const API = [
   'charging',
   'wifi',
   'bluetooth',
+  'notification',
   // powers
   'speak',
   'notify',

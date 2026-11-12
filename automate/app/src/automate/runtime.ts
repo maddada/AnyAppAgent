@@ -144,15 +144,24 @@ export async function plan(): Promise<void> {
   await ready();
   if (Native.isStopped()) {
     await Native.disarmAll();
-    await Native.listen([]);
+    await Native.listen([], []);
     return;
   }
   const s = getState();
   const wanted = new Set<string>();
   const listen = new Set<EventKind>();
+  const apps = new Set<string>();
+  let anyApp = false;
   for (const l of loadAll(s.locksOff)) {
     if (statusOf(l, s) !== 'on') continue;
-    for (const t of l.triggers) if (isEventTrigger(t)) listen.add(t.kind);
+    for (const t of l.triggers) {
+      if (!isEventTrigger(t)) continue;
+      listen.add(t.kind);
+      if (t.kind === 'notification') {
+        if (t.app) apps.add(t.app.toLowerCase());
+        else anyApp = true;
+      }
+    }
     const pretend = s.pretend?.automation === l.id ? s.pretend : undefined;
     if (pretend) {
       // Already fired (the run is under way): never arm it again, or it would run twice.
@@ -169,7 +178,7 @@ export async function plan(): Promise<void> {
   }
   for (const a of await Native.armed()) if (!wanted.has(a.id)) await Native.disarm(a.id);
   // The listener (charger, Wi-Fi, Bluetooth) runs only while an automation that is on needs it.
-  await Native.listen([...listen].sort());
+  await Native.listen([...listen].sort(), anyApp ? [] : [...apps].sort());
 }
 
 type Payload = { automation?: string; due?: number; trigger?: string; test?: boolean; plan?: boolean; event?: PhoneEvent };
@@ -201,7 +210,10 @@ export async function runEvent(e: PhoneEvent): Promise<void> {
   for (const l of loadAll(s.locksOff)) {
     if (statusOf(l, s) !== 'on') continue;
     const hit = l.triggers.find((t) => matches(t, e));
-    if (hit) await runOne(l.id, { trigger: triggerLabel(hit), due: Date.now(), test: false, manual: false });
+    if (!hit) continue;
+    // The message goes to the script only (event.notification); the log names the app, never the text.
+    const notification = e.kind === 'notification' ? Object.freeze({ app: e.app, title: e.title ?? '', text: e.text ?? '' }) : undefined;
+    await runOne(l.id, { trigger: e.kind === 'notification' ? `a notification from ${e.app}` : triggerLabel(hit), due: Date.now(), test: false, manual: false, notification });
   }
 }
 
@@ -210,7 +222,9 @@ export async function tryNow(id: string): Promise<void> {
   await runOne(id, { trigger: 'test', due: Date.now(), test: true, manual: true });
 }
 
-async function runOne(id: string, how: { trigger: string; due: number; test: boolean; manual: boolean }): Promise<void> {
+type RunHow = { trigger: string; due: number; test: boolean; manual: boolean; notification?: { app: string; title: string; text: string } };
+
+async function runOne(id: string, how: RunHow): Promise<void> {
   await ready();
   const s = getState();
   const c = compiled.find((x) => x.id === id);
@@ -259,7 +273,12 @@ async function runOne(id: string, how: { trigger: string; due: number; test: boo
     locksOff: s.locksOff,
     offset: pretend && !how.manual ? pretend.offset : 0,
   };
-  const event = Object.freeze({ trigger: how.trigger === 'pretend clock' ? (l.triggers[0] ? triggerLabel(l.triggers[0]) : 'test') : how.trigger, at: new Date(how.due), test: how.test });
+  const event = Object.freeze({
+    trigger: how.trigger === 'pretend clock' ? (l.triggers[0] ? triggerLabel(l.triggers[0]) : 'test') : how.trigger,
+    at: new Date(how.due),
+    test: how.test,
+    ...(how.notification ? { notification: how.notification } : {}),
+  });
   let kind: 'ran' | 'error' | 'stop' | 'refused' = 'ran';
   let problem = '';
   let timer: ReturnType<typeof setInterval> | undefined;

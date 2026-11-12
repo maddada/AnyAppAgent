@@ -27,7 +27,10 @@ type Native = {
   stopAll(): Promise<void>;
   resume(): Promise<void>;
 
-  listen(kinds: string[]): Promise<void>;
+  listen(kinds: string[], apps: string[]): Promise<void>;
+  notificationAccess(): boolean;
+  openNotificationAccess(): Promise<void>;
+  openAppInfo(): Promise<void>;
   hasPermission(name: string): boolean;
 };
 
@@ -64,8 +67,15 @@ export const isStopped = () => native.isStopped();
 export const stopAll = () => native.stopAll();
 export const resume = () => native.resume();
 
-/** Starts the listener for these events ('bluetooth', 'charging', 'wifi'), or stops it for none. */
-export const listen = (kinds: string[]) => native.listen(kinds);
+/**
+ * Starts the listener for these events ('bluetooth', 'charging', 'wifi'), or stops it for none;
+ * 'notification' turns the notification watcher on for these apps (none: any app).
+ */
+export const listen = (kinds: string[], apps: string[] = []) => native.listen(kinds, apps);
+/** Notifications from other apps: whether the person allowed access, and the pages to allow it. */
+export const notificationAccess = () => native.notificationAccess();
+export const openNotificationAccess = () => native.openNotificationAccess();
+export const openAppInfo = () => native.openAppInfo();
 /** Whether Android granted this permission (android.permission.*). */
 export const hasPermission = (name: string) => native.hasPermission(name);
 

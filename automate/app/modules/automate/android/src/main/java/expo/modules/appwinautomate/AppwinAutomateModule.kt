@@ -50,7 +50,25 @@ class AppwinAutomateModule : Module() {
     AsyncFunction("stopAll") { Automate.stopAll(context) }
     AsyncFunction("resume") { Automate.resume(context) }
 
-    AsyncFunction("listen") { kinds: List<String> -> ListenerService.update(context, kinds.toSet()) }
+    AsyncFunction("listen") { kinds: List<String>, apps: List<String> ->
+      NotificationWatcher.update(context, "notification" in kinds, apps)
+      ListenerService.update(context, kinds.filter { it != "notification" }.toSet())
+    }
+    Function("notificationAccess") { NotificationWatcher.hasAccess(context) }
+    AsyncFunction("openNotificationAccess") {
+      val intent = if (android.os.Build.VERSION.SDK_INT >= 30) {
+        Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+          .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, NotificationWatcher.component(context).flattenToString())
+      } else {
+        Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+      }
+      context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    AsyncFunction("openAppInfo") {
+      context.startActivity(
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + context.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      )
+    }
     Function("hasPermission") { name: String ->
       context.checkSelfPermission(name) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }

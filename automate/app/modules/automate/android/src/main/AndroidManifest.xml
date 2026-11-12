@@ -31,6 +31,16 @@
         <action android:name="android.intent.action.TIME_SET" />
       </intent-filter>
     </receiver>
+    <!-- M3: notifications from other apps. Off until the person allows notification access. -->
+    <service
+      android:name="expo.modules.appwinautomate.NotificationWatcher"
+      android:exported="true"
+      android:label="Automations"
+      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+      <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
+    </service>
     <service
       android:name="expo.modules.appwinautomate.ListenerService"
       android:exported="false"

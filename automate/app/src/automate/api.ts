@@ -5,7 +5,7 @@ import * as Native from '../../modules/automate';
 import { LIMITS, isPrivateHost } from './limits';
 import { prayerTimesFor, ajmanDay, PRAYER_KEYS, ajmanClock } from './prayer';
 import { getState, update } from './store';
-import { makeAt, makeBluetooth, makeCharging, makeEvery, makePrayer, makeWifi, ScriptError } from './triggers';
+import { makeAt, makeBluetooth, makeCharging, makeEvery, makeNotification, makePrayer, makeWifi, ScriptError } from './triggers';
 import { APP_NAME } from './brand';
 import { load, save } from '@/lib/storage';
 
@@ -152,6 +152,7 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
     charging: (options?: { plugged?: unknown }) => trigger(() => makeCharging(options)),
     wifi: (options?: { connected?: unknown; network?: unknown }) => trigger(() => makeWifi(options)),
     bluetooth: (options?: { connected?: unknown; device?: unknown }) => trigger(() => makeBluetooth(options)),
+    notification: (options?: { app?: unknown; text?: unknown }) => trigger(() => makeNotification(options)),
 
     speak: async (text: unknown, options?: { language?: unknown }) => {
       gate('speak');

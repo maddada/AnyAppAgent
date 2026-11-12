@@ -24,6 +24,7 @@ function needReady(n: Need): boolean {
   if (n === 'notifications') return Native.canNotify();
   if (n === 'listening') return Native.canNotify();
   if (n === 'nearby') return Native.hasPermission('android.permission.BLUETOOTH_CONNECT');
+  if (n === 'notificationAccess') return Native.notificationAccess();
   if (n === 'locationAlways') return Native.hasPermission('android.permission.ACCESS_FINE_LOCATION') && Native.hasPermission('android.permission.ACCESS_BACKGROUND_LOCATION');
   return Native.canExact();
 }
@@ -65,6 +66,7 @@ export function AutomationScreen({ route }: Props) {
     if (n === 'dnd') await Native.dnd.openSettings();
     if (n === 'notifications' || n === 'listening') await ensureNotificationPermission();
     if (n === 'nearby') await PermissionsAndroid.request('android.permission.BLUETOOTH_CONNECT');
+    if (n === 'notificationAccess') await Native.openNotificationAccess();
     if (n === 'locationAlways') {
       // Android asks in two steps: while in use first, then "Allow all the time" in Settings.
       const fine = await PermissionsAndroid.request('android.permission.ACCESS_FINE_LOCATION');

@@ -14,18 +14,20 @@ export type Trigger =
   | { kind: 'every'; minutes: number }
   | { kind: 'charging'; plugged: boolean }
   | { kind: 'wifi'; connected: boolean; network?: string }
-  | { kind: 'bluetooth'; connected: boolean; device?: string };
+  | { kind: 'bluetooth'; connected: boolean; device?: string }
+  | { kind: 'notification'; app?: string; text?: string };
 
 /** What the phone reports (modules/automate ListenerService). */
 export type PhoneEvent =
   | { kind: 'charging'; plugged: boolean }
   | { kind: 'wifi'; connected: boolean; network?: string | null }
-  | { kind: 'bluetooth'; connected: boolean; device?: string | null };
+  | { kind: 'bluetooth'; connected: boolean; device?: string | null }
+  | { kind: 'notification'; app: string; package: string; title?: string | null; text?: string | null };
 
 export type EventKind = PhoneEvent['kind'];
 
 export function isEventTrigger(t: Trigger): t is Extract<Trigger, { kind: EventKind }> {
-  return t.kind === 'charging' || t.kind === 'wifi' || t.kind === 'bluetooth';
+  return t.kind === 'charging' || t.kind === 'wifi' || t.kind === 'bluetooth' || t.kind === 'notification';
 }
 
 export class ScriptError extends Error {}
@@ -93,6 +95,13 @@ export function makeBluetooth(options?: { connected?: unknown; device?: unknown 
   return Object.freeze({ kind: 'bluetooth', connected: flag(options?.connected, 'connected', true), ...(device ? { device } : {}) });
 }
 
+/** notification({ app, text }): a notification from an app (part of its name), optionally mentioning some text. */
+export function makeNotification(options?: { app?: unknown; text?: unknown }): Trigger {
+  const app = name(options?.app, 'app');
+  const text = name(options?.text, 'text');
+  return Object.freeze({ kind: 'notification', ...(app ? { app } : {}), ...(text ? { text } : {}) });
+}
+
 /** Whether an event the phone reported starts this trigger. */
 export function matches(t: Trigger, e: PhoneEvent): boolean {
   if (t.kind === 'charging' && e.kind === 'charging') return t.plugged === e.plugged;
@@ -103,6 +112,12 @@ export function matches(t: Trigger, e: PhoneEvent): boolean {
   if (t.kind === 'bluetooth' && e.kind === 'bluetooth') {
     if (t.connected !== e.connected) return false;
     return !t.device || (!!e.device && e.device.toLowerCase().includes(t.device.toLowerCase()));
+  }
+  if (t.kind === 'notification' && e.kind === 'notification') {
+    const app = t.app?.toLowerCase();
+    if (app && !e.app.toLowerCase().includes(app) && e.package.toLowerCase() !== app) return false;
+    const words = `${e.title ?? ''}\n${e.text ?? ''}`.toLowerCase();
+    return !t.text || words.includes(t.text.toLowerCase());
   }
   return false;
 }
@@ -150,6 +165,7 @@ export function triggerLabel(t: Trigger): string {
   if (t.kind === 'charging') return t.plugged ? 'charger in' : 'charger out';
   if (t.kind === 'wifi') return `${t.network ?? 'Wi-Fi'} ${t.connected ? 'connected' : 'lost'}`;
   if (t.kind === 'bluetooth') return `${t.device ?? 'Bluetooth'} ${t.connected ? 'connected' : 'disconnected'}`;
+  if (t.kind === 'notification') return `a notification from ${t.app ?? 'an app'}`;
   return `every ${t.minutes === 1 ? 'minute' : `${t.minutes} minutes`}`;
 }
 
@@ -168,6 +184,10 @@ export function describeTrigger(t: Trigger): string {
   if (t.kind === 'bluetooth') {
     const which = t.device ? `a Bluetooth device called "${t.device}"` : 'any Bluetooth device';
     return t.connected ? `When ${which} connects` : `When ${which} disconnects`;
+  }
+  if (t.kind === 'notification') {
+    const from = t.app ? `from ${t.app}` : 'from any app';
+    return t.text ? `When a notification ${from} mentions "${t.text}"` : `When a notification comes ${from}`;
   }
   if (t.kind === 'at') {
     const days = t.days ? t.days.map((d) => DAY_LABEL[d]).join(', ') : 'every day';
