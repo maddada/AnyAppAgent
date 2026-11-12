@@ -380,6 +380,9 @@ export default defineSchema({
     installationId: v.optional(v.string()),
   }).index('by_login', ['login']),
 
+  // A "Connect GitHub" in progress: the state GitHub sends back to /github/callback.
+  githubStates: defineTable({ state: v.string(), userId: v.id('users'), createdAt: v.number() }).index('by_state', ['state']),
+
   // Small settings: the runner bundle boxes download ({fileId, version}).
   meta: defineTable({ key: v.string(), value: v.any() }).index('by_key', ['key']),
 

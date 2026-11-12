@@ -108,6 +108,12 @@ export async function pendingUserItem(ctx: MutationCtx, threadId: Id<'threads'>,
   await ctx.db.patch(threadId, { seq: seq + 1, lastActiveAt: now });
 }
 
+/** Cloud changes need GitHub: the code lives only there (docs/CLOUD.md, "Disconnecting GitHub"). */
+export function requireGithub(user: Doc<'users'>) {
+  if (!user.githubInstallationId) throw new Error('Connect GitHub first: your apps’ code is kept on your own GitHub.');
+  if (user.githubDisconnectedAt) throw new Error('GitHub is disconnected. Connect it again to keep changing your apps; they are all still there.');
+}
+
 export const imageArg = v.object({ fileId: v.id('_storage'), mimeType: v.string(), width: v.optional(v.number()), height: v.optional(v.number()) });
 
 export const create = mutation({
@@ -124,6 +130,7 @@ export const create = mutation({
     const prompt = args.prompt.trim().slice(0, 8000);
     if (!name) throw new Error('Give the app a name.');
     if (!prompt && !args.images?.length) throw new Error('Say what the app should do.');
+    requireGithub(user);
     await onCloudChange(ctx, user);
     const slug = await freeSlug(ctx, user._id, slugify(name));
     const now = Date.now();
@@ -153,6 +160,8 @@ export const create = mutation({
     });
     await pendingUserItem(ctx, threadId, appId, inboxId, prompt, args.images);
     await ctx.scheduler.runAfter(0, internal.boxes.ensure, { threadId });
+    // Its private repo on the person's GitHub, made at once (the first push comes after the first build).
+    await ctx.scheduler.runAfter(0, internal.github.createAppRepo, { appId });
     return appId;
   },
 });

@@ -6,7 +6,7 @@ import type { ChatItem, WorkerInfo } from '../../shared/protocol';
 import { internal } from './_generated/api';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx } from './_generated/server';
-import { imageArg, pendingUserItem } from './apps';
+import { imageArg, pendingUserItem, requireGithub } from './apps';
 import { onCloudChange } from './lib/credits';
 import { ownApp, requireUser, threadOf } from './lib/session';
 
@@ -67,6 +67,7 @@ export const send = mutation({
     const thread = await threadOf(ctx, app._id);
     const body = text.trim().slice(0, 8000);
     if (!body && !images?.length) throw new Error('Write a message first.');
+    requireGithub(user);
     await onCloudChange(ctx, user);
     const inboxId = await enqueue(ctx, thread, 'prompt', { text: body, images: images ?? [] });
     await pendingUserItem(ctx, thread._id, app._id, inboxId, body, images);

@@ -17,6 +17,8 @@ The plan is `docs/CLOUD.md`. This folder holds the cloud's own code: the Convex 
 | `convex/lib/provider.ts`, `convex/lib/instabox.ts` | The box provider interface and Instabox behind it (REST, API key). |
 | `convex/lib/credits.ts` | The subscription row, the free monthly grant, ledger and balance. |
 | `convex/signing.ts`, `convex/lib/crypto.ts` | App keys sealed (envelope: a data key per key, wrapped by `KEYS_KEK`), one-time signing tickets, the signing log. |
+| `convex/github.ts` | GitHub (milestone 3): the connect link and `/github/callback`, the user token sealed and refreshed, the app repo `anyapp-cloud-<slug>`, one-repo tokens for a box (`/runner/github-token`), disconnect; dev helpers that never print a token. |
+| `scripts/proof-account.mjs`, `scripts/m3-proof.mjs` | A dev account connected to GitHub with the spike's stored token; the milestone 3 proof (repo, push, restore from GitHub, disconnect). |
 | `runner/convex-link.mjs` | The runner's routes, the 250 ms event batches, take with acknowledge. |
 | `runner/runner.mjs` | The box's runner (milestone 2): reads the runner token from stdin, writes the agent's proxy placeholder, sets the companion's cloud config and runs `server/src/cloud-runner.ts`. |
 | `box/provision-v1.sh`, `box/agent.sh` | The image `anyapp-box-v1` on top of v0: the `kiwi` group, `/data/apps`, the agent-owned shared caches, the agent's wrapper (`sudo -n -u agent -H /opt/kiwi/agent.sh ...`), the companion's dependencies. |
@@ -25,7 +27,7 @@ The plan is `docs/CLOUD.md`. This folder holds the cloud's own code: the Convex 
 | `runner/stub-runner.mjs` | A stand-in runner (no agent): lifecycle tests with `RUNNER_ENTRY=stub-runner.mjs`. |
 | `scripts/dev.mjs` | `env`, `deploy`, `bundle` (the runner bundle boxes download), `run`, `codegen` on the dev deployment, secrets on stdin only. |
 | `scripts/m1-proof.mjs` | The milestone 1 proof on real boxes. |
-| `tests/backend.test.ts` | `npm test`: the functions against convex-test. |
+| `tests/backend.test.ts`, `tests/github.test.ts` | `npm test`: the functions against convex-test (GitHub as a fake fetch). |
 
 Milestone 1 on real boxes (12 Nov 2026, Instabox Free plan, a stand-in runner, `scripts/m1-proof.mjs`):
 

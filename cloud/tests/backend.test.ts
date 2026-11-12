@@ -11,7 +11,7 @@ const modules = import.meta.glob('../convex/**/*.*s');
 
 async function setup() {
   const t = convexTest(schema, modules);
-  const userId = await t.run((ctx) => ctx.db.insert('users', { email: 'a@example.com', name: 'A' }));
+  const userId = await t.run((ctx) => ctx.db.insert('users', { email: 'a@example.com', name: 'A', githubLogin: 'a', githubInstallationId: '1' }));
   const as = t.withIdentity({ subject: `${userId}|session1` });
   return { t, userId, as };
 }
@@ -96,7 +96,7 @@ describe('credits on the first cloud change', () => {
     const { t, as, userId } = await setup();
     const twinId = await t.run(async (ctx) => {
       await ctx.db.patch(userId, { githubUserId: 42 });
-      return ctx.db.insert('users', { email: 'twin@example.com', githubUserId: 42 });
+      return ctx.db.insert('users', { email: 'twin@example.com', githubUserId: 42, githubLogin: 'a', githubInstallationId: '1' });
     });
     await makeApp(as);
     const twin = t.withIdentity({ subject: `${twinId}|s` });

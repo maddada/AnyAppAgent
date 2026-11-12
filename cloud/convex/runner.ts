@@ -37,6 +37,9 @@ export const hello = internalMutation({
       preset: app.preset ?? 'react-native',
       repo: app.repo ?? null,
       buildHigh: app.buildHigh,
+      latestApk: app.latestApk ?? null,
+      // Made before: a box with no state of its own clones the repo and brings the chat back.
+      restore: Boolean(app.repo && app.buildHigh > 0),
       aiMode: user.aiMode ?? 'credit',
       agentSessionId: t.agentSessionId ?? null,
     };
@@ -50,6 +53,15 @@ async function offerable(ctx: QueryCtx, threadId: Id<'threads'>) {
   const t = now();
   return rows.find((r) => !r.leasedUntil || r.leasedUntil < t) ?? null;
 }
+
+/** The main chat's items, oldest first (for a box restoring the app from GitHub). */
+export const chatOf = internalQuery({
+  args: { threadId: v.id('threads') },
+  handler: async (ctx, { threadId }) => {
+    const rows = await ctx.db.query('messages').withIndex('by_thread_seq', (q) => q.eq('threadId', threadId).eq('workerId', undefined)).collect();
+    return rows.filter((m) => !m.itemId.startsWith('inbox-')).map((m) => m.item as ChatItem);
+  },
+});
 
 /** Is there work? A cheap read for the long poll. */
 export const hasWork = internalQuery({

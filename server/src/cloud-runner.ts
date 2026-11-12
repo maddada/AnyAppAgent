@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { App, ImageUpload, ServerEvent } from "../../shared/protocol.ts";
+import type { App, ChatItem, ImageUpload, ServerEvent } from "../../shared/protocol.ts";
 import { usageTaps } from "./acp/claude-session.ts";
 import { AppManager } from "./apps.ts";
 import { Auth } from "./auth.ts";
@@ -45,6 +45,8 @@ export interface Hello {
   preset: string;
   repo: string | null;
   buildHigh: number;
+  latestApk?: App["latestApk"] | null;
+  restore?: boolean;
   certSha256: string | null;
   aiMode: string;
 }
@@ -329,12 +331,13 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
     log(`build ${build.number} delivered in ${((Date.now() - t0) / 1000).toFixed(1)} s (${files.map((f) => f.abi).join(", ")}${otaFileId ? ", quick update" : ""})`);
   }
 
-  // Pushing: the runner's own way, with a one-repo token it holds (milestone 3). No repo: nothing.
+  // Pushing: the runner's own way, with a one-repo token it asks Convex for (docs/CLOUD.md).
   const lastPush = { commit: undefined as string | undefined, ok: false };
   git.setPushImpl(async (dir) => {
-    if (!hello.repo) return null;
     const commit = await git.headCommit(dir);
-    const error = await pushWithToken(link, dir, hello.repo, log);
+    const t0 = Date.now();
+    const error = await pushWithToken(link, dir, log);
+    if (!error) log(`pushed ${commit?.slice(0, 7)} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     lastPush.commit = commit;
     lastPush.ok = error === null;
     return error;
@@ -368,6 +371,12 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
   const http = startHttpServer({ host: "127.0.0.1", port: config.port, version: config.version, auth, apps, easyConnect });
   await http.ready;
   apps.recover();
+  // A fresh machine for an app made before (its snapshot expired or was lost): the code comes back
+  // from GitHub, the chat from Convex, and the build numbers carry on above the last one.
+  if (!localId && hello.restore) {
+    localId = await restoreFromGithub(link, hello, config, apps, log);
+    writeFileSync(mapFile, JSON.stringify({ localId }));
+  }
   apps.startWork();
   log(`runner ready for ${hello.slug} (${hello.packageName}); local app ${localId ?? "not made yet"}`);
 
@@ -430,27 +439,74 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
   await apps.shutdown();
 }
 
+/** A one-repo token for this thread's app (Contents write, 1 hour), and the repo it is for. */
+async function repoToken(link: RunnerLink): Promise<{ token: string; repo: string }> {
+  const t = await link.post<{ token?: string; repo?: string; error?: string }>("/runner/github-token");
+  if (!t.token || !t.repo) throw new Error(t.error ?? "no GitHub token");
+  return { token: t.token, repo: t.repo };
+}
+
+/** Runs git with the token given through this process's own child's environment only. */
+function gitWithToken(args: string[], cwd: string, token: string): Promise<{ code: number; err: string }> {
+  const helper = "!f() { echo username=x-access-token; echo password=$KIWI_GH_TOKEN; }; f";
+  const full = ["-c", "safe.directory=*", "-c", "credential.helper=", "-c", `credential.helper=${helper}`, ...args];
+  return new Promise((resolve) => {
+    const child = spawn("git", full, { cwd, env: { ...process.env, KIWI_GH_TOKEN: token, GIT_TERMINAL_PROMPT: "0" }, stdio: ["ignore", "ignore", "pipe"] });
+    let err = "";
+    child.stderr.on("data", (d: Buffer) => (err += d.toString("utf8")));
+    child.on("close", (code) => resolve({ code: code ?? 1, err }));
+  });
+}
+
+/**
+ * Clones the app's repo into its folder, brings its chat back from Convex and registers it with
+ * AppManager, its next build numbered above the highest one the phone has.
+ */
+async function restoreFromGithub(link: RunnerLink, hello: Hello, config: Config, apps: AppManager, log: Log): Promise<string> {
+  const t0 = Date.now();
+  const dir = join(config.appsDir, hello.slug);
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  const { token, repo } = await repoToken(link);
+  const r = await gitWithToken(["clone", "-q", `https://github.com/${repo}.git`, dir], config.appsDir, token);
+  if (r.code !== 0) throw new Error(`could not clone ${repo}: ${r.err.trim().split("\n").pop()}`);
+  const cloned = Date.now();
+  const { items } = await link.post<{ items: ChatItem[] }>("/runner/chat");
+  const now = new Date().toISOString();
+  const last = hello.latestApk ?? undefined;
+  const high = Math.max(hello.buildHigh, last?.number ?? 0);
+  const app: App = {
+    id: randomUUID(),
+    name: hello.name,
+    slug: hello.slug,
+    packageName: hello.packageName,
+    preset: (hello.preset as App["preset"]) ?? "react-native",
+    status: "idle",
+    iconVersion: 1,
+    ...(last ? { latestApk: last } : {}),
+    latestBuild: last && last.number === high ? last : { number: high, status: "succeeded", startedAt: now, finishedAt: now },
+    createdAt: now,
+    updatedAt: now,
+  };
+  const made = apps.adoptCloudApp(app, dir, items);
+  log(`restored ${hello.slug} from ${repo}: clone ${((cloned - t0) / 1000).toFixed(1)} s, ${items.length} chat items, next build ${high + 1}`);
+  return made.id;
+}
+
 /**
  * Pushes HEAD to the app's repo on the person's GitHub with a one-repo token Convex mints for this
- * push (milestone 3). The token is given to git through an environment variable of this process's
- * own child only, never a file, a command line or the agent.
+ * push. The token is given to git through an environment variable of this process's own child
+ * only, never a file, a command line or the agent.
  */
-export async function pushWithToken(link: RunnerLink, dir: string, repo: string, log: Log): Promise<string | null> {
+export async function pushWithToken(link: RunnerLink, dir: string, log: Log): Promise<string | null> {
   let token: string;
+  let repo: string;
   try {
-    token = (await link.post<{ token: string }>("/runner/github-token")).token;
+    ({ token, repo } = await repoToken(link));
   } catch (e) {
     return `no GitHub token: ${(e as Error).message}`;
   }
-  const helper = "!f() { echo username=x-access-token; echo password=$KIWI_GH_TOKEN; }; f";
-  const args = ["-c", "safe.directory=*", "-c", "credential.helper=", "-c", `credential.helper=${helper}`, "push", "-q", `https://github.com/${repo}.git`, "HEAD:refs/heads/main"];
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const r = await new Promise<{ code: number; err: string }>((resolve) => {
-      const child = spawn("git", args, { cwd: dir, env: { ...process.env, KIWI_GH_TOKEN: token, GIT_TERMINAL_PROMPT: "0" }, stdio: ["ignore", "ignore", "pipe"] });
-      let err = "";
-      child.stderr.on("data", (d: Buffer) => (err += d.toString("utf8")));
-      child.on("close", (code) => resolve({ code: code ?? 1, err }));
-    });
+    const r = await gitWithToken(["push", "-q", `https://github.com/${repo}.git`, "HEAD:refs/heads/main"], dir, token);
     if (r.code === 0) return null;
     log(`push attempt ${attempt} failed: ${r.err.trim().split("\n").pop()}`);
     if (attempt < 3) await new Promise((res) => setTimeout(res, 5000 * attempt));

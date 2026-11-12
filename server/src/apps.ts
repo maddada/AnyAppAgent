@@ -689,6 +689,16 @@ export class AppManager {
     update.timer.unref?.();
   }
 
+  /**
+   * The cloud: an app brought back on a fresh machine from its GitHub repo (already cloned to
+   * `dir`) with the chat Convex kept (docs/CLOUD.md, "A new box restores from GitHub").
+   */
+  adoptCloudApp(app: App, dir: string, chat: ChatItem[]): App {
+    const record: ReadyRecord = { app, dir };
+    this.addRestored(record, chat, []);
+    return record.app;
+  }
+
   /** An app brought back by a backup restore (backup.ts): it joins the list with its chat and to-dos. */
   private addRestored(record: AppRecord, chat: ChatItem[], todos: unknown): void {
     const ready = record as ReadyRecord;
@@ -1631,7 +1641,7 @@ ${overviewNudge()}` : note;
       const pushError = await git.push(record.dir);
       if (pushError) {
         this.log(`[${record.app.slug}] push failed: ${pushError}`);
-        this.errorItem(record, "Could not save this version to GitHub right now; it is kept on the PC.");
+        this.errorItem(record, this.config.cloud ? "Could not save this version to GitHub right now; it is kept on its machine and saved with the next change." : "Could not save this version to GitHub right now; it is kept on the PC.");
       }
       record.app.latestApk = build;
       this.refreshSigning(record);

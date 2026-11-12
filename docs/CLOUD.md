@@ -568,12 +568,29 @@ own GitHub account (the `cloud` in the name keeps it apart from a PC app's `anya
   and stores it as that box's Secret (an Instabox workspace key in Convex does that headless), and
   replaces its value before the hour runs out (the placeholder stays the same, running boxes get
   the new value in about 10 s). Secrets are org-wide names, so each box gets its own
-  (`GH_<boxId>`).
+  (`GH_<boxId>`). **Built in milestone 3, without the proxy for now:** Secrets can only be set by a
+  workspace's `workspace:admin` key, and the dev account is a personal org on the Free plan, so the
+  runner asks Convex (`/runner/github-token`) for a fresh one-repo token at each push and clone and
+  hands it to its own `git` child through an environment variable (never a file, a command line or
+  the agent, which runs as another user and cannot read the runner's processes). With a workspace
+  key in Convex the token moves into the proxy as above and the runner's code stays the same.
 - **A new box restores from GitHub**: it clones the repo (full history, which versions and undo
   need), then installs `node_modules` from the warm cache in the image. Snapshots stay a speed-up,
-  not the copy that matters.
+  not the copy that matters. **Built in milestone 3** (`cloud-runner.ts restoreFromGithub`): a box
+  with no state for an app that has a repo and builds clones it (1.4 s), brings the main chat back
+  from Convex (`/runner/chat`) and numbers the next build above the highest one. Its first build is
+  a full one (the fast lane's base APK is not in the repo): message to new version 447 s, of which
+  285 s Gradle.
 - **Disconnecting GitHub** stops cloud changes for that person until they reconnect (the chat says
-  why); their repos and apps stay as they are.
+  why); their repos and apps stay as they are. **Built in milestone 3**: "Disconnect GitHub"
+  deletes the tokens; a refused token refresh, or GitHub refusing a one-repo token (the App
+  uninstalled or the repo taken out of the install), marks the account disconnected; making an app
+  or sending a message then answers "GitHub is disconnected. Connect it again to keep changing your
+  apps; they are all still there." Connecting: `github:connectUrl` gives the install link (or the
+  authorize link once installed) with a one-time state; `/github/callback` checks it, stores the
+  user token (8 hours) and its refresh token sealed, and sends the browser back to
+  `anyappagent://github`. The user token is refreshed 5 minutes before it expires (refresh tokens
+  rotate: an old one is refused).
 - **Sharing and publishing releases stay out of the first version.** The GitHub connection is the
   hard part and it will be there, but the PC's sharing code drives the `gh` CLI and would need
   porting to the REST API with the App's tokens, plus the public `-releases` repo, the secrets scan,
@@ -1146,6 +1163,18 @@ two `simple` helpers at once, each landing a quick update. The agent could not r
 environment, its state, the box's secrets file or the key folder, and had no sudo. AI used: $2.11
 at list price for a new app and three changes (with $0.14 of fix turns lost to a box permission
 bug found and fixed on the way). Pushing waits for GitHub (milestone 3).
+
+**Milestone 3, what ran (12 Nov 2026):** `cloud/convex/github.ts` (connect link with a one-time
+state, the callback, the user token sealed and refreshed, the app repo made with it, one-repo
+installation tokens signed with the App's key in Convex's own runtime, disconnect), the runner's
+pushes and clones with those tokens, and the restore from GitHub. Proven: 7 tests with a fake
+GitHub (`cloud/tests/github.test.ts`); live, the stored user token refreshed after a forced expiry;
+a new app "Shop List" got `maddada/anyapp-cloud-shoplist` (private) at once, its first build was
+pushed (GitHub's main is the build's commit), its token reached that one repo only; its box and
+snapshot were then deleted, the next message made a fresh box that cloned the repo in 1.4 s, and
+build 2 was pushed on top; after "Disconnect GitHub" a message was refused with the plain reason.
+**Not run:** the browser end of connecting (the person signs in to GitHub and taps Authorize): the
+proofs used the user token the spike stored. AI used: about $1.3.
 
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account

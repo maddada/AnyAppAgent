@@ -74,6 +74,11 @@ const cmd = process.argv[1]?.endsWith('dev.mjs') ? process.argv[2] : null;
 if (cmd === 'env') {
   setVar('INSTABOX_API_KEY', env.INSTABOX_API_KEY);
   setVar('KIWI_ALLOW_WIPE', '1');
+  // The GitHub App (milestone 3): its id and slug, and its private key as PKCS#8 (Web Crypto's form).
+  setVar('GITHUB_APP_ID', env.GITHUB_APP_ID);
+  setVar('GITHUB_APP_SLUG', env.GITHUB_APP_SLUG);
+  const pem = fs.readFileSync(path.join(os.homedir(), '.appwin-secrets', 'github-app.pem'), 'utf8');
+  setVar('GITHUB_APP_PRIVATE_KEY', crypto.createPrivateKey(pem).export({ type: 'pkcs8', format: 'pem' }).toString());
 } else if (cmd === 'deploy') {
   const t = Date.now();
   convex(['dev', '--once', '--typecheck', 'enable']);

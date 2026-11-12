@@ -494,3 +494,24 @@ export const providerSays = internalMutation({
     }
   },
 });
+
+/**
+ * Dev: the thread loses its box and its snapshot (as when a snapshot expires after 30 days), so
+ * its next message makes a fresh box from the image and the code comes back from GitHub.
+ */
+export const forget = internalAction({
+  args: { threadId: v.id('threads') },
+  handler: async (ctx, { threadId }) => {
+    if (process.env.KIWI_ALLOW_WIPE !== '1') throw new Error('dev only');
+    const s = await ctx.runQuery(internal.boxes.thread, { threadId });
+    if (!s) return;
+    const p = boxProvider();
+    if (s.box?.providerId && !s.box.deletedAt) await p.delete(s.box.providerId);
+    if (s.box) await ctx.runMutation(internal.boxes.patchBox, { boxId: s.box._id, patch: { deletedAt: now() } });
+    if (s.thread.snapshotId) await p.deleteSnapshot(s.thread.snapshotId);
+    await ctx.runMutation(internal.boxes.patchThread, {
+      threadId,
+      patch: { boxState: 'none', boxId: undefined, snapshotId: undefined, runnerTokenHash: undefined, runnerSeenAt: undefined, busy: false },
+    });
+  },
+});

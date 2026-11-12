@@ -88,6 +88,15 @@ runnerRoute('/runner/signed', async (ctx, req, r) => {
   return json(200, { ok: true });
 });
 
+// The app's repo and a token for it alone (Contents write, 1 hour): the runner pushes with it.
+runnerRoute('/runner/github-token', async (ctx, _req, r) => {
+  const t = await ctx.runAction(internal.github.repoToken, { threadId: r.threadId });
+  return json('error' in t ? 409 : 200, t);
+});
+
+// The main chat as Convex has it: a box that starts with no state brings it back (restore).
+runnerRoute('/runner/chat', async (ctx, _req, r) => json(200, { items: await ctx.runQuery(internal.runner.chatOf, { threadId: r.threadId }) }));
+
 runnerRoute('/runner/upload-url', async (ctx) => json(200, { url: await ctx.runMutation(internal.runner.uploadUrl, {}) }));
 
 runnerRoute('/runner/build', async (ctx, req, r) => {
