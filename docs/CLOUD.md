@@ -9,32 +9,98 @@ everything else that must last (accounts, apps, chats, usage, money, builds, fil
 lives in Convex.
 
 Status: **the agreed plan** (decisions of 12 Nov 2026, section 12), nothing built yet. Facts were
-checked on the web on **12 Nov 2026**; each has its source link. Not legal advice: section 1 says
-which answers must come from Anthropic.
+checked on the web on **12 Nov 2026**; each has its source link. Not legal advice: section 1 gives
+the texts and the one line that leaves any doubt.
 
 What the user decided (it overrides `C:\aa\ideas\cloud-changes.html` and the first draft of this
 file): chat in the AnyAppAgent phone app, Google or a code by email, Convex for most things, one
 instabox.sh box per thread behind a small interface, signing keys stored encrypted in Convex,
 storage free to the person. **Credit is dollars**: people top up with us from the first version,
 and machine time is drawn from it at cost plus 10% even when they use their own Anthropic key.
-**Every change shows an estimate first** (machine and AI). The code is **never stored by us**: the
-agent commits and pushes to the person's GitHub after every change. Each app's chat is an
-orchestrator on **Opus 5.5 high** that hands work to helpers on the right model. Selling AI tokens
-from credit waits for Anthropic's answer.
+**AI can be paid from that credit**: the agent runs on the **Claude Agent SDK** (today's agent, the
+ACP adapter built on it) with **our own Anthropic API key**, tokens charged **at cost**, our 10% on
+machine time and a platform fee (decisions of 12 Nov 2026, second round). **Every change shows an
+estimate first** (machine and AI). The code is **never stored by us**: the agent commits and pushes
+to the person's GitHub after every change. Each app's chat is an orchestrator on **Opus 5.5 high**
+that hands work to helpers on the right model. No email or agreement with Anthropic is sought.
 
 ## 1. The terms question first
 
-**Short version.** Selling tokens through our OpenRouter key while the agent is Claude Code is what
-Anthropic's Claude Code terms forbid by name ("pay for, resell, or intermediate", so even AI at cost
-or free is out), unless Anthropic agrees otherwise. People bringing their own Anthropic API key is
-allowed in so many words. Our own agent on the Messages API (or Anthropic's Managed Agents) with our
-key is what the Commercial Terms allow ("to power products and services Customer makes available to
-its own customers and end users"); the only open point there is whether pricing the tokens as cost
-plus 10% reads as "resell the Services", a question for Anthropic or a lawyer. An agent on the Claude
-Agent SDK with our key sits in between: the SDK pages invite exactly that (end-user products, API key
-auth, multi-tenant hosting), but the SDK runs the Claude Code binary, so the hosted-Claude-Code
-condition could be read to cover it. Charging for **machine time** from our own credit is not Claude
-usage, so it is ours to sell. (Texts rechecked on the live pages on 12 Nov 2026, below.)
+**Short version.** **An agent built on the Claude Agent SDK, run in our product on our cloud boxes
+with our own Anthropic API key, for our end users, who pay us, is allowed.** Fairly sure (about 85 to
+90%): every page about the SDK says so in its own words, and Anthropic itself publishes case studies
+of exactly this shape. What stays forbidden is offering **Claude Code itself** (the product: the CLI,
+its name and look) as a hosted service paid on our key, and offering claude.ai sign-in or plan limits
+inside our product. People bringing their own Anthropic API key stays allowed too. Charging for
+**machine time** and a **platform fee** is ours to sell; passing tokens through **at cost** keeps us
+clear of Commercial Terms D.4's "resell the Services". (Texts read on the live pages on 12 Nov 2026,
+below; the one line that leaves doubt is named in "The Agent SDK finding".)
+
+### The Agent SDK finding (12 Nov 2026)
+
+**The question**: may a company run the Claude Agent SDK (TypeScript or Python) inside its own hosted
+product, on cloud boxes, for its end users, with the company's own Anthropic API key, and charge
+those end users (tokens at cost, a margin on machine time and a platform fee)?
+
+**Answer: allowed.** Not legal advice. Why:
+
+1. **The SDK's own terms name this case.** The overview, both READMEs and the TypeScript LICENSE put
+   the SDK under the Commercial Terms, "including when you use it to power products and services that
+   you make available to your own customers and end users". The only restriction any SDK page sets is
+   on claude.ai login and plan rate limits, and it sends developers to API keys instead.
+2. **The legal page tells SDK developers to use their own API key.** Its "Authentication and credential
+   use" section is the only place it names the Agent SDK: "Developers building products or services
+   that interact with Claude's capabilities, including those using the Agent SDK, should use API key
+   authentication through Claude Console". It does not say the end user's key.
+3. **The end-user-credentials condition is written for Claude Code the product, not the SDK.** "Can
+   customers offer Claude Code in their products?" never names the Agent SDK. It is about
+   "preinstalling or running Claude Code" as Claude Code: its naming rule lets such products say "that
+   it runs Claude Code", while the SDK's branding rules forbid exactly that ("Not permitted: 'Claude
+   Code' or 'Claude Code Agent'") and require "Your product should maintain its own branding and not
+   appear to be Claude Code". Two opposite branding rules only make sense as two separate regimes:
+   hosted Claude Code (end users bring credentials) and products built on the SDK (Commercial Terms,
+   developer's key).
+4. **The hosting guide cannot work under an end-user-key rule.** Its worked examples are "a site
+   builder that hosts a per-user editable site", "a chat bot that handles continuous traffic from a
+   platform like Slack" and "a customer support agent", with "the subprocess reads
+   `ANTHROPIC_API_KEY` from its environment. Supply it from your secret manager", a "Multi-tenant
+   isolation" section, and "Anthropic token cost typically dominates container infrastructure cost".
+   A Slack bot's or a support agent's users do not each bring an Anthropic key.
+5. **Anthropic publishes customers doing exactly this.** "Anything" (https://claude.com/customers/anything):
+   "Anything's AI agent, powered by Claude and the Agent SDK, handles the full build: databases,
+   backend logic, ... mobile deployment, App Store submission, and payments", for "1.5 million users
+   ... turning ideas into working software products without writing code", who have "built more than
+   800,000 apps". Anything sells plans with monthly credits ($19 for 20K credits, $199 for 200K,
+   "Can purchase more credits", https://www.createanything.com/pricing); neither page mentions an
+   Anthropic key of the user's own.
+   That is AnyAppAgent Cloud's shape: an app builder for non-coders, on the SDK, paid from credit.
+   Bolt (https://claude.com/customers/bolt) is "Built by StackBlitz and powered by the Claude Agent
+   SDK" for its users, "More than 10,000 users have already uploaded their own design systems to
+   Bolt".
+
+**The one line that leaves doubt.** The legal page's condition covers "running Claude Code in your
+products or services (e.g. in hosted sandboxes or other agent infrastructure)", and the SDK overview
+calls the SDK "A library that runs the Claude Code binary" ("The Agent SDK spawns and supervises a
+`claude` CLI subprocess", hosting guide). Read word for word, a hosted SDK product does run the
+Claude Code binary. No Anthropic page or employee has said in writing "the end-user-credentials
+condition does not apply to the SDK": the one open GitHub question near it
+(https://github.com/anthropics/claude-agent-sdk-typescript/issues/512, 19 Oct 2026, about
+subscription sign-in in an SDK app) has no Anthropic answer, and no issue in the SDK repos or
+`anthropics/claude-code` asking about our case was found. Against that literal reading stand points 1
+to 5, each more specific to the SDK. The remaining risk is that Anthropic later rewrites the legal page
+to name the SDK; the docs' policy pages have changed several times in 2026.
+
+**Conditions we keep, so we stay on the SDK side of the line:**
+
+- The agent is the Agent SDK (today: `@agentclientprotocol/claude-agent-acp`, which runs the native
+  `claude` binary from `@anthropic-ai/claude-agent-sdk-<platform>-<arch>`), unmodified, on our Console
+  API key.
+- **Never call it "Claude Code"** in the product, the store listing or the site. Allowed: "Claude
+  Agent", or "AnyAppAgent, powered by Claude". No Claude Code look-alike visuals.
+- **No claude.ai sign-in in the cloud** (the ACP adapter offers `--cli auth login --claudeai`: not
+  shown in cloud mode). Their own API key is fine.
+- Tokens at cost, shown as such; our margin is on machine time and the platform fee (D.4).
+- The Usage Policy's AI disclosure: the chat says it is an AI agent.
 
 ### What the texts say (verbatim)
 
@@ -87,7 +153,15 @@ Claude Agent SDK overview (https://code.claude.com/docs/en/agent-sdk/overview):
 
 That note restricts **claude.ai login and plan rate limits only**; it points developers to API keys.
 The same page describes the SDK as "A library that runs the Claude Code binary", and its branding
-rules forbid calling the product "Claude Code". Hosting the Agent SDK
+rules forbid calling the product "Claude Code": "Not permitted: 'Claude Code' or 'Claude Code Agent'",
+"Your product should maintain its own branding and not appear to be Claude Code or any Anthropic
+product". The SDK's READMEs say the same as the overview, word for word, under "License and terms"
+(https://github.com/anthropics/claude-agent-sdk-typescript, npm `@anthropic-ai/claude-agent-sdk`
+0.3.322, license "SEE LICENSE IN README.md"; https://github.com/anthropics/claude-agent-sdk-python,
+PyPI `claude-agent-sdk` 0.2.180). The TypeScript LICENSE.md: "© Anthropic PBC. All rights reserved.
+Use is subject to Anthropic's Commercial Terms of Service." The Python repo's LICENSE file is MIT (an
+open question in its own issues, #971 and #1245, unanswered); the bundled `claude` binary is under
+the Commercial Terms either way. Hosting the Agent SDK
 (https://code.claude.com/docs/en/agent-sdk/hosting) is written for products serving many users on the
 developer's key: "the subprocess reads `ANTHROPIC_API_KEY` from its environment. Supply it from your
 secret manager", with a "Multi-tenant isolation" section and examples such as "a site builder that
@@ -103,6 +177,10 @@ Anthropic Commercial Terms (https://www.anthropic.com/legal/commercial-terms, ef
 > D.4 "Customer may not and must not attempt to (a) access the Services to build a competing product
 > or service, including to train competing AI models or resell the Services except as expressly
 > approved by Anthropic"
+
+"Services" there means "Anthropic API keys and any other Anthropic offerings that references these
+Terms, as well as all related Anthropic tools, documentation and services", so the SDK (which
+references these Terms) and its bundled binary come under them, A.1 included.
 
 Anthropic Usage Policy (https://www.anthropic.com/legal/aup, the page says effective 12 Nov 2026,
 so it changed today): "Resell, proxy, or otherwise provide access to Claude through unauthorized
@@ -131,14 +209,14 @@ Claude agent in Agent HQ is paid from Copilot requests, under a partnership anno
 
 ### What that means for each way of paying for AI
 
-| Way | Agent | What the texts say | Needs whose answer |
-| --- | ----- | ------------------ | ------------------ |
-| **A. Our OpenRouter key, AI paid from credit** | Claude Code | "may not pay for, resell, or intermediate". Per-person OpenRouter keys made under our account are still our account and our bill. OpenRouter is also not in the listed 3P providers. Pointing Claude Code at OpenRouter with `ANTHROPIC_BASE_URL` works technically (OpenRouter's own guide) but does not change who pays. | **An agreement with Anthropic** ("Unless we've mutually agreed otherwise"; the text does not say written, but any such deal will be). Asked (section 12). |
-| **B. The person's own Anthropic API key** | Claude Code | Named as allowed: "their own Anthropic API key". | None. **The first version.** Machines are still paid from credit. |
-| **C. The person's own OpenRouter key** | Claude Code | Billed to them under their own OpenRouter agreement, but OpenRouter is not one of the three named 3P providers. | Anthropic: is OpenRouter an accepted "3P inference provider credential"? Asked. |
-| **D. Our credit, a different agent** (an open agent loop over the API, for example OpenCode, which speaks ACP) | Not Claude Code | Allowed as written: the Claude Code conditions do not apply, and Commercial Terms A.1 allows powering products for end users. Open point: D.4 forbids "resell the Services except as expressly approved", and OpenRouter forbids "reselling API access to Models" but allows incorporating it into our product. Selling an app-building agent is a product; listing "Claude tokens at cost plus 10%" looks more like resale (a reading, not settled). Anthropic's Managed Agents on our key is the same case. | Only the markup question, for Anthropic or a lawyer. Decided only if Anthropic says no to A (Q2). |
-| **E. The Claude Agent SDK with our key** | Agent SDK (it runs Claude Code underneath; our ACP adapter `claude-agent-acp` is built on it) | Unclear, leaning allowed. For: the SDK page puts it under the Commercial Terms "including when you use it to power products and services that you make available to your own customers and end users", its only restriction is on claude.ai login and plan rate limits, the legal page tells SDK developers to "use API key authentication", and the hosting guide is written for multi-tenant products on our key. Against: the SDK "runs the Claude Code binary", and the legal page's condition covers "running Claude Code in your products or services (e.g. in hosted sandboxes or other agent infrastructure)". | Anthropic (one line of confirmation). Kept behind the same switch as A until then. Asked. |
-| **F. Claude Pro, Max or Ultra sign-in** | Claude Code | Allowed only as the person signing in to the unmodified binary through Anthropic's own flow; "developers may not collect, store, or intermediate Claude.ai credentials or session tokens". Keeping a sign-in alive across boxes looks like storing. | Anthropic. Out of the first version. Asked. |
+| Way | Agent | What the texts say | Status |
+| --- | ----- | ------------------ | ------ |
+| **E. Our Anthropic API key, AI paid from credit** | Agent SDK (today's agent: the ACP adapter `claude-agent-acp`, built on it) | Allowed: the SDK is under the Commercial Terms "including when you use it to power products and services that you make available to your own customers and end users"; the legal page tells SDK developers to "use API key authentication through Claude Console"; the hosting guide is written for multi-tenant products on the developer's key; Anthropic's own case studies (Anything, Bolt) are this shape. Doubt: one literal reading of the hosted-Claude-Code line ("The Agent SDK finding" above). | **Chosen** (section 12). In the first version. Tokens at cost. |
+| **B. The person's own Anthropic API key** | Agent SDK | Allowed under both regimes: "their own Anthropic API key". | In the first version, next to E. Machines still paid from credit. |
+| **A. Claude Code itself on our OpenRouter key** | Claude Code (the product) | "may not pay for, resell, or intermediate". Needs an agreement ("Unless we've mutually agreed otherwise"). | **Dropped**: no email or agreement is sought, and E does the same job. |
+| **C. The person's own OpenRouter key** | Agent SDK | OpenRouter is not one of the three named 3P providers, and the SDK hosting guide names only Anthropic, Bedrock and Google Cloud endpoints. | Out. |
+| **D. Our credit, a different agent** (for example OpenCode over the API) | Not Claude Code | Allowed under A.1, the same as E. | Not needed now that E is allowed. |
+| **F. Claude Pro, Max or Ultra sign-in** | Agent SDK | The SDK overview: "Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK"; "developers may not collect, store, or intermediate Claude.ai credentials or session tokens". | Out. Not offered in cloud mode. |
 
 ### "The $200 Claude plan has $200 free"
 
@@ -156,20 +234,19 @@ https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultr
   linked Claude Console organization".
 
 So an Ultra (or Max) subscriber can make a Console API key that draws on that credit and paste it
-into AnyAppAgent Cloud (way B). Whether our service running Claude Code with their key counts as
-"when you run them yourself" is in the email to Anthropic; if not, the key still works, it is just
-billed to their Console balance.
+into AnyAppAgent Cloud (way B). Whether our service running the agent with their key counts as
+"when you run them yourself" is not settled (no one is asking Anthropic); if not, the key still
+works, it is just billed to their Console balance.
 
 ### Decided
 
-1. **The user writes to Anthropic** (https://www.anthropic.com/contact-sales) for an agreement on
-   way A, with the questions on ways C, E, F and the plan credit. The email is ready in
-   `C:\aa\ideas\cloud-emails.md`.
-2. **The first version ships way B** (their own Anthropic key, Ultra and Max credit included).
-   Machine time is paid from their AnyAppAgent credit.
-3. **Paying for AI from credit is built behind a switch** and turned on only after Anthropic's yes
-   (way A, Claude Code on per-person OpenRouter keys). What to do on a no is decided then (Q2).
-4. **Instabox** is asked in writing about terms 2(b)(iii) (section 8); the email is in the same file.
+1. **AI paid from credit runs on the Agent SDK with our own Anthropic API key** (way E): today's
+   agent and ACP adapter, unmodified, never called "Claude Code" in the product. Tokens are charged
+   **at cost**; our 10% is on machine time and a platform fee (section 12).
+2. **Their own Anthropic key** (way B, Ultra and Max credit included) is offered next to it. Machine
+   time is paid from their AnyAppAgent credit either way.
+3. **No email to Anthropic and no agreement sought.** Ways A, C and F are out.
+4. **Instabox** was asked in writing about terms 2(b)(iii) (section 8); that email was sent.
 
 ## 2. How people pay
 
@@ -187,13 +264,13 @@ Two things cost money: **machine time** (the cloud box that runs the agent and t
 
 **Your AI**:
 
-- **My Claude API key** (way B, the first version). Pasted once, stored encrypted (section 6). If
-  they have Max or Ultra, a one-line hint: "Your plan includes monthly API credit: link a Console
+- **My Claude API key** (way B, also in the first version). Pasted once, stored encrypted (section
+  6). If they have Max or Ultra, a one-line hint: "Your plan includes monthly API credit: link a Console
   organization, then make a key there." AnyAppAgent shows what each change cost on that key (list
   price, an estimate: Anthropic bills it, not us).
-- **Pay for AI from my credit** (way A): shown only once Anthropic agrees. Then AI is drawn from the
-  same credit at our cost plus 10%.
-- **My OpenRouter key** (way C): only if Anthropic says OpenRouter counts.
+- **Pay for AI from my credit** (way E, the first version): AI runs on our Anthropic key and is drawn
+  from the same credit **at cost** (the model's list price, no markup), plus the platform fee
+  (section 5). The card shows AI and machine time apart.
 
 Whatever the way, the AI key is never put in a file or an environment variable on the box:
 Instabox's Secrets proxy adds it to outgoing HTTPS requests, so the agent cannot print it (section
@@ -266,8 +343,8 @@ or **"Use my PC"** (today's pairing and Easy Connect). One mode per install in t
 Holds everything that must outlive a box except the code: people, apps, threads, chat history,
 estimates, usage and money, build records, APK and quick update files, encrypted signing keys, the
 person's own AI key and their GitHub token. Its live queries replace the companion's WebSocket. It
-runs no agent and no build: its actions only call the box provider, GitHub, OpenRouter (once AI from
-credit is on), Stripe and the key service, and its HTTP actions are what the box and Stripe call.
+runs no agent and no build: its actions only call the box provider, GitHub, Stripe and the key
+service (the AI calls go from the box, with the key added by the Secrets proxy), and its HTTP actions are what the box and Stripe call.
 Deployment in **US East** (standard price; Instabox is in the US anyway).
 
 ### The code lives on the person's GitHub
@@ -396,7 +473,7 @@ Convex's own. Money is stored in millionths of a dollar ("micros"), never floats
 
 | Table | Fields (short) | Indexes |
 | ----- | -------------- | ------- |
-| `users` | from Convex Auth (`name`, `email`, `image`), `aiMode` ("ownAnthropic", later "credit", "ownOpenRouter"), `githubLogin`, `githubInstallationId`, `stripeCustomerId`, `openRouterKeyHash` (credit AI only), `blocked` | `by_email`, `by_github_installation` |
+| `users` | from Convex Auth (`name`, `email`, `image`), `aiMode` ("ownAnthropic" or "credit"), `githubLogin`, `githubInstallationId`, `stripeCustomerId`, `blocked` | `by_email`, `by_github_installation` |
 | `apps` | `userId`, `name`, `slug`, `packageName` (`com.anyappcloud.<slug>`), `repo` (`owner/anyapp-cloud-<slug>`), `pushedCommit`, `preset`, `iconFileId`, `lastBuild`, `status` (`AppStatus`), `health`, `overview` (text of `overview.md`) | `by_user`, `by_package` |
 | `threads` | `appId`, `userId`, `boxId`, `boxState` ("none", "starting", "running", "paused", "snapshotted", "deleted"), `runnerTokenHash`, `lastActiveAt`, `agentSessionId` | `by_app`, `by_state_and_active` |
 | `messages` | `threadId`, `workerId?`, `item` (a `ChatItem`: text, tool rows, plan, permission, page, build, usage), `seq` | `by_thread_seq` |
@@ -408,7 +485,7 @@ Convex's own. Money is stored in millionths of a dollar ("micros"), never floats
 | `balances` | `userId`, `micros` (always the sum of `ledger`, changed in the same mutation) | `by_user` |
 | `keys` | `appId`, `userId`, `packageName`, `certSha256`, `wrappedDataKey`, `ciphertext`, `iv`, `kekVersion`, `lineage?` (never deleted) | `by_app` |
 | `signings` | `appId`, `build`, `sha256` of what was signed, `at` | `by_app` |
-| `secrets` | `userId`, `kind` ("anthropic", "githubRefresh", later "openrouter"), `wrappedDataKey`, `ciphertext`, `iv`, `last4`, `expiresAt?` | `by_user_kind` |
+| `secrets` | `userId`, `kind` ("anthropic", "githubRefresh"), `wrappedDataKey`, `ciphertext`, `iv`, `last4`, `expiresAt?` | `by_user_kind` |
 | `boxes` | `threadId`, `provider` ("instabox"), `providerId`, `size`, `startedAt`, `pausedAt`, `snapshotId`, `secondsBilled` | `by_thread`, `by_provider_id` |
 
 Medians for the estimates come from `usage` through the aggregate component (per app and level, and
@@ -423,11 +500,12 @@ HTML. **No code**, no Git bundles.
 | ---- | --------------------------------- | ------------------------------ |
 | Machine | Seconds the box ran (runner) | The provider's usage. Instabox's per-machine usage endpoint (`GET /v1/machines/{id}/usage`, offered "for billing your own customers"): running seconds by size, plus disk while paused. Drawn from credit at cost plus 10%. |
 | AI, own key (first version) | Each ACP turn's `usage` (input, output, cache write, cache read) per session, as the usage meter reads it today (`server/src/usage.ts`), times that model's list price | Never billed by us. Billed by Anthropic to them. Shown so the estimates and the per-app line are honest. |
-| AI, from credit (behind the switch) | The same ACP usage | OpenRouter: one key per person made with the Management API, so each key's own usage is that person's cost. Read after each turn and settled. Its `limit` is set to the person's balance, so OpenRouter itself stops a runaway change when the money is gone. |
+| AI, from credit (our Anthropic key) | The same ACP usage | The same ACP usage per turn, times that model's list price (our cost: tokens at cost), settled after each turn. The runner stops the change when the balance runs out (below). Checked once a day against our Console usage for the key. |
 | Storage in Convex, GitHub | Not shown | Free to the person, as decided (GitHub is theirs) |
 
-**Price**: charge = our cost times 1.10. Our cost for machines is the provider's price; for AI from
-credit it is the model's list price plus OpenRouter's 5.5% credit fee.
+**Price**: machine time = our cost times 1.10. AI from credit = the model's list price, **at cost**
+(no markup on tokens). Plus a **platform fee**, its size still open (section 12); the cost tables in
+section 7 assume 10% of the AI cost to show the order of magnitude.
 
 **Settling**: machine time is settled per change (the box's seconds from the message until the box
 pauses, read from the runner and corrected from Instabox's usage once a day), plus paused disk once
@@ -447,7 +525,9 @@ cards, as the earlier page had it) is more than half of a 10% margin on a small 
 credit stays theirs. Storage is free.
 
 **Running out**: a change starts only if the balance covers twice its machine estimate (and, once AI
-from credit is on, its AI estimate; the OpenRouter key's limit is the hard stop). A change already
+from credit, its AI estimate). With AI from credit the runner is the hard stop: it adds up each
+turn's cost and cancels the ACP session when the change's AI and machine cost reach the balance plus
+a small overdraft. A change already
 running is allowed to finish even if it goes slightly below zero; the next top-up covers it.
 Monthly spending limits come later, as decided.
 
@@ -519,8 +599,8 @@ replaces them with real medians, and the estimates use real medians from then on
 | Complex across areas, full build | orchestrator + 1 or 2 `deep` | about $0.65 | about 15 | $0.009 | **$0.009** |
 | New app (plan, helpers, first build) | orchestrator + 2 `deep` | about $0.85 | about 20 | $0.011 | **$0.012** |
 
-With AI from credit (behind the switch) the AI part would be charged at list plus OpenRouter's 5.5%,
-plus 10%: about $0.23, $0.50, $0.75 and $0.99.
+With AI from credit the AI part is charged at list (at cost): about $0.20, $0.43, $0.65 and $0.85,
+plus the platform fee (about 2, 4, 7 and 9 cents if it is 10% of the AI cost).
 
 ### Per month
 
@@ -543,15 +623,16 @@ First version (everyone on their own key, we sell machine time only):
 
 So the first version costs us roughly the fixed plan fees; cost plus 10% on machines alone never
 pays for them. Top-ups are paid in advance, so cash comes in early, but it is the person's money
-until used. The business case needs AI from credit (once Anthropic agrees):
+until used. The business case needs AI from credit and the platform fee (the fee shown here as 10%
+of the AI cost, an assumption until it is decided):
 
 | A month, everyone paying AI from credit | 10 people | 100 people | 1000 people |
 | ------- | --------- | ---------- | ----------- |
-| Inference we buy (list + OpenRouter's 5.5%) | $33 | $333 | $3,334 |
+| Inference we buy (list, on our Anthropic key) | $32 | $316 | $3,160 |
 | Instabox, Convex, the rest (as above) | $21 | $24 | $231 |
-| **What we pay** | **about $54** | **about $357** | **about $3,565** |
-| **What people pay us** (inference and machines + 10%) | $38 | $378 | $3,777 |
-| **What we keep** | about **minus $17** | about **plus $20** | about **plus $212** |
+| **What we pay** | **about $53** | **about $340** | **about $3,391** |
+| **What people pay us** (inference at cost, machines + 10%, platform fee) | $36 | $359 | $3,586 |
+| **What we keep** | about **minus $17** | about **plus $19** | about **plus $195** |
 
 Instabox's paused disk is the one cost that grows fastest if boxes are not snapshotted;
 snapshotting after an hour keeps the average under 1 GiB per person.
@@ -642,7 +723,7 @@ GitHub Apps and private repos on personal accounts cost nothing.
 - **Regions**: US East standard (our choice); Ireland, Sydney, Canada at plus 30%; fixed per
   deployment.
 
-### OpenRouter (only for AI from credit, behind the switch)
+### OpenRouter (not used now: AI from credit runs on our own Anthropic key, way E)
 
 - **Prices** equal Anthropic's list on the global endpoints (Opus 5.5 $4 / $20, Sonnet 5.5 $2 / $10,
   Fable 5.2 $8 / $40 per million; caching passed through). Regional endpoints cost 10% more.
@@ -663,7 +744,7 @@ GitHub Apps and private repos on personal accounts cost nothing.
 | ---- | --------------- | ------- | --- |
 | `shared/protocol.ts` | Every type the phone renders (`App`, `ChatItem`, `BuildInfo`, `OtaInfo`, `ApkVariant`, `TokenUsage`, `AppUsage`, `ChangeNotes`, `WorkerInfo`, `PageInfo`, `ServerEvent`) | Additive only: `BuildInfo.fileUrls?`, `App.cloud?`, `ChatItem.cost?`, `WorkerInfo.level?` | Runner event, estimate and billing types (`CostEstimate`, `Balance`, `UsageCharge`) |
 | `shared/chat`, `shared/theme` | All: rows, build card, usage line, pages, the Workbench look | The usage line shows machine and AI money and the estimate next to it; the plan card shows an estimate | The estimate line under the message box |
-| `server/` | `acp/`, `workers.ts`, `playbook.ts`, `pages/`, `todos.ts`, `usage.ts`, `build-cycle.ts`, `history.ts`, `health.ts`, `apk-scan.ts`, `icon.ts`, `secrets.ts`, `git.ts` (commit, history, undo) | A second entry `runner.ts` with no HTTP server; events go to a sink (WebSocket today, Convex in the cloud); `coordinator-playbook.ts` gets the three levels and "commit and push after every change"; `start_worker` gets `level`; ACP sessions start with a model and effort; `usage.ts` prices per model; the package prefix comes from config | `runner/convex-sink.ts`, `runner/inbox.ts`, `runner/signing.ts`, `runner/git-credentials.ts` (the one-repo token), later the OpenCode launcher (only if Q2 goes that way) |
+| `server/` | `acp/`, `workers.ts`, `playbook.ts`, `pages/`, `todos.ts`, `usage.ts`, `build-cycle.ts`, `history.ts`, `health.ts`, `apk-scan.ts`, `icon.ts`, `secrets.ts`, `git.ts` (commit, history, undo) | A second entry `runner.ts` with no HTTP server; events go to a sink (WebSocket today, Convex in the cloud); `coordinator-playbook.ts` gets the three levels and "commit and push after every change"; `start_worker` gets `level`; ACP sessions start with a model and effort; `usage.ts` prices per model; the package prefix comes from config | `runner/convex-sink.ts`, `runner/inbox.ts`, `runner/signing.ts`, `runner/git-credentials.ts` (the one-repo token), `runner/ai-meter.ts` (the per-change AI stop for AI from credit) |
 | `builder/` | `createApp`, `buildApk`, `fastlane.mjs`, `zip.mjs`, `axml.mjs`, `apksign.mjs`, `OtaSign.java`, `keybackup.mjs` | `ANYAPP_SIGN_LATER=1` (Gradle unsigned, then `apksign.mjs`); checked on Linux (it was built on Windows) | Nothing else |
 | `template/`, `template-kotlin/` | All, including the updater, Reload card, crash catcher and diary | Nothing for the first version | Later: a cloud feed for shared apps |
 | `app/` | Home grid, chat, installer, quick update hand-over, crash forwarding, AI for your apps, Settings | `api.ts`: the `Client` behind an interface with two implementations | Sign in, mode choice, connect GitHub, "Your credit" and top-up, "Your AI", estimates, the Convex client |
@@ -681,13 +762,11 @@ publishing (after the first version), and the `anyapp` CLI's other apps.
 new boxes restored from GitHub; the app grid with `com.anyappcloud.<slug>` packages; one chat per
 app as an **Opus 5.5 high orchestrator** with helpers at three levels in the same box; plan first
 and pages; builds and quick updates to the phone; versions and undo; What changed; crash reports;
-**their own Anthropic API key** (way B); **dollar credit with Stripe top-ups** (smallest $10, card fee
+**AI from credit on our Anthropic key through the Agent SDK** (way E, tokens at cost, the platform
+fee) or **their own Anthropic API key** (way B); **dollar credit with Stripe top-ups** (smallest $10, card fee
 on top; test mode until launch); machine time drawn from credit at cost plus 10%; **estimates**
 (under the message box, on the plan card, per app) and actuals per change; signing keys encrypted in
 Convex, signed on the box as a separate Unix user; Instabox behind the provider interface.
-
-**Built but switched off until Anthropic answers**: paying for AI from credit (per-person
-OpenRouter keys with limits, AI charges in the ledger).
 
 **Out**: monthly spending limits; Claude sign-in (way F); moving apps between PC and cloud; sharing
 and publishing releases (+3 days, the first thing after); the diary (it needs a phone round trip
@@ -701,12 +780,11 @@ through Convex); Expo Exact; the separate signer machine (+2 days, next).
 | 3 | GitHub: the App, connect flow (browser and back), user token refresh, repo creation, minting one-repo tokens, the credential helper, restore from GitHub, disconnect handling | 3 |
 | 4 | Phone: sign in, mode choice, the Convex `Client`, downloads from file URLs, connect GitHub, "Your AI", "Your credit" and top-up, the estimate line, plan card estimate, per-app costs | 5 |
 | 5 | Keys and secrets: envelope encryption, the key service, the signing log, the GitHub refresh token | 2 |
-| 6 | Credit and metering: usage rows per session and model from ACP and Instabox, settling machine time from the balance, ledger and balances, Stripe Checkout with the fee on top and its webhook (test mode), the credit gate, estimates from medians (aggregate component), real medians replacing section 7's guesses; AI from credit behind its switch | 5 |
+| 6 | Credit and metering: usage rows per session and model from ACP and Instabox, settling machine time from the balance, ledger and balances, Stripe Checkout with the fee on top and its webhook (test mode), the credit gate, estimates from medians (aggregate component), real medians replacing section 7's guesses; AI from credit on our key (AI charges and the platform fee in the ledger, the runner's per-change stop) | 5 |
 | 7 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator (top-up in Stripe test mode, estimate shown, code on GitHub), a second prompt as a quick update, a box deleted and the app restored from GitHub, rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 3.5 |
 | | **First version** | **30 days, about 6 weeks** (the first draft was 22) |
 | | Sharing and publishing releases from the cloud | +3 |
 | | Separate signer machine | +2 |
-| | If Anthropic says no and way D is chosen: OpenCode launcher, playbook wording, tool-call translation checks | +4 |
 
 Where the 8 extra days come from: GitHub instead of Git bundles (+2.5 net), credit and Stripe live
 instead of switched off (+1.5), estimates (+2), the orchestrator's levels and per-model pricing
@@ -719,9 +797,8 @@ field per value (or into the file the coordinator names), and tell the coordinat
 **Never paste a key, secret or private key in a chat.** Steps marked **Spike** are needed before
 milestone 0 starts; **Later** can wait.
 
-1. **Send the two emails** (Spike, free). Open `C:\aa\ideas\cloud-emails.md`. Send the first through
-   https://www.anthropic.com/contact-sales and the second to support@instabox.sh. Hand over nothing;
-   forward the answers to the coordinator when they come.
+1. **Instabox's answer** (done: the email in `C:\aa\ideas\cloud-emails.md` was sent to
+   support@instabox.sh). Forward the answer to the coordinator when it comes. No email to Anthropic.
 2. **Convex** (Spike, Free plan). Sign up at https://dashboard.convex.dev. Create a project named
    `anyappagent-cloud`, region **US East**. Hand over: the deployment URL (`https://<name>.convex.cloud`)
    and a **development deploy key** (project Settings, Deploy keys).
@@ -731,7 +808,9 @@ milestone 0 starts; **Later** can wait.
    https://dashboard.instabox.sh/dashboard/api-keys with `machines:read`, `machines:write`,
    `machines:delete` and `images:*`. Hand over: the API key (`ibk_...`) and which plan you are on.
 4. **Anthropic API key** (Spike, about $5 of credit). At https://platform.claude.com make a key with a
-   small credit. If you have Max or Ultra, first link a Console organization to the plan to claim its
+   small credit. It is also the key AI from credit runs on (way E): before real users, a separate
+   Console workspace and key for production, with a monthly spend limit, and enough prepaid credit for
+   the usage tier we need. If you have Max or Ultra, first link a Console organization to the plan to claim its
    monthly API credit
    (https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultra-and-team-plans).
    Hand over: the key (`sk-ant-...`).
@@ -765,9 +844,7 @@ milestone 0 starts; **Later** can wait.
    Cloud project, enable Cloud KMS; the coordinator will give the exact key ring steps then.
 10. **A domain** (Later: before real users, for email codes from our own address and the GitHub
     App's homepage). Not needed for the spike.
-11. **OpenRouter** (Later: only if Anthropic agrees to way A). https://openrouter.ai, $10 of credit
-    ($10.80 with the fee), one Management API key
-    (https://openrouter.ai/docs/guides/overview/auth/management-api-keys).
+11. (Dropped: OpenRouter is not needed; AI from credit runs on our Anthropic key.)
 
 12. **Cloudflare** (Later: for Family circles, `docs/CIRCLES.md`, free). A free account holding the
     domain's DNS, and one scoped API token. Needs the final product name and the domain (item 10).
@@ -782,10 +859,16 @@ Anthropic credit (none with Max or Ultra credit).
 
 ## 12. Decisions (12 Nov 2026)
 
-- **Q1, AI**: ask Anthropic for the agreement (way A) now, ship their-own-key (way B) first.
+- **Q1, AI** (second round, 12 Nov 2026, replaces the first): **AI paid from credit runs on the
+  Claude Agent SDK** (today's agent and ACP adapter, `claude-agent-acp`) **with our own Anthropic API
+  key** (way E), allowed per section 1's finding. Their own key (way B) stays as the other choice.
+  **No email to Anthropic** ("they won't answer, we're very small"): no agreement is sought, ways A,
+  C and F are dropped.
+- **Q12, pricing**: **tokens at cost**; our **10% goes on machine time and a platform fee**, never on
+  the tokens.
 - **Q3, credit**: credit is dollars, topped up with us from the first version. Machine time is drawn
-  from it at cost plus 10% even with their own key; no free fair-use cap. Paying for AI from credit
-  stays behind its switch until Anthropic says yes. Every change shows an estimate of machine and AI
+  from it at cost plus 10% even with their own key; no free fair-use cap. AI can be paid from the
+  same credit (Q1), at cost plus the platform fee (Q12). Every change shows an estimate of machine and AI
   cost first, and each app shows its own.
 - **Q4, package names**: cloud apps get their own prefix, `com.anyappcloud.<slug>`.
 - **Q5, Instabox**: yes, behind a small provider interface.
@@ -799,9 +882,11 @@ Anthropic credit (none with Max or Ultra credit).
   same box, their costs shown per helper and added into the estimate and the usage line.
 - **Q10, sign-in**: Convex Auth, Clerk if the spike hits a wall.
 - **Q11, region**: Convex US East.
+- **Q2** (what to do if Anthropic said no to way A) is closed: no one is asking, and way E is
+  allowed.
 
 Still open:
 
-- **Q2. If Anthropic says no to way A**: offer AI from credit through a different agent (way D,
-  OpenCode over OpenRouter, priced per change, after a lawyer's look), or keep the cloud own-key
-  only? Decided when Anthropic answers.
+- **Q13. The platform fee's size and basis**: 10% of each change's AI cost (what section 7 assumes),
+  10% of the whole change, or a flat fee per change or per month? Shown as its own line next to
+  "AI at cost" and "machine time".
