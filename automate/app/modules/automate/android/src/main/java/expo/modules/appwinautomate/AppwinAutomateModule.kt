@@ -1,0 +1,53 @@
+package expo.modules.appwinautomate
+
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.exception.Exceptions
+import expo.modules.kotlin.modules.Module
+import expo.modules.kotlin.modules.ModuleDefinition
+
+/** JavaScript API: modules/automate/index.ts. Only the runtime (src/automate) uses it. */
+class AppwinAutomateModule : Module() {
+  private val context: Context
+    get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
+
+  override fun definition() = ModuleDefinition {
+    Name("AppwinAutomate")
+
+    AsyncFunction("arm") { id: String, at: Double, payload: String ->
+      Automate.arm(context, id, at.toLong(), payload)
+    }
+    AsyncFunction("disarm") { id: String -> Automate.disarm(context, id) }
+    AsyncFunction("disarmAll") { Automate.disarmAll(context) }
+    AsyncFunction("armed") { Automate.armed(context) }
+    Function("canExact") { Automate.canExact(context) }
+
+    Function("dndAccess") { Automate.dndAccess(context) }
+    Function("dndIsOn") { Automate.dndIsOn(context) }
+    AsyncFunction("openDndSettings") {
+      context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    AsyncFunction("dndOn") { minutes: Int -> Automate.dndOn(context, minutes).toDouble() }
+    AsyncFunction("dndOff") { Automate.dndOff(context) }
+
+    AsyncFunction("speak") { text: String, language: String?, promise: Promise ->
+      Speaker.speak(context, text, language) { problem ->
+        if (problem == null) promise.resolve(null) else promise.reject("ERR_SPEAK", problem, null)
+      }
+    }
+    AsyncFunction("notify") { title: String, body: String?, tag: String ->
+      Notices.show(context, title, body, tag)
+    }
+    Function("canNotify") { Notices.canNotify(context) }
+
+    AsyncFunction("ask") { title: String, text: String, timeoutMs: Double, promise: Promise ->
+      Notices.ask(context, title, text, timeoutMs.toLong(), promise)
+    }
+
+    Function("isStopped") { Automate.isStopped(context) }
+    AsyncFunction("stopAll") { Automate.stopAll(context) }
+    AsyncFunction("resume") { Automate.resume(context) }
+  }
+}

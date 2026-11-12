@@ -322,3 +322,16 @@ else"), and the explanation in the app, then GitHub (Q243).
   owner, `.env` files or keys). "Show Change this app to others" in the Share dialog.
 - `anyapp copy` lets any app's agent take something from another app, only on request.
 - Details, the link, the message format and the protocol additions: `docs/CHANGE-THIS-APP.md`.
+
+## Appwin Automate (added 2026-11-12)
+
+The user answered `C:\aa\ideas\any-tasker.html`: automations you just describe, as a separate app
+AnyAppAgent makes and keeps (**Appwin Automate**, a normal app in the grid), written by the agent as
+scripts, typed in the app's one Change this app box, with every safety rail (a card before on, ask
+before sending, run log, Stop all, hard limits, and a Settings, Advanced toggle that turns the locks
+off) and all nine powers in the first version. Automations are JavaScript only, so they arrive
+through the fast lane, never as a new APK unless a new native power is needed.
+
+- The app's starter: `automate/app` (made through New app with one message, `automate/README.md`).
+- Design, the fence around scripts, the powers, milestones and the proof: `docs/AUTOMATE.md`.
+- No protocol, server, builder or phone app change.

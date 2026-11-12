@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Wakes the app on the minute to run automations (side-loaded apps get it without asking). -->
+  <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Do Not Disturb: the person still allows it with one switch in Settings. -->
+  <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+  <!-- A run is a short foreground service with a "Running ... / Stop all" notification. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+  <application>
+    <receiver android:name="expo.modules.appwinautomate.TriggerReceiver" android:exported="false" />
+    <receiver android:name="expo.modules.appwinautomate.ActionReceiver" android:exported="false" />
+    <receiver android:name="expo.modules.appwinautomate.AutomateBootReceiver" android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+        <action android:name="android.intent.action.TIME_SET" />
+      </intent-filter>
+    </receiver>
+    <service
+      android:name="expo.modules.appwinautomate.AutomateTaskService"
+      android:exported="false"
+      android:foregroundServiceType="shortService" />
+  </application>
+</manifest>

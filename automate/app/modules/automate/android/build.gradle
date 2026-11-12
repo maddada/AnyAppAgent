@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.appwinautomate'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.appwinautomate"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  lint {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // HeadlessJsTaskService: runs automations while the app is closed.
+  implementation 'com.facebook.react:react-android'
+}
