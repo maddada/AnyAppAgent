@@ -21,6 +21,7 @@ import { TodoPanel } from "./Todo.tsx";
 import { VersionsPanel } from "./Versions.tsx";
 import type { CareState } from "../../../../shared/protocol.ts";
 import { bigJob, HeadsUpCard, HealthNotice, UsageNote } from "./Trust.tsx";
+import { MoveNotice } from "./Move.tsx";
 import type { HeadsUp } from "../../../../shared/chat/index.ts";
 
 const api = window.anyapp;
@@ -190,6 +191,7 @@ function MainChat({ app, icon, online, headerExtra, hex, onSetupHex, care }: { a
         {headerExtra}
       </header>
       <HealthNotice app={app} care={care} online={online} />
+      <MoveNotice app={app} />
       <div className="chat-scroll-wrap">
         <div
           className="chat"

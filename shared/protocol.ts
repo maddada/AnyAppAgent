@@ -107,8 +107,25 @@ export interface App {
   // account. "cloud": made in the cloud; "pc": a PC app the account knows (moved, or kept ready for
   // changes while the PC is off). Absent on apps a paired PC lists.
   cloud?: CloudPlace;
+  move?: AppMove; // added (cloud milestone 8): moving to the cloud, or moved (then this PC's copy is read-only)
   createdAt: string;
   updatedAt: string;
+}
+
+// Moving an app between a PC and the cloud (docs/CLOUD.md section 3, "Moving an app"; added for
+// the cloud's milestone 8). On a PC app: its move to the cloud while it runs, and after it.
+export interface AppMove {
+  to: "cloud" | "pc";
+  state: "running" | "done" | "failed";
+  step?: string; // while running: what it does now, a plain sentence
+  error?: string; // when failed: why, a plain sentence (Move again resumes it)
+  cloudAppId?: string; // when done: the cloud app it became
+  at: string;
+}
+// POST /api/apps/:id/move  { to: "cloud" } -> App (202: the move runs; App.move shows it)
+// POST /api/cloud-apps/:cloudAppId/move-here -> App (the new PC app, once it is here)
+export interface MoveRequest {
+  to: "cloud";
 }
 
 export interface CloudPlace {

@@ -8,7 +8,7 @@ import { httpAction, type ActionCtx } from './_generated/server';
 import { auth } from './auth';
 import { callback } from './github';
 import { route as pageRoute, storePage } from './pages';
-import { sealTicket } from './signing';
+import { sealKeyForPc, sealTicket } from './signing';
 import { done as billingDone, webhook as stripeWebhook } from './stripe';
 import { hmacSha256B64, openSecret, randomToken, sha256Hex, unb64 } from './lib/crypto';
 import { pcLinkPage } from './lib/pcLinkPage';
@@ -244,6 +244,143 @@ http.route({
     if (r.state === 'linked') return json(200, { state: 'linked', token });
     return json(r.state === 'gone' ? 410 : 200, { state: r.state });
   }),
+});
+
+// ---- Moving apps (milestone 8, moves.ts): the PC does the work with its link's `move` scope. ----
+
+const bodyOf = async (req: Request) => (await req.json().catch(() => ({}))) as Record<string, unknown>;
+const field = (b: Record<string, unknown>, k: string) => (typeof b[k] === 'string' ? (b[k] as string) : '');
+const sentence = (e: unknown) => (e as Error).message.replace(/^[\s\S]*Uncaught Error: /, '').split('\n')[0]!;
+
+pcRoute('/pc/move/to-cloud', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const presets = ['react-native', 'kotlin', 'expo-exact'] as const;
+  const preset = presets.find((p) => p === field(b, 'preset'));
+  let started;
+  try {
+    started = await ctx.runMutation(internal.moves.startToCloud, {
+      userId: pc.userId,
+      linkId: pc.linkId,
+      pcAppId: field(b, 'pcAppId'),
+      name: field(b, 'name'),
+      slug: field(b, 'slug'),
+      packageName: field(b, 'packageName'),
+      ...(preset ? { preset } : {}),
+      buildHigh: Number(b.buildHigh) || 0,
+    });
+  } catch (e) {
+    return json(409, { error: sentence(e) });
+  }
+  // The app's own private repo on the person's GitHub (made once; a resumed move finds it).
+  const repo = await ctx.runAction(internal.github.createAppRepo, { appId: started.appId });
+  if (!repo) return json(409, { error: 'Could not make the app repo on your GitHub. Connect GitHub again, then try once more.' });
+  const { move } = await ctx.runMutation(internal.moves.appOfMove, { moveId: started.moveId, userId: pc.userId });
+  return json(200, { moveId: started.moveId, appId: started.appId, repo, resumed: started.resumed, steps: move.steps });
+});
+
+pcRoute('/pc/move/to-pc', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  try {
+    return json(200, await ctx.runMutation(internal.moves.startToPc, { userId: pc.userId, linkId: pc.linkId, appId: field(b, 'appId') }));
+  } catch (e) {
+    return json(409, { error: sentence(e) });
+  }
+});
+
+async function moveFor(ctx: ActionCtx, pc: PcAuth, moveId: string) {
+  return ctx.runMutation(internal.moves.appOfMove, { moveId, userId: pc.userId });
+}
+
+// A token for this app's repo only: the PC pushes (to the cloud) or clones (to the PC) with it.
+pcRoute('/pc/move/repo-token', 'move', async (ctx, req, pc) => {
+  const { app } = await moveFor(ctx, pc, field(await bodyOf(req), 'moveId'));
+  const t = await ctx.runAction(internal.github.repoTokenForApp, { appId: app._id });
+  return 'error' in t ? json(409, { error: t.error }) : json(200, t);
+});
+
+// The PC pushed: Convex checks the repo's main is that commit before the step counts.
+pcRoute('/pc/move/code', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const { move, app } = await moveFor(ctx, pc, field(b, 'moveId'));
+  const commit = field(b, 'commit');
+  if (!/^[0-9a-f]{40}$/.test(commit)) return json(400, { error: 'commit is needed' });
+  const t = await ctx.runAction(internal.github.repoTokenForApp, { appId: app._id });
+  if ('error' in t) return json(409, { error: t.error });
+  const res = await fetch(`https://api.github.com/repos/${t.repo}/commits/main`, { headers: { Authorization: `Bearer ${t.token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'kiwimake-cloud' } });
+  const head = res.ok ? ((await res.json()) as { sha?: string }).sha : undefined;
+  if (head !== commit) return json(409, { error: `GitHub does not have that commit on main yet (${res.status}).` });
+  await ctx.runMutation(internal.moves.markStep, { moveId: move._id, step: 'code', commit });
+  return json(200, { ok: true });
+});
+
+pcRoute('/pc/move/transport-key', 'move', async () => json(200, { publicRaw: process.env.KEYS_TRANSPORT_PUBLIC ?? '' }));
+
+// To the cloud: the PC's key, sealed to Convex's transport key for this move.
+pcRoute('/pc/move/key', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const { move } = await moveFor(ctx, pc, field(b, 'moveId'));
+  try {
+    const r = await ctx.runMutation(internal.signing.storeMovedKey, { moveId: move._id, box: b.box as { epk: string; iv: string; ct: string }, certSha256: field(b, 'certSha256') });
+    await ctx.runMutation(internal.moves.markStep, { moveId: move._id, step: 'key' });
+    return json(200, r);
+  } catch (e) {
+    return json(409, { error: sentence(e) });
+  }
+});
+
+// To the cloud: the chat and to-dos, in batches; `last` ends the step.
+pcRoute('/pc/move/chat', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  return json(
+    200,
+    await ctx.runMutation(internal.moves.putChat, { moveId: field(b, 'moveId'), userId: pc.userId, items: Array.isArray(b.items) ? b.items : [], ...(Array.isArray(b.todos) ? { todos: b.todos } : {}), last: b.last === true }),
+  );
+});
+
+// To the PC: the key sealed to the PC's one-time key, then the chat and to-dos.
+pcRoute('/pc/move/key-down', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const { move, app } = await moveFor(ctx, pc, field(b, 'moveId'));
+  if (move.kind !== 'toPc') return json(400, { error: 'Not a move to the PC.' });
+  const k = await ctx.runQuery(internal.signing.keyForMove, { appId: app._id });
+  if (!k) return json(409, { error: 'This app has no signing key in the cloud yet.' });
+  return json(200, await sealKeyForPc(k, move._id, field(b, 'pcKey')));
+});
+pcRoute('/pc/move/chat-down', 'move', async (ctx, req, pc) => {
+  const { move, app } = await moveFor(ctx, pc, field(await bodyOf(req), 'moveId'));
+  if (move.kind !== 'toPc') return json(400, { error: 'Not a move to the PC.' });
+  return json(200, await ctx.runQuery(internal.moves.chatForPc, { appId: app._id }));
+});
+// To the PC: the PC says it has the code, the key or the chat.
+pcRoute('/pc/move/step', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  const { move } = await moveFor(ctx, pc, field(b, 'moveId'));
+  const step = field(b, 'step');
+  if (move.kind !== 'toPc' || !['code', 'key', 'chat'].includes(step)) return json(400, { error: 'bad step' });
+  await ctx.runMutation(internal.moves.markStep, { moveId: move._id, step: step as 'code' | 'key' | 'chat' });
+  return json(200, { ok: true });
+});
+
+pcRoute('/pc/move/finish', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  try {
+    return json(
+      200,
+      await ctx.runMutation(internal.moves.finish, {
+        moveId: field(b, 'moveId'),
+        userId: pc.userId,
+        ...(typeof b.buildHigh === 'number' ? { buildHigh: b.buildHigh } : {}),
+        ...(field(b, 'pcAppId') ? { pcAppId: field(b, 'pcAppId') } : {}),
+      }),
+    );
+  } catch (e) {
+    return json(409, { error: sentence(e) });
+  }
+});
+pcRoute('/pc/move/fail', 'move', async (ctx, req, pc) => {
+  const b = await bodyOf(req);
+  await ctx.runMutation(internal.moves.fail, { moveId: field(b, 'moveId'), userId: pc.userId, error: field(b, 'error') || 'stopped' });
+  return json(200, { ok: true });
 });
 
 export default http;

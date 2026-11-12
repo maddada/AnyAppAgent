@@ -50,6 +50,53 @@ export const storeKey = internalMutation({
 });
 
 /**
+ * A key moving in from a PC (moves.ts, "To the cloud"): the PC's PKCS12 bytes, password and alias,
+ * sealed by the companion to Convex's transport key for this move. Kept like a new app's key; the
+ * same key again is fine, a different one is refused (a key is never replaced).
+ */
+export const storeMovedKey = internalMutation({
+  args: { moveId: v.id('moves'), box: sealedArg, certSha256: v.string() },
+  handler: async (ctx, { moveId, box, certSha256 }) => {
+    const m = (await ctx.db.get(moveId))!;
+    const app = (await ctx.db.get(m.appId))!;
+    if (!/^[0-9a-f]{64}$/.test(certSha256)) throw new Error('bad certificate hash');
+    const have = await ctx.db.query('keys').withIndex('by_app', (q) => q.eq('appId', app._id)).first();
+    if (have) {
+      if (have.certSha256 === certSha256) return { certSha256, stored: false };
+      throw new Error('This app already has a different signing key in the cloud; a key is never replaced.');
+    }
+    const plain = await openWith(await transportKey(), box as Sealed, `appkey-move:${moveId}`);
+    const inner = JSON.parse(new TextDecoder().decode(plain)) as { p12: string; storePassword: string; keyAlias: string };
+    plain.fill(0);
+    if (!inner.p12 || !inner.storePassword || !inner.keyAlias) throw new Error('That key is not complete.');
+    const payload = new TextEncoder().encode(JSON.stringify({ p12: inner.p12, storePassword: inner.storePassword, keyAlias: inner.keyAlias }));
+    const e = await envelopeSeal(payload, aadOf(app._id, app.packageName));
+    payload.fill(0);
+    await ctx.db.insert('keys', { appId: app._id, userId: app.userId, packageName: app.packageName, certSha256, ...e, at: Date.now() });
+    return { certSha256, stored: true };
+  },
+});
+
+/** The app's key envelope for a move to a PC (the http action opens it and seals it to the PC's one-time key). */
+export const keyForMove = internalQuery({
+  args: { appId: v.id('apps') },
+  handler: async (ctx, { appId }) => {
+    const app = (await ctx.db.get(appId))!;
+    const key = await ctx.db.query('keys').withIndex('by_app', (q) => q.eq('appId', appId)).first();
+    if (!key) return null;
+    return { envelope: { wrappedDataKey: key.wrappedDataKey, iv: key.iv, ciphertext: key.ciphertext, kekVersion: key.kekVersion }, aad: aadOf(app._id, app.packageName), certSha256: key.certSha256 };
+  },
+});
+
+/** The key for a PC, opened once and sealed to the PC's one-time key for this move only. */
+export async function sealKeyForPc(k: { envelope: Envelope; aad: string; certSha256: string }, moveId: string, pcKey: string) {
+  const plain = await envelopeOpen(k.envelope, k.aad);
+  const box = await sealTo(pcKey, plain, `appkey-down:${moveId}`);
+  plain.fill(0);
+  return { box, certSha256: k.certSha256 };
+}
+
+/**
  * A one-time ticket for one build: the key, opened once, sealed to the one-time key the runner
  * made for this request, so only that runner process can read it.
  */

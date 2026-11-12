@@ -6,6 +6,7 @@ import { AppManager } from "./apps.ts";
 import { installAppsCli } from "./apps-cli.ts";
 import { Auth } from "./auth.ts";
 import { CloudLink } from "./cloud-link.ts";
+import { builderKeys, CloudMover } from "./cloud-move.ts";
 import { loadBuilder } from "./builder.ts";
 import { loadConfig } from "./config.ts";
 import { EasyConnect } from "./easy-connect/controller.ts";
@@ -54,8 +55,13 @@ export async function main(): Promise<void> {
   // The PC link (docs/CLOUD.md section 3): this PC acting for its owner's Kiwimake account.
   const account = new CloudLink({ stateDir: config.stateDir, ...(config.cloudSite ? { site: config.cloudSite } : {}), deviceName: () => serverName(), log });
 
+  // Moving apps between this PC and the cloud (docs/CLOUD.md section 3), through the PC link.
+  const mover = new CloudMover({ apps, link: account, keys: builderKeys(builder), appsDir: config.appsDir, log });
+  mover.recover();
+
   const http = startHttpServer({
     account,
+    mover,
     host: config.host,
     port: config.port,
     version: config.version,

@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, CircleAlert, Cloud, Download, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, UserRound, Wrench } from "lucide-react";
 import { AccountPage } from "./Account.tsx";
+import { MoveButton, MoveDialog } from "./Move.tsx";
 import type { LucideIcon } from "lucide-react";
 import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
@@ -199,6 +200,7 @@ function AppsPage({
   // A helper's chat is open beside the main chat: in a narrow window the app list folds to icons.
   const [helperOpen, setHelperOpen] = useState(false);
   const [sharing, setSharing] = useState<string | null>(null);
+  const [moving, setMoving] = useState<string | null>(null);
   const [others, setOthers] = useState<string | null>(null);
   return (
     <div className={`apps-split${helperOpen ? " helper-open" : ""}`}>
@@ -268,6 +270,7 @@ function AppsPage({
               <>
                 <FromOthersButton app={app} online={online} onOpen={() => setOthers(app.id)} />
                 <ShareButton app={app} online={online} onOpen={() => setSharing(app.id)} />
+                <MoveButton app={app} account={s.admin?.account} online={online} onOpen={() => setMoving(app.id)} />
               </>
             }
             care={s.care}
@@ -276,6 +279,7 @@ function AppsPage({
           <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />
         )}
         {app && sharing === app.id && <ShareDialog app={app} onClose={() => setSharing(null)} />}
+        {app && moving === app.id && <MoveDialog app={app} onClose={() => setMoving(null)} />}
         {app && others === app.id && (
           <FromOthersDialog
             app={app}

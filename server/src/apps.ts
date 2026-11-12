@@ -3,7 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppPreset, ChangeSettingsRequest, CloneRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppMove, AppPreset, ChangeSettingsRequest, CloneRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
 import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, type VersionRecord } from "./history.ts";
 import { MEMORY_FILE } from "./playbook.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
@@ -651,6 +651,7 @@ export class AppManager {
   /** "Update it" on an app that is behind: the update message goes to its agent as the person's own. */
   keepHealthy(id: string): void {
     const record = this.record(id);
+    this.writable(record);
     this.refreshHealth(record);
     const health = record.app.health;
     if (!health) throw new HttpError(409, `${record.app.name} is already up to date.`);
@@ -693,6 +694,32 @@ export class AppManager {
    * The cloud: an app brought back on a fresh machine from its GitHub repo (already cloned to
    * `dir`) with the chat Convex kept (docs/CLOUD.md, "A new box restores from GitHub").
    */
+  /** Moving apps (cloud-move.ts): the app's folder, its move state, and an app that moved here. */
+  dirOf(id: string): string {
+    return this.record(id).dir;
+  }
+
+  setMove(id: string, move: AppMove | undefined): void {
+    const record = this.record(id);
+    if (move) record.app.move = move;
+    else delete record.app.move;
+    record.app.updatedAt = nowIso();
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
+  }
+
+  adoptMovedApp(app: App, dir: string, chat: ChatItem[], todos: TodoItem[]): App {
+    const record: ReadyRecord = { app, dir };
+    this.addRestored(record, chat.map((item) => ({ ...item, appId: app.id })), todos);
+    return record.app;
+  }
+
+  /** A copy that moved to the cloud is read-only here: it is changed in the cloud now. */
+  private writable(record: AppRecord): void {
+    if (record.app.move?.to === "cloud" && record.app.move.state === "done") throw new HttpError(409, "This app moved to the cloud. Change it there.");
+    if (record.app.move?.state === "running") throw new HttpError(409, "This app is moving to the cloud. Try again when it is done.");
+  }
+
   adoptCloudApp(app: App, dir: string, chat: ChatItem[]): App {
     const record: ReadyRecord = { app, dir };
     this.addRestored(record, chat, []);
@@ -775,6 +802,7 @@ export class AppManager {
 
   sendMessage(id: string, text: string, uploads: ImageUpload[] = [], agentExtra = ""): string {
     const record = this.record(id);
+    this.writable(record);
     if (text.trim() === "" && uploads.length === 0) throw new HttpError(400, "The message is empty.");
     const problem = checkImages(uploads.map((u) => ({ mimeType: String(u?.mimeType ?? ""), data: String(u?.data ?? "") })));
     if (problem) throw new HttpError(400, problem);
@@ -1027,6 +1055,7 @@ export class AppManager {
   /** Goes back to an earlier version: its code is built again as a new version (202). */
   async restore(id: string, build: number): Promise<App> {
     const record = this.record(id);
+    this.writable(record);
     const blocked = this.goBackBlocked(record);
     if (blocked) throw new HttpError(409, blocked);
     const to = (await this.history.versions(id, record.dir)).find((v) => v.build === build);
@@ -1040,6 +1069,7 @@ export class AppManager {
   /** Undo: back to the version before the newest one. */
   async undo(id: string): Promise<App> {
     const record = this.record(id);
+    this.writable(record);
     const list = await this.versions(id);
     const at = list.findIndex((v) => v.current);
     const target = at >= 0 ? list[at + 1] : undefined;
@@ -1145,6 +1175,7 @@ export class AppManager {
 
   rebuild(id: string): void {
     const record = this.record(id);
+    this.writable(record);
     if (!record.ready) throw new HttpError(409, "This app is not ready yet.");
     if (this.workers) {
       this.workers.rebuild(id, record.app.latestBuild?.error);

@@ -1,6 +1,7 @@
 // Operator functions, internal only (run with the dev deploy key: `node scripts/dev.mjs run ...`).
 import { v } from 'convex/values';
 import { internalMutation, internalQuery } from './_generated/server';
+import { grant } from './lib/credits';
 
 /** An upload URL for the runner bundle (scripts/dev.mjs bundle). */
 export const bundleUploadUrl = internalMutation({
@@ -63,5 +64,15 @@ export const buildsOf = internalQuery({
         signings: signings.filter((s) => s.build === b.number).map((s) => ({ what: s.what, sha256: s.sha256 })),
       })),
     );
+  },
+});
+
+/** Dev only (KIWI_ALLOW_WIPE=1): credits for a test account, as an `adjust` grant (proof runs). */
+export const devGrant = internalMutation({
+  args: { userId: v.id('users'), credits: v.number(), note: v.string() },
+  handler: async (ctx, { userId, credits, note }) => {
+    if (process.env.KIWI_ALLOW_WIPE !== '1') throw new Error('devGrant is off (KIWI_ALLOW_WIPE)');
+    if (credits <= 0 || credits > 20) throw new Error('1 to 20 credits');
+    await grant(ctx, userId, { source: 'adjust', millicredits: Math.round(credits * 1000), expiresAt: Date.now() + 30 * 86_400_000, note });
   },
 });

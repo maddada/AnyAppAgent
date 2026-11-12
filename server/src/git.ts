@@ -166,6 +166,23 @@ export async function createGithubRepo(dir: string, repoName: string): Promise<s
 }
 
 /** The commit HEAD points at, or undefined. */
+/**
+ * Runs git with a GitHub token for one repo (a push or a clone): the token reaches git only through
+ * the environment of this child process (a credential helper that echoes it), never a file, a
+ * command line, a remote URL or an agent.
+ */
+export function gitWithToken(args: string[], cwd: string, token: string): Promise<{ code: number; err: string }> {
+  const helper = "!f() { echo username=x-access-token; echo password=$KIWI_GH_TOKEN; }; f";
+  const full = ["-c", "safe.directory=*", "-c", "credential.helper=", "-c", `credential.helper=${helper}`, ...args];
+  return new Promise((resolve) => {
+    const child = spawn("git", full, { cwd, env: { ...process.env, KIWI_GH_TOKEN: token, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" }, stdio: ["ignore", "ignore", "pipe"] });
+    let err = "";
+    child.stderr?.on("data", (d: Buffer) => (err += d.toString("utf8")));
+    child.on("error", (e) => resolve({ code: 1, err: e.message }));
+    child.on("close", (code) => resolve({ code: code ?? 1, err }));
+  });
+}
+
 export async function headCommit(dir: string): Promise<string | undefined> {
   const head = await git(dir, ["rev-parse", "HEAD"]);
   return head.code === 0 ? head.stdout.trim() : undefined;

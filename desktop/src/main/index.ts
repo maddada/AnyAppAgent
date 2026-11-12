@@ -754,6 +754,8 @@ function ipc(): void {
   ipcMain.handle("helpers:stop", (_e, appId: string, workerId: string) => chatAction((c) => c.stopHelper(String(appId), String(workerId)))());
   ipcMain.handle("apps:rebuild", (_e, appId: string) => chatAction((c) => c.rebuild(String(appId)))());
   ipcMain.handle("apps:keep-healthy", (_e, appId: string) => chatAction((c) => c.keepHealthy(String(appId)))());
+  // Moving an app to the cloud (docs/CLOUD.md section 3): the companion runs it; App.move shows it.
+  ipcMain.handle("apps:move", (_e, appId: string) => chatAction((c) => c.moveToCloud(String(appId)))());
   // Sharing and publishing (docs/DISTRIBUTION.md).
   ipcMain.handle("apps:share", (_e, appId: string, shared: boolean) => chatAction((c) => c.share(String(appId), Boolean(shared)))());
   ipcMain.handle("apps:publish", (_e, appId: string, notes: string, channel: string) =>

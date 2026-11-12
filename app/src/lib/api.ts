@@ -175,6 +175,9 @@ export class Client {
   owner = () => this.call<OwnerInfo>("/api/owner");
   // The PC downloads the version's code from GitHub first: give it a minute.
   // The PC link (docs/CLOUD.md section 3): this phone hands its PC a link, takes its sign-in, or unlinks it.
+  // Moving apps (docs/CLOUD.md section 3): a PC app to the cloud (it runs on; App.move shows it), a cloud app here.
+  moveToCloud = (id: string) => this.call<App>(`/api/apps/${encodeURIComponent(id)}/move`, "POST", { to: "cloud" });
+  moveHere = (cloudAppId: string) => request<App>(this.baseUrl, `/api/cloud-apps/${encodeURIComponent(cloudAppId)}/move-here`, { method: "POST", body: {}, token: this.token, timeoutMs: 180000 });
   pcAccount = () => this.call<AccountLinkInfo>("/api/account");
   linkPc = (body: AccountLinkRequest) => request<AccountLinkInfo>(this.baseUrl, "/api/account/link", { method: "POST", body, token: this.token, timeoutMs: 30000 });
   pcHandoff = () => request<AccountHandoff>(this.baseUrl, "/api/account/handoff", { method: "POST", body: {}, token: this.token, timeoutMs: 30000 });

@@ -369,6 +369,10 @@ export class AdminClient extends EventEmitter {
   }
 
   /** "Update it" on an app that is behind: the companion sends its agent the update message. */
+  moveToCloud(appId: string): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/move`, { to: "cloud" });
+  }
+
   keepHealthy(appId: string): Promise<void> {
     return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/keep-healthy`, {});
   }

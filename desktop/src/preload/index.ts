@@ -67,6 +67,7 @@ const bridge: AnyAppBridge = {
   backupRestore: (password) => ipcRenderer.invoke("backup:restore", password),
   dismissReminder: () => ipcRenderer.invoke("care:dismiss"),
   keepHealthy: (appId) => ipcRenderer.invoke("apps:keep-healthy", appId),
+  moveToCloud: (appId) => ipcRenderer.invoke("apps:move", appId),
   getMessages: (appId) => ipcRenderer.invoke("apps:messages", appId),
   getHelpers: (appId) => ipcRenderer.invoke("helpers:list", appId),
   getHelperMessages: (appId, workerId) => ipcRenderer.invoke("helpers:messages", appId, workerId),

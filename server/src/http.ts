@@ -8,6 +8,7 @@ import type {
   AccountAskResult,
   AccountHandoff,
   AccountLinkRequest,
+  MoveRequest,
   AddTodoRequest,
   ChangeSettingsRequest,
   CloneRequest,
@@ -37,6 +38,7 @@ import type {
 import { HttpError, type AppManager } from "./apps.ts";
 import type { SigningKeys } from "./signing-keys.ts";
 import type { CloudLink } from "./cloud-link.ts";
+import type { CloudMover } from "./cloud-move.ts";
 import { ADMIN_DEVICE_ID, cleanDeviceName, type Auth } from "./auth.ts";
 import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
@@ -152,6 +154,7 @@ export function startHttpServer(deps: {
   signing?: SigningKeys;
   hostApkPath?: string;
   account?: CloudLink;
+  mover?: CloudMover;
 }): {
   server: Server;
   broadcast(event: ServerEvent): void;
@@ -376,6 +379,21 @@ export function startHttpServer(deps: {
       if (path === "/api/account/handoff") return sendJson(res, 200, (await account.handoff()) satisfies AccountHandoff);
       if (path === "/api/account/unlink") return sendJson(res, 200, await account.unlink());
       return sendError(res, 404, "Not found.");
+    }
+
+    // Moving apps (docs/CLOUD.md section 3, cloud milestone 8): a PC app to the cloud (it runs; the
+    // app's `move` shows it), or a cloud app here (answered once it is here).
+    const moveUp = /^\/api\/apps\/([^/]+)\/move$/.exec(path);
+    const moveHere = /^\/api\/cloud-apps\/([a-z0-9]{32})\/move-here$/.exec(path);
+    if (moveUp || moveHere) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      if (!deps.mover) return sendError(res, 404, "This PC cannot move apps. Update Kiwimake on your PC.");
+      if (moveUp) {
+        const body = await readBody<Partial<MoveRequest>>(req, 4 * 1024);
+        if (body.to !== "cloud") throw new HttpError(400, '"to" must be "cloud".');
+        return sendJson(res, 202, deps.mover.startToCloud(decodeURIComponent(moveUp[1]!)));
+      }
+      return sendJson(res, 200, await deps.mover.toPc(moveHere![1]!));
     }
 
     // The usage meter, the health reminder and the backup, for the phone (docs/TRUST.md).

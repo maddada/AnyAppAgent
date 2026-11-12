@@ -26,6 +26,7 @@ import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
 import { HealthBadge, HealthCard, ReminderBanner } from "@/ui/Trust";
 import { LinkAskBanner } from "@/ui/LinkAsk";
+import { MoveButton, moveLine } from "@/ui/Move";
 import { border, elevation, icon, look, radius, size, space, useTheme } from "@/ui/theme";
 
 const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
@@ -413,6 +414,11 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
               {state ? <StateLine kind={state.kind} label={state.label} /> : null}
               {placeOf(shown) === "cloud" ? <AppCredits appId={shown.id} /> : null}
               {placeOf(shown) === "cloud" ? <AppSigning appId={shown.id} /> : null}
+              {moveLine(shown) ? (
+                <T variant="caption" color={moveLine(shown)!.problem ? "problem" : "textSecondary"} testID="app-move-line">
+                  {moveLine(shown)!.text}
+                </T>
+              ) : null}
             </View>
           </View>
           {sending && !confirmRemove ? (
@@ -486,6 +492,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                   {`Version ${pkg.versionCode} is on this phone.`}
                 </T>
               ) : null}
+              <MoveButton app={shown} onMoved={onClose} />
               <Button
                 testID="app-remove"
                 label="Remove from list"

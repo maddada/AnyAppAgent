@@ -296,7 +296,26 @@ export const threadApp = internalQuery({
 export const repoToken = internalAction({
   args: { threadId: v.id('threads') },
   handler: async (ctx, { threadId }): Promise<{ token: string; repo: string; expiresAt: string } | { error: string }> => {
-    const { app, user } = await ctx.runQuery(internal.github.threadApp, { threadId });
+    const { app } = await ctx.runQuery(internal.github.threadApp, { threadId });
+    if (!app) return { error: 'no app' };
+    return ctx.runAction(internal.github.repoTokenForApp, { appId: app._id });
+  },
+});
+
+export const appAndUser = internalQuery({
+  args: { appId: v.id('apps') },
+  handler: async (ctx, { appId }) => {
+    const app = await ctx.db.get(appId);
+    const user = app ? await ctx.db.get(app.userId) : null;
+    return { app, user } as { app: Doc<'apps'> | null; user: Doc<'users'> | null };
+  },
+});
+
+/** A token for one app's repo only (a box's pushes, or a PC moving the app): Contents write, Metadata read, 1 hour. */
+export const repoTokenForApp = internalAction({
+  args: { appId: v.id('apps') },
+  handler: async (ctx, { appId }): Promise<{ token: string; repo: string; expiresAt: string } | { error: string }> => {
+    const { app, user } = await ctx.runQuery(internal.github.appAndUser, { appId });
     if (!app || !user) return { error: 'no app' };
     if (!user.githubInstallationId || user.githubDisconnectedAt) return { error: 'GitHub is not connected' };
     const repo = app.repo ?? (await ctx.runAction(internal.github.createAppRepo, { appId: app._id }));

@@ -101,7 +101,7 @@ export const get = query({
   },
 });
 
-async function freeSlug(ctx: QueryCtx, userId: Id<'users'>, base: string) {
+export async function freeSlug(ctx: QueryCtx, userId: Id<'users'>, base: string) {
   let slug = base;
   for (let n = 2; ; n++) {
     const taken = await ctx.db.query('apps').withIndex('by_user_slug', (q) => q.eq('userId', userId).eq('slug', slug)).first();
