@@ -6,9 +6,12 @@ import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { httpAction } from './_generated/server';
 import { auth } from './auth';
+import { callback } from './github';
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
+// The GitHub App's callback URL (docs/CLOUD.md section 11, step 5).
+http.route({ path: '/github/callback', method: 'GET', handler: callback });
 
 async function sha256Hex(s: string) {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
