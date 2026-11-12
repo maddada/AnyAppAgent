@@ -3,7 +3,7 @@
     "name": "Kiwimake",
     "slug": "anyappagent",
     "scheme": "anyappagent",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "portrait",
     "icon": "../shared/theme/mark/android/expo/icon.png",
     "userInterfaceStyle": "automatic",
@@ -13,7 +13,7 @@
     ],
     "android": {
       "package": "com.anyappagent",
-      "versionCode": 200,
+      "versionCode": 300,
       "adaptiveIcon": {
         "foregroundImage": "../shared/theme/mark/android/expo/adaptive-foreground.png",
         "backgroundColor": "#1D6A4A",

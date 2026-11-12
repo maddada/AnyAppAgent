@@ -1,6 +1,7 @@
 // electron-builder afterPack hook: electron-builder leaves node_modules out of extraResources, but
 // the companion (server/) and the template the builder copies need theirs. Copy them into the
-// unpacked app before the installer is made. Dev-only packages of the server are skipped.
+// unpacked app before the installer is made. Dev-only packages of the server are skipped, and so
+// is node_modules/.vitest-cache, which running the tests leaves behind.
 const { cpSync, existsSync } = require("node:fs");
 const { join, resolve, sep } = require("node:path");
 
@@ -20,7 +21,7 @@ exports.default = async function afterPack(context) {
     cpSync(from, to, {
       recursive: true,
       dereference: true,
-      filter: (src) => !SKIP.some((s) => src.includes(s) && (src.endsWith(s) || src.includes(s + sep))),
+      filter: (src) => !src.includes(`${sep}.vitest-cache`) && !SKIP.some((s) => src.includes(s) && (src.endsWith(s) || src.includes(s + sep))),
     });
   }
 };

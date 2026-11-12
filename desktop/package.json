@@ -1,7 +1,7 @@
 {
   "name": "anyappagent-desktop",
   "productName": "Kiwimake",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Kiwimake for Windows: runs the companion, onboarding, connect a phone.",
   "main": "out/main/index.js",
@@ -55,21 +55,25 @@
           "**/*",
           "!test/**",
           "!scripts/e2e.mjs",
-          "!**/*.test.ts"
+          "!**/*.test.ts",
+          "!**/.vitest-cache/**"
         ]
       },
       {
         "from": "../shared",
         "to": "companion/shared",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/.vitest-cache/**"
         ]
       },
       {
         "from": "../builder",
         "to": "companion/builder",
         "filter": [
-          "**/*"
+          "**/*",
+          "!test/**",
+          "!**/.vitest-cache/**"
         ]
       },
       {
@@ -78,7 +82,8 @@
         "filter": [
           "**/*",
           "!build/**",
-          "!android/**"
+          "!android/**",
+          "!**/.vitest-cache/**"
         ]
       },
       {
