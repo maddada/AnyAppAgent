@@ -108,7 +108,7 @@ milliseconds. File ids are Convex storage ids.
 | `suggestions` | `shareId`, `circleId`, `package`, `build`, `fromUserId`, `fromName`, `toUserId` (the owner), `text`, `createdAt`, `filedAt?` (set when the owner's PC or phone put it in From others), `openedAt?` | `by_owner_unfiled`, `by_share` |
 | `devices` | A phone that gets pushes. `userId`, `fcmToken`, `appPackage`, `createdAt`, `lastOkAt`, `disabledAt?` | `by_user`, `by_token` |
 | `pushes` | The outbox. `userId`, `kind` ("shared", "update", "suggestion", "joined"), `circleId`, `shareId?`, `title`, `body`, `dedupeKey`, `state` ("queued", "sent", "dropped"), `createdAt`, `sentAt?` | `by_user_state`, `by_dedupe` |
-| `pcTokens` | A PC that uploads for its owner. `userId`, `tokenHash`, `deviceName`, `createdAt`, `revokedAt?`; may only publish and refresh this user's shares and read their suggestions | `by_hash`, `by_user` |
+| `pcLinks` | The cloud's PC link (`docs/CLOUD.md` sections 3 and 4), built in the cloud's first version; circles use its `share` scope: publish and refresh this user's shares and read their suggestions | `by_hash`, `by_user` |
 
 Notes:
 
@@ -138,9 +138,11 @@ Notes:
 
 ### Make a circle and its link
 
-1. The person signs in (desktop: a browser page, then back; phone: Google or an email code, the same
-   screens as the cloud's). A phone paired with a PC signs in just for circles (the person stays in
-   "Use my PC" mode).
+1. The person signs in once, on either side (desktop: a browser page, then back; phone: Google or an
+   email code, the same screens as the cloud's), right where Circles asks for it. The other side
+   joins through pairing (the PC link, `docs/CLOUD.md` section 3, "One account, two places that make
+   apps"), so no one signs in twice. A PC user's apps keep being made on the PC; the account is
+   optional for everything else.
 2. New circle asks only for a name. `circles.create` makes the circle, the person's `members` row (admin)
    and the first invite, and shows the link and QR. Share goes through Android's share menu on the
    phone and Copy link on the PC.
@@ -247,13 +249,14 @@ circle shown as the place), the PC (a PC app) or Convex itself (a cloud app) sto
 | `appBuilds` row with SHA-256 and signer | What the phone checks before installing |
 
 Not the universal APK and not the `x86_64` one (an emulator is not a circle member), to save space.
-A PC app uploads through a `pcTokens` token (below); a cloud app's files are already there.
+A PC app uploads through the PC link (below); a cloud app's files are already there.
 
-**The PC's token.** The PC needs a credential that can upload for its owner but nothing else. When
-the person is signed in, the desktop app (or the paired phone) asks Convex for a **PC token**
-(`pcTokens`): random, shown once, stored only as a hash, kept by the companion in its state folder
-(`%USERPROFILE%\.anyappagent`), revocable from the circle's page, allowed only to publish builds and
-refresh shares for that user's apps and to read that user's suggestions.
+**The PC's link.** The PC needs a credential that can upload for its owner but nothing else: the
+cloud's **PC link** (`pcLinks`, `docs/CLOUD.md` section 3), made when the person signs in on either
+side (the desktop app, or the paired phone handing it over through pairing): random, shown once,
+stored only as a hash, kept by the companion in its state folder (`%USERPROFILE%\.anyappagent`),
+revocable from the desktop's Account page or the circle's page. Its `share` scope allows only
+publishing builds and refreshing shares for that user's apps and reading that user's suggestions.
 
 **Who may download.** Convex's `getUrl()` links work for anyone who has them until the file is
 deleted (`docs/CLOUD.md`), so a plain link would not be "behind the circle". Instead **no file URL is
@@ -369,11 +372,11 @@ The days are working days, and count the two changes of the user's answers (Q353
 | 2 | The web side and the link: the invite page, preview JSON, expired, full and stopped states, Open Graph tags, the `autoVerify` intent filter, the Join route and screen, the "Have a code?" field | 1.5 |
 | 3 | The shelf, public (unlisted): `shares`, the per-app switch, the feed copy (publish hook and the 6 hour cron), admin removal that sticks | 1.5 |
 | 4 | Phone: circles list, the circle (Shelf and People), invite and share sheet, install and update of a public shelf app through the installer (the stage 5 follow-a-friend piece), the notification and its dedupe, the Suggest a change form | 2 |
-| 5 | Desktop: Circles in the rail, New circle, the invite panel and QR, the switches, sign-in, and the PC token | 1 |
+| 5 | Desktop: Circles in the rail, New circle, the invite panel and QR, the switches, and the sign-in sheet and PC link reused from the cloud (`docs/CLOUD.md` milestone 7) | 1 |
 | 6 | Suggestions straight into From others (live query, filing through `POST /api/suggestions`, `filedAt`) | 0.5 |
 | 7 | **Proof of the public path** on the emulator and real GitHub test repos (below) | 1 |
 | | **Circles, public apps only (the page's "about 2 weeks")** | **10** |
-| 8 | **Private apps in Convex (Q353 B)**: `appBuilds`, the check of the 45 MB gated download, upload from a PC with the PC token and from the cloud's own files, retention, Publish to circles with Testing and Pull back, install and update from Convex, quick update bundles, the quotas, and its proof (page said about 3 days; the quick update bundles add half a day) | 3.5 |
+| 8 | **Private apps in Convex (Q353 B)**: `appBuilds`, the check of the 45 MB gated download, upload from a PC with the PC link and from the cloud's own files, retention, Publish to circles with Testing and Pull back, install and update from Convex, quick update bundles, the quotas, and its proof (page said about 3 days; the quick update bundles add half a day) | 3.5 |
 | 9 | **Push through FCM (Q356)**: the Firebase project, `google-services.json` in the phone build, notification permission, `devices`, the outbox and its dedupe, the Node action with the service account, settings and mute, and its proof on the emulator (page said about 2 days) | 2 |
 | | **All of Q350 to Q359** | **15.5 days, about 3 weeks** |
 

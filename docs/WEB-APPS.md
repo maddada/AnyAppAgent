@@ -276,15 +276,18 @@ The companion builds, the phone shows, our hosting serves.
    failed build goes back to the agent (up to 3 times), as today. An app with both targets runs both
    builds; the web one finishes first and goes live first.
 2. The companion publishes it through Convex (section 2). For that the PC needs an **Kiwimake
-   account**: the desktop's onboarding gets an optional step, "Sign in to put web apps online", the
-   same sign-in the Family circle page puts on a paired phone ("signs in just for circles"). The
-   companion keeps a publish token that can do nothing but publish this person's web apps; it is
-   stored like the other secrets and never put in an agent's environment.
+   account**, asked for only where it is needed (the build card's "Put it online"), never as a
+   step of the desktop's onboarding. The person signs in once, on the phone or the PC, and the
+   other side joins through pairing: the same account and sign-in as circles and the cloud
+   (`docs/CLOUD.md` section 3, "One account, two places that make apps"). The companion publishes
+   with the cloud's PC link (`pcLinks`, its `web` scope), which can do nothing but publish this
+   person's web apps (and what its other scopes allow); it is stored like the other secrets and
+   never put in an agent's environment.
 3. The chat's build card: "Your web app is live" with the address, Open and Share. The phone's tile
    updates, and an open copy shows the Reload card.
 4. Without an account, or offline, the web app still builds and the owner's phone opens it from the
    companion (`GET /api/apps/:id/web/*`, the same auth as `/apk`, inside Kiwimake only). The card says
-   "Not online yet: sign in on your PC to give it an address."
+   "Not online yet: sign in to give it an address." (on the phone or the PC).
 
 ### Cloud mode
 
@@ -377,7 +380,7 @@ the Public Suffix List entry.
 | 1 | Template: web packages, `targets`, the web files of the seven modules, manifest and Workbox, `WebReady`, the crash hook, Settings "This app" on web, `AGENTS.md` "Web apps", `web:check` | 3 |
 | 2 | Builder: `buildWeb`, source maps dropped, the file list, CLI `build-web`, tests | 1.5 |
 | 3 | Hosting: the Worker (host routing, caches, headers, one-page fallback, 404), R2 layout, Convex tables (`webSites`, `webBuilds`), `webPublish.begin` and `finish` with signed PUT URLs, addresses and handles, delete a site, fair-use counters | 2.5 |
-| 4 | Companion and desktop: the publish token after sign-in, publishing after each build, instant go back and undo, the build card, the local preview route, the desktop's address, Open and QR; protocol additions | 2.5 |
+| 4 | Companion and desktop: publishing with the cloud's PC link (its `web` scope), publishing after each build, instant go back and undo, the build card, the local preview route, the desktop's address, Open and QR; protocol additions | 2.5 |
 | 5 | Phone: the web tile, the WebView screen, pinned shortcuts, the bridge (AI, Change this app, back to Kiwimake), the plan page's switch | 2.5 |
 | 6 | Proof: a web app made from the phone on `emulator-5560` (a Tally or a shopping list), opened in Kiwimake and in Chrome, a change arriving with the Reload card, offline, Go back, a crash reaching the chat, a suggestion from a browser landing in From others; screenshots light and dark | 1 |
 | | **First version, PC mode** | **15 days, about 3 weeks** |
@@ -412,7 +415,8 @@ The user took every recommendation (Q360).
 5. **Every successful build goes live** at the app's address, as every build reaches the owner's
    phone today; Go back is instant. A separate Testing address can come later.
 6. **PC users sign in to Kiwimake to put web apps online**: free, the same sign-in as circles and the
-   cloud. Without it a web app opens only on the owner's phone through the PC.
+   cloud, once on either the phone or the PC (the other joins through pairing), never a step of the
+   desktop's onboarding (`docs/CLOUD.md`, decisions Q20 to Q24). Without it a web app opens only on the owner's phone through the PC.
 7. **Hosting is free** to the person, with fair-use limits (10 web apps each, a soft cap of opens per
    app).
 8. **When**: together with circles, right after the cloud's first version (Convex, sign-in and

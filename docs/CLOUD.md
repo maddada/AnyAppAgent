@@ -28,6 +28,13 @@ month**. **Every change shows an estimate first**, in credits. The code is **nev
 to the person's GitHub after every change. Each app's chat is an orchestrator on **Opus 5.5 high**
 that hands work to helpers on the right model. No email or agreement with Anthropic is sought.
 
+**Local and cloud** (decisions of 12 Nov 2026, fourth round, `C:\aa\ideas\local-and-cloud.html`,
+Q430 to Q436): **one Kiwimake account** for the PC and the cloud, **optional on the PC** and asked
+for only where a feature needs it; signed in **once, on the phone or the PC**, the other side joins
+through pairing; **one grid** on the phone with PC and cloud apps together; and, in the first
+version, **moving an app between the PC and the cloud** (both ways) and **"My PC is off, do this
+change in the cloud"**. Section 3, "One account, two places that make apps".
+
 ## 1. The terms question first
 
 **Short version.** **An agent built on the Claude Agent SDK, run in our product on our cloud boxes
@@ -396,28 +403,114 @@ Before a change runs the person sees what it will likely use:
 
 ### The phone app
 
-The same Kiwimake APK gets a second way in. First run asks **"Make apps in the cloud"** (sign in)
-or **"Use my PC"** (today's pairing and Easy Connect). One mode per install in the first version.
+The same Kiwimake APK gets a second way in. First run asks where apps should be made: **"On my
+PC"** (today's pairing and Easy Connect, no sign-in), **"In the cloud"** (sign in, then connect
+GitHub) or "Already have an account? Sign in". A phone can have both: **one grid** holds the PC's
+apps and the cloud's (section 3, "One account, two places that make apps").
 
-- Cloud mode setup is two short steps: sign in, connect GitHub. The 3 free credits let the person
+- Cloud setup is two short steps: sign in, connect GitHub. The 3 free credits let the person
   try a change at once; a plan or extra credit comes when they want more (the Own key plan asks for
   the key when chosen).
-- In cloud mode the phone talks only to Convex. The Convex React Native client keeps live queries
+- For cloud apps the phone talks only to Convex. The Convex React Native client keeps live queries
   for the app list, each thread's messages and builds, the balance and the estimates; it reconnects
-  by itself and retries mutations until they are confirmed. No WebSocket to a PC.
+  by itself and retries mutations until they are confirmed. PC apps keep today's WebSocket to the
+  PC; a phone with both keeps both connections.
 - Everything the phone does with an APK or a quick update stays as it is (`app/src/lib/installer.ts`,
   `app/modules/anyapp-native`, the Reload card, rollback, crash reports): only where the file comes
   from changes (a Convex file URL instead of `GET /api/apps/:id/apk`).
 - The screens stay the same. The data layer gets a second implementation of today's calls
   (`app/src/lib/api.ts` `Client` and the `ServerEvent` stream) backed by Convex and returning the
-  same `shared/protocol.ts` types, so `shared/chat` renders cloud chats unchanged.
-- New screens: sign in, connect GitHub, "Your plan" (plan, credits left, extra credit, the Own key
+  same `shared/protocol.ts` types, so `shared/chat` renders cloud chats unchanged. A small merging
+  client in front of the two lists both places' apps in one grid and sends each call to the place
+  that holds the app (app ids are kept apart per place).
+- New screens: first run with the three ways in, sign in, the Kiwimake account sheet, connect GitHub, "Your plan" (plan, credits left, extra credit, the Own key
   plan and its key), the estimate line under the message box and on the plan card, the per-app
   credits line in the app's Settings.
-- **Package names**: cloud apps get their own prefix, **`com.anyappcloud.<slug>`**, so a cloud app
-  and a PC app with the same name never fight over one package on the same phone. (The server
+- **Package names**: a new cloud app gets its own prefix, **`com.anyappcloud.<slug>`**, so a cloud
+  app and a PC app with the same name never fight over one package on the same phone. (The server
   already sets the package name in one place, `server/src/apps.ts`; the runner passes the cloud
-  prefix.)
+  prefix.) **The package name is the app's for life**: the prefix only says where the app was
+  born, and an app moved to the other place keeps it, with its signing key, so it installs over
+  itself and keeps its data. The cloud accepts either prefix.
+
+### One account, two places that make apps
+
+**The account.** One Kiwimake account (Convex Auth: Google or an email code), the same for the PC
+and the cloud. A person's **PC** and **the cloud** are two *places that make apps*, both listed
+under the account. The account exists without GitHub, a plan or a PC.
+
+- **The PC never needs it.** Making and changing apps on your own PC with your own Claude stays
+  account free, as today. The account holds no PC app's code, key or chat unless the person moves
+  the app or turns on "Use the cloud when my PC is off" (below).
+- **Asked for only where a feature needs it**, right there: a family circle, a web app online,
+  adding the cloud, moving an app, or a change while the PC is off. Never as a step of the PC's
+  onboarding; its last screen says in one line that an account is optional and where to sign in.
+- **Signed in once, on either side.** The phone or the desktop signs in; the other joins through
+  pairing (the phone hands its paired PC a **PC link**, or the PC hands the sign-in to the phone),
+  so no one signs in twice. The desktop's Account page shows it ("Linked from Pixel 8") and can
+  unlink.
+- **Free credits** are given on the first **cloud** change of a month, not on sign-in, so an
+  account used only for circles or web apps costs nothing.
+
+| What | Without an account | Needs the account |
+| ---- | ------------------ | ----------------- |
+| Make and change apps on your PC, with your Claude | Yes | |
+| AI for your apps, backup to a folder, restore on a new PC | Yes | |
+| Share on GitHub, updates to friends, Send app, Suggest a change by text, Make my own version | Yes (the PC's own GitHub login) | |
+| Family circles, a suggestion straight into the owner's inbox | | Yes (`docs/CIRCLES.md`) |
+| A web app online at an address (without: it opens on your phone through your PC) | | Yes (`docs/WEB-APPS.md`) |
+| Making apps in the cloud, credits, plans | | Yes, plus GitHub |
+| Moving an app between PC and cloud; a change while the PC is off | | Yes, plus GitHub, and credits for cloud changes |
+
+**The PC link.** A credential that lets one PC act for its owner in Convex, and nothing else:
+random, shown once, stored only as a hash (`pcLinks`, section 4), kept by the companion in its
+state folder, never put in an agent's environment, revocable from either side. Its scopes:
+`share` (circles' uploads and suggestions), `web` (publish web apps), `move` (push an app's code
+to its cloud repo with a one-repo token Convex mints, upload or download its sealed key, copy its
+chat, report build numbers). It replaces circles' `pcTokens` and web apps' publish token.
+
+**One grid.** The phone lists every place it knows: the paired PC (as today) and the account's
+cloud. Each tile says where it is made (a small PC or cloud mark) **only when the person has both**;
+a PC-only person sees today's grid. "Make a kiwi" gets **Make it on: My PC | Cloud** when both
+exist, defaulting to the PC when it is on (the cloud choice shows its estimate). The account sheet
+in Settings lists the places with "Add" for the missing one, and the circles and web address the
+account has. A PC app whose PC is off still opens; its tile says "PC, off".
+
+**Moving an app** (both ways, in the first version). From the app's menu on the phone or the PC,
+while the PC is on and linked:
+
+- **To the cloud**: Convex makes `anyapp-cloud-<slug>` on the person's GitHub (their user token,
+  as for a new cloud app; the PC's own `anyapp-<slug>` repo is not reused, since `gh` may be signed
+  in to another GitHub account), the companion pushes the code with its whole history there with a
+  one-repo token from Convex (so it works whether or not the app ever had a GitHub repo), uploads
+  the app's signing key sealed to Convex's public key (the desktop's key backup format,
+  `builder/lib/keybackup.mjs`, then wrapped as in section 6), copies the chat history and to-dos
+  into `messages`, and reports its highest build number. The cloud's `apps` row takes over with
+  `place: "cloud"` and the **same package name**; the next build is numbered above the PC's and
+  installs over the app. The PC keeps a read-only copy marked "Moved to the cloud".
+- **To the PC**: the companion clones the cloud repo into `C:\aa\apps\<slug>`, downloads the key
+  sealed to a key it made for this one request, imports the chat, and takes the next build number.
+  The Convex row becomes `place: "pc"` (moved), its box is deleted and its files kept until they
+  expire as usual.
+- A move is one `moves` row with its steps; a move that stops halfway is resumed or undone from that
+  row, and nothing is deleted until the other side has confirmed the code, the key and the chat.
+
+**"My PC is off, do this change in the cloud"** (in the first version). When a PC app's PC is not
+reachable, its chat says so and offers **"Do it in the cloud (about 2 credits)"** next to "Wait for
+my PC". It needs the account, the cloud added (GitHub connected) and the switch **"Use the cloud
+when my PC is off"** in the account sheet; turning it on makes the linked PC keep each app ready:
+its code pushed to its cloud repo after every change and its key uploaded once (as for a move).
+
+- The change runs as a normal cloud change on a box (estimate, credits, orchestrator and helpers,
+  build, delivery to the phone), on the same package and key, numbered above the PC's last build.
+  The app's chat on the phone shows the cloud turn in place, marked "Made in the cloud".
+- **The app stays a PC app.** When the PC is back, the companion pulls the cloud's commits, imports
+  the cloud turns into the chat, takes the build number, and the box is deleted. If the PC had
+  commits it never pushed, it merges them as one prompt to the app's agent (as a build fix is sent
+  today) before it takes new work.
+- Only one place works on an app at a time: while a cloud change runs or waits to be pulled back,
+  the PC holds new prompts for that app and says why.
+
 
 ### Convex
 
@@ -586,8 +679,8 @@ Convex's own. Money is stored in millionths of a dollar ("micros"), never floats
 
 | Table | Fields (short) | Indexes |
 | ----- | -------------- | ------- |
-| `users` | from Convex Auth (`name`, `email`, `image`), `aiMode` ("ownAnthropic", only on the Own key plan, or "credit"), `githubLogin`, `githubInstallationId`, `stripeCustomerId`, `blocked` | `by_email`, `by_github_installation` |
-| `apps` | `userId`, `name`, `slug`, `packageName` (`com.anyappcloud.<slug>`), `repo` (`owner/anyapp-cloud-<slug>`), `pushedCommit`, `preset`, `iconFileId`, `lastBuild`, `status` (`AppStatus`), `health`, `overview` (text of `overview.md`) | `by_user`, `by_package` |
+| `users` | The Kiwimake account, for the PC and the cloud: from Convex Auth (`name`, `email`, `image`), `cloudSince?` (set on the first cloud change), `pcOffSwitch` ("Use the cloud when my PC is off"), `aiMode` ("ownAnthropic", only on the Own key plan, or "credit"), `githubLogin`, `githubInstallationId`, `stripeCustomerId`, `blocked` | `by_email`, `by_github_installation` |
+| `apps` | `userId`, `name`, `slug`, `packageName` (`com.anyappcloud.<slug>`, or `com.anyapp.<slug>` for an app born on the PC), `place` ("cloud" or "pc"), `pcLinkId?` and `pcAppId?` (a PC app that moved or is kept ready for PC-off changes), `buildHigh` (the highest build number either place made), `repo` (`owner/anyapp-cloud-<slug>`), `pushedCommit`, `preset`, `iconFileId`, `lastBuild`, `status` (`AppStatus`), `health`, `overview` (text of `overview.md`) | `by_user`, `by_package` |
 | `threads` | `appId`, `userId`, `boxId`, `boxState` ("none", "starting", "running", "paused", "snapshotted", "deleted"), `runnerTokenHash`, `lastActiveAt`, `agentSessionId` | `by_app`, `by_state_and_active` |
 | `messages` | `threadId`, `workerId?`, `item` (a `ChatItem`: text, tool rows, plan, permission, page, build, usage), `seq` | `by_thread_seq` |
 | `inbox` | `threadId`, `kind` ("prompt", "permission", "cancel", "page-answers"), `payload`, `takenAt` | `by_thread_untaken` |
@@ -598,6 +691,8 @@ Convex's own. Money is stored in millionths of a dollar ("micros"), never floats
 | `keys` | `appId`, `userId`, `packageName`, `certSha256`, `wrappedDataKey`, `ciphertext`, `iv`, `kekVersion`, `lineage?` (never deleted) | `by_app` |
 | `signings` | `appId`, `build`, `sha256` of what was signed, `at` | `by_app` |
 | `secrets` | `userId`, `kind` ("anthropic", "githubRefresh"), `wrappedDataKey`, `ciphertext`, `iv`, `last4`, `expiresAt?` | `by_user_kind` |
+| `pcLinks` | One PC acting for its owner. `userId`, `tokenHash`, `deviceName`, `scopes` (`share`, `web`, `move`), `linkedFrom` ("phone" or "pc"), `createdAt`, `lastSeenAt`, `revokedAt?` | `by_hash`, `by_user` |
+| `moves` | `appId`, `userId`, `pcLinkId`, `kind` ("toCloud", "toPc", "pcOff" for a change while the PC is off, "pullBack"), `steps` (code, key, chat, build number, each with `doneAt?`), `state`, `startedAt`, `endedAt?` | `by_app`, `by_user_state` |
 | `boxes` | `threadId`, `provider` ("instabox"), `providerId`, `size`, `startedAt`, `pausedAt`, `snapshotId`, `secondsBilled` | `by_thread`, `by_provider_id` |
 
 Medians for the estimates come from `usage` through the aggregate component (per app and level, and
@@ -724,9 +819,9 @@ it, so anything Gradle can see, a bad prompt or a bad library could print or sen
 **Decided**: signing on the thread's box as a separate Unix user in the first version, then a
 **separate signer machine**, where no agent ever runs, as the next step (+2 days).
 
-**Moving between PC and cloud** (after the first version): "Download this app's key" (password
-protected, the desktop's key backup format, `builder/lib/keybackup.mjs`), and a PC can upload a key
-the same way to move an app into the cloud. The code moves through GitHub.
+**Moving between PC and cloud** (in the first version, section 3): the key travels sealed in the
+desktop's key backup format (`builder/lib/keybackup.mjs`) through the PC link, never as a file the
+person handles; in Convex it is wrapped like any other key. The code moves through GitHub.
 
 ## 7. Costs
 
@@ -933,11 +1028,11 @@ nothing. Competitors' prices (12 Nov 2026): section 1, "What others do".
 | ---- | --------------- | ------- | --- |
 | `shared/protocol.ts` | Every type the phone renders (`App`, `ChatItem`, `BuildInfo`, `OtaInfo`, `ApkVariant`, `TokenUsage`, `AppUsage`, `ChangeNotes`, `WorkerInfo`, `PageInfo`, `ServerEvent`) | Additive only: `BuildInfo.fileUrls?`, `App.cloud?`, `ChatItem.cost?`, `WorkerInfo.level?` | Runner event, estimate and billing types (`CreditEstimate`, `Balance`, `UsageCharge`, in credits) |
 | `shared/chat`, `shared/theme` | All: rows, build card, usage line, pages, the Workbench look | The usage line shows the credits used and the estimate next to it; the plan card shows an estimate | The estimate line under the message box |
-| `server/` | `acp/`, `workers.ts`, `playbook.ts`, `pages/`, `todos.ts`, `usage.ts`, `build-cycle.ts`, `history.ts`, `health.ts`, `apk-scan.ts`, `icon.ts`, `secrets.ts`, `git.ts` (commit, history, undo) | A second entry `runner.ts` with no HTTP server; events go to a sink (WebSocket today, Convex in the cloud); `coordinator-playbook.ts` gets the three levels and "commit and push after every change"; `start_worker` gets `level`; ACP sessions start with a model and effort; `usage.ts` prices per model; the package prefix comes from config | `runner/convex-sink.ts`, `runner/inbox.ts`, `runner/signing.ts`, `runner/git-credentials.ts` (the one-repo token), `runner/ai-meter.ts` (the per-change stop when credits run out) |
+| `server/` | `acp/`, `workers.ts`, `playbook.ts`, `pages/`, `todos.ts`, `usage.ts`, `build-cycle.ts`, `history.ts`, `health.ts`, `apk-scan.ts`, `icon.ts`, `secrets.ts`, `git.ts` (commit, history, undo) | A second entry `runner.ts` with no HTTP server; events go to a sink (WebSocket today, Convex in the cloud); `coordinator-playbook.ts` gets the three levels and "commit and push after every change"; `start_worker` gets `level`; ACP sessions start with a model and effort; `usage.ts` prices per model; the package prefix comes from config | `runner/convex-sink.ts`, `runner/inbox.ts`, `runner/signing.ts`, `runner/git-credentials.ts` (the one-repo token), `runner/ai-meter.ts` (the per-change stop when credits run out); on the PC side `cloud-link.ts` (the PC link, moves, keeping apps ready, pull back) |
 | `builder/` | `createApp`, `buildApk`, `fastlane.mjs`, `zip.mjs`, `axml.mjs`, `apksign.mjs`, `OtaSign.java`, `keybackup.mjs` | `ANYAPP_SIGN_LATER=1` (Gradle unsigned, then `apksign.mjs`); checked on Linux (it was built on Windows) | Nothing else |
 | `template/`, `template-kotlin/` | All, including the updater, Reload card, crash catcher and diary | Nothing for the first version | Later: a cloud feed for shared apps |
-| `app/` | Home grid, chat, installer, quick update hand-over, crash forwarding, AI for your apps, Settings | `api.ts`: the `Client` behind an interface with two implementations | Sign in, mode choice, connect GitHub, "Your plan" and extra credit, estimates, the Convex client |
-| `desktop/` | Not used by the cloud | | Later: "Move this app to the cloud" |
+| `app/` | Home grid, chat, installer, quick update hand-over, crash forwarding, AI for your apps, Settings | `api.ts`: the `Client` behind an interface with two implementations and a merging client in front; tiles get a place mark | First run with three ways in, sign in, the account sheet, Make it on, Move, Do it in the cloud, connect GitHub, "Your plan" and extra credit, estimates, the Convex client |
+| `desktop/` | Onboarding unchanged (one line about the optional account) | | The Account page (sign in, or linked from the phone, and unlink), "Move to the cloud" and "Move to my PC", the "Use the cloud when my PC is off" switch |
 | New `cloud/` | | | The Convex project (schema, functions, HTTP actions, auth, the GitHub App's token minting, Stripe webhook, estimates), the box provider interface and its Instabox implementation, the box image (Dockerfile) |
 
 Not used in the cloud: Easy Connect, pairing codes, the admin token, the desktop onboarding, the
@@ -946,7 +1041,10 @@ publishing (after the first version), and the `anyapp` CLI's other apps.
 
 ## 10. The first version
 
-**In**: cloud mode in the phone app; Google and email code sign-in (Convex Auth); **connect GitHub**
+**In**: cloud mode in the phone app; **one optional Kiwimake account** for the PC and the cloud,
+signed in once on either side, the PC link; **one grid** with PC and cloud apps; **moving apps
+between PC and cloud, both ways**; **"My PC is off, do this change in the cloud"**; Google and
+email code sign-in (Convex Auth); **connect GitHub**
 (the GitHub App), a private `anyapp-cloud-<slug>` repo per app, commit and push after every change,
 new boxes restored from GitHub; the app grid with `com.anyappcloud.<slug>` packages; one chat per
 app as an **Opus 5.5 high orchestrator** with helpers at three levels in the same box; plan first
@@ -958,21 +1056,24 @@ mode until launch); **estimates** in credits (under the message box, on the plan
 actuals per change; signing keys encrypted in
 Convex, signed on the box as a separate Unix user; Instabox behind the provider interface.
 
-**Out**: monthly spending limits; Claude sign-in (way F); moving apps between PC and cloud; sharing
+**Out**: monthly spending limits; Claude sign-in (way F); sharing
 and publishing releases (+3 days, the first thing after); the diary (it needs a phone round trip
 through Convex); Expo Exact; the separate signer machine (+2 days, next).
 
 | # | Milestone | Days |
 | - | --------- | ---- |
 | 0 | **Spike**: the box image (Node, JDK 21, Android SDK, warm Gradle, Git, Claude Code, the runner) imported to Instabox; one box creates and builds the template app (full and quick), signs after Gradle, runs one orchestrator turn that starts a `simple` helper, each with its own model and effort, with an Anthropic key through the Secrets proxy; the helper commits and pushes to a test repo with a one-repo GitHub App token, and a fresh box clones it back; measure create, resume, snapshot restore, clone and build times and memory with two helpers and a build; Convex project with Google and email code sign-in from a dev build of the phone app on the emulator | 4 |
-| 1 | Convex backend: schema, auth, runner HTTP actions and token, inbox, file uploads, the box provider interface with Instabox behind it, box lifecycle (scheduler, webhooks, pause, snapshot, delete) | 3.5 |
+| 1 | Convex backend: schema, auth, runner HTTP actions and token, inbox, file uploads, the box provider interface with Instabox behind it, box lifecycle (scheduler, webhooks, pause, snapshot, delete); `users` as the Kiwimake account without GitHub or a plan, the subscription and free grant made on the first cloud change, `apps.place` and either package prefix, `pcLinks` | 4 |
 | 2 | Runner: the event sink in `server/`, `runner.ts`, signing tickets and tmpfs signing, levels and per-session model and effort, the playbook's levels and push rule, the push check after each turn | 4 |
 | 3 | GitHub: the App, connect flow (browser and back), user token refresh, repo creation, minting one-repo tokens, the credential helper, restore from GitHub, disconnect handling | 3 |
-| 4 | Phone: sign in, mode choice, the Convex `Client`, downloads from file URLs, connect GitHub, "Your plan" (plans, extra credit, the Own key plan and its key), the estimate line, plan card estimate, per-app credits | 5 |
+| 4 | Phone: first run with three ways in (sign-in skipped for the PC), sign in, the account sheet with places and "Add", the Convex `Client` and the merging client (one grid, place marks, app ids kept apart), "Make it on" in Make a kiwi, the PC-off line, sign-in sheets reused by circles and web apps, downloads from file URLs, connect GitHub, "Your plan" (plans, extra credit, the Own key plan and its key), the estimate line, plan card estimate, per-app credits | 6.5 |
 | 5 | Keys and secrets: envelope encryption, the key service, the signing log, the GitHub refresh token | 2 |
 | 6 | Credits and metering: usage rows per session and model from ACP and Instabox, cost turned into credits, subscriptions, grants (free, plan, extra), rollover and the expiry job, spending closest to expiry first, ledger and balances, Stripe Billing and Checkout and their webhooks (test mode), Own key fair use, the credit gate, estimates from medians (aggregate component), real medians replacing section 7's guesses, the runner's per-change stop | 5.5 |
-| 7 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator (a Starter plan in Stripe test mode, estimate in credits shown, code on GitHub), a second prompt as a quick update, a box deleted and the app restored from GitHub, rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 3.5 |
-| | **First version** | **30.5 days, about 6 weeks** (the first draft was 22) |
+| 7 | The PC link: sign in on the desktop (a browser page, then back) or link from the paired phone, both ways, through the pairing channel; the companion keeps the link; the desktop's Account page and unlink; scopes checked in Convex | 1 |
+| 8 | **Moving apps, both ways**: the `moves` row and its resumable steps, the cloud repo made and pushed from the PC with a one-repo token, the key sealed up and down, the chat and to-dos copied both ways, build numbers carried over (`buildHigh`), the read-only "Moved" copy, Move on the phone's app menu and the desktop | 4 |
+| 9 | **"My PC is off, do this change in the cloud"**: the PC-off switch and keeping apps ready (push after every change, key once), the chat's offer with its estimate, the cloud change on a PC app's package and key, "Made in the cloud" rows, pull back when the PC returns (commits, chat, build number, a merge prompt for unpushed work), one place at a time | 3 |
+| 10 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator (a Starter plan in Stripe test mode, estimate in credits shown, code on GitHub), a second prompt as a quick update, a box deleted and the app restored from GitHub; a phone with a PC paired and the cloud added, both in one grid; a PC app moved to the cloud and back, installing over itself each time with its data; a change made while the PC is off and pulled back when it returns; rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 4 |
+| | **First version** | **41 days, about 8 weeks** (30.5 before local and cloud; the first draft was 22) |
 | | Sharing and publishing releases from the cloud | +3 |
 | | Separate signer machine | +2 |
 
@@ -986,7 +1087,12 @@ fresh box with a one-repo token carried by the Secrets proxy; the repo made with
 user token, which joins a "selected repositories" install by itself. Left for milestone 2: a helper at its own level, and memory with two helpers
 and a build.
 
-Where the 8.5 extra days come from: GitHub instead of Git bundles (+2.5 net), credits, plans and
+Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
+account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account
+sheet and one grid (+1.5), the PC link (+1, which circles and web apps then reuse), moving apps
+(+4), changes while the PC is off (+3), and their proof (+0.5).
+
+Where the 8.5 extra days of the plan's second draft come from: GitHub instead of Git bundles (+2.5 net), credits, plans and
 Stripe live instead of switched off (+2), estimates (+2), the orchestrator's levels and per-model
 pricing (+1.5), the provider interface (+0.5).
 
@@ -1100,6 +1206,14 @@ Anthropic credit (none with Max or Ultra credit).
 - **Q17, first app**: a person's **first new app uses at most 3 credits**, on every plan, so the free
   tier can make one (about $0.26 given away once per person).
 - **Q18, extra credit**: **$10 for 20 credits, with or without a plan**, valid 12 months.
+- **Q20 to Q24, local and cloud** (fourth round, 12 Nov 2026, `C:\aa\ideas\local-and-cloud.html`,
+  Q431 to Q435): **one Kiwimake account**, optional on the PC and asked for only when a feature needs
+  it (Q431); **signed in once, on the phone or the PC**, the other joins through pairing, no sign-in
+  step in the desktop's onboarding (Q432); **one grid** with PC and cloud apps, replacing "one mode
+  per install" (Q433); **moving apps between PC and cloud, both ways, in the first version** (Q434,
+  the user's change: the page recommended right after it); **"My PC is off, do this change in the
+  cloud" in the first version** (Q435, the user's change: the page recommended later). Package names
+  are the app's for life. The first version becomes 41 days (section 10).
 - **Q19, yearly plans**: from the first version, **10 times the monthly price** (Starter $120, Pro
   $250, Max $600, Own key $60), paid up front; **credits given monthly**, not all at once, so
   rollover and expiry stay one rule and our cost follows the money (section 2).
