@@ -293,3 +293,10 @@ the automation's name instead of its id.
 new needs in `card.ts`, the API in `automations/api.d.ts` and the fence's list). It reached the app
 as one full build (8, 144 s, the new service and permissions), installed by my phone copy without
 a prompt; the next automations using the new triggers were a quick build again (9, 17 s).
+
+**Not proven on the device yet (M2):** turning on the charger and Wi-Fi automations, and the events
+themselves (`adb emu power ac off/on`, Wi-Fi off and on). The code is built (the full build 8
+compiled the listener service), installed on the phone, and the automations using the triggers
+arrived as quick update 9; at 07:30 three other threads were driving the shared emulator, so the
+taps were stopped rather than land in their apps. Bluetooth connect and disconnect cannot be shown
+on the emulator (no device to pair): the user's phone with the car is the proof.
