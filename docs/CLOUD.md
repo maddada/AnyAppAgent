@@ -1,20 +1,26 @@
 # AnyAppAgent Cloud: the plan
 
 A cloud version of AnyAppAgent for **anyone who does not want to install the PC app**. The person
-installs only AnyAppAgent on the phone, signs in with Google or a code by email, and makes and
-changes apps exactly as today: the chat is in the phone app, the APK or quick update arrives on
-the phone. The agent and the builds run on rented cloud machines, one per thread; everything that
-must last (accounts, apps, chats, usage, builds, files, signing keys) lives in Convex.
+installs only AnyAppAgent on the phone, signs in with Google or a code by email, connects their
+GitHub, tops up dollar credit, and makes and changes apps exactly as today: the chat is in the phone
+app, the APK or quick update arrives on the phone. The agent and the builds run on rented cloud
+machines, one per thread. The app's code lives in a private repo on **the person's own GitHub**;
+everything else that must last (accounts, apps, chats, usage, money, builds, files, signing keys)
+lives in Convex.
 
-Status: a plan, nothing built. Facts were checked on the web on **12 Nov 2026**; each has its source
-link. Not legal advice: section 1 says which answers must come from Anthropic or a lawyer.
+Status: **the agreed plan** (decisions of 12 Nov 2026, section 12), nothing built yet. Facts were
+checked on the web on **12 Nov 2026**; each has its source link. Not legal advice: section 1 says
+which answers must come from Anthropic.
 
-The user's answers this plan follows (they override `C:\aa\ideas\cloud-changes.html`): chat in the
-AnyAppAgent phone app (Q300 "app"), Google or a code by email (Q301), "we will sell tokens (just use
-open router key)" and also let people add their own Claude API key, Convex for most things, one
-instabox.sh box per thread, signing keys stored encrypted in Convex, storage free to the person,
-inference and machines charged at cost plus 10%, nothing charged to someone who does not use them,
-spending limits later.
+What the user decided (it overrides `C:\aa\ideas\cloud-changes.html` and the first draft of this
+file): chat in the AnyAppAgent phone app, Google or a code by email, Convex for most things, one
+instabox.sh box per thread behind a small interface, signing keys stored encrypted in Convex,
+storage free to the person. **Credit is dollars**: people top up with us from the first version,
+and machine time is drawn from it at cost plus 10% even when they use their own Anthropic key.
+**Every change shows an estimate first** (machine and AI). The code is **never stored by us**: the
+agent commits and pushes to the person's GitHub after every change. Each app's chat is an
+orchestrator on **Opus 5.5 high** that hands work to helpers on the right model. Selling AI tokens
+from credit waits for Anthropic's answer.
 
 ## 1. The terms question first
 
@@ -23,7 +29,8 @@ Anthropic's Claude Code terms forbid by name, unless Anthropic agrees in writing
 their own Anthropic API key is allowed in so many words. Selling usage through a different agent
 (not Claude Code) moves us under Anthropic's Commercial Terms and OpenRouter's terms, which allow
 building products for end users but also forbid "reselling" access; whether cost plus 10% on tokens
-counts as reselling is a question for Anthropic or a lawyer.
+counts as reselling is a question for Anthropic or a lawyer. Charging for **machine time** from our
+own credit is not Claude usage, so it is ours to sell.
 
 ### What the texts say (verbatim)
 
@@ -86,16 +93,16 @@ and will ensure that your Authorized Users and customers agree, to comply with t
 for each Model ("Model Terms")". OpenRouter lists Anthropic's Commercial Terms as Anthropic's Model
 Terms.
 
-### What that means for each way of paying
+### What that means for each way of paying for AI
 
 | Way | Agent | What the texts say | Needs whose answer |
 | --- | ----- | ------------------ | ------------------ |
-| **A. Our OpenRouter key, we sell tokens** | Claude Code | "may not pay for, resell, or intermediate". Per-person OpenRouter keys made under our account are still our account and our bill. OpenRouter is also not in the listed 3P providers. Pointing Claude Code at OpenRouter with `ANTHROPIC_BASE_URL` works technically (OpenRouter's own guide) but does not change who pays. | **Anthropic's written agreement** ("Unless we've mutually agreed otherwise"). Without it, not allowed. |
-| **B. The person's own Anthropic API key** | Claude Code | Named as allowed: "their own Anthropic API key". | None for the key itself. We charge only for machines. |
-| **C. The person's own OpenRouter key** | Claude Code | Billed to them under their own OpenRouter agreement, but OpenRouter is not one of the three named 3P providers. | Anthropic: is OpenRouter an accepted "3P inference provider credential"? |
-| **D. Our credit, a different agent** (an open agent loop over the API, for example OpenCode, which speaks ACP) | Not Claude Code | The Claude Code conditions do not apply. Commercial Terms A.1 allows powering products for end users; D.4 forbids reselling "except as expressly approved"; OpenRouter forbids "reselling API access to Models" but allows incorporating it into our product. | **A lawyer, or Anthropic**: is "app changes paid per use at model cost plus 10%" a product (A.1) or resale (D.4)? Pricing per change instead of per token reads more like a product. |
-| **E. The Claude Agent SDK with our key** | Agent SDK (it runs Claude Code underneath; our ACP adapter `claude-agent-acp` is built on it) | The SDK page puts it under the Commercial Terms for end-user products, but the legal page names "products or services that interact with Claude's capabilities, including those using the Agent SDK" in the same breath. It is not a clean way around the Claude Code condition. | Anthropic. Treat it like A until they say otherwise. |
-| **F. Claude Pro, Max or Ultra sign-in** | Claude Code | Allowed only as the person signing in to the unmodified binary through Anthropic's own flow; "developers may not collect, store, or intermediate Claude.ai credentials or session tokens". Keeping a sign-in alive across boxes looks like storing. | Anthropic. Left out of the first version. |
+| **A. Our OpenRouter key, AI paid from credit** | Claude Code | "may not pay for, resell, or intermediate". Per-person OpenRouter keys made under our account are still our account and our bill. OpenRouter is also not in the listed 3P providers. Pointing Claude Code at OpenRouter with `ANTHROPIC_BASE_URL` works technically (OpenRouter's own guide) but does not change who pays. | **Anthropic's written agreement** ("Unless we've mutually agreed otherwise"). Asked (section 12). |
+| **B. The person's own Anthropic API key** | Claude Code | Named as allowed: "their own Anthropic API key". | None. **The first version.** Machines are still paid from credit. |
+| **C. The person's own OpenRouter key** | Claude Code | Billed to them under their own OpenRouter agreement, but OpenRouter is not one of the three named 3P providers. | Anthropic: is OpenRouter an accepted "3P inference provider credential"? Asked. |
+| **D. Our credit, a different agent** (an open agent loop over the API, for example OpenCode, which speaks ACP) | Not Claude Code | The Claude Code conditions do not apply. Commercial Terms A.1 allows powering products for end users; D.4 forbids reselling "except as expressly approved"; OpenRouter forbids "reselling API access to Models" but allows incorporating it into our product. | Decided only if Anthropic says no to A (Q2). |
+| **E. The Claude Agent SDK with our key** | Agent SDK (it runs Claude Code underneath; our ACP adapter `claude-agent-acp` is built on it) | The SDK page puts it under the Commercial Terms for end-user products, but the legal page names "products or services that interact with Claude's capabilities, including those using the Agent SDK" in the same breath. It is not a clean way around the Claude Code condition. | Anthropic. Treated like A. Asked. |
+| **F. Claude Pro, Max or Ultra sign-in** | Claude Code | Allowed only as the person signing in to the unmodified binary through Anthropic's own flow; "developers may not collect, store, or intermediate Claude.ai credentials or session tokens". Keeping a sign-in alive across boxes looks like storing. | Anthropic. Out of the first version. Asked. |
 
 ### "The $200 Claude plan has $200 free"
 
@@ -113,54 +120,86 @@ https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultr
   linked Claude Console organization".
 
 So an Ultra (or Max) subscriber can make a Console API key that draws on that credit and paste it
-into AnyAppAgent Cloud (way B). Open point: whether our service running Claude Code with their key
-counts as "when you run them yourself" for the credit. Ask Anthropic; if not, the key still works,
-it is just billed to their Console balance.
+into AnyAppAgent Cloud (way B). Whether our service running Claude Code with their key counts as
+"when you run them yourself" is in the email to Anthropic; if not, the key still works, it is just
+billed to their Console balance.
 
-### Recommendation
+### Decided
 
-1. **Today**: the user writes to Anthropic (https://www.anthropic.com/contact-sales, the link the
-   legal page gives) asking for an agreement to run Claude Code for end users on our credit (way A).
-   Costs nothing; the answer decides the most.
-2. **First version ships way B** (their own Anthropic key, Ultra and Max credit included), which is
-   allowed now. We charge machines only.
-3. **Credit (selling tokens) is built behind a switch** and turned on only after either Anthropic's
-   yes (then way A, Claude Code on per-person OpenRouter keys) or a lawyer's yes on way D (then
-   OpenCode over OpenRouter, priced per change).
-4. Also needed in writing: **Instabox's** terms (section 8) forbid making the service "available to
-   any third party"; ask them to confirm a hosted product where our agent runs the box is fine.
+1. **The user writes to Anthropic** (https://www.anthropic.com/contact-sales) for an agreement on
+   way A, with the questions on ways C, E, F and the plan credit. The email is ready in
+   `C:\aa\ideas\cloud-emails.md`.
+2. **The first version ships way B** (their own Anthropic key, Ultra and Max credit included).
+   Machine time is paid from their AnyAppAgent credit.
+3. **Paying for AI from credit is built behind a switch** and turned on only after Anthropic's yes
+   (way A, Claude Code on per-person OpenRouter keys). What to do on a no is decided then (Q2).
+4. **Instabox** is asked in writing about terms 2(b)(iii) (section 8); the email is in the same file.
 
-## 2. How people pay for AI in the product
+## 2. How people pay
 
-"Your AI" in Settings, three choices, shown plainly:
+Two things cost money: **machine time** (the cloud box that runs the agent and the builds) and **AI**
+(the model's tokens). Settings has two plain cards.
 
-- **Use my Claude API key** (way B, first version). Pasted once, stored encrypted (section 6). If
+**Your credit** (from the first version, required before the first change):
+
+- Credit is dollars. Top up with Stripe Checkout: smallest **$10**, the card fee added on top
+  ("$10 of credit, $10.61 to pay" for a US card), so cost plus 10% holds.
+- Machine time is drawn from it at **our cost plus 10%**, whatever pays for the AI. An active person
+  uses about 11 cents of machine time a month (section 7).
+- The card shows the balance, the last top-ups, and what each app drew this month.
+- No free allowance: no credit, no change. Storage stays free.
+
+**Your AI**:
+
+- **My Claude API key** (way B, the first version). Pasted once, stored encrypted (section 6). If
   they have Max or Ultra, a one-line hint: "Your plan includes monthly API credit: link a Console
-  organization, then make a key there." We charge only the machine time, cost plus 10%.
-- **Use my OpenRouter key** (way C, only if Anthropic says OpenRouter counts).
-- **Buy credit from AnyAppAgent** (way A or D, only after the answers above). Top up with Stripe;
-  each change shows what it cost us and the 10% on top.
+  organization, then make a key there." AnyAppAgent shows what each change cost on that key (list
+  price, an estimate: Anthropic bills it, not us).
+- **Pay for AI from my credit** (way A): shown only once Anthropic agrees. Then AI is drawn from the
+  same credit at our cost plus 10%.
+- **My OpenRouter key** (way C): only if Anthropic says OpenRouter counts.
 
-Whatever the way, the key is never put in a file or an environment variable on the box: Instabox's
-Secrets proxy adds it to outgoing HTTPS requests, so the agent cannot print it (section 8, to be
-proven in the spike).
+Whatever the way, the AI key is never put in a file or an environment variable on the box:
+Instabox's Secrets proxy adds it to outgoing HTTPS requests, so the agent cannot print it (section
+8, to be proven in the spike).
+
+### Estimates before every change
+
+Before a change runs the person sees what it will likely cost, split the way it is paid:
+
+- **Under the message box**, before sending: "About 1 cent machine (from credit) + about $0.20 AI
+  (on your Claude key)". It is the median of this app's last 10 changes of the same size, or the
+  defaults in section 7 for a new app.
+- **On the plan** (bigger changes are planned first, as today): the orchestrator says which helpers
+  it will start and at which level (section 3, "Models"), and the plan card shows the estimate for
+  exactly that, with a range (the 25th to 75th percentile of past changes at those levels).
+- **Per app**, on its Settings page: "This app: about 4 cents of machine time a month at your pace,
+  about $1.20 of AI a month on your key", from its last 30 days, plus what it cost so far.
+- **After the change**, the usage line shows the real numbers next to the estimate: "Machine $0.006
+  (est. $0.008), AI $0.23 on your key (est. $0.20)".
+- A change starts only if the credit covers its machine estimate twice over; otherwise the phone
+  offers a top-up. Nothing else asks for confirmation (spending limits come later, as decided).
 
 ## 3. The architecture
 
 ```
- AnyAppAgent on the phone              Convex (one deployment)                 Instabox (one box per thread)
- Sign in (Google / email code) ----->  auth: users, sessions
- Home grid, chat, Settings     <====>  live queries + mutations
-   (Convex React Native client)        apps, threads, messages, usage, builds
- Send a message                ----->  messages.send (mutation)
-                                       -> scheduler: ensureBox(thread) ------>  create / resume the box
-                                                                                runner (Node, from server/)
-                                       <-- HTTP actions, runner token <-----    chat rows, usage, build state
-                                                                                agent over ACP + builder + fast lane
-                                       file storage: APKs, quick updates <--    uploads after each build
- Install / hand quick update   <-----  build row (live) + file URL
-                                       keys: wrapped, opened per signing  -->   one-time signing ticket
-                                       billing: ledger, Stripe, usage
+ AnyAppAgent on the phone             Convex (one deployment, US East)        Box provider (Instabox first)
+ Sign in (Google / email code) ---->  auth: users, sessions
+ Connect GitHub (browser)      ---->  GitHub App: user token (encrypted)
+ Home grid, chat, Settings     <===>  live queries + mutations
+   (Convex React Native client)       apps, threads, messages, usage, builds
+ Estimate under the message box <---  estimates (per app, per level)
+ Send a message                ---->  messages.send (mutation, checks credit)
+                                      -> scheduler: ensureBox(thread) ----->   create / resume the box
+                                                                               runner (Node, from server/)
+                                      <-- HTTP actions, runner token <----     chat rows, usage, build state
+                                      --> one-repo GitHub token, 1 hour --->   agent: orchestrator + helpers
+                                                                               builder + fast lane
+                                                                               git push -----------------> person's GitHub
+                                      file storage: APKs, quick updates <-     uploads after each build      anyapp-cloud-<slug>
+ Install / hand quick update   <----  build row (live) + file URL
+                                      keys: wrapped, opened per signing ->     one-time signing ticket
+ Top up (Stripe Checkout)      ---->  billing: ledger, balance, Stripe webhook
 ```
 
 ### The phone app
@@ -168,59 +207,133 @@ proven in the spike).
 The same AnyAppAgent APK gets a second way in. First run asks **"Make apps in the cloud"** (sign in)
 or **"Use my PC"** (today's pairing and Easy Connect). One mode per install in the first version.
 
+- Cloud mode setup is three short steps: sign in, connect GitHub, top up (with "Your AI" key pasted
+  at the first change if not before).
 - In cloud mode the phone talks only to Convex. The Convex React Native client keeps live queries
-  for the app list, each thread's messages and builds, and the balance; it reconnects by itself and
-  retries mutations until they are confirmed (Convex docs, section 8). No WebSocket to a PC.
+  for the app list, each thread's messages and builds, the balance and the estimates; it reconnects
+  by itself and retries mutations until they are confirmed. No WebSocket to a PC.
 - Everything the phone does with an APK or a quick update stays as it is (`app/src/lib/installer.ts`,
   `app/modules/anyapp-native`, the Reload card, rollback, crash reports): only where the file comes
   from changes (a Convex file URL instead of `GET /api/apps/:id/apk`).
 - The screens stay the same. The data layer gets a second implementation of today's calls
   (`app/src/lib/api.ts` `Client` and the `ServerEvent` stream) backed by Convex and returning the
   same `shared/protocol.ts` types, so `shared/chat` renders cloud chats unchanged.
-- New screens: sign in, "Your AI" (section 2), "Your balance" (only once credit is on).
+- New screens: sign in, connect GitHub, "Your credit" (balance, top-up), "Your AI", the estimate
+  line under the message box and on the plan card, the per-app cost line in the app's Settings.
+- **Package names**: cloud apps get their own prefix, **`com.anyappcloud.<slug>`**, so a cloud app
+  and a PC app with the same name never fight over one package on the same phone. (The server
+  already sets the package name in one place, `server/src/apps.ts`; the runner passes the cloud
+  prefix.)
 
 ### Convex
 
-Holds everything that must outlive a box: people, apps, threads, chat history, usage and money,
-build records, APK and quick update files, encrypted signing keys and the person's own AI keys. Its
-live queries replace the companion's WebSocket. It runs no agent and no build: its actions only
-call Instabox, OpenRouter, Stripe and the key service, and its HTTP actions are what the box calls.
+Holds everything that must outlive a box except the code: people, apps, threads, chat history,
+estimates, usage and money, build records, APK and quick update files, encrypted signing keys, the
+person's own AI key and their GitHub token. Its live queries replace the companion's WebSocket. It
+runs no agent and no build: its actions only call the box provider, GitHub, OpenRouter (once AI from
+credit is on), Stripe and the key service, and its HTTP actions are what the box and Stripe call.
+Deployment in **US East** (standard price; Instabox is in the US anyway).
 
-### One Instabox box per thread
+### The code lives on the person's GitHub
 
-A **thread** is one app's chat with its agent. Helpers run inside the same box, as today's workers
-run inside the one companion. Each thread gets its own Firecracker microVM made from one image:
+We do not store code. Each cloud app has a **private repo `anyapp-cloud-<slug>`** on the person's
+own GitHub account (the `cloud` in the name keeps it apart from a PC app's `anyapp-<slug>`).
+
+- **Connecting**: a **GitHub App** ("AnyAppAgent Cloud"), not an OAuth app. The person installs it
+  on their account from the phone (a browser page, then back to the app). Why a GitHub App:
+  - The box only ever gets an **installation token for one repo, Contents write only, that expires
+    after 1 hour** (GitHub lets us narrow a token to named repositories and permissions). If the
+    agent or a bad library leaks it, it reaches one app's code for under an hour.
+  - An OAuth app's token has the `repo` scope: every repo the person has, public and private, with
+    no expiry. That must never sit on a box where an agent runs commands.
+  - The person sees exactly what it may touch, and can limit or remove it on GitHub at any time.
+- **Permissions it asks for**: Contents read and write, Administration read and write (to create
+  the repo; GitHub lists `POST /user/repos` under it), Metadata read. No account permissions, no
+  webhooks in the first version.
+- **Making the repo**: when a cloud app is created, a Convex Node action creates
+  `anyapp-cloud-<slug>` (private) with the person's user token from the GitHub App (refreshable,
+  stored encrypted like the AI key). If the person installed the App on selected repositories only,
+  the spike checks that a repo the App creates joins the installation; if not, the phone asks them
+  once to choose "All repositories" or add the new repo.
+- **Every change is pushed**: the playbook tells the orchestrator and every helper to commit with a
+  plain message and push after each change, as part of finishing the change. The runner checks
+  after each turn that `HEAD` is on GitHub and pushes itself if the agent did not, and a build is
+  only shown as "saved" once its commit is pushed. If GitHub is down the runner retries and the chat
+  says the change is not saved yet.
+- **Pushing from the box**: a Git credential helper asks the runner for the current one-repo token
+  (the runner asks Convex, which mints it with the App's private key); the spike checks whether
+  Instabox's Secrets proxy can carry it instead, so it never reaches the box at all.
+- **A new box restores from GitHub**: it clones the repo (full history, which versions and undo
+  need), then installs `node_modules` from the warm cache in the image. Snapshots stay a speed-up,
+  not the copy that matters.
+- **Disconnecting GitHub** stops cloud changes for that person until they reconnect (the chat says
+  why); their repos and apps stay as they are.
+- **Sharing and publishing releases stay out of the first version.** The GitHub connection is the
+  hard part and it will be there, but the PC's sharing code drives the `gh` CLI and would need
+  porting to the REST API with the App's tokens, plus the public `-releases` repo, the secrets scan,
+  `update.json`, the Testing channel and Pull back from APKs in Convex. That is about 3 more days,
+  not nearly free. It is the first thing after the first version.
+
+### One box per thread, behind a small interface
+
+A **thread** is one app's chat with its agent. Helpers run inside the same box (below). Each thread
+gets its own machine made from one image.
+
+The runner and Convex talk to the machine provider only through one small TypeScript interface in
+`cloud/` (`create`, `start`, `pause`, `resume`, `snapshot`, `restore`, `delete`, `exec`, `upload`,
+`download`, `usage`, `setSecret`), with **Instabox** as the first implementation. Fly.io Machines
+(the earlier page's pick) or another provider can replace it without touching the runner or the
+phone.
 
 - Our own OCI image, imported once with `instabox snapshot import` (amd64 only, which the Android SDK
   needs anyway): Node 22, a JDK (the builder already builds with JDK 21, `docs/ENVIRONMENT.md`, so
-  Debian 13's OpenJDK 21 is fine and JDK 17 is not needed), the Android SDK and NDK as
-  `docs/ENVIRONMENT.md` pins, Gradle with a warm cache for the template, the template's
-  `node_modules`, the agent and the **runner**.
-- The app's code lives on the box (a Git repo, as today) and goes to Convex as a Git bundle after
-  every build, so losing a box loses nothing.
+  Debian 13's OpenJDK 21 is fine), the Android SDK and NDK as `docs/ENVIRONMENT.md` pins, Gradle with
+  a warm cache for the template, the template's `node_modules`, Git, the agent and the **runner**.
 - **Lifecycle**: a message resumes the box (from pause "usually takes about a second"). The runner
   holds Instabox's "activity lease" while a turn or a build runs (model calls are silent, and an
   idle box would pause). **5 minutes** after the last work it pauses (memory kept, only disk billed).
   After **1 hour** paused it is snapshotted and deleted (snapshots are free today), and the next
-  message restores it from the snapshot. A snapshot unused for 30 days is deleted; the code bundle
-  in Convex then rebuilds the box from the image (a slower first build). The spike measures each
-  of these times.
+  message restores it from the snapshot. A snapshot unused for 30 days is deleted; the next message
+  then makes a fresh box from the image and clones the repo from GitHub (a slower first build). The
+  spike measures each of these times.
 
-**The runner** is the companion's work loop without its HTTP server, pairing, Easy Connect or GitHub
-(`server/src` minus `http.ts`, `auth.ts`, `easy-connect/`, `github.ts`). It starts the agent over ACP,
-keeps the playbook, helpers (`workers.ts`), pages, to-dos, the usage meter, the build after every turn
-with up to 3 fix turns (`build-cycle.ts`), versions and undo, and the fast lane. Instead of
-broadcasting `ServerEvent`s on a WebSocket it posts them to a Convex HTTP action
+**The runner** is the companion's work loop without its HTTP server, pairing, Easy Connect or `gh`
+(`server/src` minus `http.ts`, `auth.ts`, `easy-connect/`, `github.ts`). It starts the agent over
+ACP, keeps the playbook, helpers (`workers.ts`), pages, to-dos, the usage meter, the build after
+every turn with up to 3 fix turns (`build-cycle.ts`), versions and undo, and the fast lane. Instead
+of broadcasting `ServerEvent`s on a WebSocket it posts them to a Convex HTTP action
 (`POST /runner/events`, batched every 250 ms while text streams). It takes its work (new messages,
 permission answers, cancel, page answers) from Convex by one long-poll HTTP action. It signs in with
 a **runner token**: random, made per box, stored only as a hash in Convex, good for one thread,
 revoked when the box is deleted.
 
-**The agent on the box**: Claude Code over ACP (`claude-agent-acp`, as today) for ways A, B and C.
-For way D, an open agent that speaks ACP, for example OpenCode (`opencode acp`, MIT,
-https://opencode.ai/docs/acp), pointed at OpenRouter: the runner already speaks ACP, so this is a
-second launcher next to `server/src/acp/claude-session.ts`, its own playbook wording, and a check of
-how its tool calls translate (`translate.ts`), not a new protocol.
+### Models: an orchestrator and helpers at three levels
+
+Each app's chat is an **orchestrator on Opus 5.5 at high effort**: it talks with the person, plans,
+and hands the real work to helpers (as today's coordinator does with `start_worker`). Its
+instructions say which level each piece of work gets:
+
+| Level | Model and effort | For |
+| ----- | ---------------- | --- |
+| `deep` | Opus 5.5, high | Complex work spanning several areas of the codebase (a new feature that touches screens, storage and alarms; a new app) |
+| `focused` | Opus 5.5, medium | Complex work in a few files (a tricky calculation, one screen's logic) |
+| `simple` | Sonnet 5.5, high | Simple work in one area (styling, changing text, colours, an icon) |
+
+- `start_worker` gets one new required field, `level`, and the runner starts that helper's ACP
+  session with the matching model and effort. The spike checks how `claude-agent-acp` takes a
+  model and an effort per session (ACP session model selection, or Claude Code's own model and
+  effort settings for that process).
+- **Helpers run in the same box**: each is its own Claude Code process with its own ACP session, as
+  the `agent` Unix user, in the app's folder. Helpers that change the app take turns (one change
+  slot per app, as today); helpers that only read run at once. Builds run after a changing helper's
+  turn, as today. The box size (4 vCPU, 8 GiB) fits the orchestrator, two helpers and a Gradle
+  build; the spike checks memory with two helpers and a build at once.
+- **Costs**: every ACP turn reports its usage with the session's model; the runner prices it with
+  that model's list price and tags it with the helper and its level. The change's usage line adds
+  them up: "AI $0.31 on your key (orchestrator $0.09, 2 helpers $0.22)", with each helper's own
+  line in its row as today. The estimate (section 2) is built from the same tags: the orchestrator's
+  share plus the planned helpers' levels, each from the app's (or everyone's) past medians for that
+  level. Machine time is the box's, shared by all of them, so it is not split per helper.
 
 **The builder on the box** is `builder/` unchanged in what it builds: `createApp`, `buildApk`, the
 fast lane (a JavaScript-only change is a quick build in about 16 s with no Gradle, `docs/FAST-LANE.md`).
@@ -234,10 +347,11 @@ with `apksigner` (as the fast lane's bundle swap already does) and the quick upd
 storage (not the universal APK, to save space), then writes the build row. The phone's live query
 sees it, downloads its own ABI's file and installs it, or hands the quick update to the app, exactly
 as on `apk.ready` today. Convex keeps the last 3 builds' files per app (go back and undo build a new
-version, as today, so an old APK is never reinstalled). Convex file URLs work for anyone who has
-them until the file is deleted; they are only given to the app's owner, and deleting old builds
-revokes them. If downloads grow, the `@convex-dev/r2` component moves the files to Cloudflare R2
-(expiring links, no egress fee) without changing the phone.
+version from the Git history, as today, so an old APK is never reinstalled). Convex file URLs work
+for anyone who has them until the file is deleted; they are only given to the app's owner, and
+deleting old builds revokes them. If downloads grow, the `@convex-dev/r2` component moves the files
+to Cloudflare R2 (expiring links, no egress fee) without changing the phone. APKs are build output,
+not code, so keeping them in Convex does not go against "no code stored".
 
 ## 4. The data model in Convex
 
@@ -246,21 +360,24 @@ Convex's own. Money is stored in millionths of a dollar ("micros"), never floats
 
 | Table | Fields (short) | Indexes |
 | ----- | -------------- | ------- |
-| `users` | from Convex Auth (`name`, `email`, `image`), `aiMode` ("ownAnthropic", "ownOpenRouter", "credit"), `openRouterKeyHash` (credit only), `stripeCustomerId`, `blocked` | `by_email` |
-| `apps` | `userId`, `name`, `slug`, `packageName`, `preset`, `iconFileId`, `lastBuild`, `status` (`AppStatus`), `health`, `overview` (text of `overview.md`) | `by_user`, `by_package` |
-| `threads` | `appId`, `userId`, `boxId`, `boxState` ("none", "starting", "running", "paused", "snapshotted", "deleted"), `runnerTokenHash`, `lastActiveAt`, `codeBundleFileId`, `agentSessionId` | `by_app`, `by_state_and_active` |
+| `users` | from Convex Auth (`name`, `email`, `image`), `aiMode` ("ownAnthropic", later "credit", "ownOpenRouter"), `githubLogin`, `githubInstallationId`, `stripeCustomerId`, `openRouterKeyHash` (credit AI only), `blocked` | `by_email`, `by_github_installation` |
+| `apps` | `userId`, `name`, `slug`, `packageName` (`com.anyappcloud.<slug>`), `repo` (`owner/anyapp-cloud-<slug>`), `pushedCommit`, `preset`, `iconFileId`, `lastBuild`, `status` (`AppStatus`), `health`, `overview` (text of `overview.md`) | `by_user`, `by_package` |
+| `threads` | `appId`, `userId`, `boxId`, `boxState` ("none", "starting", "running", "paused", "snapshotted", "deleted"), `runnerTokenHash`, `lastActiveAt`, `agentSessionId` | `by_app`, `by_state_and_active` |
 | `messages` | `threadId`, `workerId?`, `item` (a `ChatItem`: text, tool rows, plan, permission, page, build, usage), `seq` | `by_thread_seq` |
 | `inbox` | `threadId`, `kind` ("prompt", "permission", "cancel", "page-answers"), `payload`, `takenAt` | `by_thread_untaken` |
-| `builds` | `appId`, `number`, `delivery` ("apk" or "quick"), `files` (`{abi, fileId, sizeBytes, sha256}[]`), `otaFileId`, `runtime`, `changes` (`ChangeNotes`), `commit`, `seconds` | `by_app_number` |
-| `usage` | `userId`, `appId`, `threadId`, `messageId`, `kind` ("inference" or "machine"), `tokens` (`TokenUsage`) or `seconds` and `size`, `costMicros`, `chargeMicros`, `source`, `settled` | `by_user_at`, `by_message` |
+| `changes` | `appId`, `threadId`, `messageId`, `estimate` (`machineMicros`, `aiMicros`, `low`, `high`, `levels`), `actual` (`machineMicros`, `aiMicros`), `aiPaidBy` ("ownKey" or "credit"), `state` | `by_app_at`, `by_message` |
+| `builds` | `appId`, `number`, `delivery` ("apk" or "quick"), `files` (`{abi, fileId, sizeBytes, sha256}[]`), `otaFileId`, `runtime`, `changes` (`ChangeNotes`), `commit`, `pushed`, `seconds` | `by_app_number` |
+| `usage` | `userId`, `appId`, `threadId`, `changeId`, `kind` ("inference" or "machine"), `workerId?`, `level?`, `model?`, `effort?`, `tokens` (`TokenUsage`) or `seconds` and `size`, `costMicros`, `chargeMicros` (0 for AI on their own key), `settled` | `by_user_at`, `by_change`, `by_app_level` |
 | `ledger` | `userId`, `kind` ("topup", "charge", "refund", "adjust"), `amountMicros`, `stripePaymentId`, `usageIds` | `by_user_at` |
 | `balances` | `userId`, `micros` (always the sum of `ledger`, changed in the same mutation) | `by_user` |
 | `keys` | `appId`, `userId`, `packageName`, `certSha256`, `wrappedDataKey`, `ciphertext`, `iv`, `kekVersion`, `lineage?` (never deleted) | `by_app` |
 | `signings` | `appId`, `build`, `sha256` of what was signed, `at` | `by_app` |
-| `secrets` | `userId`, `kind` ("anthropic" or "openrouter"), `wrappedDataKey`, `ciphertext`, `iv`, `last4` | `by_user_kind` |
-| `boxes` | `threadId`, `instaboxId`, `size`, `startedAt`, `pausedAt`, `snapshotId`, `secondsBilled` | `by_thread`, `by_instabox_id` |
+| `secrets` | `userId`, `kind` ("anthropic", "githubRefresh", later "openrouter"), `wrappedDataKey`, `ciphertext`, `iv`, `last4`, `expiresAt?` | `by_user_kind` |
+| `boxes` | `threadId`, `provider` ("instabox"), `providerId`, `size`, `startedAt`, `pausedAt`, `snapshotId`, `secondsBilled` | `by_thread`, `by_provider_id` |
 
-Files: APKs (per ABI), quick update zips, icons, chat pictures, page HTML, code bundles.
+Medians for the estimates come from `usage` through the aggregate component (per app and level, and
+across everyone for new apps). Files: APKs (per ABI), quick update zips, icons, chat pictures, page
+HTML. **No code**, no Git bundles.
 
 ## 5. Metering and billing (cost plus 10%)
 
@@ -268,35 +385,42 @@ Files: APKs (per ABI), quick update zips, icons, chat pictures, page HTML, code 
 
 | What | Live number (shown while it runs) | The number we bill (the truth) |
 | ---- | --------------------------------- | ------------------------------ |
-| Inference, credit | Each ACP turn's `usage` (input, output, cache write, cache read), as the usage meter reads it today (`server/src/usage.ts`), times the model's price | OpenRouter: one key per person made with the Management API (formerly "provisioning keys"), so each key's own usage is that person's cost. Read after each turn and settled. Its `limit` is set to the person's balance, so OpenRouter itself stops a runaway change when the money is gone. |
-| Inference, own key | The same ACP usage, shown, never billed | Billed by Anthropic or OpenRouter to them |
-| Machine | Seconds the box ran (runner) | Instabox's per-machine usage endpoint (`GET /v1/machines/{id}/usage`, offered "for billing your own customers"): running seconds by size, plus disk while paused |
-| Storage in Convex | Not shown | Free to the person, as decided |
+| Machine | Seconds the box ran (runner) | The provider's usage. Instabox's per-machine usage endpoint (`GET /v1/machines/{id}/usage`, offered "for billing your own customers"): running seconds by size, plus disk while paused. Drawn from credit at cost plus 10%. |
+| AI, own key (first version) | Each ACP turn's `usage` (input, output, cache write, cache read) per session, as the usage meter reads it today (`server/src/usage.ts`), times that model's list price | Never billed by us. Billed by Anthropic to them. Shown so the estimates and the per-app line are honest. |
+| AI, from credit (behind the switch) | The same ACP usage | OpenRouter: one key per person made with the Management API, so each key's own usage is that person's cost. Read after each turn and settled. Its `limit` is set to the person's balance, so OpenRouter itself stops a runaway change when the money is gone. |
+| Storage in Convex, GitHub | Not shown | Free to the person, as decided (GitHub is theirs) |
 
-**Price**: charge = our cost times 1.10, where our cost is the model's list price plus OpenRouter's
-5.5% credit fee (credit only) plus the machine. Each change shows one line: "This change: $0.25
-(our cost $0.23 + 10%)".
+**Price**: charge = our cost times 1.10. Our cost for machines is the provider's price; for AI from
+credit it is the model's list price plus OpenRouter's 5.5% credit fee.
 
-**Money in**: Stripe Checkout top-ups (the `@convex-dev/stripe` component handles the webhook). Two
-rules make cost plus 10% hold up, because Stripe's fee (2.9% plus 30 cents for a US card, plus 1%
-for international cards, per the earlier page) is more than half of a 10% margin on a $5 top-up:
+**Settling**: machine time is settled per change (the box's seconds from the message until the box
+pauses, read from the runner and corrected from Instabox's usage once a day), plus paused disk once
+a day. Each charge is one `ledger` row and the balance moves in the same mutation.
 
-- The card fee is added on top at checkout ("$10 credit, $10.59 to pay").
-- Smallest top-up $10.
+**Money in**: Stripe Checkout top-ups (the `@convex-dev/stripe` component handles the webhook), in
+the first version. Because Stripe's fee (2.9% plus 30 cents for a US card, plus 1% for international
+cards, as the earlier page had it) is more than half of a 10% margin on a small top-up:
 
-**Who pays nothing**: someone who makes no change. Storage is free. With their own AI key the only
-charge is machine time, about 10 cents a month for an active person (section 7), so the first
-version can leave it free under a fair-use cap (Q3).
+- The card fee is added on top at checkout, grossed up so we receive the full credit: $10 of credit
+  is about **$10.61** to pay with a US card, about **$10.72** with an international one.
+- Smallest top-up **$10**.
+- Refunds of unused credit by hand (the `refund` ledger row) in the first version; disputes
+  block the account until settled.
 
-**Running out**: a change starts only with a balance above its estimate; the OpenRouter key's limit
-is the hard stop. Spending limits per month come later, as decided.
+**Who pays nothing**: someone who makes no change pays nothing beyond what they topped up, and that
+credit stays theirs. Storage is free.
+
+**Running out**: a change starts only if the balance covers twice its machine estimate (and, once AI
+from credit is on, its AI estimate; the OpenRouter key's limit is the hard stop). A change already
+running is allowed to finish even if it goes slightly below zero; the next top-up covers it.
+Monthly spending limits come later, as decided.
 
 ## 6. Signing keys in Convex ("so never lost")
 
 Each app keeps its own signing key, as on the PC since stage 1 of `docs/DISTRIBUTION.md`. Losing it
 means no phone ever takes that app's update again, so it is stored in Convex, encrypted, never
 deleted. Leaking it means anyone can make an update phones accept, so it is opened only for one
-signing, never where the agent can read it.
+signing, never where the agent can read it. It is not code and never goes to GitHub.
 
 **Encryption (envelope):**
 
@@ -308,8 +432,8 @@ signing, never where the agent can read it.
 - Per app a fresh 256-bit **data key**. The PKCS12 file and its password are encrypted with it
   (AES-256-GCM, with the app id and package name as additional data, so a row copied to another app
   does not open). The data key is stored only wrapped by the master key.
-- The person's own Anthropic or OpenRouter key is stored the same way in `secrets`; Settings shows
-  the last 4 characters.
+- The person's own Anthropic key and their GitHub refresh token are stored the same way in
+  `secrets`; Settings shows the last 4 characters of the AI key.
 - "Never lost" also needs the master key never lost: the key service never destroys its versions,
   Convex backups cover the rows, and the owner keeps a sealed offline copy of an exported wrapping
   key.
@@ -329,54 +453,72 @@ signing, never where the agent can read it.
 3. Every signing is written to `signings` and shown in the app's Settings.
 
 Why not sign inside Gradle as on the PC: in the cloud the agent writes `build.gradle` and Gradle runs
-it, so anything Gradle can see, a bad prompt or a bad library could print or send away. A separate
-signer machine, where no agent ever runs, is stronger still; it is the step after the first version
-(Q6).
+it, so anything Gradle can see, a bad prompt or a bad library could print or send away.
+
+**Decided**: signing on the thread's box as a separate Unix user in the first version, then a
+**separate signer machine**, where no agent ever runs, as the next step (+2 days).
 
 **Moving between PC and cloud** (after the first version): "Download this app's key" (password
 protected, the desktop's key backup format, `builder/lib/keybackup.mjs`), and a PC can upload a key
-the same way to move an app into the cloud.
+the same way to move an app into the cloud. The code moves through GitHub.
 
 ## 7. Costs
 
-### Per change (Opus 5.5)
+### Per change, with the orchestrator and helpers
 
-Token counts are the usage meter's real run (`docs/TRUST.md`), priced on the earlier page; OpenRouter
-charges the same as Anthropic's list (Opus 5.5 $4 in, $20 out, $5 cache write, $0.20 cache read per
-million). Machine: Instabox 4 vCPU and 8 GiB is 4 x $0.004 + 8 x $0.00225 = **$0.034 an hour**, for
-the turn, the build and 5 minutes before the box pauses.
+Prices (section 8): Opus 5.5 $4 in, $20 out, $5 cache write, $0.20 cache read per million; Sonnet
+5.5 half of that. Machine: Instabox 4 vCPU and 8 GiB is 4 x $0.004 + 8 x $0.00225 = **$0.034 an
+hour**, for the turns, the build and 5 minutes before the box pauses.
 
-| Change | Model (list) | Our cost with OpenRouter's 5.5% | Box minutes | Machine | Charged (cost + 10%) |
-| ------ | ------------ | ------------------------------- | ----------- | ------- | -------------------- |
-| Small change, quick update | $0.21 | $0.222 | about 6 | $0.004 | **$0.25** |
-| Small change, full build | $0.21 | $0.222 | about 10 | $0.006 | **$0.25** |
-| Bigger change (agent reads the whole app) | $0.46 | $0.485 | about 12 | $0.007 | **$0.54** |
-| New app (plan, then build with helpers, first build of a new project) | $0.70 | $0.739 | about 19 | $0.011 | **$0.82** |
+The first draft's numbers were the usage meter's measured run with one agent doing the work
+(`docs/TRUST.md`). The orchestrator plus helpers split is **not measured yet**: the numbers below
+are that measurement re-cut by hand (the orchestrator's Opus turns about $0.08 to $0.15 per change,
+the helper's work at its level's price, high effort a little dearer than medium). Milestone 6
+replaces them with real medians, and the estimates use real medians from then on.
 
-On Sonnet 5.5 the model part is half. With the person's own key only the machine is charged: under
-a cent per change.
+| Change | Levels | AI (list, on their key) | Box minutes | Machine cost | Machine charged from credit (+10%) |
+| ------ | ------ | ----------------------- | ----------- | ------------ | ---------------------------------- |
+| Simple (text, styling), quick update | orchestrator + 1 `simple` | about $0.20 | about 7 | $0.004 | **$0.004** |
+| Complex in a few files, full build | orchestrator + 1 `focused` | about $0.43 | about 12 | $0.007 | **$0.008** |
+| Complex across areas, full build | orchestrator + 1 or 2 `deep` | about $0.65 | about 15 | $0.009 | **$0.009** |
+| New app (plan, helpers, first build) | orchestrator + 2 `deep` | about $0.85 | about 20 | $0.011 | **$0.012** |
+
+With AI from credit (behind the switch) the AI part would be charged at list plus OpenRouter's 5.5%,
+plus 10%: about $0.23, $0.50, $0.75 and $0.99.
 
 ### Per month
 
-Assumption (the earlier page's): an active person makes 8 changes a month (6 small, 70% of them
-quick updates, 1 bigger, 1 new app). Model cost $2.42 list, $2.55 with OpenRouter's fee; machines
-about 75 box minutes plus paused disk, about **$0.06**, say $0.10 with build-fix turns.
+Assumption: an active person makes 8 changes a month (4 simple, 2 in a few files, 1 across areas, 1
+new app). AI about **$3.16** on their own key (list). Machines about 87 box minutes ($0.05) plus
+paused disk before the hourly snapshot ($0.01), say **$0.10** with build-fix turns, so **about 11
+cents a month** drawn from their credit. A $10 top-up lasts such a person years.
+
+First version (everyone on their own key, we sell machine time only):
 
 | A month | 10 people | 100 people | 1000 people |
 | ------- | --------- | ---------- | ----------- |
-| Inference we buy (credit, everyone on credit) | $25.50 | $255 | $2,550 |
-| Instabox usage (machines and paused disk) | $1 | $10 | $100 |
-| Instabox plan | $20 Pro (includes $20 usage) | $20 Pro | $100 Builder (200 boxes running at once) |
+| Instabox usage | $1 | $10 | $100 |
+| Instabox plan | $20 Pro (includes $20 of usage) | $20 Pro | $100 Builder (200 boxes running at once) |
 | Convex | $0 Starter | about $3 Starter, pay as you go | about $30 Professional (1 developer, $25) |
-| Key service, domain, email codes | about $1 | about $1 | about $1 plus email (not priced) |
-| **What we pay** (Instabox usage inside the Pro plan's $20 credit at 10 and 100) | **about $47** | **about $279** | **about $2,781** |
-| **What people pay** (cost + 10% on inference and machines; the card fee added on top) | $29 | $292 | $2,915 |
-| **What we keep** | about **minus $18** | about **plus $12** | about **plus $134** |
+| Key service, domain, email codes, GitHub App | about $1 | about $1 | about $1 plus email (not priced) |
+| **What we pay** | **about $21** | **about $24** | **about $231** |
+| **What people pay us** (machines + 10%; the card fee is passed on) | $1.10 | $11 | $110 |
+| **What we keep** | about **minus $20** | about **minus $13** | about **minus $121** |
 
-With everyone on their own key instead: we pay about $21, $24 and $231 a month, and the 10% on
-machines brings in under $1, $1 and $10. So own-key people cost us roughly the fixed plan fees.
-Instabox's paused disk is the one cost that grows fastest if boxes are not snapshotted; snapshotting
-after an hour keeps the average under 1 GiB per person.
+So the first version costs us roughly the fixed plan fees; cost plus 10% on machines alone never
+pays for them. Top-ups are paid in advance, so cash comes in early, but it is the person's money
+until used. The business case needs AI from credit (once Anthropic agrees):
+
+| A month, everyone paying AI from credit | 10 people | 100 people | 1000 people |
+| ------- | --------- | ---------- | ----------- |
+| Inference we buy (list + OpenRouter's 5.5%) | $33 | $333 | $3,334 |
+| Instabox, Convex, the rest (as above) | $21 | $24 | $231 |
+| **What we pay** | **about $54** | **about $357** | **about $3,565** |
+| **What people pay us** (inference and machines + 10%) | $38 | $378 | $3,777 |
+| **What we keep** | about **minus $17** | about **plus $20** | about **plus $212** |
+
+Instabox's paused disk is the one cost that grows fastest if boxes are not snapshotted;
+snapshotting after an hour keeps the average under 1 GiB per person.
 
 Numbers used: Instabox "$0.004 per vCPU-hour", "$0.00225 per GiB-hour", disk "$0.08 per GiB-month",
 "Snapshots are free", Pro "$20/month + usage" with "$20 of credits" and 200 GiB disk, Builder
@@ -385,6 +527,7 @@ calls, then $2.20 per million; Professional $25 per developer with 25M calls
 (https://www.convex.dev/pricing); about 1,000 to 2,000 calls per change for streaming chat, batched
 (estimate). OpenRouter: "5.5% ($0.80 minimum) fee when you purchase credits", "We pass through the
 pricing of the underlying model providers without any markup" (https://openrouter.ai/docs/faq).
+GitHub Apps and private repos on personal accounts cost nothing.
 
 ## 8. The facts checked (12 Nov 2026)
 
@@ -394,8 +537,9 @@ pricing of the underlying model providers without any markup" (https://openroute
   sudo, apt and Docker. Run by InsForge AI, Inc. (Delaware). First blog post 2 Sep 2026; paid plans
   since 20 Oct 2026; access by waitlist, "Pro users skip the waitlist entirely". SOC 2 Type II
   reported. **No status page found**; SLAs only on Team and above; the terms say no warranty "that a
-  Sandbox or its data will not be lost". Sources: https://instabox.sh/docs/limits.md,
-  https://instabox.sh/blog.md, https://instabox.sh/blog/workos.md, https://instabox.sh/terms.
+  Sandbox or its data will not be lost" (one reason the code lives on GitHub and the provider sits
+  behind an interface). Sources: https://instabox.sh/docs/limits.md, https://instabox.sh/blog.md,
+  https://instabox.sh/blog/workos.md, https://instabox.sh/terms.
 - **API**: REST at `https://api.instabox.sh` (OpenAPI at https://api.instabox.sh/v1/openapi.json),
   TypeScript SDK `@insforge/instabox-sdk`, Python SDK, CLI, MCP. Keys `ibk_...` with scopes
   (`machines:read|write|delete`, `images:*`). `POST /v1/machines`, then `start`, `stop`, `suspend`,
@@ -417,12 +561,25 @@ pricing of the underlying model providers without any markup" (https://openroute
   plans; an "activity lease" keeps a box awake during silent model calls; upload about 50 Mbit/s per
   machine; no documented outbound allowlist; automatic abuse checks can lock a box for 24 hours.
 - **Secrets proxy**: adds API keys to outgoing HTTPS headers so the real key never enters the box
-  (https://instabox.sh/docs/secrets.md). To prove with Claude Code and OpenRouter in the spike.
+  (https://instabox.sh/docs/secrets.md). To prove with Claude Code (and the GitHub token) in the
+  spike.
 - **Terms** (https://instabox.sh/terms, 9 Nov 2026): 2(b)(iii) the customer may not "rent, lease,
   lend, sell, sublicense, or otherwise make the Services available to any third party except as
   expressly permitted", while 4(c) speaks of the customer's "relationship with the end users of
   those services". Our agent working for a person's app in a box is closer to 4(c), but the person's
-  prompts do run commands there. Ask Instabox in writing.
+  prompts do run commands there. Asked in writing (`C:\aa\ideas\cloud-emails.md`).
+
+### GitHub Apps
+
+- **Installation tokens** "expire after 1 hour"; the `repositories` or `repository_ids` body
+  parameters limit a token to named repos, and the `permissions` parameter limits what it may do,
+  never beyond the App's own permissions
+  (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app).
+- **Creating a repo**: `POST /user/repos` is listed under the repository permissions
+  "Administration" (write) and "Repository creation" (write), for user and installation tokens
+  (https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps). Whether a
+  repo it creates joins an installation limited to selected repositories was not found in the docs;
+  the spike checks it.
 
 ### Convex
 
@@ -436,7 +593,7 @@ pricing of the underlying model providers without any markup" (https://openroute
   `getUrl()` gives a URL "anyone with the URL can access" until the file is deleted.
 - **Auth** (https://labs.convex.dev/auth): Convex Auth supports React Native, OTP by email (with
   Resend) and Google OAuth, but "is in beta (it isn't complete and may change in
-  backward-incompatible ways)". Clerk is the well-trodden alternative with Expo support
+  backward-incompatible ways)". Clerk is the fallback with Expo support
   (https://docs.convex.dev/auth/clerk). The React Native Google flow uses `expo-web-browser`; it
   cannot be tested in Expo Go (we never use Expo Go).
 - **Actions**: Node actions run up to 10 minutes with 512 MiB; they are not retried. An agent turn
@@ -446,9 +603,10 @@ pricing of the underlying model providers without any markup" (https://openroute
   20 MiB), responses up to 100 MiB. A service calls them with a shared secret it checks.
 - **Components**: rate limiter, Stripe, aggregate, workpool, workflow, R2, Agent.
 - **Self-hosting**: FSL Apache 2.0, becomes Apache 2.0 after two years; the way out if needed.
-- **Regions**: US East standard; Ireland, Sydney, Canada at plus 30%; fixed per deployment.
+- **Regions**: US East standard (our choice); Ireland, Sydney, Canada at plus 30%; fixed per
+  deployment.
 
-### OpenRouter
+### OpenRouter (only for AI from credit, behind the switch)
 
 - **Prices** equal Anthropic's list on the global endpoints (Opus 5.5 $4 / $20, Sonnet 5.5 $2 / $10,
   Fable 5.2 $8 / $40 per million; caching passed through). Regional endpoints cost 10% more.
@@ -467,99 +625,139 @@ pricing of the underlying model providers without any markup" (https://openroute
 
 | Part | Reused as it is | Changed | New |
 | ---- | --------------- | ------- | --- |
-| `shared/protocol.ts` | Every type the phone renders (`App`, `ChatItem`, `BuildInfo`, `OtaInfo`, `ApkVariant`, `TokenUsage`, `AppUsage`, `ChangeNotes`, `WorkerInfo`, `PageInfo`, `ServerEvent`) | Additive only: `BuildInfo.fileUrls?`, `App.cloud?`, `ChatItem.cost?` | Runner event and billing types (`Balance`, `UsageCharge`) |
-| `shared/chat`, `shared/theme` | All: rows, build card, usage line, pages, the Workbench look | The usage line can show money | Nothing |
-| `server/` | `acp/`, `workers.ts`, `playbook.ts`, `coordinator-playbook.ts`, `pages/`, `todos.ts`, `usage.ts`, `build-cycle.ts`, `history.ts`, `health.ts`, `apk-scan.ts`, `icon.ts`, `secrets.ts` | A second entry `runner.ts` with no HTTP server; events go to a sink (WebSocket today, Convex in the cloud); `git.ts` without GitHub | `runner/convex-sink.ts`, `runner/inbox.ts`, `runner/signing.ts`, later the OpenCode launcher |
+| `shared/protocol.ts` | Every type the phone renders (`App`, `ChatItem`, `BuildInfo`, `OtaInfo`, `ApkVariant`, `TokenUsage`, `AppUsage`, `ChangeNotes`, `WorkerInfo`, `PageInfo`, `ServerEvent`) | Additive only: `BuildInfo.fileUrls?`, `App.cloud?`, `ChatItem.cost?`, `WorkerInfo.level?` | Runner event, estimate and billing types (`CostEstimate`, `Balance`, `UsageCharge`) |
+| `shared/chat`, `shared/theme` | All: rows, build card, usage line, pages, the Workbench look | The usage line shows machine and AI money and the estimate next to it; the plan card shows an estimate | The estimate line under the message box |
+| `server/` | `acp/`, `workers.ts`, `playbook.ts`, `pages/`, `todos.ts`, `usage.ts`, `build-cycle.ts`, `history.ts`, `health.ts`, `apk-scan.ts`, `icon.ts`, `secrets.ts`, `git.ts` (commit, history, undo) | A second entry `runner.ts` with no HTTP server; events go to a sink (WebSocket today, Convex in the cloud); `coordinator-playbook.ts` gets the three levels and "commit and push after every change"; `start_worker` gets `level`; ACP sessions start with a model and effort; `usage.ts` prices per model; the package prefix comes from config | `runner/convex-sink.ts`, `runner/inbox.ts`, `runner/signing.ts`, `runner/git-credentials.ts` (the one-repo token), later the OpenCode launcher (only if Q2 goes that way) |
 | `builder/` | `createApp`, `buildApk`, `fastlane.mjs`, `zip.mjs`, `axml.mjs`, `apksign.mjs`, `OtaSign.java`, `keybackup.mjs` | `ANYAPP_SIGN_LATER=1` (Gradle unsigned, then `apksign.mjs`); checked on Linux (it was built on Windows) | Nothing else |
 | `template/`, `template-kotlin/` | All, including the updater, Reload card, crash catcher and diary | Nothing for the first version | Later: a cloud feed for shared apps |
-| `app/` | Home grid, chat, installer, quick update hand-over, crash forwarding, AI for your apps, Settings | `api.ts`: the `Client` behind an interface with two implementations | Sign in, mode choice, "Your AI", balance, the Convex client |
+| `app/` | Home grid, chat, installer, quick update hand-over, crash forwarding, AI for your apps, Settings | `api.ts`: the `Client` behind an interface with two implementations | Sign in, mode choice, connect GitHub, "Your credit" and top-up, "Your AI", estimates, the Convex client |
 | `desktop/` | Not used by the cloud | | Later: "Move this app to the cloud" |
-| New `cloud/` | | | The Convex project (schema, functions, HTTP actions, auth), the box image (Dockerfile), the Instabox client, the Stripe webhook |
+| New `cloud/` | | | The Convex project (schema, functions, HTTP actions, auth, the GitHub App's token minting, Stripe webhook, estimates), the box provider interface and its Instabox implementation, the box image (Dockerfile) |
 
-Not used in the cloud: Easy Connect, pairing codes, the admin token, the desktop onboarding, GitHub
-repos (Q8), and the `anyapp` CLI's other apps (the runner can serve it from Convex later).
+Not used in the cloud: Easy Connect, pairing codes, the admin token, the desktop onboarding, the
+`gh` CLI and `server/src/github.ts` (the GitHub App's REST calls replace them), sharing and
+publishing (after the first version), and the `anyapp` CLI's other apps.
 
 ## 10. The first version
 
-**In**: cloud mode in the phone app; Google and email code sign-in; the app grid; one chat per app
-with helpers in the same box; plan first and pages; builds and quick updates to the phone; versions
-and undo; What changed; crash reports; the usage line per change; **their own Anthropic API key**
-(way B); machine time metered (free under a cap, Q3); signing keys encrypted in Convex.
+**In**: cloud mode in the phone app; Google and email code sign-in (Convex Auth); **connect GitHub**
+(the GitHub App), a private `anyapp-cloud-<slug>` repo per app, commit and push after every change,
+new boxes restored from GitHub; the app grid with `com.anyappcloud.<slug>` packages; one chat per
+app as an **Opus 5.5 high orchestrator** with helpers at three levels in the same box; plan first
+and pages; builds and quick updates to the phone; versions and undo; What changed; crash reports;
+**their own Anthropic API key** (way B); **dollar credit with Stripe top-ups** (smallest $10, card fee
+on top; test mode until launch); machine time drawn from credit at cost plus 10%; **estimates**
+(under the message box, on the plan card, per app) and actuals per change; signing keys encrypted in
+Convex, signed on the box as a separate Unix user; Instabox behind the provider interface.
 
-**Built but switched off until the answers**: credit (per-person OpenRouter keys, ledger, Stripe
-top-ups, cost plus 10%).
+**Built but switched off until Anthropic answers**: paying for AI from credit (per-person
+OpenRouter keys with limits, AI charges in the ledger).
 
 **Out**: monthly spending limits; Claude sign-in (way F); moving apps between PC and cloud; sharing
-and publishing to GitHub releases; the diary (it needs a phone round trip through Convex); Expo
-Exact; a separate signer machine.
+and publishing releases (+3 days, the first thing after); the diary (it needs a phone round trip
+through Convex); Expo Exact; the separate signer machine (+2 days, next).
 
 | # | Milestone | Days |
 | - | --------- | ---- |
-| 0 | **Spike**: the box image (Node, JDK 21, Android SDK, warm Gradle, Claude Code, the runner) imported to Instabox; one box creates and builds the template app (full and quick), signs after Gradle, and runs one Claude Code turn with an Anthropic key through the Secrets proxy; measure create, resume, snapshot restore and build times; Convex project with Google and email code sign-in from a dev build of the phone app on the emulator | 3 |
-| 1 | Convex backend: schema, auth, runner HTTP actions and token, inbox, file uploads, box lifecycle (scheduler, webhooks, pause, snapshot, delete) | 3 |
-| 2 | Runner: the event sink in `server/`, `runner.ts`, signing tickets and tmpfs signing, code bundles and restore | 4 |
-| 3 | Phone: sign in, mode choice, the Convex `Client`, downloads from file URLs, "Your AI" | 4 |
-| 4 | Keys and secrets: envelope encryption, the key service, the signing log | 2 |
-| 5 | Metering: usage rows from ACP and Instabox, the cost line per change, the fair-use cap; credit behind its switch (OpenRouter keys with limits, ledger, Stripe Checkout and webhook) | 3 |
-| 6 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator, a second prompt as a quick update, rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 3 |
-| | **First version** | **22 days, about 4.5 weeks** |
-| | If way D is chosen: OpenCode launcher, playbook wording, tool-call translation checks | +4 |
+| 0 | **Spike**: the box image (Node, JDK 21, Android SDK, warm Gradle, Git, Claude Code, the runner) imported to Instabox; one box creates and builds the template app (full and quick), signs after Gradle, runs one orchestrator turn that starts a `simple` helper, each with its own model and effort, with an Anthropic key through the Secrets proxy; the helper commits and pushes to a test repo with a one-repo GitHub App token, and a fresh box clones it back; measure create, resume, snapshot restore, clone and build times and memory with two helpers and a build; Convex project with Google and email code sign-in from a dev build of the phone app on the emulator | 4 |
+| 1 | Convex backend: schema, auth, runner HTTP actions and token, inbox, file uploads, the box provider interface with Instabox behind it, box lifecycle (scheduler, webhooks, pause, snapshot, delete) | 3.5 |
+| 2 | Runner: the event sink in `server/`, `runner.ts`, signing tickets and tmpfs signing, levels and per-session model and effort, the playbook's levels and push rule, the push check after each turn | 4 |
+| 3 | GitHub: the App, connect flow (browser and back), user token refresh, repo creation, minting one-repo tokens, the credential helper, restore from GitHub, disconnect handling | 3 |
+| 4 | Phone: sign in, mode choice, the Convex `Client`, downloads from file URLs, connect GitHub, "Your AI", "Your credit" and top-up, the estimate line, plan card estimate, per-app costs | 5 |
+| 5 | Keys and secrets: envelope encryption, the key service, the signing log, the GitHub refresh token | 2 |
+| 6 | Credit and metering: usage rows per session and model from ACP and Instabox, settling machine time from the balance, ledger and balances, Stripe Checkout with the fee on top and its webhook (test mode), the credit gate, estimates from medians (aggregate component), real medians replacing section 7's guesses; AI from credit behind its switch | 5 |
+| 7 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator (top-up in Stripe test mode, estimate shown, code on GitHub), a second prompt as a quick update, a box deleted and the app restored from GitHub, rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 3.5 |
+| | **First version** | **30 days, about 6 weeks** (the first draft was 22) |
+| | Sharing and publishing releases from the cloud | +3 |
 | | Separate signer machine | +2 |
+| | If Anthropic says no and way D is chosen: OpenCode launcher, playbook wording, tool-call translation checks | +4 |
 
-## 11. Accounts and keys for the first spike (one task for the user)
+Where the 8 extra days come from: GitHub instead of Git bundles (+2.5 net), credit and Stripe live
+instead of switched off (+1.5), estimates (+2), the orchestrator's levels and per-model pricing
+(+1.5), the provider interface (+0.5).
 
-Nothing here costs money except Instabox Pro if the free plan's waitlist blocks us, and $10 of
-OpenRouter credit only if credit is to be tested.
+## 11. Accounts and keys: one task for the user
 
-1. **Convex**: sign up at https://dashboard.convex.dev (Free plan). Create a project named
-   `anyappagent-cloud`, US East region (standard price). Hand over: the deployment URL and a
-   **development deploy key** (project Settings, Deploy keys).
-2. **Instabox**: sign up at https://dashboard.instabox.sh. Free plan (one 4 vCPU / 8 GiB machine) is
-   enough for the spike if the invite arrives; otherwise **Pro, $20 a month** (skips the waitlist,
-   includes $20 of usage). Create an API key at https://dashboard.instabox.sh/dashboard/api-keys with
-   `machines:read`, `machines:write`, `machines:delete` and `images:*`. Also email
-   support@instabox.sh asking whether terms 2(b)(iii) allows a product where our agent runs a box per
-   end user's app.
-3. **Anthropic API key** for way B: https://platform.claude.com, a key with a small credit (about $5).
-   If the user has Max or Ultra, link a Console organization to the plan to claim its monthly API
-   credit (https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultra-and-team-plans).
-4. **Google OAuth client**: https://console.cloud.google.com/apis/credentials. New project, OAuth
-   consent screen "External" in testing mode with the user's own Google account as a test user,
-   then an OAuth client ID of type "Web application" with the redirect URI
-   `https://<deployment>.convex.site/api/auth/callback/google`. Free. Hand over the client ID and
+Do these in order. Put every value into a **1Password item named `AnyAppAgent Cloud (dev)`**, one
+field per value (or into the file the coordinator names), and tell the coordinator it is there.
+**Never paste a key, secret or private key in a chat.** Steps marked **Spike** are needed before
+milestone 0 starts; **Later** can wait.
+
+1. **Send the two emails** (Spike, free). Open `C:\aa\ideas\cloud-emails.md`. Send the first through
+   https://www.anthropic.com/contact-sales and the second to support@instabox.sh. Hand over nothing;
+   forward the answers to the coordinator when they come.
+2. **Convex** (Spike, Free plan). Sign up at https://dashboard.convex.dev. Create a project named
+   `anyappagent-cloud`, region **US East**. Hand over: the deployment URL (`https://<name>.convex.cloud`)
+   and a **development deploy key** (project Settings, Deploy keys).
+3. **Instabox** (Spike). Sign up at https://dashboard.instabox.sh. The Free plan (one 4 vCPU / 8 GiB
+   machine) is enough for the spike if the invite arrives; if the waitlist blocks you, **Pro, $20 a
+   month** (skips the waitlist, includes $20 of usage). Create an API key at
+   https://dashboard.instabox.sh/dashboard/api-keys with `machines:read`, `machines:write`,
+   `machines:delete` and `images:*`. Hand over: the API key (`ibk_...`) and which plan you are on.
+4. **Anthropic API key** (Spike, about $5 of credit). At https://platform.claude.com make a key with a
+   small credit. If you have Max or Ultra, first link a Console organization to the plan to claim its
+   monthly API credit
+   (https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-ultra-and-team-plans).
+   Hand over: the key (`sk-ant-...`).
+5. **GitHub App** (Spike, free). At https://github.com/settings/apps/new create an app:
+   - Name `AnyAppAgent Cloud Dev`, homepage `https://github.com/<your login>`.
+   - Callback URL `https://<name>.convex.site/github/callback` (the deployment from step 2, with
+     `.convex.site`); tick "Expire user authorization tokens" and "Request user authorization
+     (OAuth) during installation".
+   - Webhook: untick "Active".
+   - Repository permissions: Administration read and write, Contents read and write, Metadata read
+     only. No account permissions.
+   - "Where can this GitHub App be installed?": **Only on this account** (for the spike).
+   - After creating it: "Generate a new client secret" and "Generate a private key" (a `.pem` file
+     downloads).
+   Hand over: the App ID, the app's slug (from its public page URL), the Client ID, the client
+   secret, and the `.pem` file attached to the 1Password item (as a file, not as text in a field).
+6. **Google OAuth client** (Spike, free). At https://console.cloud.google.com/apis/credentials: a new
+   project `anyappagent-cloud`, OAuth consent screen "External" in testing mode with your own Google
+   account as a test user, then an OAuth client ID of type "Web application" with the redirect URI
+   `https://<name>.convex.site/api/auth/callback/google`. Hand over: the client ID and client
    secret.
-5. **Resend** for email codes: https://resend.com, free plan, one API key. Without a verified domain
-   it can only send to the account's own address, which is enough for the spike (price and limits
-   not checked here).
-6. **OpenRouter** (only to test credit, not needed for the first version):
-   https://openrouter.ai, $10 of credit ($10.80 with the fee), one API key with a $10 limit, and a
-   Management API key (https://openrouter.ai/docs/guides/overview/auth/management-api-keys).
-7. **Anthropic**: write to https://www.anthropic.com/contact-sales about way A (and ask about ways C,
-   E, F and whether the Max and Ultra credit applies to a hosted service).
+7. **Resend** for email codes (Spike, Free plan). At https://resend.com make one API key. Without a
+   verified domain it sends only to your own address, which is enough for the spike. Hand over: the
+   API key (`re_...`).
+8. **Stripe in test mode** (Later: milestone 6, free). Sign up at https://dashboard.stripe.com/register;
+   no business details are needed for test mode. Stay in **Test mode**, then Developers, API keys.
+   Hand over: the **test** secret key (`sk_test_...`). The webhook signing secret comes later: the
+   coordinator will give you the exact webhook URL to add, then you hand over its `whsec_...`.
+   Never hand over a live key (`sk_live_...`) until launch.
+9. **Google Cloud KMS** (Later: before real users, about $0.06 a key a month). In the same Google
+   Cloud project, enable Cloud KMS; the coordinator will give the exact key ring steps then.
+10. **A domain** (Later: before real users, for email codes from our own address and the GitHub
+    App's homepage). Not needed for the spike.
+11. **OpenRouter** (Later: only if Anthropic agrees to way A). https://openrouter.ai, $10 of credit
+    ($10.80 with the fee), one Management API key
+    (https://openrouter.ai/docs/guides/overview/auth/management-api-keys).
 
-Later, not for the spike: Stripe (test mode is free), Google Cloud KMS (same Google Cloud project),
-a domain.
+Costs for the spike: nothing, or $20 for Instabox Pro if the waitlist blocks, plus about $5 of
+Anthropic credit (none with Max or Ultra credit).
 
-## 12. Open questions for the user
+## 12. Decisions (12 Nov 2026)
 
-- **Q1. Selling tokens.** Ask Anthropic for the agreement (way A) now, and ship their-own-key (way
-  B) first while waiting? Recommended: yes to both.
-- **Q2. If Anthropic says no**: offer credit through a different agent (way D, OpenCode over
-  OpenRouter, priced per change, after a lawyer's look), or keep the cloud own-key only?
-- **Q3. Machine time with their own key** is about 10 cents a month for an active person: free under
-  a fair-use cap (recommended), or billed (needs a card for cents)?
-- **Q4. Package names**: a cloud app named "Tally" and a PC app named "Tally" would both be
-  `com.anyapp.tally` with different keys, so one cannot install over the other on the same phone.
-  Use `com.anyapp.<slug>` and refuse a clash on the phone, or give cloud apps their own prefix?
-- **Q5. Instabox is two months old** (no status page, no SLA below Team, waitlist). Go ahead with it
-  behind a small interface so Fly.io Machines (the earlier page's pick) can replace it?
-- **Q6. Signing**: on the thread's box as a separate Unix user after Gradle (first version), then a
-  separate signer machine (+2 days)? Or the signer machine from the start?
-- **Q7. Top-ups** (once credit is on): smallest $10, the card fee added on top. OK?
-- **Q8. Code backup**: cloud apps without GitHub in the first version (code as Git bundles in
-  Convex, downloadable later)?
-- **Q9. Model**: Opus 5.5 by default with Sonnet 5.5 as the cheaper choice in "Your AI"?
-- **Q10. Sign-in**: Convex Auth (beta, all inside Convex) or Clerk (mature, Expo support, its own
-  account)? Recommended: Convex Auth, Clerk if the spike hits a wall.
-- **Q11. Region**: Convex US East (standard price; Instabox is in the US anyway) or Europe (plus
-  30%)?
+- **Q1, AI**: ask Anthropic for the agreement (way A) now, ship their-own-key (way B) first.
+- **Q3, credit**: credit is dollars, topped up with us from the first version. Machine time is drawn
+  from it at cost plus 10% even with their own key; no free fair-use cap. Paying for AI from credit
+  stays behind its switch until Anthropic says yes. Every change shows an estimate of machine and AI
+  cost first, and each app shows its own.
+- **Q4, package names**: cloud apps get their own prefix, `com.anyappcloud.<slug>`.
+- **Q5, Instabox**: yes, behind a small provider interface.
+- **Q6, signing**: on the box as a separate Unix user first, then a separate signer machine.
+- **Q7, top-ups**: smallest $10, the card fee added on top, in the first version.
+- **Q8, code**: never stored by us. A private repo per app on the person's GitHub through a GitHub
+  App; the agent commits and pushes after every change; new boxes restore from GitHub. Sharing and
+  publishing releases stay out of the first version (+3 days after).
+- **Q9, models**: each app's chat is an orchestrator on Opus 5.5 high; helpers on Opus 5.5 high
+  (across areas), Opus 5.5 medium (a few files) or Sonnet 5.5 high (simple, one area), all in the
+  same box, their costs shown per helper and added into the estimate and the usage line.
+- **Q10, sign-in**: Convex Auth, Clerk if the spike hits a wall.
+- **Q11, region**: Convex US East.
+
+Still open:
+
+- **Q2. If Anthropic says no to way A**: offer AI from credit through a different agent (way D,
+  OpenCode over OpenRouter, priced per change, after a lawyer's look), or keep the cloud own-key
+  only? Decided when Anthropic answers.
