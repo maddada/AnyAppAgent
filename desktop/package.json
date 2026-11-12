@@ -1,7 +1,7 @@
 {
   "name": "anyappagent-desktop",
   "productName": "Kiwimake",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Kiwimake for Windows: runs the companion, onboarding, connect a phone.",
   "main": "out/main/index.js",
