@@ -197,7 +197,7 @@ The first version is all nine powers. In working days, one thread:
 | M1 | First slice (this): the app made through Kiwimake, the fence and runtime, all safety rails and the Advanced toggle, time and prayer times, speak and notify, Do Not Disturb | 2 (done) |
 | M2 | Bluetooth, Wi-Fi and charging triggers: the listener service (always-on notice with Stop all), Nearby devices | 2 (built) |
 | M3 | Notifications from other apps: the listener service, the restricted-settings walkthrough | 1.5 (built) |
-| M4 | Location arrive and leave: places in the app, proximity alerts, "Allow all the time" walkthrough | 1.5 (built) |
+| M4 | Location arrive and leave: places in the app, the listener's own location checks, "Allow all the time" walkthrough | 1.5 (built) |
 | M5 | The app in front (usage access) | 1 (built) |
 | M6 | Accessibility: read and tap, the deny-list, the warning card | 2.5 (built) |
 | M7 | Shizuku: setup walkthrough, the command list, its own ask | 2 (built) |
