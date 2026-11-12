@@ -15,12 +15,13 @@ the texts and the one line that leaves any doubt.
 What the user decided (it overrides `C:\aa\ideas\cloud-changes.html` and the first draft of this
 file): chat in the AnyAppAgent phone app, Google or a code by email, Convex for most things, one
 instabox.sh box per thread behind a small interface, signing keys stored encrypted in Convex,
-storage free to the person. **Credit is dollars**: people top up with us from the first version,
-and machine time is drawn from it at cost plus 10% even when they use their own Anthropic key.
-**AI can be paid from that credit**: the agent runs on the **Claude Agent SDK** (today's agent, the
-ACP adapter built on it) with **our own Anthropic API key**, tokens charged **at cost**, our 10% on
-machine time and a platform fee (decisions of 12 Nov 2026, second round). **Every change shows an
-estimate first** (machine and AI). The code is **never stored by us**: the agent commits and pushes
+storage free to the person. **People pay in credits** (decisions of 12 Nov 2026, third round): a
+monthly plan (Starter $12 for 30 credits, Pro $25 for 70, Max $60 for 180), extra credit at $10 for
+20, and 3 free credits every month. A credit bundles everything a change needs (the agent, the
+machine, the build, delivery to the phone) and the person never sees tokens, machine time or our
+costs. The agent runs on the **Claude Agent SDK** (today's agent, the ACP adapter built on it) with
+**our own Anthropic API key**. People with their own Anthropic key take the **Own key plan, $6 a
+month**. **Every change shows an estimate first**, in credits. The code is **never stored by us**: the agent commits and pushes
 to the person's GitHub after every change. Each app's chat is an orchestrator on **Opus 5.5 high**
 that hands work to helpers on the right model. No email or agreement with Anthropic is sought.
 
@@ -31,16 +32,19 @@ with our own Anthropic API key, for our end users, who pay us, is allowed.** Fai
 90%): every page about the SDK says so in its own words, and Anthropic itself publishes case studies
 of exactly this shape. What stays forbidden is offering **Claude Code itself** (the product: the CLI,
 its name and look) as a hosted service paid on our key, and offering claude.ai sign-in or plan limits
-inside our product. People bringing their own Anthropic API key stays allowed too. Charging for
-**machine time** and a **platform fee** is ours to sell; passing tokens through **at cost** keeps us
-clear of Commercial Terms D.4's "resell the Services". (Texts read on the live pages on 12 Nov 2026,
-below; the one line that leaves doubt is named in "The Agent SDK finding".)
+inside our product. People bringing their own Anthropic API key stays allowed too. Selling
+**credits that bundle the whole service** (the agent's work, machines, builds, storage, delivery to
+the phone) at a margin is selling our own product, which A.1 allows ("to power products and services
+Customer makes available to its own customers"); it is how Anything and Bolt, both Anthropic case
+studies, charge. What D.4 forbids is reselling "the Services" themselves, so we never sell or show
+tokens, a token price or API access. (Texts read on the live pages on 12 Nov 2026, below; the one
+line that leaves doubt is named in "The Agent SDK finding".)
 
 ### The Agent SDK finding (12 Nov 2026)
 
 **The question**: may a company run the Claude Agent SDK (TypeScript or Python) inside its own hosted
 product, on cloud boxes, for its end users, with the company's own Anthropic API key, and charge
-those end users (tokens at cost, a margin on machine time and a platform fee)?
+those end users (credits that bundle AI, machine time and builds, sold at a margin)?
 
 **Answer: allowed.** Not legal advice. Why:
 
@@ -99,7 +103,11 @@ to name the SDK; the docs' policy pages have changed several times in 2026.
   Agent", or "AnyAppAgent, powered by Claude". No Claude Code look-alike visuals.
 - **No claude.ai sign-in in the cloud** (the ACP adapter offers `--cli auth login --claudeai`: not
   shown in cloud mode). Their own API key is fine.
-- Tokens at cost, shown as such; our margin is on machine time and the platform fee (D.4).
+- **Credits buy app changes, never Claude** (D.4). A credit is the price of AnyAppAgent's service as
+  a whole. No token price, token allowance, model price list or per-model cost is shown or sold;
+  no API endpoint, general chat or prompt box outside app building is paid from credits; the agent
+  only builds and changes the person's own apps. The margin is on our product, not on "the
+  Services".
 - The Usage Policy's AI disclosure: the chat says it is an AI agent.
 
 ### What the texts say (verbatim)
@@ -206,13 +214,20 @@ provider cost with no token markup (Kilo adds a 5% fee on buying credit). These 
 not Claude Code, and none of them was found adding a markup on the tokens themselves. The hosted
 Claude Code services found (Murmell, Droneship) have users bring their own key or plan. GitHub's
 Claude agent in Agent HQ is paid from Copilot requests, under a partnership announced with Anthropic.
+App builders for people who do not code price differently: they sell **bundled credits with a
+margin** and show no token price. Anything (on the Agent SDK) sells 20K credits for $24 a month
+(https://www.anything.com/docs/account/credits.md), Lovable 100 credits for $25
+(https://docs.lovable.dev/introduction/subscription-plans.md), Bolt (on the Agent SDK) its own
+"tokens" from $25 a month (https://bolt.new/pricing), Rork about 100 messages for $20 to $25 (third-party
+figures, https://vp0.com/blogs/rork-pricing-plans-2026/). That is
+the model AnyAppAgent Cloud follows (section 2).
 
 ### What that means for each way of paying for AI
 
 | Way | Agent | What the texts say | Status |
 | --- | ----- | ------------------ | ------ |
-| **E. Our Anthropic API key, AI paid from credit** | Agent SDK (today's agent: the ACP adapter `claude-agent-acp`, built on it) | Allowed: the SDK is under the Commercial Terms "including when you use it to power products and services that you make available to your own customers and end users"; the legal page tells SDK developers to "use API key authentication through Claude Console"; the hosting guide is written for multi-tenant products on the developer's key; Anthropic's own case studies (Anything, Bolt) are this shape. Doubt: one literal reading of the hosted-Claude-Code line ("The Agent SDK finding" above). | **Chosen** (section 12). In the first version. Tokens at cost. |
-| **B. The person's own Anthropic API key** | Agent SDK | Allowed under both regimes: "their own Anthropic API key". | In the first version, next to E. Machines still paid from credit. |
+| **E. Our Anthropic API key, AI paid from credit** | Agent SDK (today's agent: the ACP adapter `claude-agent-acp`, built on it) | Allowed: the SDK is under the Commercial Terms "including when you use it to power products and services that you make available to your own customers and end users"; the legal page tells SDK developers to "use API key authentication through Claude Console"; the hosting guide is written for multi-tenant products on the developer's key; Anthropic's own case studies (Anything, Bolt) are this shape. Doubt: one literal reading of the hosted-Claude-Code line ("The Agent SDK finding" above). | **Chosen** (section 12). In the first version. Sold inside credits (section 2), never as tokens. |
+| **B. The person's own Anthropic API key** | Agent SDK | Allowed under both regimes: "their own Anthropic API key". | In the first version, next to E, on the Own key plan ($6 a month, section 2). |
 | **A. Claude Code itself on our OpenRouter key** | Claude Code (the product) | "may not pay for, resell, or intermediate". Needs an agreement ("Unless we've mutually agreed otherwise"). | **Dropped**: no email or agreement is sought, and E does the same job. |
 | **C. The person's own OpenRouter key** | Agent SDK | OpenRouter is not one of the three named 3P providers, and the SDK hosting guide names only Anthropic, Bedrock and Google Cloud endpoints. | Out. |
 | **D. Our credit, a different agent** (for example OpenCode over the API) | Not Claude Code | Allowed under A.1, the same as E. | Not needed now that E is allowed. |
@@ -241,57 +256,101 @@ works, it is just billed to their Console balance.
 ### Decided
 
 1. **AI paid from credit runs on the Agent SDK with our own Anthropic API key** (way E): today's
-   agent and ACP adapter, unmodified, never called "Claude Code" in the product. Tokens are charged
-   **at cost**; our 10% is on machine time and a platform fee (section 12).
-2. **Their own Anthropic key** (way B, Ultra and Max credit included) is offered next to it. Machine
-   time is paid from their AnyAppAgent credit either way.
+   agent and ACP adapter, unmodified, never called "Claude Code" in the product. It is sold inside
+   **credits that bundle the whole service**, with our margin in the credit price; no token price
+   is ever shown (section 2, section 12).
+2. **Their own Anthropic key** (way B, Ultra and Max credit included) is offered next to it on the
+   **Own key plan**, $6 a month: Anthropic bills them for the AI, we charge the plan.
 3. **No email to Anthropic and no agreement sought.** Ways A, C and F are out.
 4. **Instabox** was asked in writing about terms 2(b)(iii) (section 8); that email was sent.
 
 ## 2. How people pay
 
-Two things cost money: **machine time** (the cloud box that runs the agent and the builds) and **AI**
-(the model's tokens). Settings has two plain cards.
+People buy **credits**, and every change uses some. A credit bundles everything a change needs: the
+agent's work (AI), the cloud box, the build, storage and delivery to the phone. The person sees
+credits only: never tokens, a token price, machine time or what anything costs us. This is how
+Lovable, Anything, Bolt and Rork price (section 1).
 
-**Your credit** (from the first version, required before the first change):
+### Plans
 
-- Credit is dollars. Top up with Stripe Checkout: smallest **$10**, the card fee added on top
-  ("$10 of credit, $10.61 to pay" for a US card), so cost plus 10% holds.
-- Machine time is drawn from it at **our cost plus 10%**, whatever pays for the AI. An active person
-  uses about 11 cents of machine time a month (section 7).
-- The card shows the balance, the last top-ups, and what each app drew this month.
-- No free allowance: no credit, no change. Storage stays free.
+| Plan | Price a month | Credits a month | Per credit |
+| ---- | ------------- | --------------- | ---------- |
+| Free | $0 | 3 | |
+| Starter | **$12** | **30** | $0.40 |
+| Pro | **$25** | **70** | $0.36 |
+| Max | **$60** | **180** | $0.33 |
+| Own key | **$6** | none needed: changes are unlimited on their own Anthropic key, fair use 30 box hours a month | |
 
-**Your AI**:
+- **Extra credit**: **$10 for 20 credits** ($0.50 each), a one-off Stripe Checkout, valid 12 months.
+  Anyone signed in can buy it, with or without a plan, so a light user can pay as they go.
+- **Card fees are inside the prices**: no fee is added at checkout.
+- **Free credit**: 3 credits a month, given when the account is first used in that month (so dormant
+  accounts cost nothing), expiring at the end of the month, no rollover. One free allowance per
+  GitHub account (every account must connect GitHub). 3 credits make about three small changes or
+  one change in a few files; a new app (about 4.3 credits) needs a plan or extra credit.
+- **Rollover**: unused plan credits roll over **one month** while the plan is active, then expire.
+  Extra credit lasts 12 months. Credits are spent **closest to expiry first**: this month's free
+  credit, then last month's plan credit, then this month's, then extra credit.
+- **Changing plan**: an upgrade starts now (Stripe prorates the price) and adds the new plan's
+  credits for the rest of the month pro rata; a downgrade or cancel takes effect at the end of the
+  month. Credits already given stay until they expire; a cancelled account is on Free after that.
+- **Refunds**: credits are not refunded as money. A change that fails through our fault (the box or
+  the build service, not the app's own code) has its credits given back by hand in the first
+  version.
 
-- **My Claude API key** (way B, also in the first version). Pasted once, stored encrypted (section
-  6). If they have Max or Ultra, a one-line hint: "Your plan includes monthly API credit: link a Console
-  organization, then make a key there." AnyAppAgent shows what each change cost on that key (list
-  price, an estimate: Anthropic bills it, not us).
-- **Pay for AI from my credit** (way E, the first version): AI runs on our Anthropic key and is drawn
-  from the same credit **at cost** (the model's list price, no markup), plus the platform fee
-  (section 5). The card shows AI and machine time apart.
+### Credits per change
 
-Whatever the way, the AI key is never put in a file or an environment variable on the box:
+Credits are **metered from what the change really cost us**, hidden from the person:
+
+- Credits used = (the change's AI at list price + its machine time) / **$0.20**, rounded up to a
+  tenth of a credit. $0.20 is the **credit cost basis**, one constant (`CREDIT_COST_MICROS =
+  200000`), reviewed when model prices or measured costs change; it is never shown.
+- Typical changes (section 7): a small change about **1** credit, a change in a few files about
+  **2.2**, a change across areas about **3.3**, a new app about **4.3**.
+- The usage line says **"Used 2.2 credits"**. The person can see each change's credits, each app's
+  credits this month and their balance; nothing is split into AI and machine.
+
+Because every credit is priced above the $0.20 it costs us, no change and no heavy user can lose us
+money on credits; only the free credit, failures we give back and the fixed fees are costs without
+income (section 7).
+
+### The Own key plan
+
+- **$6 a month**. AI runs on the person's own Anthropic API key (way B; Max or Ultra API credit
+  works, section 1) and Anthropic bills them for it. We charge nothing per change.
+- **Fair use: 30 box hours a month** (a typical change keeps a box running about 11 minutes, so
+  about 160 changes). Past that, each further box hour uses half a credit from their free or extra
+  credit; with none left, the phone offers extra credit.
+- Their free monthly credits stay theirs and are used only past fair use; the plan does not mix
+  their key and ours within one change.
+- Their key cannot be used without the plan: on Free, Starter, Pro or Max every change runs on our
+  key and uses credits.
+- Each change shows what it likely cost **on their own key**, in dollars ("about $0.20 on your
+  Claude key"): that is Anthropic's bill to them, not a price of ours, so it does not break the "no
+  token price" rule.
+
+The AI key, ours or theirs, is never put in a file or an environment variable on the box:
 Instabox's Secrets proxy adds it to outgoing HTTPS requests, so the agent cannot print it (section
 8, to be proven in the spike).
 
 ### Estimates before every change
 
-Before a change runs the person sees what it will likely cost, split the way it is paid:
+Before a change runs the person sees what it will likely use:
 
-- **Under the message box**, before sending: "About 1 cent machine (from credit) + about $0.20 AI
-  (on your Claude key)". It is the median of this app's last 10 changes of the same size, or the
-  defaults in section 7 for a new app.
+- **Under the message box**, before sending: **"About 1 credit"** (on the Own key plan: "About
+  $0.20 on your Claude key"). It is the median of this app's last 10 changes of the same size, or
+  the defaults in section 7 for a new app.
 - **On the plan** (bigger changes are planned first, as today): the orchestrator says which helpers
   it will start and at which level (section 3, "Models"), and the plan card shows the estimate for
-  exactly that, with a range (the 25th to 75th percentile of past changes at those levels).
-- **Per app**, on its Settings page: "This app: about 4 cents of machine time a month at your pace,
-  about $1.20 of AI a month on your key", from its last 30 days, plus what it cost so far.
-- **After the change**, the usage line shows the real numbers next to the estimate: "Machine $0.006
-  (est. $0.008), AI $0.23 on your key (est. $0.20)".
-- A change starts only if the credit covers its machine estimate twice over; otherwise the phone
-  offers a top-up. Nothing else asks for confirmation (spending limits come later, as decided).
+  exactly that, as a range: "About 3 to 4 credits" (the 25th to 75th percentile of past changes at
+  those levels).
+- **Per app**, on its Settings page: "This app: about 12 credits a month at your pace", from its
+  last 30 days, plus what it used so far.
+- **After the change**, the usage line shows the real number next to the estimate: "Used 2.2
+  credits (est. 2)".
+- A change starts only if the available credits cover the high end of its estimate; otherwise the
+  phone offers extra credit or a plan. Nothing else asks for confirmation (spending limits come
+  later, as decided).
 
 ## 3. The architecture
 
@@ -320,8 +379,9 @@ Before a change runs the person sees what it will likely cost, split the way it 
 The same AnyAppAgent APK gets a second way in. First run asks **"Make apps in the cloud"** (sign in)
 or **"Use my PC"** (today's pairing and Easy Connect). One mode per install in the first version.
 
-- Cloud mode setup is three short steps: sign in, connect GitHub, top up (with "Your AI" key pasted
-  at the first change if not before).
+- Cloud mode setup is two short steps: sign in, connect GitHub. The 3 free credits let the person
+  try a change at once; a plan or extra credit comes when they want more (the Own key plan asks for
+  the key when chosen).
 - In cloud mode the phone talks only to Convex. The Convex React Native client keeps live queries
   for the app list, each thread's messages and builds, the balance and the estimates; it reconnects
   by itself and retries mutations until they are confirmed. No WebSocket to a PC.
@@ -331,8 +391,9 @@ or **"Use my PC"** (today's pairing and Easy Connect). One mode per install in t
 - The screens stay the same. The data layer gets a second implementation of today's calls
   (`app/src/lib/api.ts` `Client` and the `ServerEvent` stream) backed by Convex and returning the
   same `shared/protocol.ts` types, so `shared/chat` renders cloud chats unchanged.
-- New screens: sign in, connect GitHub, "Your credit" (balance, top-up), "Your AI", the estimate
-  line under the message box and on the plan card, the per-app cost line in the app's Settings.
+- New screens: sign in, connect GitHub, "Your plan" (plan, credits left, extra credit, the Own key
+  plan and its key), the estimate line under the message box and on the plan card, the per-app
+  credits line in the app's Settings.
 - **Package names**: cloud apps get their own prefix, **`com.anyappcloud.<slug>`**, so a cloud app
   and a PC app with the same name never fight over one package on the same phone. (The server
   already sets the package name in one place, `server/src/apps.ts`; the runner passes the cloud
@@ -443,8 +504,9 @@ instructions say which level each piece of work gets:
   build; the spike checks memory with two helpers and a build at once.
 - **Costs**: every ACP turn reports its usage with the session's model; the runner prices it with
   that model's list price and tags it with the helper and its level. The change's usage line adds
-  them up: "AI $0.31 on your key (orchestrator $0.09, 2 helpers $0.22)", with each helper's own
-  line in its row as today. The estimate (section 2) is built from the same tags: the orchestrator's
+  them up: on the Own key plan "AI $0.31 on your key (orchestrator $0.09, 2 helpers $0.22)", with
+  each helper's own line in its row as today; on our key only credits are shown ("Used 1.6
+  credits", per helper in its row), never dollars or tokens. The estimate (section 2) is built from the same tags: the orchestrator's
   share plus the planned helpers' levels, each from the app's (or everyone's) past medians for that
   level. Machine time is the box's, shared by all of them, so it is not split per helper.
 
@@ -473,16 +535,15 @@ Convex's own. Money is stored in millionths of a dollar ("micros"), never floats
 
 | Table | Fields (short) | Indexes |
 | ----- | -------------- | ------- |
-| `users` | from Convex Auth (`name`, `email`, `image`), `aiMode` ("ownAnthropic" or "credit"), `githubLogin`, `githubInstallationId`, `stripeCustomerId`, `blocked` | `by_email`, `by_github_installation` |
+| `users` | from Convex Auth (`name`, `email`, `image`), `aiMode` ("ownAnthropic", only on the Own key plan, or "credit"), `githubLogin`, `githubInstallationId`, `stripeCustomerId`, `blocked` | `by_email`, `by_github_installation` |
 | `apps` | `userId`, `name`, `slug`, `packageName` (`com.anyappcloud.<slug>`), `repo` (`owner/anyapp-cloud-<slug>`), `pushedCommit`, `preset`, `iconFileId`, `lastBuild`, `status` (`AppStatus`), `health`, `overview` (text of `overview.md`) | `by_user`, `by_package` |
 | `threads` | `appId`, `userId`, `boxId`, `boxState` ("none", "starting", "running", "paused", "snapshotted", "deleted"), `runnerTokenHash`, `lastActiveAt`, `agentSessionId` | `by_app`, `by_state_and_active` |
 | `messages` | `threadId`, `workerId?`, `item` (a `ChatItem`: text, tool rows, plan, permission, page, build, usage), `seq` | `by_thread_seq` |
 | `inbox` | `threadId`, `kind` ("prompt", "permission", "cancel", "page-answers"), `payload`, `takenAt` | `by_thread_untaken` |
-| `changes` | `appId`, `threadId`, `messageId`, `estimate` (`machineMicros`, `aiMicros`, `low`, `high`, `levels`), `actual` (`machineMicros`, `aiMicros`), `aiPaidBy` ("ownKey" or "credit"), `state` | `by_app_at`, `by_message` |
+| `changes` | `appId`, `threadId`, `messageId`, `estimate` (`costMicros`, `millicredits`, `low`, `high`, `levels`), `actual` (`machineMicros`, `aiMicros`, `millicredits`), `aiPaidBy` ("ownKey" or "credit"), `state` | `by_app_at`, `by_message` |
 | `builds` | `appId`, `number`, `delivery` ("apk" or "quick"), `files` (`{abi, fileId, sizeBytes, sha256}[]`), `otaFileId`, `runtime`, `changes` (`ChangeNotes`), `commit`, `pushed`, `seconds` | `by_app_number` |
-| `usage` | `userId`, `appId`, `threadId`, `changeId`, `kind` ("inference" or "machine"), `workerId?`, `level?`, `model?`, `effort?`, `tokens` (`TokenUsage`) or `seconds` and `size`, `costMicros`, `chargeMicros` (0 for AI on their own key), `settled` | `by_user_at`, `by_change`, `by_app_level` |
-| `ledger` | `userId`, `kind` ("topup", "charge", "refund", "adjust"), `amountMicros`, `stripePaymentId`, `usageIds` | `by_user_at` |
-| `balances` | `userId`, `micros` (always the sum of `ledger`, changed in the same mutation) | `by_user` |
+| `usage` | `userId`, `appId`, `threadId`, `changeId`, `kind` ("inference" or "machine"), `workerId?`, `level?`, `model?`, `effort?`, `tokens` (`TokenUsage`) or `seconds` and `size`, `costMicros` (our cost, never shown), `millicredits` (0 for AI on their own key), `settled` | `by_user_at`, `by_change`, `by_app_level` |
+| `subscriptions`, `grants`, `ledger`, `balances` | Plans and credits: section 5 | |
 | `keys` | `appId`, `userId`, `packageName`, `certSha256`, `wrappedDataKey`, `ciphertext`, `iv`, `kekVersion`, `lineage?` (never deleted) | `by_app` |
 | `signings` | `appId`, `build`, `sha256` of what was signed, `at` | `by_app` |
 | `secrets` | `userId`, `kind` ("anthropic", "githubRefresh"), `wrappedDataKey`, `ciphertext`, `iv`, `last4`, `expiresAt?` | `by_user_kind` |
@@ -492,44 +553,73 @@ Medians for the estimates come from `usage` through the aggregate component (per
 across everyone for new apps). Files: APKs (per ABI), quick update zips, icons, chat pictures, page
 HTML. **No code**, no Git bundles.
 
-## 5. Metering and billing (cost plus 10%)
+## 5. Metering and billing (credits)
 
 **What is measured, and from where:**
 
 | What | Live number (shown while it runs) | The number we bill (the truth) |
 | ---- | --------------------------------- | ------------------------------ |
-| Machine | Seconds the box ran (runner) | The provider's usage. Instabox's per-machine usage endpoint (`GET /v1/machines/{id}/usage`, offered "for billing your own customers"): running seconds by size, plus disk while paused. Drawn from credit at cost plus 10%. |
-| AI, own key (first version) | Each ACP turn's `usage` (input, output, cache write, cache read) per session, as the usage meter reads it today (`server/src/usage.ts`), times that model's list price | Never billed by us. Billed by Anthropic to them. Shown so the estimates and the per-app line are honest. |
-| AI, from credit (our Anthropic key) | The same ACP usage | The same ACP usage per turn, times that model's list price (our cost: tokens at cost), settled after each turn. The runner stops the change when the balance runs out (below). Checked once a day against our Console usage for the key. |
-| Storage in Convex, GitHub | Not shown | Free to the person, as decided (GitHub is theirs) |
+| Machine | Seconds the box ran (runner) | The provider's usage. Instabox's per-machine usage endpoint (`GET /v1/machines/{id}/usage`, offered "for billing your own customers"): running seconds by size, plus disk while paused. Priced at our cost into the change's credits; on the Own key plan, counted against the 30 box hours. |
+| AI on our key | Each ACP turn's `usage` (input, output, cache write, cache read) per session, as the usage meter reads it today (`server/src/usage.ts`), times that model's list price | The same, settled after each turn as our cost, then turned into credits. Checked once a day against our Console usage for the key. |
+| AI, own key (Own key plan) | The same ACP usage | Never billed by us. Billed by Anthropic to them. Shown in dollars as "on your Claude key" so the estimates are honest. |
+| Storage in Convex, GitHub | Not shown | Free to the person, as decided (GitHub is theirs). Paused disk is ours, not charged. |
 
-**Price**: machine time = our cost times 1.10. AI from credit = the model's list price, **at cost**
-(no markup on tokens). Plus a **platform fee**, its size still open (section 12); the cost tables in
-section 7 assume 10% of the AI cost to show the order of magnitude.
+**Turning cost into credits**: each turn's cost (AI at list plus machine) is converted at the credit
+cost basis, `CREDIT_COST_MICROS = 200000` ($0.20 a credit), into **millicredits** (thousandths of a
+credit, integers, never floats; 2.2 credits is 2,200). At the end of the change the total is rounded
+up to a tenth of a credit with one `adjust` row. The person sees only credits.
 
-**Settling**: machine time is settled per change (the box's seconds from the message until the box
-pauses, read from the runner and corrected from Instabox's usage once a day), plus paused disk once
-a day. Each charge is one `ledger` row and the balance moves in the same mutation.
+**The data model** (Convex; these four tables replace the dollar `ledger` and `balances` of the
+first draft):
 
-**Money in**: Stripe Checkout top-ups (the `@convex-dev/stripe` component handles the webhook), in
-the first version. Because Stripe's fee (2.9% plus 30 cents for a US card, plus 1% for international
-cards, as the earlier page had it) is more than half of a 10% margin on a small top-up:
+| Table | Fields (short) | Indexes |
+| ----- | -------------- | ------- |
+| `subscriptions` | `userId`, `plan` ("free", "starter", "pro", "max", "ownKey"), `stripeSubscriptionId?`, `status` ("active", "pastDue", "cancelled"), `periodStart`, `periodEnd`, `cancelAtPeriodEnd`, `boxSecondsThisPeriod` (Own key fair use) | `by_user`, `by_stripe_id` |
+| `grants` | `userId`, `source` ("free", "plan", "extra", "refund", "adjust"), `millicredits` (given), `remaining`, `grantedAt`, `expiresAt`, `stripePaymentId?`, `period?` | `by_user_expires` (spending order), `by_expires` (the expiry job) |
+| `ledger` | `userId`, `kind` ("grant", "spend", "expire", "refund", "adjust"), `millicredits` (plus or minus), `grantId`, `changeId?`, `usageIds?` | `by_user_at`, `by_change` |
+| `balances` | `userId`, `millicredits` (the sum of unexpired grants' `remaining`, changed in the same mutation as `grants` and `ledger`) | `by_user` |
 
-- The card fee is added on top at checkout, grossed up so we receive the full credit: $10 of credit
-  is about **$10.61** to pay with a US card, about **$10.72** with an international one.
-- Smallest top-up **$10**.
-- Refunds of unused credit by hand (the `refund` ledger row) in the first version; disputes
-  block the account until settled.
+The plan prices and credits (`PLANS`: Starter $12 and 30, Pro $25 and 70, Max $60 and 180, Own key
+$6), the extra credit pack ($10 for 20), the free allowance (3) and the cost basis live in one
+config file in `cloud/`, so a price change is one edit.
 
-**Who pays nothing**: someone who makes no change pays nothing beyond what they topped up, and that
-credit stays theirs. Storage is free.
+**Grants:**
 
-**Running out**: a change starts only if the balance covers twice its machine estimate (and, once AI
-from credit, its AI estimate). With AI from credit the runner is the hard stop: it adds up each
-turn's cost and cancels the ACP session when the change's AI and machine cost reach the balance plus
-a small overdraft. A change already
-running is allowed to finish even if it goes slightly below zero; the next top-up covers it.
-Monthly spending limits come later, as decided.
+- **Free**: when an account on Free (or any plan) first opens the app or starts a change in a month,
+  a `free` grant of 3 credits is written if none exists for that month; it expires at the month's
+  end (UTC). One per GitHub account.
+- **Plan**: Stripe's `invoice.paid` for the subscription writes a `plan` grant of that plan's
+  credits, expiring at the end of the **next** period (one month of rollover). Upgrades add a pro
+  rata grant at once.
+- **Extra**: Checkout's `checkout.session.completed` writes an `extra` grant of 20 credits,
+  expiring in 12 months.
+- **Expiry**: a daily Convex cron writes an `expire` row for each grant past `expiresAt` with credits
+  left, and lowers the balance in the same mutation.
+
+**Spending**: after each turn the runner reports its usage; one mutation prices it, converts it to
+millicredits, takes them from the user's grants in `by_user_expires` order (closest to expiry first),
+writes the `spend` rows with the grant and change ids, and lowers the balance. On the Own key plan
+the box's seconds are added to `boxSecondsThisPeriod` instead; past 30 hours each box hour costs half
+a credit, spent the same way.
+
+**Money in**: Stripe Billing subscriptions for the plans and Stripe Checkout for extra credit (the
+`@convex-dev/stripe` component handles the webhooks). Card fees are inside our prices: about $0.65
+on Starter, $1.03 on Pro, $2.04 on Max, $0.47 on Own key and $0.59 on an extra credit pack (2.9%
+plus 30 cents, a US card; 1% more for international cards). A failed renewal moves the subscription
+to "pastDue": its next grant waits, credits already given stay.
+
+**Who pays nothing**: an account that never pays gets its 3 free credits a month and nothing more.
+Storage is free.
+
+**Running out**: a change starts only if the available credits cover the high end of its estimate.
+The runner is the hard stop: it adds up each turn's credits and cancels the ACP session when the
+change reaches the balance plus a small overdraft (half a credit). A change already running is
+allowed to finish within that overdraft; the next grant covers it. Monthly spending limits come
+later, as decided.
+
+**Checks**: once a day, the sum of `usage.costMicros` is compared with our Anthropic Console usage
+and Instabox's usage, and the average credits per change by level with section 7's numbers; if real
+costs drift above the cost basis, the basis is raised (one constant) before margins go.
 
 ## 6. Signing keys in Convex ("so never lost")
 
@@ -590,49 +680,58 @@ The first draft's numbers were the usage meter's measured run with one agent doi
 (`docs/TRUST.md`). The orchestrator plus helpers split is **not measured yet**: the numbers below
 are that measurement re-cut by hand (the orchestrator's Opus turns about $0.08 to $0.15 per change,
 the helper's work at its level's price, high effort a little dearer than medium). Milestone 6
-replaces them with real medians, and the estimates use real medians from then on.
+replaces them with real medians, and the credit cost basis follows the real numbers.
 
-| Change | Levels | AI (list, on their key) | Box minutes | Machine cost | Machine charged from credit (+10%) |
-| ------ | ------ | ----------------------- | ----------- | ------------ | ---------------------------------- |
-| Simple (text, styling), quick update | orchestrator + 1 `simple` | about $0.20 | about 7 | $0.004 | **$0.004** |
-| Complex in a few files, full build | orchestrator + 1 `focused` | about $0.43 | about 12 | $0.007 | **$0.008** |
-| Complex across areas, full build | orchestrator + 1 or 2 `deep` | about $0.65 | about 15 | $0.009 | **$0.009** |
-| New app (plan, helpers, first build) | orchestrator + 2 `deep` | about $0.85 | about 20 | $0.011 | **$0.012** |
+| Change | Levels | AI (list) | Box minutes | Machine | **Our cost** | **Credits** | Price on Starter ($0.40 a credit) | Our margin |
+| ------ | ------ | --------- | ----------- | ------- | ------------ | ----------- | --------------------------------- | ---------- |
+| Simple (text, styling), quick update | orchestrator + 1 `simple` | about $0.20 | about 7 | $0.004 | $0.20 | about **1** | $0.40 | $0.20 |
+| Complex in a few files, full build | orchestrator + 1 `focused` | about $0.43 | about 12 | $0.007 | $0.44 | about **2.2** | $0.88 | $0.44 |
+| Complex across areas, full build | orchestrator + 1 or 2 `deep` | about $0.65 | about 15 | $0.009 | $0.66 | about **3.3** | $1.32 | $0.66 |
+| New app (plan, helpers, first build) | orchestrator + 2 `deep` | about $0.85 | about 20 | $0.011 | $0.86 | about **4.3** | $1.72 | $0.86 |
 
-With AI from credit the AI part is charged at list (at cost): about $0.20, $0.43, $0.65 and $0.85,
-plus the platform fee (about 2, 4, 7 and 9 cents if it is 10% of the AI cost).
+The margin before card fees is half the price on Starter, 44% on Pro ($0.36 a credit), 40% on Max
+($0.33) and 60% on extra credit ($0.50).
 
 ### Per month
 
-Assumption: an active person makes 8 changes a month (4 simple, 2 in a few files, 1 across areas, 1
-new app). AI about **$3.16** on their own key (list). Machines about 87 box minutes ($0.05) plus
-paused disk before the hourly snapshot ($0.01), say **$0.10** with build-fix turns, so **about 11
-cents a month** drawn from their credit. A $10 top-up lasts such a person years.
+Assumptions:
 
-First version (everyone on their own key, we sell machine time only):
+- An **active person** makes 8 changes a month (4 simple, 2 in a few files, 1 across areas, 1 new
+  app): about **16 credits**, costing us **$3.26** (AI $3.16, machines about $0.10 with build-fix
+  turns and paused disk).
+- Every paying person is on **Starter** ($12, 30 credits), the plan that fits 16 credits. Pro and Max
+  keep the same or a higher margin per person.
+- **Free accounts**: 3 free accounts in use for every paying person, each using all 3 free credits
+  ($0.60 of our cost), so **$1.80 per paying person**. Free accounts that do not open the app that
+  month get no credits and cost nothing.
+- Fixed fees without machine usage (counted per person above): Instabox Pro $20 (its $20 of
+  included usage covers up to about 100 people) or Builder $100 at 1000; Convex $0, about $3, about
+  $30; the key service, domain, email codes and GitHub App about $1.
 
-| A month | 10 people | 100 people | 1000 people |
+| A month, everyone paying on Starter, typical use | 10 people | 100 people | 1000 people |
 | ------- | --------- | ---------- | ----------- |
-| Instabox usage | $1 | $10 | $100 |
-| Instabox plan | $20 Pro (includes $20 of usage) | $20 Pro | $100 Builder (200 boxes running at once) |
-| Convex | $0 Starter | about $3 Starter, pay as you go | about $30 Professional (1 developer, $25) |
-| Key service, domain, email codes, GitHub App | about $1 | about $1 | about $1 plus email (not priced) |
-| **What we pay** | **about $21** | **about $24** | **about $231** |
-| **What people pay us** (machines + 10%; the card fee is passed on) | $1.10 | $11 | $110 |
-| **What we keep** | about **minus $20** | about **minus $13** | about **minus $121** |
+| Plans paid | $120 | $1,200 | $12,000 |
+| Card fees | $6.50 | $65 | $650 |
+| AI and machines for paying people (16 credits, $3.26 each) | $33 | $326 | $3,260 |
+| Free credit (30, 300, 3000 free accounts, $0.60 each) | $18 | $180 | $1,800 |
+| Instabox plan, Convex, the rest | $21 | $24 | $131 |
+| **What we keep** | about **$42** | about **$605** | about **$6,159** |
+| The same if every paying person uses all 30 credits ($6.00 each) | about $14 | about $331 | about $3,419 |
 
-So the first version costs us roughly the fixed plan fees; cost plus 10% on machines alone never
-pays for them. Top-ups are paid in advance, so cash comes in early, but it is the person's money
-until used. The business case needs AI from credit and the platform fee (the fee shown here as 10%
-of the AI cost, an assumption until it is decided):
-
-| A month, everyone paying AI from credit | 10 people | 100 people | 1000 people |
+| A month, everyone on the Own key plan | 10 people | 100 people | 1000 people |
 | ------- | --------- | ---------- | ----------- |
-| Inference we buy (list, on our Anthropic key) | $32 | $316 | $3,160 |
-| Instabox, Convex, the rest (as above) | $21 | $24 | $231 |
-| **What we pay** | **about $53** | **about $340** | **about $3,391** |
-| **What people pay us** (inference at cost, machines + 10%, platform fee) | $36 | $359 | $3,586 |
-| **What we keep** | about **minus $17** | about **plus $19** | about **plus $195** |
+| Plans paid ($6) | $60 | $600 | $6,000 |
+| Card fees ($0.47 each) | $5 | $47 | $470 |
+| Machines (about $0.10 each; $1.02 at full fair use) | $1 | $10 | $100 |
+| Instabox plan, Convex, the rest | $21 | $24 | $131 |
+| **What we keep** | about **$33** | about **$519** | about **$5,299** |
+
+**The development budget** (about $3,000 a month of profit): reached at about **500 paying people**
+with typical use, about **900** if every one of them uses every credit. At 100 people the business
+keeps about $330 to $605 a month; $3,000 at 100 people would take about $37 a month from each.
+The free tier is the cost to watch: each active free account costs up to $0.60 a month, so about 13
+active free accounts per paying person (9 if paying people use every credit) eat the whole profit. If that
+happens, the allowance is lowered or tied to activity (one constant).
 
 Instabox's paused disk is the one cost that grows fastest if boxes are not snapshotted;
 snapshotting after an hour keeps the average under 1 GiB per person.
@@ -642,9 +741,10 @@ Numbers used: Instabox "$0.004 per vCPU-hour", "$0.00225 per GiB-hour", disk "$0
 "$100/month + usage" (https://instabox.sh/docs/pricing.md). Convex Starter free with 1M function
 calls, then $2.20 per million; Professional $25 per developer with 25M calls
 (https://www.convex.dev/pricing); about 1,000 to 2,000 calls per change for streaming chat, batched
-(estimate). OpenRouter: "5.5% ($0.80 minimum) fee when you purchase credits", "We pass through the
-pricing of the underlying model providers without any markup" (https://openrouter.ai/docs/faq).
-GitHub Apps and private repos on personal accounts cost nothing.
+(estimate). Stripe 2.9% plus 30 cents for a US card. OpenRouter: "5.5% ($0.80 minimum) fee when you
+purchase credits", "We pass through the pricing of the underlying model providers without any
+markup" (https://openrouter.ai/docs/faq). GitHub Apps and private repos on personal accounts cost
+nothing. Competitors' prices (12 Nov 2026): section 1, "What others do".
 
 ## 8. The facts checked (12 Nov 2026)
 
@@ -742,12 +842,12 @@ GitHub Apps and private repos on personal accounts cost nothing.
 
 | Part | Reused as it is | Changed | New |
 | ---- | --------------- | ------- | --- |
-| `shared/protocol.ts` | Every type the phone renders (`App`, `ChatItem`, `BuildInfo`, `OtaInfo`, `ApkVariant`, `TokenUsage`, `AppUsage`, `ChangeNotes`, `WorkerInfo`, `PageInfo`, `ServerEvent`) | Additive only: `BuildInfo.fileUrls?`, `App.cloud?`, `ChatItem.cost?`, `WorkerInfo.level?` | Runner event, estimate and billing types (`CostEstimate`, `Balance`, `UsageCharge`) |
-| `shared/chat`, `shared/theme` | All: rows, build card, usage line, pages, the Workbench look | The usage line shows machine and AI money and the estimate next to it; the plan card shows an estimate | The estimate line under the message box |
-| `server/` | `acp/`, `workers.ts`, `playbook.ts`, `pages/`, `todos.ts`, `usage.ts`, `build-cycle.ts`, `history.ts`, `health.ts`, `apk-scan.ts`, `icon.ts`, `secrets.ts`, `git.ts` (commit, history, undo) | A second entry `runner.ts` with no HTTP server; events go to a sink (WebSocket today, Convex in the cloud); `coordinator-playbook.ts` gets the three levels and "commit and push after every change"; `start_worker` gets `level`; ACP sessions start with a model and effort; `usage.ts` prices per model; the package prefix comes from config | `runner/convex-sink.ts`, `runner/inbox.ts`, `runner/signing.ts`, `runner/git-credentials.ts` (the one-repo token), `runner/ai-meter.ts` (the per-change AI stop for AI from credit) |
+| `shared/protocol.ts` | Every type the phone renders (`App`, `ChatItem`, `BuildInfo`, `OtaInfo`, `ApkVariant`, `TokenUsage`, `AppUsage`, `ChangeNotes`, `WorkerInfo`, `PageInfo`, `ServerEvent`) | Additive only: `BuildInfo.fileUrls?`, `App.cloud?`, `ChatItem.cost?`, `WorkerInfo.level?` | Runner event, estimate and billing types (`CreditEstimate`, `Balance`, `UsageCharge`, in credits) |
+| `shared/chat`, `shared/theme` | All: rows, build card, usage line, pages, the Workbench look | The usage line shows the credits used and the estimate next to it; the plan card shows an estimate | The estimate line under the message box |
+| `server/` | `acp/`, `workers.ts`, `playbook.ts`, `pages/`, `todos.ts`, `usage.ts`, `build-cycle.ts`, `history.ts`, `health.ts`, `apk-scan.ts`, `icon.ts`, `secrets.ts`, `git.ts` (commit, history, undo) | A second entry `runner.ts` with no HTTP server; events go to a sink (WebSocket today, Convex in the cloud); `coordinator-playbook.ts` gets the three levels and "commit and push after every change"; `start_worker` gets `level`; ACP sessions start with a model and effort; `usage.ts` prices per model; the package prefix comes from config | `runner/convex-sink.ts`, `runner/inbox.ts`, `runner/signing.ts`, `runner/git-credentials.ts` (the one-repo token), `runner/ai-meter.ts` (the per-change stop when credits run out) |
 | `builder/` | `createApp`, `buildApk`, `fastlane.mjs`, `zip.mjs`, `axml.mjs`, `apksign.mjs`, `OtaSign.java`, `keybackup.mjs` | `ANYAPP_SIGN_LATER=1` (Gradle unsigned, then `apksign.mjs`); checked on Linux (it was built on Windows) | Nothing else |
 | `template/`, `template-kotlin/` | All, including the updater, Reload card, crash catcher and diary | Nothing for the first version | Later: a cloud feed for shared apps |
-| `app/` | Home grid, chat, installer, quick update hand-over, crash forwarding, AI for your apps, Settings | `api.ts`: the `Client` behind an interface with two implementations | Sign in, mode choice, connect GitHub, "Your credit" and top-up, "Your AI", estimates, the Convex client |
+| `app/` | Home grid, chat, installer, quick update hand-over, crash forwarding, AI for your apps, Settings | `api.ts`: the `Client` behind an interface with two implementations | Sign in, mode choice, connect GitHub, "Your plan" and extra credit, estimates, the Convex client |
 | `desktop/` | Not used by the cloud | | Later: "Move this app to the cloud" |
 | New `cloud/` | | | The Convex project (schema, functions, HTTP actions, auth, the GitHub App's token minting, Stripe webhook, estimates), the box provider interface and its Instabox implementation, the box image (Dockerfile) |
 
@@ -762,10 +862,11 @@ publishing (after the first version), and the `anyapp` CLI's other apps.
 new boxes restored from GitHub; the app grid with `com.anyappcloud.<slug>` packages; one chat per
 app as an **Opus 5.5 high orchestrator** with helpers at three levels in the same box; plan first
 and pages; builds and quick updates to the phone; versions and undo; What changed; crash reports;
-**AI from credit on our Anthropic key through the Agent SDK** (way E, tokens at cost, the platform
-fee) or **their own Anthropic API key** (way B); **dollar credit with Stripe top-ups** (smallest $10, card fee
-on top; test mode until launch); machine time drawn from credit at cost plus 10%; **estimates**
-(under the message box, on the plan card, per app) and actuals per change; signing keys encrypted in
+**AI on our Anthropic key through the Agent SDK** (way E) or **their own Anthropic API key** (way B,
+the Own key plan); **credits**: the Free, Starter, Pro, Max and Own key plans as Stripe
+subscriptions, extra credit by Stripe Checkout, the free monthly credit, rollover and expiry (test
+mode until launch); **estimates** in credits (under the message box, on the plan card, per app) and
+actuals per change; signing keys encrypted in
 Convex, signed on the box as a separate Unix user; Instabox behind the provider interface.
 
 **Out**: monthly spending limits; Claude sign-in (way F); moving apps between PC and cloud; sharing
@@ -778,17 +879,17 @@ through Convex); Expo Exact; the separate signer machine (+2 days, next).
 | 1 | Convex backend: schema, auth, runner HTTP actions and token, inbox, file uploads, the box provider interface with Instabox behind it, box lifecycle (scheduler, webhooks, pause, snapshot, delete) | 3.5 |
 | 2 | Runner: the event sink in `server/`, `runner.ts`, signing tickets and tmpfs signing, levels and per-session model and effort, the playbook's levels and push rule, the push check after each turn | 4 |
 | 3 | GitHub: the App, connect flow (browser and back), user token refresh, repo creation, minting one-repo tokens, the credential helper, restore from GitHub, disconnect handling | 3 |
-| 4 | Phone: sign in, mode choice, the Convex `Client`, downloads from file URLs, connect GitHub, "Your AI", "Your credit" and top-up, the estimate line, plan card estimate, per-app costs | 5 |
+| 4 | Phone: sign in, mode choice, the Convex `Client`, downloads from file URLs, connect GitHub, "Your plan" (plans, extra credit, the Own key plan and its key), the estimate line, plan card estimate, per-app credits | 5 |
 | 5 | Keys and secrets: envelope encryption, the key service, the signing log, the GitHub refresh token | 2 |
-| 6 | Credit and metering: usage rows per session and model from ACP and Instabox, settling machine time from the balance, ledger and balances, Stripe Checkout with the fee on top and its webhook (test mode), the credit gate, estimates from medians (aggregate component), real medians replacing section 7's guesses; AI from credit on our key (AI charges and the platform fee in the ledger, the runner's per-change stop) | 5 |
-| 7 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator (top-up in Stripe test mode, estimate shown, code on GitHub), a second prompt as a quick update, a box deleted and the app restored from GitHub, rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 3.5 |
-| | **First version** | **30 days, about 6 weeks** (the first draft was 22) |
+| 6 | Credits and metering: usage rows per session and model from ACP and Instabox, cost turned into credits, subscriptions, grants (free, plan, extra), rollover and the expiry job, spending closest to expiry first, ledger and balances, Stripe Billing and Checkout and their webhooks (test mode), Own key fair use, the credit gate, estimates from medians (aggregate component), real medians replacing section 7's guesses, the runner's per-change stop | 5.5 |
+| 7 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator (a Starter plan in Stripe test mode, estimate in credits shown, code on GitHub), a second prompt as a quick update, a box deleted and the app restored from GitHub, rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 3.5 |
+| | **First version** | **30.5 days, about 6 weeks** (the first draft was 22) |
 | | Sharing and publishing releases from the cloud | +3 |
 | | Separate signer machine | +2 |
 
-Where the 8 extra days come from: GitHub instead of Git bundles (+2.5 net), credit and Stripe live
-instead of switched off (+1.5), estimates (+2), the orchestrator's levels and per-model pricing
-(+1.5), the provider interface (+0.5).
+Where the 8.5 extra days come from: GitHub instead of Git bundles (+2.5 net), credits, plans and
+Stripe live instead of switched off (+2), estimates (+2), the orchestrator's levels and per-model
+pricing (+1.5), the provider interface (+0.5).
 
 ## 11. Accounts and keys: one task for the user
 
@@ -864,16 +965,25 @@ Anthropic credit (none with Max or Ultra credit).
   key** (way E), allowed per section 1's finding. Their own key (way B) stays as the other choice.
   **No email to Anthropic** ("they won't answer, we're very small"): no agreement is sought, ways A,
   C and F are dropped.
-- **Q12, pricing**: **tokens at cost**; our **10% goes on machine time and a platform fee**, never on
-  the tokens.
-- **Q3, credit**: credit is dollars, topped up with us from the first version. Machine time is drawn
-  from it at cost plus 10% even with their own key; no free fair-use cap. AI can be paid from the
-  same credit (Q1), at cost plus the platform fee (Q12). Every change shows an estimate of machine and AI
-  cost first, and each app shows its own.
+- **Q12, pricing** (third round, 12 Nov 2026, replaces "tokens at cost plus 10%"; the pricing page
+  `C:\aa\ideas\cloud-pricing.html`, Q390 to Q395): **monthly plans with credits** (page Q391,
+  model A). A credit bundles the whole service; the person never sees tokens, a token price, machine
+  time or our costs. Credits are metered from our real cost at a hidden basis of $0.20 a credit
+  (section 2).
+- **Q3, credit**: credits, not dollars. **Starter $12 for 30 credits, Pro $25 for 70, Max $60 for
+  180; extra credit $10 for 20** (page Q392), valid 12 months; plan credits roll over one month.
+  Every change shows an estimate in credits first, and each app shows its own.
+- **Q14, free tier** (page Q393): **3 free credits every month**, given when the account is first
+  used that month, no rollover, one per GitHub account.
+- **Q15, own key** (page Q394): the **Own key plan, $6 a month**, unlimited changes on their own
+  Anthropic key, fair use 30 box hours a month, then half a credit per box hour.
+- **Q16, terms**: credits buy app changes, never Claude: no token price, allowance or API access is
+  shown or sold, and credits pay only for building the person's apps (section 1).
 - **Q4, package names**: cloud apps get their own prefix, `com.anyappcloud.<slug>`.
 - **Q5, Instabox**: yes, behind a small provider interface.
 - **Q6, signing**: on the box as a separate Unix user first, then a separate signer machine.
-- **Q7, top-ups**: smallest $10, the card fee added on top, in the first version.
+- **Q7, payments** (replaced by Q3): plans as Stripe subscriptions and extra credit by Stripe
+  Checkout, card fees inside the prices, in the first version.
 - **Q8, code**: never stored by us. A private repo per app on the person's GitHub through a GitHub
   App; the agent commits and pushes after every change; new boxes restore from GitHub. Sharing and
   publishing releases stay out of the first version (+3 days after).
@@ -885,8 +995,15 @@ Anthropic credit (none with Max or Ultra credit).
 - **Q2** (what to do if Anthropic said no to way A) is closed: no one is asking, and way E is
   allowed.
 
-Still open:
+- **Q13** (the platform fee's size) is closed: there is no separate platform fee; the margin is in
+  the credit price (Q12).
 
-- **Q13. The platform fee's size and basis**: 10% of each change's AI cost (what section 7 assumes),
-  10% of the whole change, or a flat fee per change or per month? Shown as its own line next to
-  "AI at cost" and "machine time".
+Still open (the defaults above stand until answered):
+
+- **Q17. A first app on the free tier**: 3 free credits do not cover a new app (about 4.3). Keep it
+  (people see a plan is needed to make an app), or let a person's first new app use at most 3
+  credits (costs us about $0.26 more once)?
+- **Q18. Extra credit without a plan**: allowed in this plan (pay as you go for light users), or
+  only for people on a plan, as Lovable does?
+- **Q19. Yearly plans**: offer them at two months free, as Lovable, Anything and Replit do, or not
+  in the first version?
