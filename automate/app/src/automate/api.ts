@@ -141,6 +141,19 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
 
   const memoryKey = `automate.memory.${ctx.automation}`;
 
+  const phoneNumber = (v: unknown) => {
+    const n = String(v ?? '').replace(/[^\d+*#]/g, '');
+    if (n.length < 3 || n.length > 20) throw new ScriptError('That is not a phone number.');
+    return n;
+  };
+  const countSend = async () => {
+    if (ctx.locksOff) return;
+    const hourAgo = Date.now() - 3600_000;
+    const recent = (getState().recentSends ?? []).filter((t) => t > hourAgo);
+    if (recent.length >= LIMITS.sendsPerHour) throw new ScriptError(`More than ${LIMITS.sendsPerHour} sends in an hour (safety lock).`);
+    await update((s) => ({ ...s, recentSends: [...recent, Date.now()] }));
+  };
+
   // A refused trigger (every 1 minute while the locks are on) becomes a marker, so the card still
   // shows the automation's own name with the reason, instead of a bare error.
   const trigger = (make: () => unknown) => {
@@ -183,6 +196,27 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
         const problem = await Native.screenTap(t);
         if (problem) throw new ScriptError(problem);
         line(`Tapped "${t.slice(0, 60)}"`);
+      },
+    }),
+
+    // M8: messages and calls. Always the person's own tap: the app prepares, never sends.
+    message: Object.freeze({
+      text: async (number: unknown, body: unknown) => {
+        gate('message.text');
+        const n = phoneNumber(number);
+        const t = String(body ?? '').slice(0, 500);
+        await countSend();
+        await Native.offer('text', n, t, `${ctx.name} wrote a text for you`, ctx.automation);
+        line(`Wrote a text to ${n} for you to send`);
+      },
+    }),
+    phone: Object.freeze({
+      call: async (number: unknown) => {
+        gate('phone.call');
+        const n = phoneNumber(number);
+        await countSend();
+        await Native.offer('call', n, undefined, `${ctx.name} wants you to call ${n}`, ctx.automation);
+        line(`Offered a call to ${n}`);
       },
     }),
 

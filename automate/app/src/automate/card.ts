@@ -42,6 +42,14 @@ export function actionLine(a: CardAction): string {
       return `Fetch from ${host(first)} (asks you first, every time)`;
     case 'web.post':
       return `Send to ${host(first)} (asks you first, every time)`;
+    case 'message.text': {
+      const n = typeof first === 'string' ? first : 'someone';
+      return `Write a text to ${n} (you send it yourself)`;
+    }
+    case 'phone.call': {
+      const n = typeof first === 'string' ? first : 'someone';
+      return `Offer to call ${n} (you make the call)`;
+    }
     case 'screen.read':
       return 'Read what is on the screen (never password fields)';
     case 'screen.tap': {
@@ -84,7 +92,7 @@ export function needsOf(actions: CardAction[], triggers: Trigger[] = []): Need[]
     }
   }
   for (const a of actions) {
-    if (a.call === 'notify') needs.add('notifications');
+    if (a.call === 'notify' || a.call === 'message.text' || a.call === 'phone.call') needs.add('notifications');
     if (a.call === 'doNotDisturb.on' || a.call === 'doNotDisturb.off') needs.add('dnd');
     if (a.call.startsWith('screen.')) needs.add('screen');
     if (a.call.startsWith('shizuku.')) needs.add('shizuku');

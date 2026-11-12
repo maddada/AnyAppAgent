@@ -1,6 +1,8 @@
 import { Alert, StyleSheet, Switch, Text } from 'react-native';
 
-import { setLocksOff, useAutomate } from '@/automate/runtime';
+import { NEED_LABEL } from '@/automate/card';
+import { needReady, openPowerSettings, STRONG_POWERS } from '@/automate/needs';
+import { setLocksOff, statusOf, useAutomate } from '@/automate/runtime';
 import { Label, List, Row } from '@/components/Bits';
 import { ThisAppSection } from '@/components/ChangeThisApp';
 import { Screen } from '@/components/Screen';
@@ -9,7 +11,12 @@ import { spacing, type, useColors } from '@/theme';
 /** Settings. Put the app's own settings above "This app", which stays last (see AGENTS.md). */
 export function SettingsScreen() {
   const colors = useColors();
-  const { state } = useAutomate();
+  const { state, list } = useAutomate();
+  // Powers Android allows now, with the automations that are on and use them.
+  const powers = STRONG_POWERS.filter(needReady).map((n) => ({
+    need: n,
+    users: list.filter((l) => statusOf(l, state) === 'on' && l.needs.includes(n)).map((l) => l.name),
+  }));
 
   const toggle = (wantOff: boolean) => {
     if (!wantOff) {
@@ -29,6 +36,26 @@ export function SettingsScreen() {
   return (
     <Screen>
       <Text style={[type.title, styles.title, { color: colors.text }]}>Settings</Text>
+
+      {powers.length ? (
+        <>
+          <Label>Powers</Label>
+          <List>
+            {powers.map((p, i) => (
+              <Row
+                key={p.need}
+                first={i === 0}
+                title={NEED_LABEL[p.need].title}
+                detail={p.users.length ? `Used by ${p.users.join(', ')}` : 'No automation uses it now: you can switch it off'}
+                tone={p.users.length ? undefined : 'accent'}
+                testID={`power-${p.need}`}
+                onPress={() => void openPowerSettings(p.need)}
+                right={<Text style={[type.small, { color: colors.textFaint }]}>{p.users.length ? 'Open' : 'Switch off'}</Text>}
+              />
+            ))}
+          </List>
+        </>
+      ) : null}
 
       <Label>Advanced</Label>
       <List>

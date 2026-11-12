@@ -47,6 +47,8 @@ export type LogEntry = {
   automation?: string;
   lines?: string[];
   test?: boolean;
+  /** The same entry again and again (a blocked automation, for example) is one entry with a count. */
+  count?: number;
 };
 
 const STATE_KEY = 'automate.state';
@@ -103,7 +105,16 @@ export async function updateAuto(id: string, fn: (a: AutoState) => AutoState): P
 export async function addLog(entry: Omit<LogEntry, 'id' | 'at'> & { at?: number }): Promise<LogEntry> {
   await ready();
   const full: LogEntry = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, at: Date.now(), ...entry };
-  log = [full, ...log].slice(0, MAX_LOG);
+  const last = log[0];
+  const same =
+    last &&
+    last.kind === full.kind &&
+    last.automation === full.automation &&
+    last.title === full.title &&
+    JSON.stringify(last.lines ?? []) === JSON.stringify(full.lines ?? []) &&
+    full.at - last.at < 60 * 60_000;
+  // A flood (the same refusal again and again) must not push the real history out of the log.
+  log = same ? [{ ...last, at: full.at, count: (last.count ?? 1) + 1 }, ...log.slice(1)] : [full, ...log].slice(0, MAX_LOG);
   changed();
   const snapshot = log;
   writing = writing.then(() => save(LOG_KEY, snapshot)).catch(() => {});

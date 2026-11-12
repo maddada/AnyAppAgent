@@ -126,6 +126,16 @@ declare const screen: {
   tap(text: string): Promise<void>;
 };
 
+/** A text the person sends: a notification opens Messages with it written. Never sent by the app. */
+declare const message: {
+  text(number: string, body: string): Promise<void>;
+};
+
+/** A call the person makes: a notification opens the dialer with the number. */
+declare const phone: {
+  call(number: string): Promise<void>;
+};
+
 /** Things no normal app can do, through the person's Shizuku app. Only these, nothing else. */
 declare const shizuku: {
   wifi(on: boolean): Promise<void>;

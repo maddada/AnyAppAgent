@@ -29,6 +29,7 @@ export function RunLogScreen() {
             <Text style={[type.small, type.numeric, { color: colors.textFaint }]}>
               {when(e.at)}
               {e.test ? '  ·  test' : ''}
+              {e.count && e.count > 1 ? `  ·  ${e.count} times` : ''}
             </Text>
             <Text style={[type.bodyStrong, { color: colors.text }]}>{e.title}</Text>
             {(e.lines ?? []).map((x, j) => (

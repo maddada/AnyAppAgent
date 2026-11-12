@@ -65,6 +65,7 @@ The whole API (types and comments: `automations/api.d.ts`):
 | `arrive(place)`, `leave(place)` | Arriving at or leaving a place: the name of a place the person saved in the app's Places ("Mosque"), or `{ lat, lon, name }`. If the place is not saved yet, tell the person to save it in Places (Location, all the time is asked on the card) |
 | `appOpened(app, { forMinutes? })` | An app comes to the front, or has been there `forMinutes` (Usage access is asked on the card) |
 | `screen.read()`, `screen.tap(text)` | Read the screen of the app in front, tap a button by its words (Accessibility, asked on the card). Never in password fields, installers, Settings, permission screens or this app |
+| `message.text(number, body)`, `phone.call(number)` | A notification that opens Messages with the text written, or the dialer: the person sends or calls, never the app |
 | `shizuku.wifi(on)`, `shizuku.mobileData(on)`, `shizuku.stopApp(app)` | Through the person's Shizuku app; only these three |
 | `notification({ app?, text? })` | A notification from another app (`app`: part of its name) that mentions `text`; the notification is in `event.notification` (notification access is asked on the card) |
 | `speak(text, { language? })` | Says it aloud on the alarm volume (heard in Do Not Disturb) |

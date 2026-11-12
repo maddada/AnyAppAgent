@@ -34,6 +34,7 @@ type Native = {
   openScreenSettings(): Promise<void>;
   screenRead(): Promise<string>;
   screenTap(text: string): Promise<string>;
+  offer(kind: string, number: string, body: string | null, title: string, tag: string): Promise<void>;
   shizukuState(): string;
   shizukuRequest(): Promise<void>;
   shizukuAct(action: string, arg: string | null): Promise<string>;
@@ -97,6 +98,10 @@ export const openScreenSettings = () => native.openScreenSettings();
 export const screenRead = async (): Promise<{ app?: string; texts?: string[]; refused?: string }> => JSON.parse(await native.screenRead());
 /** "" when the tap went through, else why not. */
 export const screenTap = (text: string) => native.screenTap(text);
+
+/** M8: a text or a call the person sends themselves (a notification that opens Messages or the dialer). */
+export const offer = (kind: 'text' | 'call', number: string, body: string | undefined, title: string, tag: string) =>
+  native.offer(kind, number, body ?? null, title, tag);
 
 /** M7: Shizuku. "missing", "stopped", "denied" or "ready". */
 export const shizukuState = () => native.shizukuState() as 'missing' | 'stopped' | 'denied' | 'ready';

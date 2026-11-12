@@ -66,6 +66,9 @@ class AppwinAutomateModule : Module() {
     }
     AsyncFunction("screenRead") { ScreenService.read(context) }
     AsyncFunction("screenTap") { text: String -> ScreenService.tap(context, text) }
+    AsyncFunction("offer") { kind: String, number: String, body: String?, title: String, tag: String ->
+      Notices.offer(context, kind, number, body, title, tag)
+    }
     Function("shizukuState") { ShizukuPower.state(context) }
     AsyncFunction("shizukuRequest") { ShizukuPower.request() }
     AsyncFunction("shizukuAct") { action: String, arg: String? -> ShizukuPower.act(context, action, arg) }

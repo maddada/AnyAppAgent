@@ -147,7 +147,7 @@ later version lists powers no automation uses any more, so the person can switch
 | Rail | How |
 | --- | --- |
 | A card before on | `AutomationScreen`: When and It will from the code, You asked for (the agent's sentence, labelled), It needs, Hard limits, Show the script. Nothing runs before Turn it on. The approval is tied to the source hash: a changed script stops running and shows its card again with the new lines marked |
-| Ask before sending | `web.get` / `web.post` (and in later versions SMS, calls, messages) go through `ask()`: a high-priority notification "Maghrib quiet time wants to send to example.com", Allow / Don't allow, two minutes, then no. https only, never to this phone or its home network |
+| Ask before sending | `web.get` / `web.post` go through `ask()`; texts and calls (`message.text`, `phone.call`) are never sent by the app at all: a notification opens Messages with the text written, or the dialer, and the person sends or calls: a high-priority notification "Maghrib quiet time wants to send to example.com", Allow / Don't allow, two minutes, then no. https only, never to this phone or its home network |
 | Run log | Every run, failure, skip, block by a limit, change, turn on and off, Stop all, locks change. On the phone only (and short notes in the app's diary, which the agent can read with `read_diary`) |
 | Stop all | Home (with a confirm) and every notice the app posts. Natively: a stop flag every power checks, all wake-ups cancelled, Do Not Disturb this app turned on goes off, speech stops, open questions answered no. Resume on Home |
 | Hard limits | `src/automate/limits.ts`: at most 12 runs an hour per automation and 60 for all, a run stops after 60 s and 20 power calls, `every` at least 15 minutes, Do Not Disturb at most 12 hours and always timed, speech 300 characters, 10 sends an hour, each asked. Never install apps, change security settings or read passwords: there is no API for them |
@@ -201,7 +201,7 @@ The first version is all nine powers. In working days, one thread:
 | M5 | The app in front (usage access) | 1 (built) |
 | M6 | Accessibility: read and tap, the deny-list, the warning card | 2.5 (built) |
 | M7 | Shizuku: setup walkthrough, the command list, its own ask | 2 (built) |
-| M8 | Unused powers list, ask-before-sending for SMS and calls, publish and clone check, docs | 1 |
+| M8 | Unused powers list, ask-before-sending for SMS and calls, publish and clone check, docs | 1 (built) |
 
 About 14 days in all, 12 after this slice. M2 to M7 each end with one APK; everything after is the
 fast lane.
@@ -376,3 +376,30 @@ this app in it, then Try it now on Night Wi-Fi).
 At the end of the sitting: Stop all (listener, alarms and location requests stopped). A geofence
 from test build 16 stays registered on the emulator until it restarts or the app is reinstalled
 (that build never left it).
+
+## M8 (2026-11-12)
+
+- **Texts and calls the person sends.** `message.text(number, body)` and `phone.call(number)` post
+  "<automation> wrote a text for you" with Open Messages (or Open the dialer): the person sends or
+  calls, the app never does, so no SMS or call permission and nothing the safety locks could turn
+  off. They count toward the 10 sends an hour. Proof: Text home (`at('18:00')`, from one prompt, a
+  quick update) said "Write a text to 0501234567 (you send it yourself)" on its card (`120-*`); Try
+  it now posted the offer (`121-*`), and Open Messages opened Google Messages on 0501234567 with "On my
+  way home" written and not sent (`122-*`; the draft was cleared, nothing was sent).
+- **Powers no automation uses.** Settings, Powers lists every strong power Android allowed (Do Not
+  Disturb, notification access, usage access, screen access, Location all the time, Nearby
+  devices, Shizuku) with the automations that are on and use it, or "No automation uses it now: you
+  can switch it off", and opens Android's page for it (`123-*`; after turning Mum wrote off,
+  notification access shows as unused, `125-*`; dark `126-*`).
+- **The run log after a flood.** The same entry again and again (a blocked automation) is one entry
+  with "N times", so a flood can not push the history out of the 300 entries any more; and Home
+  shows "Ran / Failed / Did not send <when>" from each automation's own record (`124-*`). Both came
+  from the Mosque flood seen in M4.
+- **Publishing and clones.** Unchanged and not run here: Appwin Automate is an ordinary app, so
+  Share with others, Publish and Make my own version (`docs/DISTRIBUTION.md`,
+  `docs/CHANGE-THIS-APP.md`) work for it as for any app; publishing makes a public GitHub release
+  under the user's account, which is the user's call.
+
+At the end of the sitting: Stop all (listener and alarms stopped). One tap of mine missed my own
+notification's Stop all (the shade had closed) and landed on an empty part of another thread's
+app screen; nothing happened there, and Stop all was done from the app.

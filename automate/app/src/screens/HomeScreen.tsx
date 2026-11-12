@@ -39,7 +39,13 @@ export function HomeScreen() {
       { text: 'Stop all', style: 'destructive', onPress: () => void stopEverything() },
     ]);
 
-  const lastRun = (id: string) => log.find((e) => e.automation === id && (e.kind === 'ran' || e.kind === 'error' || e.kind === 'stop'));
+  // From each automation's own record, so a long log can never make it look as if it never ran.
+  const lastRun = (id: string) => {
+    const a = state.autos[id];
+    if (!a?.lastRun) return undefined;
+    const e = log.find((x) => x.automation === id && x.at >= a.lastRun! - 1000 && (x.kind === 'ran' || x.kind === 'error' || x.kind === 'stop' || x.kind === 'blocked'));
+    return { at: a.lastRun, kind: e?.kind ?? (a.lastResult === 'ok' ? 'ran' : a.lastResult === 'skipped' ? 'blocked' : 'error'), test: e?.test };
+  };
 
   return (
     <Screen>
@@ -108,7 +114,9 @@ export function HomeScreen() {
                 </View>
                 <Text style={[type.small, { color: colors.textMuted }]}>{l.error ?? l.when.join(' · ')}</Text>
                 <Text style={[type.small, { color: colors.textFaint }]}>
-                  {last ? `${last.kind === 'ran' ? 'Ran' : last.kind === 'stop' ? 'Stopped' : 'Failed'} ${when(last.at)}${last.test ? ' (test)' : ''}` : 'Never ran'}
+                  {last
+                    ? `${last.kind === 'ran' ? 'Ran' : last.kind === 'stop' ? 'Stopped' : last.kind === 'blocked' ? 'Did not send' : 'Failed'} ${when(last.at)}${last.test ? ' (test)' : ''}`
+                    : 'Never ran'}
                 </Text>
               </Pressable>
             );
