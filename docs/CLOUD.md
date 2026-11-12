@@ -8,7 +8,9 @@ machines, one per thread. The app's code lives in a private repo on **the person
 everything else that must last (accounts, apps, chats, usage, money, builds, files, signing keys)
 lives in Convex.
 
-Status: **the agreed plan** (decisions of 12 Nov 2026, section 12), nothing built yet. Facts were
+Status: **the agreed plan** (decisions of 12 Nov 2026, section 12). **Milestone 0, the spike, ran on
+12 Nov 2026**: the box image, builds on a box, an agent turn, Convex sign-in and the phone round trip
+are proven; GitHub and the Secrets proxy wait on the user (section 10, `cloud/README.md`). Facts were
 checked on the web on **12 Nov 2026**; each has its source link. Not legal advice: section 1 gives
 the texts and the one line that leaves any doubt.
 
@@ -341,7 +343,12 @@ income (section 7).
 
 The AI key, ours or theirs, is never put in a file or an environment variable on the box:
 Instabox's Secrets proxy adds it to outgoing HTTPS requests, so the agent cannot print it (section
-8, to be proven in the spike).
+8). Not proven yet: managing Secrets needs a signed-in owner or a workspace's `workspace:admin` key
+(a personal org's API key cannot), so production runs in an Instabox **workspace**. Proven instead
+in the spike, and the fallback for any provider without a secrets proxy: the runner holds the key
+in memory and serves a forwarder on 127.0.0.1 that adds it; the agent runs as another Unix user
+with a dummy key and `ANTHROPIC_BASE_URL` pointing at the forwarder (no file the agent could reach
+held the key).
 
 ### Estimates before every change
 
@@ -469,17 +476,27 @@ The runner and Convex talk to the machine provider only through one small TypeSc
 (the earlier page's pick) or another provider can replace it without touching the runner or the
 phone.
 
-- Our own OCI image, imported once with `instabox snapshot import` (amd64 only, which the Android SDK
-  needs anyway): Node 22, a JDK (the builder already builds with JDK 21, `docs/ENVIRONMENT.md`, so
+- Our own image: Node 22, a JDK (the builder already builds with JDK 21, `docs/ENVIRONMENT.md`, so
   Debian 13's OpenJDK 21 is fine), the Android SDK and NDK as `docs/ENVIRONMENT.md` pins, Gradle with
   a warm cache for the template, the template's `node_modules`, Git, the agent and the **runner**.
-- **Lifecycle**: a message resumes the box (from pause "usually takes about a second"). The runner
-  holds Instabox's "activity lease" while a turn or a build runs (model calls are silent, and an
-  idle box would pause). **5 minutes** after the last work it pauses (memory kept, only disk billed).
-  After **1 hour** paused it is snapshotted and deleted (snapshots are free today), and the next
-  message restores it from the snapshot. A snapshot unused for 30 days is deleted; the next message
-  then makes a fresh box from the image and clones the repo from GitHub (a slower first build). The
-  spike measures each of these times.
+  **The spike built it on a box and saved it with `instabox snapshot save`** (32 s, about 16.6 GB of
+  content on 36 GiB of disks): `snapshot import` pulls only from a registry ("it cannot read an image
+  that exists only in Docker on your computer"), which means a private registry and a multi-GB push.
+  `cloud/box/Dockerfile` is the same recipe for import from CI later. (Spike, 12 Nov 2026:
+  `cloud/README.md`.)
+- **Lifecycle**: a message resumes the box (pause and resume took about 4 s each through the CLI,
+  memory kept). The runner holds Instabox's "activity lease" while a turn or a build runs (model
+  calls are silent, and an idle box would pause). **5 minutes** after the last work it pauses (only
+  disk billed). After **1 hour** paused it is snapshotted and deleted (snapshots are free today), and
+  the next message restores it from the snapshot: **a box from a snapshot took 69 s** (a stock
+  template under 1 s), so that message waits about a minute more; the chat says "Waking up your
+  app's machine". A snapshot unused for 30 days is deleted; the next message then makes a fresh box
+  from the image and clones the repo from GitHub (the first full build of an app on a fresh box
+  from the image took 171 s).
+- **All of a box's outbound HTTPS goes through Instabox's TLS-intercepting proxy**, Secrets or not.
+  In the spike it refused every HTTPS connection for about 1.5 minutes during Gradle's first
+  download burst, then recovered: the runner retries a build that failed on downloads before it
+  counts as a failed build (and before it uses one of the 3 fix turns).
 
 **The runner** is the companion's work loop without its HTTP server, pairing, Easy Connect or `gh`
 (`server/src` minus `http.ts`, `auth.ts`, `easy-connect/`, `github.ts`). It starts the agent over
@@ -504,14 +521,17 @@ instructions say which level each piece of work gets:
 | `simple` | Sonnet 5.5, high | Simple work in one area (styling, changing text, colours, an icon) |
 
 - `start_worker` gets one new required field, `level`, and the runner starts that helper's ACP
-  session with the matching model and effort. The spike checks how `claude-agent-acp` takes a
-  model and an effort per session (ACP session model selection, or Claude Code's own model and
-  effort settings for that process).
+  session with the matching model and effort. **Proven in the spike**: after `session/new`,
+  `session/set_config_option` with `configId: "model"`, `value: "claude-opus-5-5"` (or
+  `claude-sonnet-5-5`), then `configId: "effort"` (category `thought_level`), `value: "high"` or
+  `"medium"`; the session's transcript showed `claude-opus-5-5` at `high`.
 - **Helpers run in the same box**: each is its own Claude Code process with its own ACP session, as
   the `agent` Unix user, in the app's folder. Helpers that change the app take turns (one change
   slot per app, as today); helpers that only read run at once. Builds run after a changing helper's
   turn, as today. The box size (4 vCPU, 8 GiB) fits the orchestrator, two helpers and a Gradle
-  build; the spike checks memory with two helpers and a build at once.
+  build: in the spike one agent session and a full Gradle build ran at once with no OOM kill, but
+  memory (page cache included) sat at 7.4 to 7.9 GiB through every build; two helpers and a build
+  at once is still to measure (milestone 2), with 4 vCPU / 16 GiB (Pro's 8/16) as the fallback.
 - **Costs**: every ACP turn reports its usage with the session's model; the runner prices it with
   that model's list price and tags it with the helper and its level. The change's usage line adds
   them up: on the Own key plan "AI $0.31 on your key (orchestrator $0.09, 2 helpers $0.22)", with
@@ -523,9 +543,12 @@ instructions say which level each piece of work gets:
 **The builder on the box** is `builder/` unchanged in what it builds: `createApp`, `buildApk`, the
 fast lane (a JavaScript-only change is a quick build in about 16 s with no Gradle, `docs/FAST-LANE.md`).
 One change: in the cloud **Gradle never sees the signing key**. With `ANYAPP_SIGN_LATER=1` the init
-script leaves `signingConfig` empty, Gradle builds the release APK unsigned, and the runner signs it
-with `apksigner` (as the fast lane's bundle swap already does) and the quick update with
-`OtaSign.java`, in a separate step after Gradle has exited (section 6).
+script sets the release `signingConfig` to `null` (leaving it empty is not enough: Expo's generated
+Gradle then signs release builds with the debug key), Gradle builds the release APKs unsigned, and
+they are signed with `apksigner` (as the fast lane's bundle swap already does) and the quick update
+with `OtaSign.java`, in a separate step after Gradle has exited (section 6). Built in the spike:
+`builder/` signs right after Gradle exits (1.6 to 2.6 s for three APKs); moving that step to the
+`runner` user with a signing ticket is milestone 2.
 
 **Builds reach the phone without a PC.** After a successful build the runner uploads the
 `arm64-v8a` APK (phones), the `x86_64` one (the emulator) and the quick update zip to Convex file
@@ -708,6 +731,11 @@ replaces them with real medians, and the credit cost basis follows the real numb
 | Complex across areas, full build | orchestrator + 1 or 2 `deep` | about $0.65 | about 15 | $0.009 | $0.66 | about **3.3** | $1.32 | $0.66 |
 | New app (plan, helpers, first build) | orchestrator + 2 `deep` | about $0.85 | about 20 | $0.011 | $0.86 | about **4.3** | $1.72 | $0.86 |
 
+Spike check (12 Nov 2026): two small changes done by the Opus 5.5 high orchestrator alone (no
+helper) cost $0.182 and $0.209 at list price, with 31K to 33K tokens of cache write and 92K to 127K
+of cache read each; the box worked about 40 to 60 s per change (turn, quick build, upload), so the
+"about 7" box minutes are mostly the 5 minutes before the pause. The simple row holds.
+
 The margin before card fees is half the price on Starter, 44% on Pro ($0.36 a credit), 40% on Max
 ($0.33) and 60% on extra credit ($0.50).
 
@@ -797,20 +825,29 @@ nothing. Competitors' prices (12 Nov 2026): section 1, "What others do".
   https://instabox.sh/docs/billing.md.
 - **Sizes**: Free 4 vCPU / 8 GiB only, one machine; Pro 2/4, 4/8, 8/16; Builder up to 16/32. `/data`
   20 GiB by default, up to 200 GiB on Pro. No GPUs, no nested virtualisation (fine: we build, we do
-  not run an emulator there).
-- **Times**: resume from pause "usually takes about a second"; cold reboot "back in about 20
-  seconds"; a create or a start from stopped is not published (the spike measures it).
+  not run an emulator there). **The Free plan, as the API enforces it** (spike, 12 Nov 2026): only
+  the `agent-browser`, `android`, `omarchy` and `ci` templates or a snapshot (`universal` refused),
+  idle pause fixed at 30 minutes, `maxRunMinutes: 120` on the machine (the limits page says 480),
+  5 snapshots.
+- **Times** (measured in the spike, through the CLI): create from a template under 1 s server side
+  (9 s wall); pause 3.7 s, resume 4.1 s; stop 7.6 s, start 7.2 s; snapshot save 32 s; **create from
+  a snapshot 69 s**; restore in place 83 s. Every table and number: `cloud/README.md`.
 - **Android**: "Debian 13 has no `openjdk-17` package"; it ships OpenJDK 21, and "Gradle and the
-  Android Gradle plugin run on 21". Our builder already builds with JDK 21. Custom images:
-  `instabox snapshot import <docker image>`, amd64 only (https://instabox.sh/docs/custom-images.md).
+  Android Gradle plugin run on 21". Our builder already builds with JDK 21 (proven on a box: the
+  template app builds unchanged). Custom images: `instabox snapshot import <docker image>`, amd64
+  only, from a registry only (https://instabox.sh/docs/custom-images.md); or set a box up and
+  `instabox snapshot save` it (the spike's route).
 - **Persistence**: stop keeps files, pause keeps memory too; "No forced TTL" for paused machines and
   snapshots.
 - **Limits**: Pro 500 machines, 100 running, 30 starts a minute; idle pause 5 to 30 minutes on paid
   plans; an "activity lease" keeps a box awake during silent model calls; upload about 50 Mbit/s per
   machine; no documented outbound allowlist; automatic abuse checks can lock a box for 24 hours.
 - **Secrets proxy**: adds API keys to outgoing HTTPS headers so the real key never enters the box
-  (https://instabox.sh/docs/secrets.md). To prove with Claude Code (and the GitHub token) in the
-  spike.
+  (https://instabox.sh/docs/secrets.md); git over HTTPS works with it too (Basic auth, hosts
+  `github.com` and `api.github.com`). Saving a Secret needs an org owner signed in, or a
+  workspace's `workspace:admin` API key: "a personal org's API key cannot carry workspace:admin"
+  (the spike's key was refused with `missing_scope`). Not proven yet. The proxy intercepts all
+  outbound HTTPS (its CA is in the box's trust stores), with or without Secrets.
 - **Terms** (https://instabox.sh/terms, 9 Nov 2026): 2(b)(iii) the customer may not "rent, lease,
   lend, sell, sublicense, or otherwise make the Services available to any third party except as
   expressly permitted", while 4(c) speaks of the customer's "relationship with the end users of
@@ -915,6 +952,16 @@ through Convex); Expo Exact; the separate signer machine (+2 days, next).
 | 6 | Credits and metering: usage rows per session and model from ACP and Instabox, cost turned into credits, subscriptions, grants (free, plan, extra), rollover and the expiry job, spending closest to expiry first, ledger and balances, Stripe Billing and Checkout and their webhooks (test mode), Own key fair use, the credit gate, estimates from medians (aggregate component), real medians replacing section 7's guesses, the runner's per-change stop | 5.5 |
 | 7 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator (a Starter plan in Stripe test mode, estimate in credits shown, code on GitHub), a second prompt as a quick update, a box deleted and the app restored from GitHub, rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 3.5 |
 | | **First version** | **30.5 days, about 6 weeks** (the first draft was 22) |
+
+**Milestone 0, what ran (12 Nov 2026, numbers in `cloud/README.md`):** the image (built on a box and
+saved as a snapshot, not imported); a fresh box from it builds a new app in 171 s, a quick update in
+6 to 7 s, signed after Gradle; one orchestrator turn on Opus 5.5 high (no helper yet) for $0.18 to
+$0.21 a small change; Convex Auth (Google reaches Google's page, the email code goes out through
+Resend, dev-only anonymous sign-in) and the phone round trip, prompt to APK link in about 38 s.
+Still open, both waiting on the user: the GitHub part (the App is not installed on an account
+yet) and the Secrets proxy (it needs `instabox login` or a workspace key; a local key forwarder
+stood in for it). Also left for milestone 2: a helper at its own level, and memory with two
+helpers and a build.
 | | Sharing and publishing releases from the cloud | +3 |
 | | Separate signer machine | +2 |
 

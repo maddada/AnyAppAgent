@@ -46,6 +46,20 @@ export async function signWithLineage(javaHome, sdk, apk, { old, next, lineageFi
 }
 
 /**
+ * Signs an unsigned APK in place with one key (`{ storeFile, storePassword, keyAlias }`). Used when
+ * Gradle built it without the key (ANYAPP_SIGN_LATER=1, the cloud: docs/CLOUD.md, section 6).
+ */
+export async function signApk(javaHome, sdk, apk, key) {
+  await apksignerRun(javaHome, sdk, [
+    'sign',
+    '--ks', key.storeFile, '--ks-type', 'PKCS12', '--ks-key-alias', key.keyAlias,
+    '--ks-pass', 'env:ANYAPP_KS_PASS', '--key-pass', 'env:ANYAPP_KS_PASS',
+    '--v4-signing-enabled', 'false',
+    apk,
+  ], { ANYAPP_KS_PASS: key.storePassword });
+}
+
+/**
  * `apksigner verify --print-certs` (plus `extra`, such as a --max-sdk-version): resolves with the
  * set of certificate SHA-256s it reports for the newest signature scheme that applies, and rejects
  * when the APK does not verify or when no certificate could be read at all (an output format
