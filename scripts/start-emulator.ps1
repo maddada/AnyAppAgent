@@ -1,4 +1,4 @@
-# Starts a Kiwimake Android emulator (visible window, hardware acceleration) if it is not
+# Starts an AnyAppAgent Android emulator (visible window, hardware acceleration) if it is not
 # already running, then waits until Android has fully booted.
 # Usage:  pwsh -File C:\dev\AnyAppAgent\scripts\start-emulator.ps1 [-Name anyapp|anyapp2] [-TimeoutSec 300] [-ColdBoot]
 # Serials are fixed by console port: anyapp = emulator-5560, anyapp2 = emulator-5562.
