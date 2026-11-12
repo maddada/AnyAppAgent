@@ -170,7 +170,7 @@ have and keeps your apps, your connection and your AI key.
 **Coming from version 0.1.0?** From 0.2.0 on, Kiwimake is signed with its own release key
 instead of a shared development key, so Android will not install 0.2.0 over 0.1.0 ("App not
 installed" or "conflicts with an existing package"). Uninstall the old Kiwimake first (hold its
-icon, **Uninstall**), then install 0.2.0. The apps you made stay on your phone and on your PC. You
+icon, **Uninstall**), then install the newest version. The apps you made stay on your phone and on your PC. You
 connect the phone to your PC again (Connect a phone, scan the code), and if you used AI for your
 apps, you put your AI key in Settings again. An app made before that says AI is not set up
 starts working again as soon as Kiwimake installs a new version of it (ask it for any small
