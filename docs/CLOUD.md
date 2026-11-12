@@ -9,8 +9,8 @@ everything else that must last (accounts, apps, chats, usage, money, builds, fil
 lives in Convex.
 
 Status: **the agreed plan** (decisions of 12 Nov 2026, section 12). **Milestone 0, the spike, ran on
-12 Nov 2026**: the box image, builds on a box, an agent turn, Convex sign-in and the phone round trip
-are proven; GitHub and the Secrets proxy wait on the user (section 10, `cloud/README.md`). Facts were
+12 Nov 2026**: the box image, builds on a box, an agent turn with the key only in the Secrets proxy,
+Convex sign-in and the phone round trip are proven; GitHub waits on the App's install (section 10, `cloud/README.md`). Facts were
 checked on the web on **12 Nov 2026**; each has its source link. Not legal advice: section 1 gives
 the texts and the one line that leaves any doubt.
 
@@ -343,12 +343,14 @@ income (section 7).
 
 The AI key, ours or theirs, is never put in a file or an environment variable on the box:
 Instabox's Secrets proxy adds it to outgoing HTTPS requests, so the agent cannot print it (section
-8). Not proven yet: managing Secrets needs a signed-in owner or a workspace's `workspace:admin` key
-(a personal org's API key cannot), so production runs in an Instabox **workspace**. Proven instead
-in the spike, and the fallback for any provider without a secrets proxy: the runner holds the key
-in memory and serves a forwarder on 127.0.0.1 that adds it; the agent runs as another Unix user
-with a dummy key and `ANTHROPIC_BASE_URL` pointing at the forwarder (no file the agent could reach
-held the key).
+8). **Proven in the spike**: the box's `ANTHROPIC_API_KEY` is a placeholder (`ibsec_...`), the
+agent ran a full turn with it (the proxy counted 17 requests, 0 denied), and a scan of the whole
+box found the real key in no file, before or after the turn. Managing Secrets needs a signed-in
+owner (`instabox login`) or a workspace's `workspace:admin` key (a personal org's API key cannot),
+so production runs in an Instabox **workspace** whose key Convex holds. The fallback for a
+provider without a secrets proxy, also proven: the runner holds the key in memory and serves a
+forwarder on 127.0.0.1 that adds it; the agent runs as another Unix user with a dummy key and
+`ANTHROPIC_BASE_URL` pointing at the forwarder.
 
 ### Estimates before every change
 
@@ -846,8 +848,10 @@ nothing. Competitors' prices (12 Nov 2026): section 1, "What others do".
   (https://instabox.sh/docs/secrets.md); git over HTTPS works with it too (Basic auth, hosts
   `github.com` and `api.github.com`). Saving a Secret needs an org owner signed in, or a
   workspace's `workspace:admin` API key: "a personal org's API key cannot carry workspace:admin"
-  (the spike's key was refused with `missing_scope`). Not proven yet. The proxy intercepts all
-  outbound HTTPS (its CA is in the box's trust stores), with or without Secrets.
+  (the spike's key was refused with `missing_scope`; the signed-in CLI saved it). Proven with the
+  agent in the spike (section 2, "The Own key plan"); the GitHub token through it is still to
+  prove. The proxy intercepts all outbound HTTPS (its CA is in the box's trust stores), with or
+  without Secrets.
 - **Terms** (https://instabox.sh/terms, 9 Nov 2026): 2(b)(iii) the customer may not "rent, lease,
   lend, sell, sublicense, or otherwise make the Services available to any third party except as
   expressly permitted", while 4(c) speaks of the customer's "relationship with the end users of
@@ -952,18 +956,17 @@ through Convex); Expo Exact; the separate signer machine (+2 days, next).
 | 6 | Credits and metering: usage rows per session and model from ACP and Instabox, cost turned into credits, subscriptions, grants (free, plan, extra), rollover and the expiry job, spending closest to expiry first, ledger and balances, Stripe Billing and Checkout and their webhooks (test mode), Own key fair use, the credit gate, estimates from medians (aggregate component), real medians replacing section 7's guesses, the runner's per-change stop | 5.5 |
 | 7 | Proof and hardening: the Ajman prayer alarm made in cloud mode on the emulator (a Starter plan in Stripe test mode, estimate in credits shown, code on GitHub), a second prompt as a quick update, a box deleted and the app restored from GitHub, rate limits (one change at a time, 5 boxes per person), egress and abuse notes, docs | 3.5 |
 | | **First version** | **30.5 days, about 6 weeks** (the first draft was 22) |
+| | Sharing and publishing releases from the cloud | +3 |
+| | Separate signer machine | +2 |
 
 **Milestone 0, what ran (12 Nov 2026, numbers in `cloud/README.md`):** the image (built on a box and
 saved as a snapshot, not imported); a fresh box from it builds a new app in 171 s, a quick update in
-6 to 7 s, signed after Gradle; one orchestrator turn on Opus 5.5 high (no helper yet) for $0.18 to
-$0.21 a small change; Convex Auth (Google reaches Google's page, the email code goes out through
-Resend, dev-only anonymous sign-in) and the phone round trip, prompt to APK link in about 38 s.
-Still open, both waiting on the user: the GitHub part (the App is not installed on an account
-yet) and the Secrets proxy (it needs `instabox login` or a workspace key; a local key forwarder
-stood in for it). Also left for milestone 2: a helper at its own level, and memory with two
-helpers and a build.
-| | Sharing and publishing releases from the cloud | +3 |
-| | Separate signer machine | +2 |
+6 to 7 s, signed after Gradle; orchestrator turns on Opus 5.5 high (no helper yet) for $0.14 to
+$0.21 a small change, the last one with the key only in Instabox's Secrets proxy; Convex Auth
+(Google reaches Google's page, the email code goes out through Resend, dev-only anonymous sign-in)
+and the phone round trip, prompt to APK link in about 38 s. Still open: the GitHub part (waiting on
+the App's install). Left for milestone 2: a helper at its own level, and memory with two helpers
+and a build.
 
 Where the 8.5 extra days come from: GitHub instead of Git bundles (+2.5 net), credits, plans and
 Stripe live instead of switched off (+2), estimates (+2), the orchestrator's levels and per-model
