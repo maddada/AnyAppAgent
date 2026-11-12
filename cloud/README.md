@@ -13,7 +13,8 @@ the spike**: it proves the risky parts and measures them; it is not the product.
 | `box/Dockerfile` | The same image as an OCI recipe for `instabox snapshot import` (not built yet). |
 | `spike/convex.mjs` | Sets the dev deployment's env vars from the secrets file through stdin, deploys, rotates the runner token. |
 | `spike/github-app.mjs` | The GitHub App: its JWT, installation tokens narrowed to one repo, repo create and delete. |
-| `spike/run-runner.mjs` | Starts the runner on a box for one prompt, the secrets on stdin. |
+| `spike/run-runner.mjs` | Starts the runner on a box for one prompt, the secrets on stdin (`--instabox-secrets`: only the runner token; the AI key comes from the Secrets proxy). |
+| `spike/instabox-secret.mjs` | Saves a value from the secrets file as an Instabox proxy Secret, scoped to named hosts, through the signed-in CLI and stdin. |
 | `spike/send.mjs` | A command-line stand-in for the phone: signs in without an account, sends a prompt, prints the chat. |
 
 The phone side of the spike is `app/src/app/cloud-spike.tsx` (opened with
@@ -29,8 +30,9 @@ them from there and passes values only on stdin.
 cd cloud && npm install
 node spike/convex.mjs env       # once: auth and runner env vars on the dev deployment
 node spike/convex.mjs deploy    # push convex/ to the dev deployment
-instabox create --name spike --snapshot anyapp-box-v0 --secrets none
-INSTABOX_BIN=<instabox executable, not the .cmd shim> node spike/run-runner.mjs spike
+INSTABOX_BIN=<instabox executable> node spike/instabox-secret.mjs ANTHROPIC_API_KEY --ai anthropic   # once, signed-in CLI
+instabox create --name spike --snapshot anyapp-box-v0 --secrets ANTHROPIC_API_KEY
+INSTABOX_BIN=<instabox executable, not the .cmd shim> node spike/run-runner.mjs spike --instabox-secrets
 node spike/send.mjs "Change the subtitle to ..."    # or the phone screen
 ```
 
@@ -60,11 +62,12 @@ CLI's own round trip) unless they say "server".
 | APK upload box to Convex storage (23.5 MB) | 1.0 to 3.1 s |
 | Agent turn 1 (Opus 5.5 high, "change the subtitle") | 46 s; 8 in, 401 out, 31,111 cache write, 92,335 cache read tokens; **$0.182** at list price |
 | Agent turn 2, from the phone ("add a line under the name") | 30 s; 10 in, 928 out, 33,070 cache write, 126,547 cache read; **$0.209** |
+| Agent turn 3, **key only in Instabox's Secrets proxy** ("change the subtitle") | 23 s; 8 in, 546 out, 22,164 cache write, 110,798 cache read; **$0.144**; the proxy counted 17 requests, 0 denied |
 | Phone send to APK link on the phone (turn 2, quick build) | about 38 s |
 | Memory | the 8 GiB box sits at 7.4 to 7.9 GiB used (page cache included) through every Gradle build and stays there while the Gradle daemons live; no OOM kill, also with an agent turn and a full build at once |
 | Convex deploy (dev) | 6 s |
 
-**Spent**: Anthropic about $0.39 (two turns at list price, from ACP's usage; the Console's own
+**Spent**: Anthropic about $0.54 (three turns at list price, from ACP's usage; the Console's own
 number was not checked). Instabox $0 (Free plan, 4.5 vCPU-hours of its free
 allowance). Convex, Resend, Google, GitHub $0.
 
@@ -78,7 +81,13 @@ allowance). Convex, Resend, Google, GitHub $0.
 - Model and effort per ACP session: `session/set_config_option` with `configId: "model"`,
   `value: "claude-opus-5-5"` (shown as `opus`), then `configId: "effort"` (category
   `thought_level`), `value: "high"`. The session's transcript shows `claude-opus-5-5` at `high`.
-- The AI key never reached the agent: the runner held it in memory and served a forwarder on
+- **Instabox's Secrets proxy carries the AI key.** Saved with the signed-in CLI (a personal org's
+  API key cannot manage Secrets: `missing_scope`, "a personal org's API key cannot carry
+  workspace:admin"), scoped to `api.anthropic.com`, selected on a box made from the image. In the
+  box `ANTHROPIC_API_KEY` is `ibsec_...` (70 characters); `GET /v1/models` with it answers 200 (a
+  wrong key 401); the agent ran a whole turn and a full build on it; a scan of every file on the
+  box (all of `/` but `/proc`, `/sys`, `/dev`) found the real key nowhere, before or after.
+- The fallback without a secrets proxy also worked: the runner held the key in memory and served a forwarder on
   127.0.0.1; the agent ran as the Unix user `agent` with a dummy key and
   `ANTHROPIC_BASE_URL` pointing at it. A search of every file the agent could reach for the real
   key found none.
@@ -92,10 +101,6 @@ allowance). Convex, Resend, Google, GitHub $0.
 
 ### Not proven (needs the user)
 
-- **Instabox Secrets proxy.** Saving an org Secret needs a signed-in owner or an API key with
-  `workspace:admin`, and "a personal org's API key cannot carry workspace:admin". Our key is a
-  personal org key, so `instabox login` (a device code the account owner approves in a browser)
-  is needed, or a workspace. The key-proxy above stood in for it.
 - **GitHub.** The App `anyappagent-cloud-dev` is not installed on any account yet
   (`GET /app/installations` is empty), so no repo was created, pushed or cloned. The scripts are
   ready (`spike/github-app.mjs`, `box/git-with-token.sh`).

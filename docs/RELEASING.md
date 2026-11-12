@@ -35,6 +35,8 @@ save the password in a password manager (`node app/scripts/release-key.mjs passw
 The backup is useless without the password, and the password is only in Credential Manager on this
 PC until you save it somewhere.
 
+A copy of the key, its backup and its password live in the owner's 1Password item "AnyAppAgent phone release key".
+
 `app/scripts/release-key.mjs`:
 
 ```
