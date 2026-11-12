@@ -77,6 +77,13 @@ if (cmd === 'env') {
   // The GitHub App (milestone 3): its id and slug, and its private key as PKCS#8 (Web Crypto's form).
   setVar('GITHUB_APP_ID', env.GITHUB_APP_ID);
   setVar('GITHUB_APP_SLUG', env.GITHUB_APP_SLUG);
+  // The key transport (milestone 5): Convex's P-256 key pair, made once.
+  const names = convex(['env', 'list', '--names-only']);
+  if (!/^KEYS_TRANSPORT_PRIVATE$/m.test(names)) {
+    const pair = await crypto.webcrypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+    setVar('KEYS_TRANSPORT_PRIVATE', Buffer.from(await crypto.webcrypto.subtle.exportKey('pkcs8', pair.privateKey)).toString('base64'));
+    setVar('KEYS_TRANSPORT_PUBLIC', Buffer.from(await crypto.webcrypto.subtle.exportKey('raw', pair.publicKey)).toString('base64'));
+  }
   const pem = fs.readFileSync(path.join(os.homedir(), '.appwin-secrets', 'github-app.pem'), 'utf8');
   setVar('GITHUB_APP_PRIVATE_KEY', crypto.createPrivateKey(pem).export({ type: 'pkcs8', format: 'pem' }).toString());
 } else if (cmd === 'deploy') {

@@ -4,7 +4,7 @@
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { EXTRA_PACK, FREE_MONTHLY_MILLICREDITS, PLANS } from './config';
-import { randomToken, seal, sha256Hex } from './lib/crypto';
+import { randomToken, sealSecret, sha256Hex } from './lib/crypto';
 import { balanceOf, subscriptionOf } from './lib/credits';
 import { requireUser } from './lib/session';
 
@@ -100,9 +100,9 @@ export const setOwnKey = mutation({
     const user = await requireUser(ctx);
     const k = key.trim();
     if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(k)) throw new Error('That does not look like an Anthropic API key. It starts with sk-ant-.');
-    const box = await seal(k, `anthropic:${user._id}`);
+    const box = await sealSecret(k, `anthropic:${user._id}`);
     const old = await ctx.db.query('secrets').withIndex('by_user_kind', (q) => q.eq('userId', user._id).eq('kind', 'anthropic')).first();
-    const row = { userId: user._id, kind: 'anthropic' as const, iv: box.iv, ciphertext: box.ciphertext, last4: k.slice(-4) };
+    const row = { userId: user._id, kind: 'anthropic' as const, ...box, last4: k.slice(-4) };
     if (old) await ctx.db.replace(old._id, row);
     else await ctx.db.insert('secrets', row);
     return { last4: row.last4 };

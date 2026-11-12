@@ -16,7 +16,7 @@ import { cloudAvailable } from "@/lib/cloud";
 import { takeShare } from "@/lib/sharedIn";
 import { SendAppPanel } from "@/ui/SendApp";
 import { appAction, getState, placeOf, removeApp, sortedApps, useClientFor, useStore } from "@/lib/store";
-import { AppCredits, credits, PlaceMark } from "@/ui/CloudBits";
+import { AppCredits, AppSigning, credits, PlaceMark } from "@/ui/CloudBits";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
@@ -410,6 +410,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
               </T>
               {state ? <StateLine kind={state.kind} label={state.label} /> : null}
               {placeOf(shown) === "cloud" ? <AppCredits appId={shown.id} /> : null}
+              {placeOf(shown) === "cloud" ? <AppSigning appId={shown.id} /> : null}
             </View>
           </View>
           {sending && !confirmRemove ? (

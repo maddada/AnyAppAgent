@@ -12,7 +12,7 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Doc, Id } from './_generated/dataModel';
 import { httpAction, internalAction, internalMutation, internalQuery, mutation, type ActionCtx } from './_generated/server';
-import { b64, open, randomToken, seal, unb64 } from './lib/crypto';
+import { b64, openSecret, randomToken, sealSecret, unb64 } from './lib/crypto';
 import { requireUser } from './lib/session';
 
 const API = 'https://api.github.com';
@@ -119,15 +119,15 @@ async function saveFromToken(ctx: ActionCtx, userId: Id<'users'>, t: any, instal
     login,
     githubUserId,
     installationId: inst,
-    access: await seal(t.access_token, `github:access:${userId}`),
-    refresh: t.refresh_token ? await seal(t.refresh_token, `github:refresh:${userId}`) : undefined,
+    access: await sealSecret(t.access_token, `github:access:${userId}`),
+    refresh: t.refresh_token ? await sealSecret(t.refresh_token, `github:refresh:${userId}`) : undefined,
     expiresAt: t.expires_in ? Date.now() + Number(t.expires_in) * 1000 : undefined,
     refreshExpiresAt: t.refresh_token_expires_in ? Date.now() + Number(t.refresh_token_expires_in) * 1000 : undefined,
   });
   return { ok: true, login };
 }
 
-const sealed = v.object({ iv: v.string(), ciphertext: v.string() });
+const sealed = v.object({ iv: v.string(), ciphertext: v.string(), wrappedDataKey: v.optional(v.string()), kekVersion: v.optional(v.number()) });
 
 export const saveToken = internalMutation({
   args: {
@@ -141,9 +141,9 @@ export const saveToken = internalMutation({
     refreshExpiresAt: v.optional(v.number()),
   },
   handler: async (ctx, a) => {
-    const put = async (kind: 'githubAccess' | 'githubRefresh', box: { iv: string; ciphertext: string }, expiresAt?: number) => {
+    const put = async (kind: 'githubAccess' | 'githubRefresh', box: { iv: string; ciphertext: string; wrappedDataKey?: string; kekVersion?: number }, expiresAt?: number) => {
       const old = await ctx.db.query('secrets').withIndex('by_user_kind', (q) => q.eq('userId', a.userId).eq('kind', kind)).first();
-      const row = { userId: a.userId, kind, iv: box.iv, ciphertext: box.ciphertext, ...(expiresAt ? { expiresAt } : {}) };
+      const row = { userId: a.userId, kind, ...box, ...(expiresAt ? { expiresAt } : {}) };
       if (old) await ctx.db.replace(old._id, row);
       else await ctx.db.insert('secrets', row);
     };
@@ -189,7 +189,7 @@ export const userToken = internalAction({
   handler: async (ctx, { userId }): Promise<string | null> => {
     const { user, access, refresh } = await ctx.runQuery(internal.github.tokensOf, { userId });
     if (!user || !access || user.githubDisconnectedAt) return null;
-    if (!access.expiresAt || access.expiresAt - REFRESH_EARLY_MS > Date.now()) return open(access, `github:access:${userId}`);
+    if (!access.expiresAt || access.expiresAt - REFRESH_EARLY_MS > Date.now()) return openSecret(access, `github:access:${userId}`);
     if (!refresh) {
       await ctx.runMutation(internal.github.markDisconnected, { userId });
       return null;
@@ -201,7 +201,7 @@ export const userToken = internalAction({
         client_id: process.env.GITHUB_APP_CLIENT_ID,
         client_secret: process.env.GITHUB_APP_CLIENT_SECRET,
         grant_type: 'refresh_token',
-        refresh_token: await open(refresh, `github:refresh:${userId}`),
+        refresh_token: await openSecret(refresh, `github:refresh:${userId}`),
       }),
     });
     const t = await res.json();
@@ -327,8 +327,8 @@ export const adoptSpikeToken = internalAction({
     if (process.env.KIWI_ALLOW_WIPE !== '1') throw new Error('dev only');
     const row = await ctx.runQuery(internal.github.spikeToken, { login });
     if (!row) throw new Error(`no spike token for ${login}`);
-    const access = await open(row.access, `github:access:${login}`);
-    const refresh = row.refresh ? await open(row.refresh, `github:refresh:${login}`) : undefined;
+    const access = await openSecret(row.access, `github:access:${login}`);
+    const refresh = row.refresh ? await openSecret(row.refresh, `github:refresh:${login}`) : undefined;
     // An expired access token is refreshed at once (its refresh token lasts 6 months).
     const done = await saveFromToken(ctx, userId, { access_token: access, refresh_token: refresh, expires_in: Math.max(1, Math.floor(((row.expiresAt ?? 0) - Date.now()) / 1000)) }, row.installationId).catch(() => null);
     if (!done?.ok) {
@@ -339,8 +339,8 @@ export const adoptSpikeToken = internalAction({
         login,
         githubUserId: 0,
         installationId: row.installationId ?? '',
-        access: await seal(access, `github:access:${userId}`),
-        refresh: await seal(refresh, `github:refresh:${userId}`),
+        access: await sealSecret(access, `github:access:${userId}`),
+        refresh: await sealSecret(refresh, `github:refresh:${userId}`),
         expiresAt: 1,
       });
     }

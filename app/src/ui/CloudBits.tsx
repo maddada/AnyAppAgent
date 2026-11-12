@@ -81,6 +81,19 @@ export function AppCredits({ appId }: { appId: string }) {
   );
 }
 
+/** In a cloud app's sheet: its own signing key and the signing log (docs/CLOUD.md section 6). */
+export function AppSigning({ appId }: { appId: string }) {
+  const log = useQuery(api.signing.log, { appId }) as { certSha256: string | null; builds: { build: number; at: number; files: number }[] } | undefined;
+  if (!log?.certSha256) return null;
+  const last = log.builds[0];
+  return (
+    <T variant="caption" color="textTertiary" testID="app-signing">
+      Signed with its own key {log.certSha256.slice(0, 8)}
+      {last ? `, ${log.builds.length === 1 ? "1 version" : `${log.builds.length} versions`} signed, the last one version ${last.build}` : ""}
+    </T>
+  );
+}
+
 /** The small mark on a tile saying where it is made (only when the person has both places). */
 export function PlaceMark({ place, off }: { place: "pc" | "cloud"; off?: boolean }) {
   const t = useTheme();

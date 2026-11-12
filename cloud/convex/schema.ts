@@ -298,6 +298,7 @@ export default defineSchema({
     userId: v.id('users'),
     kind: v.union(v.literal('anthropic'), v.literal('githubAccess'), v.literal('githubRefresh')),
     wrappedDataKey: v.optional(v.string()),
+    kekVersion: v.optional(v.number()),
     ciphertext: v.string(),
     iv: v.string(),
     last4: v.optional(v.string()),

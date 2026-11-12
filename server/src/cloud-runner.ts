@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { App, ChatItem, ImageUpload, ServerEvent } from "../../shared/protocol.ts";
 import { usageTaps } from "./acp/claude-session.ts";
+import { oneTimeKey, openWith, sealTo, type Sealed } from "./cloud-transport.ts";
 import { AppManager } from "./apps.ts";
 import { Auth } from "./auth.ts";
 import { loadBuilder, type Builder, type BuildResult } from "./builder.ts";
@@ -38,6 +39,7 @@ export interface InboxItem {
 }
 
 export interface Hello {
+  threadId: string;
   appId: string;
   name: string;
   slug: string;
@@ -116,7 +118,9 @@ export class CloudBuilder implements Builder {
   private readonly link: RunnerLink;
   private readonly cert: () => string | null;
   private readonly log: Log;
-  constructor(real: Builder, prefix: string[], link: RunnerLink, cert: () => string | null, log: Log) {
+  private readonly threadId: string;
+  constructor(real: Builder, prefix: string[], link: RunnerLink, cert: () => string | null, log: Log, threadId: string) {
+    this.threadId = threadId;
     this.real = real;
     this.prefix = prefix;
     this.link = link;
@@ -176,7 +180,11 @@ export class CloudBuilder implements Builder {
     const ota = result.ota ? { ...result.ota, path: copy(result.ota.path) } : undefined;
     const keyDir = secretDir();
     try {
-      const ticket = await this.link.post<{ p12: string; storePassword: string; keyAlias: string; certSha256: string }>("/runner/sign-ticket", { build });
+      // The key comes sealed to a key made for this one request; only this process can open it.
+      const once = await oneTimeKey();
+      const answer = await this.link.post<{ box: Sealed; certSha256: string }>("/runner/sign-ticket", { build, runnerKey: once.publicRaw });
+      const inner = JSON.parse(new TextDecoder().decode(await openWith(once.key, answer.box, `ticket:${this.threadId}:${build}`))) as { p12: string; storePassword: string; keyAlias: string };
+      const ticket = { ...inner, certSha256: answer.certSha256 };
       const storeFile = join(keyDir, "key.p12");
       writeFileSync(storeFile, Buffer.from(ticket.p12, "base64"), { mode: 0o600 });
       const ext = (await import(pathToFileURL(join(REPO_DIR, "builder", "lib", "external-sign.mjs")).href)) as ExternalSign;
@@ -219,18 +227,18 @@ export class CloudBuilder implements Builder {
 }
 
 /** Makes the app's signing key before the agent starts on it, hands it to Convex once, deletes it here. */
-async function makeAppKey(link: RunnerLink, packageName: string, log: Log): Promise<string> {
+async function makeAppKey(link: RunnerLink, threadId: string, packageName: string, log: Log): Promise<string> {
   const keyDir = secretDir();
   try {
     const ext = (await import(pathToFileURL(join(REPO_DIR, "builder", "lib", "external-sign.mjs")).href)) as ExternalSign;
     const env = (await import(pathToFileURL(join(REPO_DIR, "builder", "lib", "env.mjs")).href)) as { androidEnv(): { javaHome: string } };
     const key = await ext.newAppKey(env.androidEnv().javaHome, join(keyDir, "key.p12"), packageName);
-    const stored = await link.post<{ certSha256: string }>("/runner/key", {
-      p12: readFileSync(key.storeFile).toString("base64"),
-      storePassword: key.storePassword,
-      keyAlias: key.keyAlias,
-      certSha256: key.certSha256,
-    });
+    // Sealed to Convex's transport key: the key is readable nowhere between here and Convex.
+    const { publicRaw } = await link.post<{ publicRaw: string }>("/runner/transport-key");
+    if (!publicRaw) throw new Error("Convex has no transport key");
+    const inner = JSON.stringify({ p12: readFileSync(key.storeFile).toString("base64"), storePassword: key.storePassword, keyAlias: key.keyAlias });
+    const box = await sealTo(publicRaw, new TextEncoder().encode(inner), `appkey-upload:${threadId}`);
+    const stored = await link.post<{ certSha256: string }>("/runner/key", { box, certSha256: key.certSha256 });
     if (stored.certSha256 !== key.certSha256) throw new Error("Convex kept another key for this app");
     log(`signing key for ${packageName} made and stored (${key.certSha256.slice(0, 12)})`);
     return key.certSha256;
@@ -267,7 +275,7 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
   const store = new Store(config.stateDir);
   const real = await loadBuilder("real");
   let cert = hello.certSha256;
-  const builder = new CloudBuilder(real, config.cloud.agentPrefix, link, () => cert, log);
+  const builder = new CloudBuilder(real, config.cloud.agentPrefix, link, () => cert, log, hello.threadId);
 
   // Which local app is this thread's (one thread, one app).
   const mapFile = join(config.stateDir, "kiwi-thread.json");
@@ -434,7 +442,7 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
         const images = await imagesOf(item.payload);
         if (item.payload?.create && !localId) {
           const c = item.payload.create as { name: string; slug: string; packageName: string; preset: string; askMore: boolean };
-          if (!cert) cert = await makeAppKey(link, c.packageName, log);
+          if (!cert) cert = await makeAppKey(link, hello.threadId, c.packageName, log);
           const app = apps.create(c.name, String(item.payload.text ?? ""), c.preset, c.askMore, images, false, { slug: c.slug, packageName: c.packageName });
           localId = app.id;
           writeFileSync(mapFile, JSON.stringify({ localId }));

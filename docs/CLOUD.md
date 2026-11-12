@@ -1201,6 +1201,24 @@ version installed from Convex, "make the big button green" from the phone arrivi
 update with the app's Reload, and the grid with a paired PC and the cloud. Calls the cloud does not
 have yet (versions and undo, crash reports, sharing) answer "not in the cloud yet".
 
+**Milestone 5, what ran (12 Nov 2026):** the master key sits behind `cloud/convex/lib/keyservice.ts`:
+version 1 is `KEYS_KEK` (the dev deployment), version 2 a Google Cloud KMS key reached with a
+service account's own token (`GCP_KMS_KEY`, `GCP_KMS_SA`); new data keys are wrapped with the
+newest configured version and old rows keep theirs. Every secret is now an envelope (a data key
+per row): app signing keys, the person's own Anthropic key, their GitHub user and refresh tokens
+(older rows sealed directly still open). The key no longer travels as plain JSON inside TLS: the
+runner seals a new app's key to Convex's transport key (`KEYS_TRANSPORT_PUBLIC`), and a signing
+ticket comes back sealed to a P-256 key the runner made for that one request (ECDH, HKDF, AES-GCM,
+bound to the thread and build: `cloud/convex/lib/transport.ts`, `server/src/cloud-transport.ts`).
+The signing log shows in a cloud app's sheet ("Signed with its own key ..., the last one version
+N"). Proven: 4 new tests in `cloud/tests/keys.test.ts` and 2 in `server/test/cloud-transport.test.ts`
+(the two halves agree), and live: a change to Water Sips from the phone, on a fresh box restored
+from GitHub, then versions 7 and 8 signed through sealed tickets, pushed and delivered as quick
+updates (`C:/aa/e2e/cloud-build/m5/`). The live run found what the tests could not: Convex allows
+no key generation inside a mutation ("Can't use cryptographic randomness"), so the ticket is
+sealed in the HTTP action; three fix turns were spent on it first. AI used: $0.81. **Not run:** version 2 (KMS): it needs the Google Cloud KMS key and its service account
+(section 11, item 9).
+
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account
 sheet and one grid (+1.5), the PC link (+1, which circles and web apps then reuse), moving apps

@@ -3,8 +3,18 @@
 // signed with a one-time ticket: the runner asks for that build's ticket, gets the key once, signs
 // on a tmpfs as another Unix user than the agent's, and reports what it signed (the signing log).
 import { v } from 'convex/values';
-import { internalMutation, internalQuery } from './_generated/server';
-import { envelopeOpen, envelopeSeal } from './lib/crypto';
+import { internalMutation, internalQuery, query } from './_generated/server';
+import { ownApp, requireUser } from './lib/session';
+import { envelopeOpen, envelopeSeal, type Envelope } from './lib/crypto';
+import { importPrivate, openWith, sealTo, type Sealed } from './lib/transport';
+
+/** Convex's transport key (KEYS_TRANSPORT_PRIVATE, PKCS#8 base64; its public half in KEYS_TRANSPORT_PUBLIC). */
+async function transportKey() {
+  const k = process.env.KEYS_TRANSPORT_PRIVATE;
+  if (!k) throw new Error('KEYS_TRANSPORT_PRIVATE is not set');
+  return importPrivate(k);
+}
+const sealedArg = v.object({ epk: v.string(), iv: v.string(), ct: v.string() });
 
 const aadOf = (appId: string, packageName: string) => `appkey:${appId}:${packageName}`;
 const TICKET_MS = 10 * 60_000;
@@ -14,10 +24,15 @@ export const keyOf = internalQuery({
   handler: async (ctx, { appId }) => ctx.db.query('keys').withIndex('by_app', (q) => q.eq('appId', appId)).first(),
 });
 
-/** Stores a new app's key (PKCS12 bytes, base64, and its password). Refused when it has one. */
+/**
+ * Stores a new app's key, sealed by the runner to Convex's transport key (its PKCS12 bytes as
+ * base64, password and alias inside). Refused when the app has one already.
+ */
 export const storeKey = internalMutation({
-  args: { threadId: v.id('threads'), p12: v.string(), storePassword: v.string(), keyAlias: v.string(), certSha256: v.string() },
-  handler: async (ctx, a) => {
+  args: { threadId: v.id('threads'), box: sealedArg, certSha256: v.string() },
+  handler: async (ctx, { threadId, box, certSha256 }) => {
+    const inner = JSON.parse(new TextDecoder().decode(await openWith(await transportKey(), box as Sealed, `appkey-upload:${threadId}`))) as { p12: string; storePassword: string; keyAlias: string };
+    const a = { threadId, certSha256, ...inner };
     const t = (await ctx.db.get(a.threadId))!;
     const app = (await ctx.db.get(t.appId))!;
     const have = await ctx.db.query('keys').withIndex('by_app', (q) => q.eq('appId', app._id)).first();
@@ -34,7 +49,10 @@ export const storeKey = internalMutation({
   },
 });
 
-/** A one-time ticket for one build: the key, opened once, to the box that asks for that build. */
+/**
+ * A one-time ticket for one build: the key, opened once, sealed to the one-time key the runner
+ * made for this request, so only that runner process can read it.
+ */
 export const ticket = internalMutation({
   args: { threadId: v.id('threads'), build: v.number() },
   handler: async (ctx, { threadId, build }) => {
@@ -46,12 +64,23 @@ export const ticket = internalMutation({
     const used = await ctx.db.query('signingTickets').withIndex('by_thread', (q) => q.eq('threadId', threadId)).filter((q) => q.eq(q.field('build'), build)).first();
     if (used) throw new Error(`Build ${build} was already given its key.`);
     await ctx.db.insert('signingTickets', { threadId, appId: app._id, build, usedAt: Date.now(), expiresAt: Date.now() + TICKET_MS });
-    const plain = await envelopeOpen(key, aadOf(app._id, app.packageName));
-    const k = JSON.parse(new TextDecoder().decode(plain)) as { p12: string; storePassword: string; keyAlias: string };
-    plain.fill(0);
-    return { ...k, certSha256: key.certSha256 };
+    // The envelope leaves here still sealed; the HTTP action opens it and seals it to the runner
+    // (Convex allows no key generation in a mutation).
+    return {
+      envelope: { wrappedDataKey: key.wrappedDataKey, iv: key.iv, ciphertext: key.ciphertext, kekVersion: key.kekVersion },
+      aad: aadOf(app._id, app.packageName),
+      certSha256: key.certSha256,
+    };
   },
 });
+
+/** The ticket for the runner: the key opened from its envelope and sealed to the runner's one-time key. */
+export async function sealTicket(t: { envelope: Envelope; aad: string; certSha256: string }, threadId: string, build: number, runnerKey: string) {
+  const plain = await envelopeOpen(t.envelope, t.aad);
+  const box = await sealTo(runnerKey, plain, `ticket:${threadId}:${build}`);
+  plain.fill(0);
+  return { box, certSha256: t.certSha256 };
+}
 
 /** The signing log: what was signed for which build (shown in the app's Settings). */
 export const signed = internalMutation({
@@ -62,3 +91,21 @@ export const signed = internalMutation({
   },
 });
 
+
+/** The signing log for the app's owner (shown in the app's sheet): which builds were signed, by which key. */
+export const log = query({
+  args: { appId: v.string() },
+  handler: async (ctx, { appId }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    const key = await ctx.db.query('keys').withIndex('by_app', (q) => q.eq('appId', app._id)).first();
+    const rows = await ctx.db.query('signings').withIndex('by_app', (q) => q.eq('appId', app._id)).order('desc').take(60);
+    const builds = new Map<number, { build: number; at: number; files: number }>();
+    for (const r of rows) {
+      const b = builds.get(r.build) ?? { build: r.build, at: r.at, files: 0 };
+      b.files++;
+      builds.set(r.build, b);
+    }
+    return { certSha256: key?.certSha256 ?? null, keySince: key?.at ?? null, builds: [...builds.values()].slice(0, 10) };
+  },
+});

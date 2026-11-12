@@ -8,6 +8,7 @@ import { httpAction, type ActionCtx } from './_generated/server';
 import { auth } from './auth';
 import { callback } from './github';
 import { route as pageRoute, storePage } from './pages';
+import { sealTicket } from './signing';
 import { hmacSha256B64, sha256Hex, unb64 } from './lib/crypto';
 
 const http = httpRouter();
@@ -80,11 +81,14 @@ runnerRoute('/runner/events', async (ctx, req, r) => {
 // Signing (docs/CLOUD.md section 6): the new app's key once, a one-time ticket per build, the log.
 runnerRoute('/runner/key', async (ctx, req, r) => {
   const b = await req.json();
-  return json(200, await ctx.runMutation(internal.signing.storeKey, { threadId: r.threadId, p12: String(b.p12), storePassword: String(b.storePassword), keyAlias: String(b.keyAlias), certSha256: String(b.certSha256) }));
+  return json(200, await ctx.runMutation(internal.signing.storeKey, { threadId: r.threadId, box: b.box, certSha256: String(b.certSha256) }));
 });
+// Convex's transport public key: a new app's key goes up sealed to it.
+runnerRoute('/runner/transport-key', async () => json(200, { publicRaw: process.env.KEYS_TRANSPORT_PUBLIC ?? '' }));
 runnerRoute('/runner/sign-ticket', async (ctx, req, r) => {
   const b = await req.json();
-  return json(200, await ctx.runMutation(internal.signing.ticket, { threadId: r.threadId, build: Number(b.build) }));
+  const t = await ctx.runMutation(internal.signing.ticket, { threadId: r.threadId, build: Number(b.build) });
+  return json(200, await sealTicket(t, r.threadId, Number(b.build), String(b.runnerKey)));
 });
 runnerRoute('/runner/signed', async (ctx, req, r) => {
   const b = await req.json();
