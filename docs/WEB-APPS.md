@@ -7,7 +7,8 @@ Today AnyAppAgent (being renamed **Appwin.ai**; this file says Appwin) makes onl
 React Native and Kotlin templates, APKs, and the fast lane. This file plans a second kind of app: a
 **web app** that Appwin builds, hosts at its own address, and opens on the phone without an install.
 
-Status: **plan only**, nothing built, no account made, nothing spent. Facts were checked on the web
+Status: **the agreed plan** (decisions of 12 Nov 2026, section 7), nothing built, no account made,
+nothing spent. Facts were checked on the web
 on **12 Nov 2026**; each has its source. It builds on `docs/CLOUD.md` (the agreed cloud plan),
 `docs/DISTRIBUTION.md`, `docs/CHANGE-THIS-APP.md`, `docs/FAST-LANE.md`, `docs/VERSIONS.md` and the
 Family circle page (`C:\aa\ideas\family-circle.html`).
@@ -330,7 +331,7 @@ version (the image gets the web packages warm; the runner learns the targets).
   zip with each version" (the code zip still goes to the public releases repo as today, never to us).
 - **Circles**: a web app on a circle's shelf shows **Open** instead of Install; opening it in Appwin
   adds its tile; updates need nothing (the next open is the new version). Private sites ("only this
-  circle") are in section 6's open questions.
+  circle") come after the first version (section 7, decision 3).
 
 ## 5. Turning a web app into an APK later, or both from one codebase
 
@@ -394,34 +395,29 @@ the free Cloudflare account the Family circle plan already needs; turn on R2 the
 for, the free tier covers this). Nothing else beyond the cloud accounts already listed in
 `docs/CLOUD.md` section 11.
 
-## 7. Open questions, each with a recommendation
+## 7. Decisions (12 Nov 2026)
 
-1. **Template**: Expo web in the same React Native template, or a separate plain web template?
-   **Recommended: the same template** (one codebase, Android later is a switch). Plain web stays the
-   fallback if the spike finds it too heavy.
-2. **Address**: `<app>-<owner>.appwin.app` on a separate domain, `<app>-<owner>.appwin.ai`, or
-   `appwin.ai/a/<app>`? **Recommended: a separate domain**, one subdomain per app (about $15 a year;
-   protects `appwin.ai` and keeps apps apart). The domain name itself is the user's pick.
-3. **Who can open a web app**: anyone with the address (not listed in search engines), or private
-   choices from the start? **Recommended: anyone with the address in the first version**, private
-   (only me, only a circle) next (+3 days).
-4. **Data**: browser only first, or shared data in the first version? **Recommended: browser only
-   first**, shared data next (+5 days); it also helps Android apps.
-5. **Does every successful build go live**, or only when the owner presses Publish? **Recommended:
-   every build goes live**, like every build reaching the owner's phone today; Go back is instant if
-   one is bad. A separate "Testing" address can come later.
-6. **PC users need an Appwin account to put web apps online.** **Recommended: yes**, free, the same
-   sign-in as circles and the cloud; without it the web app opens only on the owner's phone through
-   the PC.
-7. **Is hosting free?** **Recommended: free with fair-use limits** (10 web apps each, a soft cap per
-   app); it costs us about $1 to $6 a month up to 1000 people.
-8. **When**: after the cloud's first version, together with circles (Convex, sign-in and Cloudflare
-   exist by then), or before the cloud for PC users? **Recommended: with circles, right after the
-   cloud's first version**; web apps make circles much easier (Open instead of Install). Before the
-   cloud costs +3 days for the sign-in and Convex setup.
-9. **Web or Android for a new app**: a new question in the New app sheet, or the plan decides?
-   **Recommended: the plan decides and says why, with a Web, Android or Both switch on the plan
-   page**; the sheet stays as simple as it is.
+The user took every recommendation (Q360).
+
+1. **Template**: the same React Native template with Expo web on. A plain web template is only the
+   fallback if the spike finds React Native Web too heavy.
+2. **Address**: a separate domain for people's apps, one subdomain per app,
+   `<app>-<owner>.<apps domain>` (about $15 a year). The domain name is the user's to pick when it is
+   bought; `appwin.app` is the working name.
+3. **Who can open a web app**: anyone with the address, not listed in search engines, in the first
+   version. Private sites (only me, only a circle) come next (+3 days).
+4. **Data**: in the browser only in the first version. Shared data in Convex with Sign in with Appwin
+   comes next (+5 days), for Android apps too.
+5. **Every successful build goes live** at the app's address, as every build reaches the owner's
+   phone today; Go back is instant. A separate Testing address can come later.
+6. **PC users sign in to Appwin to put web apps online**: free, the same sign-in as circles and the
+   cloud. Without it a web app opens only on the owner's phone through the PC.
+7. **Hosting is free** to the person, with fair-use limits (10 web apps each, a soft cap of opens per
+   app).
+8. **When**: together with circles, right after the cloud's first version (Convex, sign-in and
+   Cloudflare exist by then).
+9. **Web or Android for a new app**: the plan decides and says why, with a Web, Android or Both
+   switch on the plan page. The New app sheet does not change.
 
 ## Sources (checked 12 Nov 2026)
 
