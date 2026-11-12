@@ -733,6 +733,14 @@ milestone 0 starts; **Later** can wait.
     ($10.80 with the fee), one Management API key
     (https://openrouter.ai/docs/guides/overview/auth/management-api-keys).
 
+12. **Cloudflare** (Later: for Family circles, `docs/CIRCLES.md`, free). A free account holding the
+    domain's DNS, and one scoped API token. Needs the final product name and the domain (item 10).
+13. **Firebase** (Later: for Family circles' push, free Spark plan). A Firebase project on the
+    `anyappagent-cloud` Google Cloud project, an Android app `com.anyappagent`, its
+    `google-services.json` and a service account key. Details in `docs/CIRCLES.md` section 10.
+14. **Resend domain** (Later: with item 10). Verify the real domain in Resend so email codes reach
+    everyone, not only you.
+
 Costs for the spike: nothing, or $20 for Instabox Pro if the waitlist blocks, plus about $5 of
 Anthropic credit (none with Max or Ultra credit).
 
