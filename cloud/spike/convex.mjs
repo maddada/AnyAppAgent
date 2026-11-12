@@ -66,6 +66,10 @@ if (cmd === null) {
   setVar('AUTH_GOOGLE_SECRET', env.GOOGLE_CLIENT_SECRET);
   setVar('AUTH_RESEND_KEY', env.RESEND_API_KEY);
   setVar('SPIKE_ANONYMOUS', '1');
+  setVar('GITHUB_APP_CLIENT_ID', env.GITHUB_APP_CLIENT_ID);
+  setVar('GITHUB_APP_CLIENT_SECRET', env.GITHUB_APP_CLIENT_SECRET);
+  // The key that seals stored tokens (spike: an env var made once; launch: a key service).
+  if (!/^KEYS_KEK$/m.test(names)) setVar('KEYS_KEK', crypto.randomBytes(32).toString('base64'));
   setVar('RUNNER_TOKEN_SHA256', crypto.createHash('sha256').update(runnerToken()).digest('hex'));
 } else if (cmd === 'deploy') {
   const t = Date.now();

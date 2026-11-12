@@ -13,6 +13,8 @@ the spike**: it proves the risky parts and measures them; it is not the product.
 | `box/Dockerfile` | The same image as an OCI recipe for `instabox snapshot import` (not built yet). |
 | `spike/convex.mjs` | Sets the dev deployment's env vars from the secrets file through stdin, deploys, rotates the runner token. |
 | `spike/github-app.mjs` | The GitHub App: its JWT, installation tokens narrowed to one repo, repo create and delete. |
+| `spike/github-secret.mjs` | Mints a one-repo installation token and saves it as an Instabox proxy Secret (stdin only). |
+| `convex/github.ts` | The App's OAuth callback (`/github/callback`: code to user token, sealed with `KEYS_KEK`) and `createRepo` with the user token. |
 | `spike/run-runner.mjs` | Starts the runner on a box for one prompt, the secrets on stdin (`--instabox-secrets`: only the runner token; the AI key comes from the Secrets proxy). |
 | `spike/instabox-secret.mjs` | Saves a value from the secrets file as an Instabox proxy Secret, scoped to named hosts, through the signed-in CLI and stdin. |
 | `spike/send.mjs` | A command-line stand-in for the phone: signs in without an account, sends a prompt, prints the chat. |
@@ -66,6 +68,8 @@ CLI's own round trip) unless they say "server".
 | Phone send to APK link on the phone (turn 2, quick build) | about 38 s |
 | Memory | the 8 GiB box sits at 7.4 to 7.9 GiB used (page cache included) through every Gradle build and stays there while the Gradle daemons live; no OOM kill, also with an agent turn and a full build at once |
 | Convex deploy (dev) | 6 s |
+| GitHub push from a box, token only in the Secrets proxy (55 files, 836 KB) | 1.7 s |
+| GitHub clone on a fresh box from the image | 0.8 s; then a full build from the clone (with `npm install`) 208 s |
 
 **Spent**: Anthropic about $0.54 (three turns at list price, from ACP's usage; the Console's own
 number was not checked). Instabox $0 (Free plan, 4.5 vCPU-hours of its free
@@ -87,6 +91,17 @@ allowance). Convex, Resend, Google, GitHub $0.
   box `ANTHROPIC_API_KEY` is `ibsec_...` (70 characters); `GET /v1/models` with it answers 200 (a
   wrong key 401); the agent ran a whole turn and a full build on it; a scan of every file on the
   box (all of `/` but `/proc`, `/sys`, `/dev`) found the real key nowhere, before or after.
+- **GitHub with a one-repo token through the Secrets proxy.** The App is installed on `maddada`
+  ("Only select repositories": `anyapp-cloud-spike-seed`, installation 181146494). A token for
+  that one repo (Contents write, 1 hour) went from `spike/github-secret.mjs` straight into an
+  Instabox Secret scoped to `github.com` and `api.github.com`; on the box git's credential helper
+  returned only the placeholder. The template app was pushed to the seed repo's `main`
+  (`00f9e59`), a push to another repo failed, and a fresh box cloned it back and built it.
+  (Instabox's per-Secret counter said 0 right after the first box's push and 3 after the clone.)
+- **An installation token cannot create a repo on a personal account**: `POST /user/repos` answered
+  `403 "Rate Limit Exceeded"` five times over 15 minutes while the token's core limit had 4,998 calls
+  left, although GitHub's permissions page lists installation tokens for it. Repos are made with
+  the person's user token, as `docs/CLOUD.md` planned.
 - The fallback without a secrets proxy also worked: the runner held the key in memory and served a forwarder on
   127.0.0.1; the agent ran as the Unix user `agent` with a dummy key and
   `ANTHROPIC_BASE_URL` pointing at it. A search of every file the agent could reach for the real
@@ -101,9 +116,10 @@ allowance). Convex, Resend, Google, GitHub $0.
 
 ### Not proven (needs the user)
 
-- **GitHub.** The App `anyappagent-cloud-dev` is not installed on any account yet
-  (`GET /app/installations` is empty), so no repo was created, pushed or cloned. The scripts are
-  ready (`spike/github-app.mjs`, `box/git-with-token.sh`).
+- **Creating the repo with the person's user token**, and whether a repo made that way joins
+  an install on "Only select repositories". The callback and the action are deployed
+  (`convex/github.ts`); the person has to authorize the App once more, because the install's
+  code went to a callback that did not exist yet.
 - **Google sign-in to the end** and **the email code to the end**: both need the person's own
   Google account or inbox.
 - Two helpers and a build at once (the spike ran one agent session; no `start_worker` helper).

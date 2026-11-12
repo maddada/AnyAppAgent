@@ -10,7 +10,9 @@ lives in Convex.
 
 Status: **the agreed plan** (decisions of 12 Nov 2026, section 12). **Milestone 0, the spike, ran on
 12 Nov 2026**: the box image, builds on a box, an agent turn with the key only in the Secrets proxy,
-Convex sign-in and the phone round trip are proven; GitHub waits on the App's install (section 10, `cloud/README.md`). Facts were
+Convex sign-in, the phone round trip, and push and clone with a one-repo token through the proxy
+are proven; creating the repo with the person's user token is still open (section 10,
+`cloud/README.md`). Facts were
 checked on the web on **12 Nov 2026**; each has its source link. Not legal advice: section 1 gives
 the texts and the one line that leaves any doubt.
 
@@ -447,7 +449,13 @@ own GitHub account (the `cloud` in the name keeps it apart from a PC app's `anya
   `anyapp-cloud-<slug>` (private) with the person's user token from the GitHub App (refreshable,
   stored encrypted like the AI key). If the person installed the App on selected repositories only,
   the spike checks that a repo the App creates joins the installation; if not, the phone asks them
-  once to choose "All repositories" or add the new repo.
+  once to choose "All repositories" or add the new repo. **Spike (12 Nov 2026)**: an installation
+  token cannot do it, whatever the permissions page says: `POST /user/repos` with one answered
+  `403 "Rate Limit Exceeded"` five times over 15 minutes while its core limit had 4,998 calls left,
+  so the user token is required, as planned. The callback that turns GitHub's code into the user
+  token (sealed with AES-256-GCM) and the create action are built (`cloud/convex/github.ts`); the
+  person has to authorize once more because the install's code went to a callback that did not
+  exist yet, so "joins the installation" is still open.
 - **Every change is pushed**: the playbook tells the orchestrator and every helper to commit with a
   plain message and push after each change, as part of finishing the change. The runner checks
   after each turn that `HEAD` is on GitHub and pushes itself if the agent did not, and a build is
@@ -455,7 +463,15 @@ own GitHub account (the `cloud` in the name keeps it apart from a PC app's `anya
   says the change is not saved yet.
 - **Pushing from the box**: a Git credential helper asks the runner for the current one-repo token
   (the runner asks Convex, which mints it with the App's private key); the spike checks whether
-  Instabox's Secrets proxy can carry it instead, so it never reaches the box at all.
+  Instabox's Secrets proxy can carry it instead, so it never reaches the box at all. **Proven in the
+  spike**: a one-repo token (Contents write, 1 hour) saved as a proxy Secret scoped to `github.com`
+  and `api.github.com`; on the box git's credential helper hands out only the placeholder
+  (`ibsec_...`); the push took 1.7 s, a push to another repo failed, and a fresh box from the image
+  cloned it back in 0.8 s and built it in 208 s. So the proxy carries it: Convex mints the token
+  and stores it as that box's Secret (an Instabox workspace key in Convex does that headless), and
+  replaces its value before the hour runs out (the placeholder stays the same, running boxes get
+  the new value in about 10 s). Secrets are org-wide names, so each box gets its own
+  (`GH_<boxId>`).
 - **A new box restores from GitHub**: it clones the repo (full history, which versions and undo
   need), then installs `node_modules` from the warm cache in the image. Snapshots stay a speed-up,
   not the copy that matters.
@@ -868,7 +884,8 @@ nothing. Competitors' prices (12 Nov 2026): section 1, "What others do".
   "Administration" (write) and "Repository creation" (write), for user and installation tokens
   (https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps). Whether a
   repo it creates joins an installation limited to selected repositories was not found in the docs;
-  the spike checks it.
+  the spike checks it. In practice (spike) an installation token on a personal account's
+  installation is refused (`403 "Rate Limit Exceeded"`, every time); the user token is needed.
 
 ### Convex
 
@@ -964,8 +981,10 @@ saved as a snapshot, not imported); a fresh box from it builds a new app in 171 
 6 to 7 s, signed after Gradle; orchestrator turns on Opus 5.5 high (no helper yet) for $0.14 to
 $0.21 a small change, the last one with the key only in Instabox's Secrets proxy; Convex Auth
 (Google reaches Google's page, the email code goes out through Resend, dev-only anonymous sign-in)
-and the phone round trip, prompt to APK link in about 38 s. Still open: the GitHub part (waiting on
-the App's install). Left for milestone 2: a helper at its own level, and memory with two helpers
+and the phone round trip, prompt to APK link in about 38 s; a push from a box and a clone on a
+fresh box with a one-repo token carried by the Secrets proxy. Still open: creating the repo with
+the person's user token and whether it joins a "selected repositories" install (needs one more
+GitHub authorization by the person). Left for milestone 2: a helper at its own level, and memory with two helpers
 and a build.
 
 Where the 8.5 extra days come from: GitHub instead of Git bundles (+2.5 net), credits, plans and

@@ -29,6 +29,14 @@ export default defineSchema({
       }),
     ),
   }).index('by_thread_seq', ['threadId', 'seq']),
+  // The person's GitHub App user token, encrypted with KEYS_KEK (github.ts). Spike: by login.
+  githubTokens: defineTable({
+    login: v.string(),
+    access: v.object({ iv: v.string(), ciphertext: v.string() }),
+    refresh: v.optional(v.object({ iv: v.string(), ciphertext: v.string() })),
+    expiresAt: v.optional(v.number()),
+    installationId: v.optional(v.string()),
+  }).index('by_login', ['login']),
   // Work for the thread's box: the runner long-polls it.
   inbox: defineTable({
     threadId: v.id('threads'),
