@@ -6,26 +6,7 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { httpAction, internalAction, internalMutation, internalQuery } from './_generated/server';
 
-const enc = new TextEncoder();
-const dec = new TextDecoder();
-const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u));
-const unb64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-
-/** AES-256-GCM with KEYS_KEK (32 bytes, base64; spike: an env var, launch: a key service). */
-async function kek() {
-  const raw = process.env.KEYS_KEK;
-  if (!raw) throw new Error('KEYS_KEK is not set');
-  return crypto.subtle.importKey('raw', unb64(raw), 'AES-GCM', false, ['encrypt', 'decrypt']);
-}
-async function seal(text: string, aad: string) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: enc.encode(aad) }, await kek(), enc.encode(text)));
-  return { iv: b64(iv), ciphertext: b64(ct) };
-}
-async function open(box: { iv: string; ciphertext: string }, aad: string) {
-  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(box.iv), additionalData: enc.encode(aad) }, await kek(), unb64(box.ciphertext));
-  return dec.decode(pt);
-}
+import { open, seal } from './lib/crypto';
 
 async function gh(method: string, path: string, token: string, body?: unknown) {
   const res = await fetch(`https://api.github.com${path}`, {

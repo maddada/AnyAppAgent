@@ -604,6 +604,17 @@ phone.
   app's machine". A snapshot unused for 30 days is deleted; the next message then makes a fresh box
   from the image and clones the repo from GitHub (the first full build of an app on a fresh box
   from the image took 171 s).
+  **Built in milestone 1 (`cloud/convex/boxes.ts`), measured on real boxes:** Convex holds the
+  activity lease itself while the runner says it is busy (the runner has no Instabox key). **A
+  paused box cannot be snapshotted** (Instabox: "resume it, then save the snapshot"), so the hour
+  step is resume, stop, snapshot the stopped box, delete: 21 s in all. Pause 5 s, a reply after
+  resume 3 s, a reply on a running box 3 s, the first reply from a fresh box from the image 76 to
+  125 s (the box's create operation keeps running for a while after it says "running", and
+  commands are refused until it ends), a reply after a restore from the thread's own snapshot
+  189 s (`cloud/README.md`). A box that pauses in the middle of a long poll loses the poll's answer,
+  so work is **offered with a 45 s lease and acknowledged** by the runner, never marked taken when
+  sent. Instabox's webhooks (`/instabox/webhook`, Standard Webhooks signing) and a 10-minute
+  reconcile against the provider keep Convex's view right when a box pauses or goes by itself.
 - **All of a box's outbound HTTPS goes through Instabox's TLS-intercepting proxy**, Secrets or not.
   In the spike it refused every HTTPS connection for about 1.5 minutes during Gradle's first
   download burst, then recovered: the runner retries a build that failed on downloads before it
@@ -615,9 +626,12 @@ ACP, keeps the playbook, helpers (`workers.ts`), pages, to-dos, the usage meter,
 every turn with up to 3 fix turns (`build-cycle.ts`), versions and undo, and the fast lane. Instead
 of broadcasting `ServerEvent`s on a WebSocket it posts them to a Convex HTTP action
 (`POST /runner/events`, batched every 250 ms while text streams). It takes its work (new messages,
-permission answers, cancel, page answers) from Convex by one long-poll HTTP action. It signs in with
+permission answers, cancel, page answers) from Convex by one long-poll HTTP action (`/runner/take`,
+then `/runner/ack`). It signs in with
 a **runner token**: random, made per box, stored only as a hash in Convex, good for one thread,
-revoked when the box is deleted.
+revoked when the box is deleted. Convex starts it on the box with a fixed script whose arguments
+carry no secret (the token goes on stdin), from a **runner bundle** in Convex file storage
+(`node scripts/dev.mjs bundle`), so a new runner needs no new image.
 
 ### Models: an orchestrator and helpers at three levels
 
@@ -1086,6 +1100,16 @@ and the phone round trip, prompt to APK link in about 38 s; a push from a box an
 fresh box with a one-repo token carried by the Secrets proxy; the repo made with the person's
 user token, which joins a "selected repositories" install by itself. Left for milestone 2: a helper at its own level, and memory with two helpers
 and a build.
+
+**Milestone 1, what ran (12 Nov 2026):** the full schema (sections 4 and 5, plus `workers`,
+`pages`, `todos`, `signingTickets`, `meta`, `webhookEvents`), the account without GitHub or a
+plan, the Free subscription and the 3 free credits on the first cloud change (one per GitHub
+account), `apps.place` and either package prefix, `pcLinks`, the runner routes with a per-box token,
+the inbox with leases, file uploads and build records (last 3 builds keep their files), the
+`BoxProvider` interface with Instabox behind it, and the lifecycle (scheduler, a minute tick,
+webhooks, reconcile). Proven: 19 tests (`cloud/tests`), and on real boxes a phone stand-in made an
+app, Convex made its box from the image and started a stand-in runner (no AI), then pause, resume,
+snapshot and delete, restore from the snapshot, and removal, with no box or snapshot left behind.
 
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account

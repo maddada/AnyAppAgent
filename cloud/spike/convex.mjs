@@ -84,6 +84,9 @@ if (cmd === null) {
   // npx convex run <function> '<json args>' on the dev deployment (internal functions too).
   const [fn, json = '{}'] = process.argv.slice(3);
   console.log(convex(['run', fn, json]).trim());
+} else if (cmd === 'codegen') {
+  convex(['codegen', '--typecheck', 'disable']);
+  console.log('codegen done');
 } else if (cmd === 'names') {
   console.log(convex(['env', 'list', '--names-only']));
 } else {

@@ -1,70 +1,120 @@
-// The phone's side of a thread: send a message, watch the chat live. The spike has one thread per
-// person; milestone 1 adds apps and one thread per app.
-import { getAuthUserId } from '@convex-dev/auth/server';
+// The phone's side of an app's chat: watch it live, send a message, stop, answer a permission or a
+// page, stop a helper. Every action the box must take goes through the thread's inbox, and wakes
+// the box if it sleeps.
 import { v } from 'convex/values';
-import { mutation, query, type QueryCtx } from './_generated/server';
-import type { Id } from './_generated/dataModel';
+import type { ChatItem, WorkerInfo } from '../../shared/protocol';
+import { internal } from './_generated/api';
+import type { Doc, Id } from './_generated/dataModel';
+import { mutation, query, type MutationCtx } from './_generated/server';
+import { imageArg, pendingUserItem } from './apps';
+import { onCloudChange } from './lib/credits';
+import { ownApp, requireUser, threadOf } from './lib/session';
 
-async function threadOf(ctx: QueryCtx, userId: Id<'users'>) {
-  return ctx.db
-    .query('threads')
-    .withIndex('by_user', (q) => q.eq('userId', userId))
-    .first();
+function withAppId(item: ChatItem, appId: string): ChatItem {
+  return { ...item, appId, ...(item.worker ? { worker: { ...item.worker, appId } } : {}) };
 }
 
-export const me = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-    const user = await ctx.db.get(userId);
-    return { id: userId, email: user?.email ?? null, name: user?.name ?? null, anonymous: Boolean(user?.isAnonymous) };
-  },
-});
-
+/** The main chat (no workerId) or one helper's chat, ordered by seq. */
 export const messages = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-    const thread = await threadOf(ctx, userId);
-    if (!thread) return [];
+  args: { appId: v.string(), workerId: v.optional(v.string()), limit: v.optional(v.number()) },
+  handler: async (ctx, { appId, workerId, limit }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    const thread = await threadOf(ctx, app._id);
     const rows = await ctx.db
       .query('messages')
-      .withIndex('by_thread_seq', (q) => q.eq('threadId', thread._id))
-      .order('asc')
-      .take(200);
-    return Promise.all(
-      rows.map(async (m) => ({
-        id: m._id,
-        seq: m.seq,
-        role: m.role,
-        text: m.text,
-        apkUrl: m.apkFileId ? await ctx.storage.getUrl(m.apkFileId) : null,
-        usage: m.usage ?? null,
-        at: m._creationTime,
-      })),
-    );
+      .withIndex('by_thread_seq', (q) => q.eq('threadId', thread._id).eq('workerId', workerId))
+      .order('desc')
+      .take(Math.min(limit ?? 300, 1000));
+    return rows.reverse().map((m) => withAppId(m.item as ChatItem, app._id));
   },
 });
 
+export const helpers = query({
+  args: { appId: v.string() },
+  handler: async (ctx, { appId }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    const thread = await threadOf(ctx, app._id);
+    const rows = await ctx.db.query('workers').withIndex('by_thread_worker', (q) => q.eq('threadId', thread._id)).collect();
+    return rows.map((w) => ({ ...(w.info as WorkerInfo), appId: app._id }));
+  },
+});
+
+/** What the chat shows about the box ("Waking up your app's machine"), and whether it is busy. */
+export const box = query({
+  args: { appId: v.string() },
+  handler: async (ctx, { appId }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    const thread = await threadOf(ctx, app._id);
+    return { state: thread.boxState, note: thread.boxNote ?? null, busy: Boolean(thread.busy) };
+  },
+});
+
+async function enqueue(ctx: MutationCtx, thread: Doc<'threads'>, kind: Doc<'inbox'>['kind'], payload: unknown): Promise<Id<'inbox'>> {
+  const id = await ctx.db.insert('inbox', { threadId: thread._id, kind, payload });
+  await ctx.db.patch(thread._id, { lastActiveAt: Date.now() });
+  await ctx.scheduler.runAfter(0, internal.boxes.ensure, { threadId: thread._id });
+  return id;
+}
+
 export const send = mutation({
-  args: { text: v.string() },
-  handler: async (ctx, { text }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error('Not signed in');
-    const body = text.trim().slice(0, 4000);
-    if (!body) throw new Error('Empty message');
-    let thread = await threadOf(ctx, userId);
-    const threadId = thread?._id ?? (await ctx.db.insert('threads', { userId, appName: 'Spike', boxState: 'none', lastActiveAt: Date.now() }));
-    if (thread) await ctx.db.patch(thread._id, { lastActiveAt: Date.now() });
-    const last = await ctx.db
-      .query('messages')
-      .withIndex('by_thread_seq', (q) => q.eq('threadId', threadId))
-      .order('desc')
-      .first();
-    await ctx.db.insert('messages', { threadId, seq: (last?.seq ?? 0) + 1, role: 'user', text: body });
-    await ctx.db.insert('inbox', { threadId, kind: 'prompt', text: body });
-    return threadId;
+  args: { appId: v.string(), text: v.string(), images: v.optional(v.array(imageArg)) },
+  handler: async (ctx, { appId, text, images }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    const thread = await threadOf(ctx, app._id);
+    const body = text.trim().slice(0, 8000);
+    if (!body && !images?.length) throw new Error('Write a message first.');
+    await onCloudChange(ctx, user);
+    const inboxId = await enqueue(ctx, thread, 'prompt', { text: body, images: images ?? [] });
+    await pendingUserItem(ctx, thread._id, app._id, inboxId, body, images);
+    await ctx.db.patch(app._id, { lastMessagePreview: body.slice(0, 120), updatedAt: Date.now() });
+  },
+});
+
+export const cancel = mutation({
+  args: { appId: v.string() },
+  handler: async (ctx, { appId }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    const thread = await threadOf(ctx, app._id);
+    // Messages not taken yet are dropped here: the box never sees them.
+    const waiting = await ctx.db.query('inbox').withIndex('by_thread_untaken', (q) => q.eq('threadId', thread._id).eq('takenAt', undefined)).collect();
+    for (const w of waiting) {
+      if (w.kind !== 'prompt') continue;
+      await ctx.db.patch(w._id, { takenAt: Date.now() });
+      const pending = await ctx.db.query('messages').withIndex('by_thread_item', (q) => q.eq('threadId', thread._id).eq('itemId', `inbox-${w._id}`)).first();
+      if (pending) await ctx.db.patch(pending._id, { item: { ...pending.item, queued: false, dropped: true }, updatedAt: Date.now() });
+    }
+    await enqueue(ctx, thread, 'cancel', {});
+  },
+});
+
+export const answerPermission = mutation({
+  args: { appId: v.string(), requestId: v.string(), optionId: v.string() },
+  handler: async (ctx, { appId, requestId, optionId }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    await enqueue(ctx, await threadOf(ctx, app._id), 'permission', { requestId, optionId });
+  },
+});
+
+export const stopHelper = mutation({
+  args: { appId: v.string(), workerId: v.string() },
+  handler: async (ctx, { appId, workerId }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    await enqueue(ctx, await threadOf(ctx, app._id), 'stop-helper', { workerId });
+  },
+});
+
+export const rebuild = mutation({
+  args: { appId: v.string() },
+  handler: async (ctx, { appId }) => {
+    const user = await requireUser(ctx);
+    const app = await ownApp(ctx, user._id, appId);
+    await enqueue(ctx, await threadOf(ctx, app._id), 'rebuild', {});
   },
 });

@@ -1,11 +1,50 @@
 # cloud/: Kiwimake Cloud
 
-The plan is `docs/CLOUD.md`. This folder holds the cloud's own code. Today that is **milestone 0,
-the spike**: it proves the risky parts and measures them; it is not the product.
+The plan is `docs/CLOUD.md`. This folder holds the cloud's own code: the Convex backend
+(milestone 1), the runner's line to Convex, the box image's scripts, and the spike's scripts
+(milestone 0, below) that proved the risky parts.
+
+## The backend (milestone 1)
 
 | Path | What |
 | ---- | ---- |
-| `convex/` | The Convex project (dev deployment only): Convex Auth (Google, a 6-digit code by email through Resend, and a dev-only anonymous sign-in), a one-thread chat, the runner's HTTP routes (`/runner/take` long poll, `/runner/post`, `/runner/upload-url`). |
+| `convex/schema.ts` | The data model (docs/CLOUD.md sections 4 and 5). |
+| `convex/config.ts` | Prices, credits, allowances, model prices and box timings: one place. |
+| `convex/accounts.ts` | The Kiwimake account (`me`), the PC-off switch, PC links. |
+| `convex/apps.ts`, `convex/chat.ts` | The phone's side: the grid, making and removing an app, the chat (live), send, stop, permissions, helpers. Rows come back in `shared/protocol.ts` shapes. |
+| `convex/runner.ts`, `convex/http.ts` | The box's side: `/runner/hello`, `/runner/take` (long poll) and `/runner/ack`, `/runner/events` (ServerEvents), `/runner/upload-url`, `/runner/build`, the signing routes; Instabox's webhook. |
+| `convex/boxes.ts`, `convex/crons.ts` | One box per thread: make, wake, start the runner, pause after 5 minutes, snapshot and delete after an hour, restore, retire; a minute tick and a 10-minute reconcile. |
+| `convex/lib/provider.ts`, `convex/lib/instabox.ts` | The box provider interface and Instabox behind it (REST, API key). |
+| `convex/lib/credits.ts` | The subscription row, the free monthly grant, ledger and balance. |
+| `convex/signing.ts`, `convex/lib/crypto.ts` | App keys sealed (envelope: a data key per key, wrapped by `KEYS_KEK`), one-time signing tickets, the signing log. |
+| `runner/convex-link.mjs` | The runner's routes, the 250 ms event batches, take with acknowledge. |
+| `runner/stub-runner.mjs` | A stand-in runner (no agent): lifecycle tests with `RUNNER_ENTRY=stub-runner.mjs`. |
+| `scripts/dev.mjs` | `env`, `deploy`, `bundle` (the runner bundle boxes download), `run`, `codegen` on the dev deployment, secrets on stdin only. |
+| `scripts/m1-proof.mjs` | The milestone 1 proof on real boxes. |
+| `tests/backend.test.ts` | `npm test`: the functions against convex-test. |
+
+Milestone 1 on real boxes (12 Nov 2026, Instabox Free plan, a stand-in runner, `scripts/m1-proof.mjs`):
+
+| Step | Time |
+| ---- | ---- |
+| Make an app to the first reply: box made from the image, runner bundle fetched and started | 76 to 125 s (101 s in the last run) |
+| A reply on a running box (phone to box to phone) | 2.8 s |
+| Pause | 5 s |
+| A reply after resume (the box wakes, the runner carries on) | 3.4 s |
+| Snapshot and delete (resume, stop, snapshot the stopped box, delete) | 21 s |
+| A reply after a restore from the thread's own snapshot | 189 s |
+| Remove the app (box and snapshot deleted) | 4 s |
+
+What the real boxes taught: a box says "running" while its create operation still runs (commands
+get `409 operation_conflict` until it ends: the provider waits); suspend and the other lifecycle
+calls need an `Idempotency-Key`; a paused box cannot be snapshotted; a long poll cut by a pause
+loses its answer, so the inbox offers work with a lease and the runner acknowledges it.
+
+## The spike (milestone 0)
+
+| Path | What |
+| ---- | ---- |
+| `convex/` (in the spike) | The Convex project (dev deployment only): Convex Auth (Google, a 6-digit code by email through Resend, and a dev-only anonymous sign-in), a one-thread chat, the runner's HTTP routes (`/runner/take` long poll, `/runner/post`, `/runner/upload-url`). |
 | `runner/spike-runner.mjs` | The box's loop for the spike: takes a prompt from Convex, runs one agent turn over ACP (`claude-agent-acp`, the Claude Agent SDK), posts the reply and its usage, builds with `builder/` (`ANYAPP_SIGN_LATER=1`), uploads the x86_64 APK to Convex storage, posts the build. Milestone 2 replaces it with `server/`'s real runner. |
 | `runner/start.sh` | Starts the runner with fixed arguments, so stdin (the secrets) can only reach it. |
 | `box/provision-sdk.sh` | Installs the Android SDK pieces `docs/ENVIRONMENT.md` pins, on a box. |
