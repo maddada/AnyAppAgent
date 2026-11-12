@@ -97,8 +97,24 @@ describe('the credit gate and the stop', () => {
       const sub = (await ctx.db.query('subscriptions').first())!;
       await ctx.db.patch(sub._id, { firstAppDone: true });
       await ctx.db.patch(appId, { buildHigh: 1 });
+      for (const c of await ctx.db.query('changes').collect()) await ctx.db.patch(c._id, { state: 'done' });
     });
     await expect(as.mutation(api.chat.send, { appId, text: 'more' })).rejects.toThrow(/needs about 1.5 credits and you have 0/);
+  });
+
+  test('one change at a time: a message while the change runs joins it, with no second gate', async () => {
+    const { t, as, appId, takeAll } = await setup();
+    await takeAll();
+    await t.run(async (ctx) => {
+      for (const g of await ctx.db.query('grants').collect()) await ctx.db.patch(g._id, { remaining: 0 });
+      const b = (await ctx.db.query('balances').first())!;
+      await ctx.db.patch(b._id, { millicredits: 0 });
+    });
+    await as.mutation(api.chat.send, { appId, text: 'and make it blue' });
+    const changes = await t.run((ctx) => ctx.db.query('changes').collect());
+    expect(changes).toHaveLength(1);
+    const inbox = await t.run((ctx) => ctx.db.query('inbox').collect());
+    expect(new Set(inbox.map((i) => i.changeId)).size).toBe(1);
   });
 
   test('past the balance plus half a credit, the runner is told to stop and the chat says why', async () => {

@@ -75,6 +75,19 @@ export async function openChange(ctx: MutationCtx, user: Doc<'users'>, app: Doc<
   });
 }
 
+/**
+ * One change at a time per app (milestone 10): a message sent while this app's change is still
+ * queued or running belongs to that change (it asks no new credit gate and runs in the same box);
+ * only a message to an idle app opens a new change.
+ */
+export async function joinOrOpenChange(ctx: MutationCtx, user: Doc<'users'>, app: Doc<'apps'>, threadId: Id<'threads'>): Promise<Id<'changes'>> {
+  for (const state of ['running', 'queued'] as const) {
+    const open = await ctx.db.query('changes').withIndex('by_thread_state', (q) => q.eq('threadId', threadId).eq('state', state)).first();
+    if (open) return open._id;
+  }
+  return openChange(ctx, user, app, threadId);
+}
+
 /** The change the runner is working on now: the newest running one, else the newest queued, else the last. */
 async function currentChange(ctx: MutationCtx, threadId: Id<'threads'>): Promise<Doc<'changes'> | null> {
   const running = await ctx.db.query('changes').withIndex('by_thread_state', (q) => q.eq('threadId', threadId).eq('state', 'running')).order('desc').first();

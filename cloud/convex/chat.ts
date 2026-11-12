@@ -8,7 +8,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx } from './_generated/server';
 import { imageArg, pendingUserItem, requireGithub } from './apps';
 import { onCloudChange } from './lib/credits';
-import { openChange } from './billing';
+import { joinOrOpenChange } from './billing';
 import { ownApp, requireUser, threadOf } from './lib/session';
 
 function withAppId(item: ChatItem, appId: string): ChatItem {
@@ -100,7 +100,7 @@ export const send = mutation({
     if (!body && !images?.length) throw new Error('Write a message first.');
     requireGithub(user);
     await onCloudChange(ctx, user);
-    const changeId = await openChange(ctx, user, app, thread._id);
+    const changeId = await joinOrOpenChange(ctx, user, app, thread._id);
     const inboxId = await enqueue(ctx, thread, 'prompt', { text: body, images: images ?? [] }, changeId);
     await pendingUserItem(ctx, thread._id, app._id, inboxId, body, images);
     await ctx.db.patch(app._id, { lastMessagePreview: body.slice(0, 120), updatedAt: Date.now() });
@@ -150,6 +150,10 @@ export const rebuild = mutation({
   handler: async (ctx, { appId }) => {
     const user = await requireUser(ctx);
     const app = await ownApp(ctx, user._id, appId);
-    await enqueue(ctx, await threadOf(ctx, app._id), 'rebuild', {});
+    // A rebuild runs a helper (AI and machine time): it is metered as a change like any other.
+    requireGithub(user);
+    const thread = await threadOf(ctx, app._id);
+    const changeId = await joinOrOpenChange(ctx, user, app, thread._id);
+    await enqueue(ctx, thread, 'rebuild', {}, changeId);
   },
 });

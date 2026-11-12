@@ -1322,7 +1322,40 @@ during the cloud build and would not start again from this session), and the des
 button live (built and type-checked; the same companion route as the phone's). The cloud change
 used 1.8 credits (dev grant). Gaps found: a moved app carries no icon until the cloud builds (it
 shows its letter), and the cloud's Rebuild goes through a helper agent outside any change, so it
-is not metered (to fix with milestone 10's rate limits).
+is not metered (to fix with milestone 10's rate limits). The cloud change cost $0.495 of AI (2.6
+credits against an estimate of 1).
+
+**Milestone 9, what ran (12 Nov 2026):** `cloud/convex/pcoff.ts` and the companion's
+`server/src/keep-ready.ts`. **Kept ready:** with the switch on and the PC linked, after every new
+version (and at start, on linking) the companion registers the app (`/pc/ready`: the Convex row
+stays `place: "pc"` with `keptReady`, and gets its repo), pushes `HEAD` when it differs from what
+the cloud has (checked on GitHub), and uploads the key once (`appkey-ready:<appId>`); with the
+switch off the call answers `off` and nothing goes up. **The change while the PC is off:** the
+phone's PC app chat, when the PC is not reachable and the app is kept ready, offers "Do it in the
+cloud" with its estimate next to "Wait for my PC" (`pcoff.offer`); `pcoff.change` runs the
+credit gate, marks the row `pcOff` (the time and the first chat row of the change) and queues the
+prompt; a box restores the app from GitHub and builds it on the PC app's package and key; the phone
+follows it in the row's chat (opened by id, not in the grid), where follow-ups are taken too.
+**Pull back:** at start and every 5 minutes the companion lists the rows with `pcOff` and, once
+the cloud is idle, fetches `main` with a one-repo token and fast-forwards (or merges; if the same
+lines changed it keeps its own, puts the cloud's on a branch `made-in-the-cloud` and asks the
+agent to merge them), imports the change's chat rows marked "Made in the cloud"
+(`ChatItem.madeInCloud`, shown on the phone and the desktop), raises its build number above the
+cloud's, and tells Convex, which clears `pcOff` and retires the box. **One place at a time:**
+while a change made in the cloud is still to come back, the PC refuses a change of its own for
+that app ("is coming back to this PC first") and pulls back at once. `shared/protocol.ts`
+addition (additive): `ChatItem.madeInCloud`. Proven: 3 Convex tests, 2 companion tests, and live
+on Tip Jar after milestone 8 (`C:/aa/e2e/cloud-build/m9/`): the switch on, the companion kept it
+ready (its pushed commit already the PC's `HEAD`, the key already there), the companion stopped
+("PC off"), a change asked for ("Changed while my PC was off" under the first line) ran in a fresh
+box and built version 4 with the PC app's key ($0.302 of AI, 1.6 credits); the companion started
+again and pulled it back within seconds (fast-forward, the change's 8 chat rows marked, next build
+5), and built version 5; versions 4 and 5 carry the same certificate and the change. Found and fixed
+on the way: the change's first chat row must be above every row already in the chat, and the rows
+brought back are only those made since the change began. **Not run:** the phone's offer card and
+the switch flipped from the phone (the emulator was down: the change was asked for with the dev-only
+`pcoff.devChange`, the switch set with `admin.devSetPcOffSwitch`), and the merge prompt path (both
+sides changing the same lines; covered by the code, not by a test).
 
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account

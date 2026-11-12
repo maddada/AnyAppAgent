@@ -12,7 +12,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { internal } from './_generated/api';
 import { internalMutation, internalQuery, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { freeSlug, imageArg, pendingUserItem, requireGithub, slugify } from './apps';
-import { openChange } from './billing';
+import { joinOrOpenChange } from './billing';
 import { estimateFor } from './estimates';
 import { onCloudChange } from './lib/credits';
 import { requireUser } from './lib/session';
@@ -124,27 +124,41 @@ export const offer = query({
 /** "Do it in the cloud": the change runs in a box on the PC app's package and key. */
 export const change = mutation({
   args: { packageName: v.string(), text: v.string(), images: v.optional(v.array(imageArg)) },
-  handler: async (ctx, { packageName, text, images }) => {
-    const user = await requireUser(ctx);
-    if (!user.pcOffSwitch) throw new Error('Turn on "Use the cloud when my PC is off" in your account first.');
-    requireGithub(user);
-    const app = await rowFor(ctx, user._id, packageName);
-    if (!app || app.place !== 'pc' || !app.keptReady || !app.pushedCommit) throw new Error('This app is not ready in the cloud yet. It is, once your PC has made a version with the switch on.');
-    const moving = await ctx.db.query('moves').withIndex('by_app', (q) => q.eq('appId', app._id)).filter((q) => q.eq(q.field('state'), 'running')).first();
-    if (moving) throw new Error('This app is moving. Try again when it is done.');
-    const body = text.trim().slice(0, 8000);
-    if (!body && !images?.length) throw new Error('Write a message first.');
-    const threadId = await threadFor(ctx, app);
-    await onCloudChange(ctx, user);
-    const changeId = await openChange(ctx, user, app, threadId);
-    const thread = (await ctx.db.get(threadId))!;
-    if (!app.pcOff) await ctx.db.patch(app._id, { pcOff: { since: Date.now(), fromSeq: thread.seq } });
-    const inboxId = await ctx.db.insert('inbox', { threadId, changeId, kind: 'prompt', payload: { text: body, images: images ?? [], pcOff: true } });
-    await pendingUserItem(ctx, threadId, app._id, inboxId, body, images);
-    await ctx.scheduler.runAfter(0, internal.boxes.ensure, { threadId });
-    return app._id;
+  handler: async (ctx, { packageName, text, images }) => startChange(ctx, await requireUser(ctx), packageName, text, images),
+});
+
+/** Dev only (KIWI_ALLOW_WIPE=1): the same change for a test account, from a proof script. */
+export const devChange = internalMutation({
+  args: { userId: v.id('users'), packageName: v.string(), text: v.string() },
+  handler: async (ctx, { userId, packageName, text }) => {
+    if (process.env.KIWI_ALLOW_WIPE !== '1') throw new Error('devChange is off (KIWI_ALLOW_WIPE)');
+    return startChange(ctx, (await ctx.db.get(userId))!, packageName, text);
   },
 });
+
+async function startChange(ctx: MutationCtx, user: Doc<'users'>, packageName: string, text: string, images?: { fileId: Id<'_storage'>; mimeType: string; width?: number; height?: number }[]) {
+  if (!user.pcOffSwitch) throw new Error('Turn on "Use the cloud when my PC is off" in your account first.');
+  requireGithub(user);
+  const app = await rowFor(ctx, user._id, packageName);
+  if (!app || app.place !== 'pc' || !app.keptReady || !app.pushedCommit) throw new Error('This app is not ready in the cloud yet. It is, once your PC has made a version with the switch on.');
+  const moving = await ctx.db.query('moves').withIndex('by_app', (q) => q.eq('appId', app._id)).filter((q) => q.eq(q.field('state'), 'running')).first();
+  if (moving) throw new Error('This app is moving. Try again when it is done.');
+  const body = text.trim().slice(0, 8000);
+  if (!body && !images?.length) throw new Error('Write a message first.');
+  const threadId = await threadFor(ctx, app);
+  await onCloudChange(ctx, user);
+  const changeId = await joinOrOpenChange(ctx, user, app, threadId);
+  const thread = (await ctx.db.get(threadId))!;
+  if (!app.pcOff) {
+    // From the next row on: above the thread's counter and above every row already in the chat.
+    const last = await ctx.db.query('messages').withIndex('by_thread_seq', (q) => q.eq('threadId', threadId).eq('workerId', undefined)).order('desc').first();
+    await ctx.db.patch(app._id, { pcOff: { since: Date.now(), fromSeq: Math.max(thread.seq, (last?.seq ?? 0) + 1) } });
+  }
+  const inboxId = await ctx.db.insert('inbox', { threadId, changeId, kind: 'prompt', payload: { text: body, images: images ?? [], pcOff: true } });
+  await pendingUserItem(ctx, threadId, app._id, inboxId, body, images);
+  await ctx.scheduler.runAfter(0, internal.boxes.ensure, { threadId });
+  return app._id;
+}
 
 // ---------- pulling back (the PC, when it is on again)
 
@@ -173,7 +187,14 @@ export const pullBackChat = internalQuery({
     const thread = await ctx.db.query('threads').withIndex('by_app', (q) => q.eq('appId', appId)).first();
     if (!thread || !app.pcOff) return { items: [] as ChatItem[] };
     const rows = await ctx.db.query('messages').withIndex('by_thread_seq', (q) => q.eq('threadId', thread._id).eq('workerId', undefined).gte('seq', app.pcOff!.fromSeq)).collect();
-    return { items: rows.filter((r) => !r.itemId.startsWith('inbox-')).map((r) => r.item as ChatItem) };
+    // Rows of this change only: from its first row on, and made since it started.
+    const since = app.pcOff.since - 5_000;
+    return {
+      items: rows
+        .filter((r) => !r.itemId.startsWith('inbox-'))
+        .map((r) => r.item as ChatItem)
+        .filter((i) => !i.createdAt || Date.parse(i.createdAt) >= since),
+    };
   },
 });
 

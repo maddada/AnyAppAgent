@@ -76,3 +76,19 @@ export const devGrant = internalMutation({
     await grant(ctx, userId, { source: 'adjust', millicredits: Math.round(credits * 1000), expiresAt: Date.now() + 30 * 86_400_000, note });
   },
 });
+
+/** Dev only (KIWI_ALLOW_WIPE=1): "Use the cloud when my PC is off" for a test account (proof runs). */
+export const devSetPcOffSwitch = internalMutation({
+  args: { userId: v.id('users'), on: v.boolean() },
+  handler: async (ctx, { userId, on }) => {
+    if (process.env.KIWI_ALLOW_WIPE !== '1') throw new Error('devSetPcOffSwitch is off (KIWI_ALLOW_WIPE)');
+    await ctx.db.patch(userId, { pcOffSwitch: on });
+  },
+});
+
+/** An app's metered changes (scripts only): what each cost us and what it charged. */
+export const changesOfApp = internalQuery({
+  args: { appId: v.id('apps') },
+  handler: async (ctx, { appId }) =>
+    (await ctx.db.query('changes').withIndex('by_app_at', (q) => q.eq('appId', appId)).collect()).map((c) => ({ state: c.state, startedAt: c.startedAt, actual: c.actual, estimate: c.estimate?.millicredits ?? 0 })),
+});
