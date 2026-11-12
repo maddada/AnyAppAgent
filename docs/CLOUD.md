@@ -10,9 +10,8 @@ lives in Convex.
 
 Status: **the agreed plan** (decisions of 12 Nov 2026, section 12). **Milestone 0, the spike, ran on
 12 Nov 2026**: the box image, builds on a box, an agent turn with the key only in the Secrets proxy,
-Convex sign-in, the phone round trip, and push and clone with a one-repo token through the proxy
-are proven; creating the repo with the person's user token is still open (section 10,
-`cloud/README.md`). Facts were
+Convex sign-in, the phone round trip, the repo made with the person's GitHub user token, and push
+and clone with a one-repo token through the proxy are proven (section 10, `cloud/README.md`). Facts were
 checked on the web on **12 Nov 2026**; each has its source link. Not legal advice: section 1 gives
 the texts and the one line that leaves any doubt.
 
@@ -448,14 +447,15 @@ own GitHub account (the `cloud` in the name keeps it apart from a PC app's `anya
 - **Making the repo**: when a cloud app is created, a Convex Node action creates
   `anyapp-cloud-<slug>` (private) with the person's user token from the GitHub App (refreshable,
   stored encrypted like the AI key). If the person installed the App on selected repositories only,
-  the spike checks that a repo the App creates joins the installation; if not, the phone asks them
-  once to choose "All repositories" or add the new repo. **Spike (12 Nov 2026)**: an installation
+  a repo the App creates joins the installation by itself (**proven in the spike**: the install was
+  on "Only select repositories" with one repo; `anyapp-cloud-spike-1`, made with the user token,
+  was in `/installation/repositories` at once and a one-repo token for it could be minted), so the
+  phone never has to ask for "All repositories". **Spike (12 Nov 2026)**: an installation
   token cannot do it, whatever the permissions page says: `POST /user/repos` with one answered
   `403 "Rate Limit Exceeded"` five times over 15 minutes while its core limit had 4,998 calls left,
   so the user token is required, as planned. The callback that turns GitHub's code into the user
-  token (sealed with AES-256-GCM) and the create action are built (`cloud/convex/github.ts`); the
-  person has to authorize once more because the install's code went to a callback that did not
-  exist yet, so "joins the installation" is still open.
+  token (sealed with AES-256-GCM, with its refresh token; GitHub gives it 8 hours) and the create
+  action are built (`cloud/convex/github.ts`) and made `anyapp-cloud-spike-1` (201, private).
 - **Every change is pushed**: the playbook tells the orchestrator and every helper to commit with a
   plain message and push after each change, as part of finishing the change. The runner checks
   after each turn that `HEAD` is on GitHub and pushes itself if the agent did not, and a build is
@@ -982,9 +982,8 @@ saved as a snapshot, not imported); a fresh box from it builds a new app in 171 
 $0.21 a small change, the last one with the key only in Instabox's Secrets proxy; Convex Auth
 (Google reaches Google's page, the email code goes out through Resend, dev-only anonymous sign-in)
 and the phone round trip, prompt to APK link in about 38 s; a push from a box and a clone on a
-fresh box with a one-repo token carried by the Secrets proxy. Still open: creating the repo with
-the person's user token and whether it joins a "selected repositories" install (needs one more
-GitHub authorization by the person). Left for milestone 2: a helper at its own level, and memory with two helpers
+fresh box with a one-repo token carried by the Secrets proxy; the repo made with the person's
+user token, which joins a "selected repositories" install by itself. Left for milestone 2: a helper at its own level, and memory with two helpers
 and a build.
 
 Where the 8.5 extra days come from: GitHub instead of Git bundles (+2.5 net), credits, plans and

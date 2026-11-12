@@ -11,7 +11,7 @@ the spike**: it proves the risky parts and measures them; it is not the product.
 | `box/provision-sdk.sh` | Installs the Android SDK pieces `docs/ENVIRONMENT.md` pins, on a box. |
 | `box/git-with-token.sh` | Runs one git command with a token from stdin (not used yet: see "Not proven"). |
 | `box/Dockerfile` | The same image as an OCI recipe for `instabox snapshot import` (not built yet). |
-| `spike/convex.mjs` | Sets the dev deployment's env vars from the secrets file through stdin, deploys, rotates the runner token. |
+| `spike/convex.mjs` | Sets the dev deployment's env vars from the secrets file through stdin, deploys, rotates the runner token, runs a function (`run github:createRepo '{...}'`). Starts Convex's CLI with Node, no shell. |
 | `spike/github-app.mjs` | The GitHub App: its JWT, installation tokens narrowed to one repo, repo create and delete. |
 | `spike/github-secret.mjs` | Mints a one-repo installation token and saves it as an Instabox proxy Secret (stdin only). |
 | `convex/github.ts` | The App's OAuth callback (`/github/callback`: code to user token, sealed with `KEYS_KEK`) and `createRepo` with the user token. |
@@ -102,6 +102,13 @@ allowance). Convex, Resend, Google, GitHub $0.
   `403 "Rate Limit Exceeded"` five times over 15 minutes while the token's core limit had 4,998 calls
   left, although GitHub's permissions page lists installation tokens for it. Repos are made with
   the person's user token, as `docs/CLOUD.md` planned.
+- **The repo made with the person's user token, and it joins the install.** After the person
+  authorized the App, `/github/callback` stored their user token sealed with `KEYS_KEK` (with a
+  refresh token, 8 hours). `npx convex run github:createRepo` made `maddada/anyapp-cloud-spike-1`
+  (201, private), and it was in the "Only select repositories" install at once
+  (`/installation/repositories` lists it; a one-repo installation token for it could be minted).
+  The install's own OAuth code had been lost (it reached a callback that did not exist yet), so one
+  extra authorization was needed.
 - The fallback without a secrets proxy also worked: the runner held the key in memory and served a forwarder on
   127.0.0.1; the agent ran as the Unix user `agent` with a dummy key and
   `ANTHROPIC_BASE_URL` pointing at it. A search of every file the agent could reach for the real
@@ -116,10 +123,6 @@ allowance). Convex, Resend, Google, GitHub $0.
 
 ### Not proven (needs the user)
 
-- **Creating the repo with the person's user token**, and whether a repo made that way joins
-  an install on "Only select repositories". The callback and the action are deployed
-  (`convex/github.ts`); the person has to authorize the App once more, because the install's
-  code went to a callback that did not exist yet.
 - **Google sign-in to the end** and **the email code to the end**: both need the person's own
   Google account or inbox.
 - Two helpers and a build at once (the spike ran one agent session; no `start_worker` helper).

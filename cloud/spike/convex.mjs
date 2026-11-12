@@ -19,12 +19,12 @@ const env = readEnvFile();
 if (!env.CONVEX_DEPLOY_KEY?.startsWith('dev:')) throw new Error('CONVEX_DEPLOY_KEY must be a dev deploy key');
 
 function convex(args, input) {
-  const r = spawnSync('npx', ['convex', ...args], {
+  // Convex's CLI script run by this Node, no shell (arguments are passed as they are).
+  const r = spawnSync(process.execPath, [path.join(CLOUD, 'node_modules', 'convex', 'bin', 'main.js'), ...args], {
     cwd: CLOUD,
     env: { ...process.env, CONVEX_DEPLOY_KEY: env.CONVEX_DEPLOY_KEY },
     input,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
   });
   if (r.status !== 0) throw new Error(`convex ${args[0]} ${args[1] ?? ''} failed: ${(r.stderr || r.stdout).slice(-800)}`);
   return r.stdout;
@@ -80,6 +80,10 @@ if (cmd === null) {
   // A new runner token (the old file is replaced), and Convex gets its hash.
   fs.rmSync(path.join(SECRETS, 'cloud-spike-runner.token'), { force: true });
   setVar('RUNNER_TOKEN_SHA256', crypto.createHash('sha256').update(runnerToken()).digest('hex'));
+} else if (cmd === 'run') {
+  // npx convex run <function> '<json args>' on the dev deployment (internal functions too).
+  const [fn, json = '{}'] = process.argv.slice(3);
+  console.log(convex(['run', fn, json]).trim());
 } else if (cmd === 'names') {
   console.log(convex(['env', 'list', '--names-only']));
 } else {
