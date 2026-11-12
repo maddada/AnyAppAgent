@@ -54,7 +54,7 @@ export const BOX = {
   /** A snapshot unused this long is deleted; the next message clones from GitHub. */
   snapshotTtlMs: 30 * 24 * 3600_000,
   /** The image every box starts from (the spike's snapshot). */
-  imageSnapshot: 'anyapp-box-v0',
+  imageSnapshot: 'anyapp-box-v1',
   /** A person may have this many boxes not deleted. */
   maxPerUser: 5,
 };

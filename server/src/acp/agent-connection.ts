@@ -209,14 +209,14 @@ export function createAcpAgentConnection(options: {
 }
 
 // bb's acpClientCapabilities + requestAcpInitialize, with fs access on as bb's bridge sets it.
-export async function requestAcpInitialize(connection: AcpAgentConnection): Promise<unknown> {
+export async function requestAcpInitialize(connection: AcpAgentConnection, clientFs = true): Promise<unknown> {
   return connection.request(
     "initialize",
     {
       protocolVersion: ACP_CLIENT_PROTOCOL_VERSION,
       clientInfo: { name: "anyappagent", version: "0.1.0" },
       clientCapabilities: {
-        fs: { readTextFile: true, writeTextFile: true },
+        fs: { readTextFile: clientFs, writeTextFile: clientFs },
         terminal: false,
         auth: { terminal: true },
       },

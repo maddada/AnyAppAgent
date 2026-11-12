@@ -138,7 +138,14 @@ export async function leftoverConflictMarkers(copyDir: string): Promise<string[]
 /** Removes a helper's copy and its branch (its work already landed, or it never changed anything). */
 export async function removeHelperCopy(appDir: string, copyDir: string, helperId: string): Promise<void> {
   await git(appDir, ["worktree", "remove", "--force", copyDir], 5 * 60_000);
-  if (existsSync(copyDir)) await rm(copyDir, { recursive: true, force: true, maxRetries: 3 });
+  if (existsSync(copyDir)) await rm(copyDir, { recursive: true, force: true, maxRetries: 3 }).catch(() => undefined);
+  // The cloud: the agent is another Unix user and its build tools make folders only it may empty;
+  // the agent's own rm takes them (ANYAPP_AGENT_PREFIX, server/src/cloud-settings.ts).
+  if (existsSync(copyDir) && process.env.ANYAPP_AGENT_PREFIX) {
+    const prefix = JSON.parse(process.env.ANYAPP_AGENT_PREFIX) as string[];
+    if (prefix.length > 0) await run(prefix[0]!, [...prefix.slice(1), "rm", "-rf", "--", copyDir], dirname(copyDir), 5 * 60_000);
+  }
+  if (existsSync(copyDir)) throw new Error(`could not remove ${copyDir}`);
   await git(appDir, ["worktree", "prune"]);
   await git(appDir, ["branch", "-D", helperBranch(helperId)]);
 }

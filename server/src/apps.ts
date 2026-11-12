@@ -506,7 +506,8 @@ export class AppManager {
   // ---------- commands
 
   /** uploads: pictures for the first message; sharedIn: "Like this, but mine" (the agent gets sharedInNote). */
-  create(name: string, prompt: string, preset: unknown = "react-native", askMore = false, uploads: ImageUpload[] = [], sharedIn = false): App {
+  /** fixed: the cloud names the app's slug and package itself (docs/CLOUD.md, "Package names"). */
+  create(name: string, prompt: string, preset: unknown = "react-native", askMore = false, uploads: ImageUpload[] = [], sharedIn = false, fixed?: { slug: string; packageName: string }): App {
     const cleanName = name.trim().replace(/\s+/g, " ");
     if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native, Kotlin or Expo Exact.");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
@@ -516,14 +517,15 @@ export class AppManager {
     const base = slugify(cleanName);
     const taken = (slug: string) =>
       this.store.allRecords().some((r) => r.app.slug === slug) || existsSync(join(this.config.appsDir, slug));
-    let slug = base;
+    let slug = fixed?.slug ?? base;
+    if (fixed && taken(slug)) throw new HttpError(409, "That app is already on this machine.");
     for (let n = 2; taken(slug); n++) slug = `${base}${n}`;
     const now = nowIso();
     const app: App = {
       id: randomUUID(),
       name: cleanName,
       slug,
-      packageName: `com.anyapp.${slug}`,
+      packageName: fixed?.packageName ?? `com.anyapp.${slug}`,
       preset: preset as AppPreset,
       status: "creating",
       iconVersion: 1,
@@ -1453,7 +1455,7 @@ ${overviewNudge()}` : note;
     const appInfo = { name: record.app.name, packageName: record.app.packageName, dir: record.dir, preset: record.app.preset };
     const coordinated = this.workers
       ? {
-          instructions: coordinatorPlaybook(appInfo),
+          instructions: coordinatorPlaybook(appInfo, { cloud: Boolean(this.config.cloud) }),
           // An app made before workers resumes its session and gets the new playbook once.
           instructionsOnResume: (ready.coordinatorPlaybook ?? 0) < COORDINATOR_PLAYBOOK_VERSION,
           mcpServers: [workerToolsMcpServer(this.config.port, record.app.id, this.workers.toolsToken), this.pages.mcpServer(this.config.port, record.app.id), this.history.mcpServer(this.config.port, record.app.id)],
@@ -1466,8 +1468,10 @@ ${overviewNudge()}` : note;
       instructions: appPlaybook(appInfo),
       mcpServers: [this.pages.mcpServer(this.config.port, record.app.id), this.history.mcpServer(this.config.port, record.app.id)],
       ...coordinated,
-      launch: claudeLaunchSpec(this.config.acpLaunch),
+      launch: claudeLaunchSpec(this.config.acpLaunch, this.config.cloud?.agentPrefix),
       askPermissions: this.config.askPermissions,
+      // The cloud: the app's chat is the orchestrator (Opus 5.5 high), the agent another Unix user.
+      ...(this.config.cloud ? { model: this.config.cloud.orchestrator, tag: { role: "orchestrator" }, clientFs: false } : {}),
       onUpdate: (update) => {
         if (isJsonObject(update) && (update["sessionUpdate"] === "tool_call" || update["sessionUpdate"] === "tool_call_update")) {
           const toolCallId = String(update["toolCallId"] ?? "");

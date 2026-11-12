@@ -269,7 +269,10 @@ export class Pages {
 
   /** Where an app's agents write their page files (outside the app's repository). */
   draftsDir(appId: string): string {
-    const dir = join(this.dir, appId, "files");
+    // The cloud: the agent is another Unix user and cannot write in our state folder, so its page
+    // files go in a folder it shares with us (ANYAPP_PAGE_DRAFTS_DIR, set by the cloud runner).
+    const root = process.env.ANYAPP_PAGE_DRAFTS_DIR;
+    const dir = root ? join(root, appId) : join(this.dir, appId, "files");
     mkdirSync(dir, { recursive: true });
     return dir;
   }

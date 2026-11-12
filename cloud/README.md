@@ -18,6 +18,10 @@ The plan is `docs/CLOUD.md`. This folder holds the cloud's own code: the Convex 
 | `convex/lib/credits.ts` | The subscription row, the free monthly grant, ledger and balance. |
 | `convex/signing.ts`, `convex/lib/crypto.ts` | App keys sealed (envelope: a data key per key, wrapped by `KEYS_KEK`), one-time signing tickets, the signing log. |
 | `runner/convex-link.mjs` | The runner's routes, the 250 ms event batches, take with acknowledge. |
+| `runner/runner.mjs` | The box's runner (milestone 2): reads the runner token from stdin, writes the agent's proxy placeholder, sets the companion's cloud config and runs `server/src/cloud-runner.ts`. |
+| `box/provision-v1.sh`, `box/agent.sh` | The image `anyapp-box-v1` on top of v0: the `kiwi` group, `/data/apps`, the agent-owned shared caches, the agent's wrapper (`sudo -n -u agent -H /opt/kiwi/agent.sh ...`), the companion's dependencies. |
+| `scripts/box.mjs`, `scripts/box-exec.mjs` | A dev box by hand (create, delete, snapshot, upload) and one command on it, for the image. |
+| `scripts/m2-proof.mjs`, `scripts/say.mjs`, `scripts/usage-cost.mjs` | The milestone 2 proof (a real app through Convex), one chat message as the proof's stand-in, the AI cost of a runner log at list price. |
 | `runner/stub-runner.mjs` | A stand-in runner (no agent): lifecycle tests with `RUNNER_ENTRY=stub-runner.mjs`. |
 | `scripts/dev.mjs` | `env`, `deploy`, `bundle` (the runner bundle boxes download), `run`, `codegen` on the dev deployment, secrets on stdin only. |
 | `scripts/m1-proof.mjs` | The milestone 1 proof on real boxes. |

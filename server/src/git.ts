@@ -133,7 +133,14 @@ export async function commitAll(dir: string, message: string): Promise<boolean> 
   return true;
 }
 
+/** The cloud runner pushes its own way (a one-repo token it holds, never the agent): docs/CLOUD.md. */
+let pushImpl: ((dir: string) => Promise<string | null>) | undefined;
+export function setPushImpl(fn: ((dir: string) => Promise<string | null>) | undefined): void {
+  pushImpl = fn;
+}
+
 export async function push(dir: string): Promise<string | null> {
+  if (pushImpl) return pushImpl(dir);
   const remotes = await git(dir, ["remote"]);
   if (!remotes.stdout.split(/\s+/).includes("origin")) return null;
   const result = await git(dir, ["push", "-q", "-u", "origin", "HEAD"], 90_000);

@@ -53,8 +53,9 @@ export async function createApp({ dir, name, slug, packageName, preset, onLog = 
   if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) throw new Error(`createApp: ${dir} already exists and is not empty`);
   await fsp.mkdir(path.dirname(dir), { recursive: true });
   // Every new app gets its own signing key (kept outside the app; the same package id always gets
-  // the same key). Made first, so a failure here leaves no half-made app folder.
-  await ensureAppKey(androidEnv().javaHome, packageName, onLog);
+  // the same key). Made first, so a failure here leaves no half-made app folder. In the cloud
+  // (ANYAPP_SIGN_EXTERNAL=1) the key is made and kept outside the builder's reach.
+  if (!signExternalOn()) await ensureAppKey(androidEnv().javaHome, packageName, onLog);
 
   const t0 = Date.now();
   if (preset === 'expo-exact') {
@@ -265,7 +266,7 @@ async function runBuild(dir, n, onLog, preset, feeds = {}, fast = false) {
       packageName = appJson.expo?.android?.package;
     }
     // The app's own key, or the shared key for apps made before per-app keys (lib/keystore.mjs).
-    const signing = await signingFor(javaHome, packageName, say);
+    const signing = signExternalOn() ? externalSigning() : await signingFor(javaHome, packageName, say);
     const keystore = signing.gradle;
     say(`Building ${packageName ?? slug} #${n} (${preset}, ${signing.kind} key) in ${dir}`);
     const finish = (built, parts = []) =>
@@ -381,7 +382,8 @@ async function runBuild(dir, n, onLog, preset, feeds = {}, fast = false) {
     // 4. Gradle release build with the shared key and versionCode = build number. With
     // ANYAPP_SIGN_LATER=1 (the cloud, docs/CLOUD.md section 6) Gradle never sees the key: it builds
     // the APKs unsigned and finishApk signs them after Gradle has exited.
-    const signLater = signLaterOn() && !kotlin;
+    const signLater = (signLaterOn() || signing.external) && !kotlin;
+    if (signing.external && kotlin) throw new BuildError('Kotlin apps cannot be built in the cloud yet.');
     const gradleEnv = {
       ...env,
       ORG_GRADLE_PROJECT_anyappVersionCode: String(n),
@@ -513,6 +515,8 @@ async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, sl
   await Promise.all(
     [apkPath, ...copies.map((c) => c.out)].map(async (apk) => {
       try {
+        // External signing: the APKs leave the builder unsigned; lib/external-sign.mjs signs them.
+        if (signing.external) return;
         if (signing.resign) await signWithLineage(javaHome, sdk, apk, signing.resign);
         else if (signLater) await signApk(javaHome, sdk, apk, signing.gradle);
         await checkSigning(javaHome, sdk, apk, signing.expect);
@@ -543,6 +547,7 @@ async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, sl
     packageName: badging?.packageName ?? packageName,
     preset,
     signing: { kind: signing.kind, certSha256: signing.certSha256 },
+    ...(signing.external ? { unsigned: true } : {}),
     durationMs,
     timings,
     logPath: logFile,
@@ -750,6 +755,21 @@ async function pruneApks(outDir, keep) {
 /** ANYAPP_SIGN_LATER=1: Gradle builds unsigned and the builder signs after it (docs/CLOUD.md, section 6). */
 function signLaterOn() {
   return process.env.ANYAPP_SIGN_LATER === '1';
+}
+
+/**
+ * ANYAPP_SIGN_EXTERNAL=1 (the cloud, docs/CLOUD.md section 6): this process never sees a key. Gradle
+ * builds unsigned, the fast lane writes its APKs and quick update unsigned, and the result says
+ * `unsigned: true`; lib/external-sign.mjs signs them afterwards as another Unix user.
+ * ANYAPP_SIGN_CERT is the app's certificate SHA-256 (public), so results can name it.
+ */
+function signExternalOn() {
+  return process.env.ANYAPP_SIGN_EXTERNAL === '1';
+}
+
+function externalSigning() {
+  const cert = process.env.ANYAPP_SIGN_CERT ?? '';
+  return { kind: 'own', gradle: null, resign: null, certSha256: cert, expect: { current: cert }, external: true };
 }
 
 /** ABI splits are on unless ANYAPP_ABI_SPLITS=0 (then only the full APK is built). */

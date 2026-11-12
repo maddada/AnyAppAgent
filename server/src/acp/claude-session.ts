@@ -20,6 +20,13 @@ import {
 import { decodeAcpPermissionRequest, isJsonObject, readString, type AcpPermissionRequest } from "./acp-client.ts";
 import type { PlanLimit, TokenUsage } from "../../../shared/protocol.ts";
 import { planLimitFrom, promptUsage } from "../usage.ts";
+import type { ModelChoice } from "../cloud-settings.ts";
+
+/**
+ * Every finished turn's usage with the session's model and tags (the cloud runner prices and
+ * reports it per helper and level, docs/CLOUD.md "Costs"). Listeners must not throw.
+ */
+export const usageTaps = new Set<(u: { sessionId: string; model?: string; effort?: string; tag: Record<string, string>; usage: TokenUsage }) => void>();
 
 export const CLAUDE_ACP_PACKAGE = "@agentclientprotocol/claude-agent-acp";
 export const CLAUDE_ACP_VERSION = "0.102.0";
@@ -31,12 +38,15 @@ export interface LaunchSpec {
   args: string[];
 }
 
-export function claudeLaunchSpec(kind: "local" | "npx"): LaunchSpec {
+export function claudeLaunchSpec(kind: "local" | "npx", prefix: string[] = []): LaunchSpec {
   if (kind === "npx") return { command: "npx", args: ["-y", `${CLAUDE_ACP_PACKAGE}@${CLAUDE_ACP_VERSION}`] };
   const require = createRequire(import.meta.url);
   const pkgJson = require.resolve(`${CLAUDE_ACP_PACKAGE}/package.json`);
   const pkg = require(pkgJson) as { bin: Record<string, string> };
-  return { command: process.execPath, args: [join(dirname(pkgJson), pkg.bin["claude-agent-acp"])] };
+  const local = { command: process.execPath, args: [join(dirname(pkgJson), pkg.bin["claude-agent-acp"])] };
+  // The cloud: the agent runs as another Unix user (cloud-settings.ts agentPrefix, e.g. sudo -u agent).
+  if (prefix.length > 0) return { command: prefix[0]!, args: [...prefix.slice(1), local.command, ...local.args] };
+  return local;
 }
 
 const STRIPPED_ENV = new Set(["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT", "CLAUDE_AGENT_SDK_VERSION"]);
@@ -70,6 +80,15 @@ export interface ClaudeSessionOptions {
   launch: LaunchSpec;
   /** Dev and tests only (ANYAPP_ASK_PERMISSIONS=1): stay in the default mode, so permission requests reach the chat. */
   askPermissions?: boolean;
+  /** The cloud: this session's model and effort (session/set_config_option after it starts). */
+  model?: ModelChoice;
+  /** The cloud: labels for usageTaps (the helper id and level). */
+  tag?: Record<string, string>;
+  /**
+   * Whether the agent may read and write files through this process (ACP's fs capability). Off in
+   * the cloud: the agent is another Unix user and must use its own file access, never ours.
+   */
+  clientFs?: boolean;
   onUpdate(update: unknown): void;
   /** The usage meter (usage.ts): the tokens of each finished turn (session/prompt's usage). */
   onUsage?(usage: TokenUsage): void;
@@ -136,7 +155,7 @@ export class ClaudeSession {
     });
     this.connection = connection;
     try {
-      const init = await requestAcpInitialize(connection);
+      const init = await requestAcpInitialize(connection, this.options.clientFs !== false);
       const agent = isJsonObject(init) && isJsonObject(init["agentCapabilities"]) ? init["agentCapabilities"] : {};
       const sessionCaps = isJsonObject(agent["sessionCapabilities"]) ? agent["sessionCapabilities"] : {};
       const supportsResume = sessionCaps["resume"] !== undefined && sessionCaps["resume"] !== null && sessionCaps["resume"] !== false;
@@ -176,9 +195,35 @@ export class ClaudeSession {
       }
       if (!this.options.askPermissions) await this.selectFullAccessMode(configState);
       else await this.connection.request("session/set_mode", { sessionId: this.sessionId, modeId: "default" }, 30_000).catch(() => undefined);
+      if (this.options.model) await this.selectModel(configState, this.options.model);
     } catch (error) {
       await connection.kill();
       throw error;
+    }
+  }
+
+  /**
+   * The model first, then the effort (the adapter offers effort levels per model), with ACP's
+   * session/set_config_option, as the cloud spike proved (docs/CLOUD.md, "Models").
+   */
+  private async selectModel(configState: unknown, choice: ModelChoice): Promise<void> {
+    type Option = { id: string; category?: string };
+    const optionsOf = (state: unknown): Option[] =>
+      isJsonObject(state) && Array.isArray(state["configOptions"]) ? (state["configOptions"] as Option[]).filter((o) => isJsonObject(o) && typeof o.id === "string") : [];
+    let options = optionsOf(configState);
+    const isModel = (o: Option) => o.category === "model" || o.id === "model";
+    const isEffort = (o: Option) => o.category === "thought_level" || o.id === "effort";
+    try {
+      const model = options.find(isModel);
+      if (model) {
+        const next = await this.connection!.request("session/set_config_option", { sessionId: this.sessionId, configId: model.id, value: choice.model }, 30_000);
+        if (optionsOf(next).length) options = optionsOf(next);
+      }
+      const effort = options.find(isEffort);
+      if (effort) await this.connection!.request("session/set_config_option", { sessionId: this.sessionId, configId: effort.id, value: choice.effort }, 30_000);
+      this.options.log(`session ${this.sessionId}: ${choice.model} at ${choice.effort}`);
+    } catch (error) {
+      this.options.log(`could not set the model to ${choice.model} at ${choice.effort}: ${(error as Error).message}`);
     }
   }
 
@@ -232,6 +277,11 @@ export class ClaudeSession {
     const result = await this.connection.request("session/prompt", { sessionId: this.sessionId, prompt }, null);
     const usage = promptUsage(result);
     if (usage) {
+      for (const tap of usageTaps) {
+        try {
+          tap({ sessionId: this.sessionId, ...(this.options.model ? { model: this.options.model.model, effort: this.options.model.effort } : {}), tag: this.options.tag ?? {}, usage });
+        } catch {}
+      }
       try {
         this.options.onUsage?.(usage);
       } catch (error) {

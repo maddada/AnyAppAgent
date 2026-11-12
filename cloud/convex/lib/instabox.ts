@@ -1,7 +1,7 @@
 // Instabox (instabox.sh) behind the BoxProvider interface: its REST API with an API key
 // (`machines:read|write|delete`, `images:*`). Runs in Convex's default runtime (fetch only) and
 // in Node scripts. The key is passed in by the caller and never logged.
-import { ProviderError, type BoxInfo, type BoxProvider, type BoxState, type BoxUsage, type CreateBoxOptions, type ExecOptions, type ExecResult, type SnapshotInfo } from './provider';
+import { ProviderError, type BoxInfo, type BoxProvider, type BoxState, type BoxUsage, type CreateBoxOptions, type ExecOptions, type ExecResult, type SnapshotInfo } from './provider.ts';
 
 const API = 'https://api.instabox.sh';
 
@@ -24,11 +24,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class Instabox implements BoxProvider {
   readonly name = 'instabox';
-  constructor(
-    private readonly key: string,
-    private readonly orgId?: string,
-  ) {
+  private readonly key: string;
+  private readonly orgId?: string;
+  constructor(key: string, orgId?: string) {
     if (!key) throw new Error('Instabox: no API key');
+    this.key = key;
+    this.orgId = orgId;
   }
 
   private async call<T = any>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {

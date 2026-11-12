@@ -50,7 +50,7 @@ export function run(fn, args = {}) {
 /** Packs what a box runs (the runner, and from milestone 2 the companion's code it reuses). */
 export function packRunner() {
   const out = path.join(os.tmpdir(), `kiwi-runner-${process.pid}.tgz`);
-  const parts = ['cloud/runner', 'server/src', 'server/package.json', 'shared', 'builder', 'template', 'template-kotlin'].filter((p) => fs.existsSync(path.join(REPO, p)));
+  const parts = ['cloud/runner', 'server/src', 'server/package.json', 'server/package-lock.json', 'cloud/box/agent.sh', 'shared', 'builder', 'template', 'template-kotlin'].filter((p) => fs.existsSync(path.join(REPO, p)));
   const tarBin = process.platform === 'win32' ? path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
   const r = spawnSync(tarBin, ['-czf', out, '--exclude=node_modules', '--exclude=.gradle', '--exclude=build', '--exclude=android/app/build', '--exclude=*.test.ts', '-C', REPO, ...parts], { encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`tar failed: ${r.stderr}`);

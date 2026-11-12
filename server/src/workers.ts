@@ -9,9 +9,10 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { ChatItem, PlanLimit, ServerEvent, TokenUsage, WorkerInfo, WorkerState } from "../../shared/protocol.ts";
 import { ClaudeSession, claudeLaunchSpec, pickAllowOption } from "./acp/claude-session.ts";
+import { levelChoice, type HelperLevel } from "./cloud-settings.ts";
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { Config } from "./config.ts";
-import { workerPlaybook } from "./coordinator-playbook.ts";
+import { cloudWords, workerPlaybook } from "./coordinator-playbook.ts";
 import { appsCliEnv } from "./apps-cli.ts";
 import { commitAll } from "./git.ts";
 import { checkCommand } from "./playbook.ts";
@@ -304,7 +305,7 @@ export class WorkerManager {
 
   // ---------- commands (the coordinator's tools and the HTTP routes)
 
-  start(appId: string, args: { title: string; brief: string; changesApp: boolean; forceBuild?: boolean }): WorkerInfo {
+  start(appId: string, args: { title: string; brief: string; changesApp: boolean; forceBuild?: boolean; level?: HelperLevel }): WorkerInfo {
     const record = this.host.record(appId);
     if (!record) throw new Error("The app is gone.");
     const entry = this.workers(appId);
@@ -312,7 +313,17 @@ export class WorkerManager {
     while (entry.records.some((w) => w.info.id === id)) id = randomBytes(3).toString("hex");
     const now = nowIso();
     const w: WorkerRecord = {
-      info: { id, appId, title: oneLine(args.title, 60) || "Work on the app", state: "working", latest: "Starting", changesApp: args.changesApp, createdAt: now, updatedAt: now },
+      info: {
+        id,
+        appId,
+        title: oneLine(args.title, 60) || "Work on the app",
+        state: "working",
+        latest: "Starting",
+        changesApp: args.changesApp,
+        ...(this.host.config.cloud ? { level: args.level ?? "focused" } : {}),
+        createdAt: now,
+        updatedAt: now,
+      },
       brief: args.brief.trim(),
       rowId: randomUUID(),
       inbox: [args.brief.trim()],
@@ -394,12 +405,18 @@ export class WorkerManager {
       cwd,
       env: appsCliEnv(this.host.stateDir, appId),
       ...(w.sessionId ? { resumeSessionId: w.sessionId } : {}),
-      instructions: workerPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: cwd, preset: record.app.preset }, w.info),
+      instructions: ((text) => (this.host.config.cloud ? cloudWords(text) : text))(
+        workerPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: cwd, preset: record.app.preset }, w.info),
+      ),
       mcpServers: [
         ...(this.host.pageTools ? [this.host.pageTools(appId, { workerId: w.info.id, title: w.info.title })] : []),
         ...(this.host.appTools ? [this.host.appTools(appId, w.info.id)] : []),
       ],
-      launch: claudeLaunchSpec(this.host.config.acpLaunch),
+      launch: claudeLaunchSpec(this.host.config.acpLaunch, this.host.config.cloud?.agentPrefix),
+      // The cloud: the helper's level picks its model and effort (docs/CLOUD.md, "Models").
+      ...(this.host.config.cloud
+        ? { model: levelChoice(this.host.config.cloud, w.info.level), tag: { role: "helper", workerId: w.info.id, level: w.info.level ?? "focused" }, clientFs: false }
+        : {}),
       onUsage: (usage) => this.host.countUsage?.(appId, w.usageItem, usage),
       onPlanLimit: (limit) => this.host.notePlan?.(limit),
       onUpdate: (update) => {

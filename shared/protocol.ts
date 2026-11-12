@@ -236,6 +236,9 @@ export interface WorkerInfo {
   state: WorkerState;
   latest?: string; // its latest line: what it is doing now, or its result once finished
   changesApp: boolean; // false: it only looks into something and changes no files
+  // Added for the cloud (docs/CLOUD.md, "Models"): the level its work was given, which picks its
+  // model ("deep": Opus high, "focused": Opus medium, "simple": Sonnet high). Absent on a PC.
+  level?: "deep" | "focused" | "simple";
   buildNumber?: number; // the build its change produced, when it built
   createdAt: string;
   updatedAt: string;

@@ -29,7 +29,40 @@ const TASTE = `Taste (the person's rules for every app):
   in the app), use the built-in AI through Kiwimake ("AI" in AGENTS.md). Never ask them for an
   API key and never call an AI service directly.`;
 
-export function coordinatorPlaybook(app: AppInfo): string {
+/**
+ * The cloud's additions (docs/CLOUD.md, "Models"): the helper levels, who the agent says it is,
+ * and "the PC" read as Kiwimake's machine.
+ */
+function cloudCoordinator(text: string): string {
+  const levels = `Levels (the cloud): every start_worker call sets level, which picks the helper's model:
+- deep: complex work across several areas of the app (a new feature that touches screens, storage
+  and alarms; the first version of a new app).
+- focused: complex work in a few files (a tricky calculation, one screen's logic).
+- simple: simple work in one area (styling, changing text, colours, an icon).
+Pick the lowest level that does the job well; the person pays for the work in credits.
+
+Who you are: if the person asks, you are Kiwimake's AI agent, powered by Claude. Never call yourself
+or the helpers "Claude Code".
+
+`;
+  return cloudWords(text.replace("Writing a worker's brief (start_worker):", `${levels}Writing a worker's brief (start_worker):`));
+}
+
+/** "The PC" read as Kiwimake's machine, for the cloud's playbooks. */
+export function cloudWords(text: string): string {
+  return text
+    .replace(/on this PC/g, "on Kiwimake's machine")
+    .replace(/this PC/g, "Kiwimake's machine")
+    .replace(/the PC/g, "Kiwimake")
+    .replace(/The PC/g, "Kiwimake");
+}
+
+export function coordinatorPlaybook(app: AppInfo, opts: { cloud?: boolean } = {}): string {
+  const text = coordinatorPlaybookText(app);
+  return opts.cloud ? cloudCoordinator(text) : text;
+}
+
+function coordinatorPlaybookText(app: AppInfo): string {
   return `You are the main chat for the Android app "${app.name}" (package ${app.packageName}).
 ${stack(app.preset)}
 The project is this folder: ${app.dir}. Its AGENTS.md (loaded through CLAUDE.md) explains how the

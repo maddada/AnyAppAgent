@@ -24,13 +24,30 @@ pidf=/dev/shm/kiwi-runner.pid
 mkdir -p "$base"
 if [ -f "$pidf" ] && grep -qs runner.mjs "/proc/$(cat "$pidf")/cmdline"; then echo running; exit 0; fi
 if [ "$mode" = check ]; then echo stopped; exit 0; fi
-dir=$base/runner-$version
+# The code is readable by the agent (the builder runs as agent); the runner's state is not.
+code=/data/kiwi-code
+mkdir -p "$code" && chmod 755 "$code"
+dir=$code/runner-$version
 if [ ! -f "$dir/.ok" ]; then
   rm -rf "$dir"; mkdir -p "$dir"
   curl -fsSL --retry 5 --retry-all-errors "$bundle" -o "$base/runner.tgz"
   tar -xzf "$base/runner.tgz" -C "$dir"
   rm -f "$base/runner.tgz"
+  # The companion's dependencies: the image's copy when the lock file is the same, else installed.
+  want=$(sha256sum "$dir/server/package-lock.json" | cut -d' ' -f1)
+  if [ -f /opt/kiwi/server-deps/.lockhash ] && [ "$(cat /opt/kiwi/server-deps/.lockhash)" = "$want" ]; then
+    ln -sfn /opt/kiwi/server-deps/node_modules "$dir/server/node_modules"
+  else
+    (cd "$dir/server" && npm ci --omit=dev --no-audit --no-fund --loglevel=error) >&2
+  fi
   touch "$dir/.ok"
+fi
+# Gradle replaces files in its cache: the agent must own the shared caches (image v1 had them
+# group-writable only).
+if [ -d /data/shared/gradle ] && [ "$(stat -c %U /data/shared/gradle)" != agent ]; then sudo -n chown -R agent:kiwi /data/shared; fi
+# The agent's wrapper from this bundle (root-owned: the agent cannot change it).
+if [ -f "$dir/cloud/box/agent.sh" ] && [ -d /opt/kiwi ]; then
+  sed 's/\r$//' "$dir/cloud/box/agent.sh" > "$base/agent.sh.new" && sudo -n install -o root -g root -m 755 "$base/agent.sh.new" /opt/kiwi/agent.sh && rm -f "$base/agent.sh.new"
 fi
 secrets=$(cat)
 printf '%s' "$secrets" | nohup node "$dir/cloud/runner/$entry" --convex "$site" --pid-file "$pidf" >> "$base/runner.log" 2>&1 &

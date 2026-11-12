@@ -45,6 +45,12 @@ const TOOLS = [
         title: { type: "string", description: "Its task in 3 to 6 plain words, shown to the person, e.g. \"Make the button green\"." },
         brief: { type: "string", description: "Everything it needs: what the person wants (their words when they matter), what you know, what done looks like." },
         changes_app: { type: "boolean", description: "false when it should only look into something and change no files. Default true." },
+        level: {
+          type: "string",
+          enum: ["deep", "focused", "simple"],
+          description:
+            "How hard the work is (it picks the worker's model): deep for complex work across several areas (a new feature touching screens, storage and alarms; a new app), focused for complex work in a few files (a tricky calculation, one screen's logic), simple for simple work in one area (styling, text, colours, an icon). Default focused.",
+        },
       },
       required: ["title", "brief"],
     },
@@ -85,7 +91,8 @@ function callTool(workers: WorkerManager, appId: string, name: string, args: Rec
   switch (name) {
     case "start_worker": {
       const changesApp = args["changes_app"] !== false;
-      const w = workers.start(appId, { title: arg(args, "title"), brief: arg(args, "brief"), changesApp });
+      const level = args["level"] === "deep" || args["level"] === "simple" || args["level"] === "focused" ? args["level"] : undefined;
+      const w = workers.start(appId, { title: arg(args, "title"), brief: arg(args, "brief"), changesApp, ...(level ? { level } : {}) });
       return changesApp
         ? `Worker ${w.id} "${w.title}" started in its own copy of the app. Its change is added to the app when it is done (one change at a time, then a build), and its report arrives as a message.`
         : `Worker ${w.id} "${w.title}" started (looks only). Its report arrives as a message when it is done.`;

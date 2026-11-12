@@ -553,7 +553,11 @@ own GitHub account (the `cloud` in the name keeps it apart from a PC app's `anya
   plain message and push after each change, as part of finishing the change. The runner checks
   after each turn that `HEAD` is on GitHub and pushes itself if the agent did not, and a build is
   only shown as "saved" once its commit is pushed. If GitHub is down the runner retries and the chat
-  says the change is not saved yet.
+  says the change is not saved yet. **Built in milestone 2, simpler than planned:** as on the PC,
+  neither the orchestrator nor a helper commits; the runner commits each change when its build
+  succeeds ("Build N: ...") and pushes right after (`git.setPushImpl`, `cloud-runner.ts
+  pushWithToken`), three tries, with a one-repo token it asks Convex for and holds only in memory
+  for that push. The build row records whether its commit was pushed.
 - **Pushing from the box**: a Git credential helper asks the runner for the current one-repo token
   (the runner asks Convex, which mints it with the App's private key); the spike checks whether
   Instabox's Secrets proxy can carry it instead, so it never reaches the box at all. **Proven in the
@@ -657,6 +661,11 @@ instructions say which level each piece of work gets:
   build: in the spike one agent session and a full Gradle build ran at once with no OOM kill, but
   memory (page cache included) sat at 7.4 to 7.9 GiB through every build; two helpers and a build
   at once is still to measure (milestone 2), with 4 vCPU / 16 GiB (Pro's 8/16) as the fallback.
+  **Measured in milestone 2** (the runner samples `/proc/meminfo` while it works): the
+  orchestrator, one helper and a full Gradle build peaked at 6.6 GiB used (1.2 GiB available); the
+  orchestrator and two helpers working at once, each landing a quick update, sat at 5.5 to 5.6 GiB.
+  Two helpers each starting a full Gradle build at once did not happen (builds take turns per app),
+  so 8 GiB stays.
 - **Costs**: every ACP turn reports its usage with the session's model; the runner prices it with
   that model's list price and tags it with the helper and its level. The change's usage line adds
   them up: on the Own key plan "AI $0.31 on your key (orchestrator $0.09, 2 helpers $0.22)", with
@@ -673,7 +682,15 @@ Gradle then signs release builds with the debug key), Gradle builds the release 
 they are signed with `apksigner` (as the fast lane's bundle swap already does) and the quick update
 with `OtaSign.java`, in a separate step after Gradle has exited (section 6). Built in the spike:
 `builder/` signs right after Gradle exits (1.6 to 2.6 s for three APKs); moving that step to the
-`runner` user with a signing ticket is milestone 2.
+`runner` user with a signing ticket is milestone 2. **Built in milestone 2:** on the box the builder
+runs as `agent` with `ANYAPP_SIGN_EXTERNAL=1` and never sees a key (its APKs and quick update
+leave it unsigned); the runner (the box's login user) asks Convex for that build's one-time ticket,
+writes the key to a tmpfs folder only it can read, signs copies of the outputs
+(`builder/lib/external-sign.mjs`: `apksigner`, then `ota.sig` added to the quick update), checks
+the certificate, wipes the key and writes the signing log. A new app's key is made by the runner
+before the agent starts and handed to Convex once over TLS (sealed there with a data key wrapped by
+`KEYS_KEK`; milestone 5 adds sealing to Convex's public key on the way). Kotlin apps sign inside
+their own Gradle script and are refused in the cloud for now.
 
 **Builds reach the phone without a PC.** After a successful build the runner uploads the
 `arm64-v8a` APK (phones), the `x86_64` one (the emulator) and the quick update zip to Convex file
@@ -1110,6 +1127,25 @@ the inbox with leases, file uploads and build records (last 3 builds keep their 
 webhooks, reconcile). Proven: 19 tests (`cloud/tests`), and on real boxes a phone stand-in made an
 app, Convex made its box from the image and started a stand-in runner (no AI), then pause, resume,
 snapshot and delete, restore from the snapshot, and removal, with no box or snapshot left behind.
+
+**Milestone 2, what ran (12 Nov 2026):** the runner is `server/src/cloud-runner.ts` (AppManager
+with its ServerEvents sent to Convex and its commands taken from the inbox), started by
+`cloud/runner/runner.mjs` from the runner bundle. A new image, **`anyapp-box-v1`**
+(`cloud/box/provision-v1.sh`): the `kiwi` group shared by the runner and `agent` for `/data/apps`
+only, the agent owning the shared Gradle and builder caches, `/opt/kiwi/agent.sh` (sudo gives the
+agent a clean environment with only the proxy placeholder for the AI key), and the companion's
+dependencies (the boot script links them when the lock file matches). ACP sessions get their model
+and effort (`session/set_config_option`), `start_worker` has `level`, the orchestrator's playbook
+in the cloud has the three levels and says it is "Kiwimake's AI agent, powered by Claude", and the
+agent gets no file access through the runner (ACP's fs capability is off). Proven on a real box
+(`cloud/scripts/m2-proof.mjs`, `C:/aa/e2e/cloud-build/m2/`): a new app planned by the orchestrator
+(Opus 5.5 high) and built by a `focused` helper (Opus 5.5 medium) as `agent`, signed with a ticket
+(the APK's certificate is the app's own, checked with `apksigner`), uploaded and installed on the
+emulator; a "make the title green" change by a `simple` helper (Sonnet 5.5 high) as a quick update;
+two `simple` helpers at once, each landing a quick update. The agent could not read the runner's
+environment, its state, the box's secrets file or the key folder, and had no sudo. AI used: $2.11
+at list price for a new app and three changes (with $0.14 of fix turns lost to a box permission
+bug found and fixed on the way). Pushing waits for GitHub (milestone 3).
 
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account

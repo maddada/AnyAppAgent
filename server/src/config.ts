@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
+import { cloudSettingsFromEnv, type CloudSettings } from "./cloud-settings.ts";
 
 export const SERVER_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const REPO_DIR = resolve(SERVER_DIR, "..");
@@ -24,6 +25,8 @@ export interface Config {
   coordinator: boolean;
   /** The agent explains its plan (bullets and a page) and waits for a yes before it builds a new app. ANYAPP_PLAN_FIRST=off skips that (scripts). */
   planFirst: boolean;
+  /** The cloud runner only (ANYAPP_CLOUD=1, docs/CLOUD.md): models per session, the agent as another Unix user. */
+  cloud?: CloudSettings;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -41,5 +44,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     askPermissions: env.ANYAPP_ASK_PERMISSIONS === "1",
     coordinator: !["off", "0", "false", "no"].includes((env.ANYAPP_COORDINATOR ?? "on").toLowerCase()),
     planFirst: !["off", "0", "false", "no"].includes((env.ANYAPP_PLAN_FIRST ?? "on").toLowerCase()),
+    ...(cloudSettingsFromEnv(env) ? { cloud: cloudSettingsFromEnv(env) } : {}),
   };
 }

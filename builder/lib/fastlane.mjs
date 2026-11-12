@@ -207,14 +207,20 @@ export async function makeOtaPackage({ file, bundle, resDir, packageName, build,
     files: files.map((f) => ({ name: f.name, size: f.data.length, sha256: sha256(f.data) })),
   };
   const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 1));
-  const manifestFile = `${file}.json`;
-  await fsp.writeFile(manifestFile, manifestBytes);
-  const { sig, cert } = await signFile(javaHome, key, manifestFile);
-  await fsp.rm(manifestFile, { force: true });
-  if (expectCert && cert !== expectCert) throw new Error(`the quick update was signed by ${cert.slice(0, 12)} but the app is signed by ${expectCert.slice(0, 12)}`);
+  // No key (external signing, the cloud): the package goes out without ota.sig, and
+  // lib/external-sign.mjs adds it later as another Unix user.
+  let sig = null;
+  if (key) {
+    const manifestFile = `${file}.json`;
+    await fsp.writeFile(manifestFile, manifestBytes);
+    const signed = await signFile(javaHome, key, manifestFile);
+    await fsp.rm(manifestFile, { force: true });
+    if (expectCert && signed.cert !== expectCert) throw new Error(`the quick update was signed by ${signed.cert.slice(0, 12)} but the app is signed by ${expectCert.slice(0, 12)}`);
+    sig = signed.sig;
+  }
   await writeZip(file, [
     { name: 'ota.json', data: manifestBytes },
-    { name: 'ota.sig', data: Buffer.from(sig) },
+    ...(sig ? [{ name: 'ota.sig', data: Buffer.from(sig) }] : []),
     ...files.map((f) => ({ name: f.name, data: f.data, store: /\.(png|jpe?g|webp|gif|mp3|ogg|m4a|ttf|otf)$/i.test(f.name) })),
   ]);
   const data = await fsp.readFile(file);
@@ -248,6 +254,7 @@ export async function swapBundle({ baseApk, outApk, bundle, build, javaHome, sdk
   if (!sawBundle || !sawManifest) throw new Error(`${path.basename(baseApk)} has no ${sawBundle ? 'AndroidManifest.xml' : 'JavaScript bundle'}`);
   await fsp.mkdir(path.dirname(outApk), { recursive: true });
   await writeZip(outApk, items);
+  if (!key) return outApk; // external signing: signed later by lib/external-sign.mjs
   await apksignerRun(javaHome, sdk, [
     'sign',
     '--ks', key.storeFile, '--ks-key-alias', key.keyAlias, '--ks-pass', 'env:ANYAPP_KS_PASS',
