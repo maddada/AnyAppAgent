@@ -200,7 +200,7 @@ export function installAppsCli(stateDir: string, nodePath: string = process.exec
   mkdirSync(binDir, { recursive: true });
   const entry = CLI_ENTRY;
   const state = resolve(stateDir);
-  // ELECTRON_RUN_AS_NODE: under the desktop app, process.execPath is AnyAppAgent.exe in Node mode.
+  // ELECTRON_RUN_AS_NODE: under the desktop app, process.execPath is Kiwimake.exe in Node mode.
   const cmd = [
     "@echo off",
     "setlocal",

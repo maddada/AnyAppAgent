@@ -1,4 +1,4 @@
-// Turns ACP `session/update` notifications into AnyAppAgent ChatItems. Modelled on bb's
+// Turns ACP `session/update` notifications into Kiwimake ChatItems. Modelled on bb's
 // packages/provider-bridge-acp/src/delta-translation.ts (MIT, see THIRD_PARTY_NOTICES.md):
 // assistant and thought text stream into one item until something else happens (bb's
 // closeThoughtStream/closeAssistantStream), tool_call opens an item that tool_call_update

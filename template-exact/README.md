@@ -1,4 +1,4 @@
-# AnyAppAgent Expo Exact preset (alpha)
+# Kiwimake Expo Exact preset (alpha)
 
 The "Expo Exact" choice of the New app sheet. Unlike `template/` and `template-kotlin/`, this is
 not a full starter: `builder/lib/exact.mjs` makes the app with Exact's own `exact new <dir> --with
@@ -6,7 +6,7 @@ android` from a pinned Exact checkout (`builder/exact/pin.json`, patched for Win
 `builder/exact/windows.patch` until upstream has the fixes, expo/exact issues 147 to 150), then
 adds what is here:
 
-- `AGENTS.md`: AnyAppAgent's instructions for the app's agent, put above Exact's generated block.
+- `AGENTS.md`: Kiwimake's instructions for the app's agent, put above Exact's generated block.
 
 and writes `anyapp.json` (`{ preset: "expo-exact", slug, package }`) and a plain `CLAUDE.md`.
 

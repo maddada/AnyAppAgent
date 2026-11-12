@@ -1,4 +1,4 @@
-# AnyAppAgent theme: Workbench
+# Kiwimake theme: Workbench
 
 One look for the Android app (`app/`) and the desktop app (`desktop/`). A maker's bench: warm paper,
 graphite ink and one bottle green that only ever means "do this next" or "ready". Bricolage

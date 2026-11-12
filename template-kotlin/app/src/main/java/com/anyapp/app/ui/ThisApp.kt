@@ -29,10 +29,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * "Change this app" (AnyAppAgent docs/CHANGE-THIS-APP.md): the "This app" group every app has in its
- * settings. Built in: keep it in the app's Settings screen. The row opens AnyAppAgent at this app
+ * "Change this app" (Kiwimake docs/CHANGE-THIS-APP.md): the "This app" group every app has in its
+ * settings. Built in: keep it in the app's Settings screen. The row opens Kiwimake at this app
  * (the person who made it lands in its chat; anyone else can suggest a change or make their own
- * version), or without AnyAppAgent an explanation drawn by the app (com.anyapp.updates.ChangeSheet).
+ * version), or without Kiwimake an explanation drawn by the app (com.anyapp.updates.ChangeSheet).
  */
 @Composable
 fun ChangeThisAppRow(screen: String = "settings") {
@@ -77,7 +77,7 @@ fun ThisAppSection(screen: String = "settings") {
   HorizontalDivider(thickness = 1.dp, color = colors.border)
   Row(Modifier.fillMaxWidth().padding(vertical = Spacing.md), verticalAlignment = Alignment.CenterVertically) {
     Text(if (owner.isEmpty()) "Made" else "Made by $owner", style = AppType.body, color = colors.text, modifier = Modifier.weight(1f))
-    Text("with AnyAppAgent", style = AppType.small, color = colors.textMuted)
+    Text("with Kiwimake", style = AppType.small, color = colors.textMuted)
   }
   HorizontalDivider(thickness = 1.dp, color = colors.border)
 }

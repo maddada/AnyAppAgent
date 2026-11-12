@@ -41,7 +41,7 @@ export async function createApp(args: {
       "}",
       "",
     ].join("\n"),
-    "README.md": `# ${args.name}\n\nCreated by AnyAppAgent (fake builder).\n`,
+    "README.md": `# ${args.name}\n\nCreated by Kiwimake (fake builder).\n`,
   };
   for (const [name, content] of Object.entries(files)) writeFileSync(join(args.dir, name), content);
   args.onLog?.("fake builder: project created");
@@ -100,7 +100,7 @@ export async function adoptApp(args: { src: string; dir: string; name: string; s
   const { cpSync, readdirSync } = await import("node:fs");
   if (existsSync(args.dir) && readdirSync(args.dir).length > 0) throw new Error(`${args.dir} already exists and is not empty`);
   const appJson = join(args.src, "app.json");
-  if (!existsSync(appJson)) throw new Error("This is not an app made with AnyAppAgent (no app.json or anyapp.json).");
+  if (!existsSync(appJson)) throw new Error("This is not an app made with Kiwimake (no app.json or anyapp.json).");
   cpSync(args.src, args.dir, { recursive: true });
   const meta = JSON.parse(readFileSync(join(args.dir, "app.json"), "utf8")) as { expo: { name: string; slug: string; android?: { package?: string } } };
   meta.expo.name = args.name;

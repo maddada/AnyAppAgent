@@ -1,4 +1,4 @@
-// Native side of src/lib/ai.ts: talks to AnyAppAgent's local AI service (it holds the key).
+// Native side of src/lib/ai.ts: talks to Kiwimake's local AI service (it holds the key).
 // Use src/lib/ai.ts, not this file. Wire format: modules/ai/README.md.
 import { requireNativeModule, type EventSubscription } from 'expo';
 

@@ -1,4 +1,4 @@
-// Small shared pieces of Appwin Automate's screens: section labels, status pills, plain rows.
+// Small shared pieces of Automate's screens: section labels, status pills, plain rows.
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 

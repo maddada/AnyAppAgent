@@ -3,7 +3,7 @@ package com.anyapp.updates
 import android.app.job.JobParameters
 import android.app.job.JobService
 
-/** The daily background check (AppUpdater). Same file in every AnyAppAgent template. */
+/** The daily background check (AppUpdater). Same file in every Kiwimake template. */
 class UpdateJob : JobService() {
   override fun onStartJob(params: JobParameters): Boolean {
     Thread {

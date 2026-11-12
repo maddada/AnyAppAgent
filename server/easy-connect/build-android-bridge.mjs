@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Builds the Easy Connect bridge for the AnyAppAgent Android app: the same gomobile `bind` that
+// Builds the Easy Connect bridge for the Kiwimake Android app: the same gomobile `bind` that
 // Ghostex's apps/mobile/tailcat-bridge/build.sh runs, from the copy in ./tailcat-bridge, with the
 // same pinned gomobile, using the private Go toolchain in %USERPROFILE%\.anyappagent\tools (made
 // there by the companion's Easy Connect install when missing). Output, never inside the repo:

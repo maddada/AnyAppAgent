@@ -22,9 +22,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * AI (Claude or OpenRouter) through AnyAppAgent. The person adds their AI key once, in
- * AnyAppAgent's Settings; every app made with AnyAppAgent can then use it. This app never sees
- * the key: requests go to AnyAppAgent on the same phone (a bound service), which adds the key,
+ * AI (Claude or OpenRouter) through Kiwimake. The person adds their AI key once, in
+ * Kiwimake's Settings; every app made with Kiwimake can then use it. This app never sees
+ * the key: requests go to Kiwimake on the same phone (a bound service), which adds the key,
  * counts usage and lets the person switch AI off per app. Usage: AGENTS.md, "AI".
  *
  *   val answer = Ai.ask(context, "Suggest a name for a cat")
@@ -36,14 +36,14 @@ import org.json.JSONObject
  */
 object Ai {
   /**
-   * AnyAppAgent's package. Development only: `adb shell setprop debug.anyapp.ai.agent <package>`
-   * talks to a side-by-side AnyAppAgent build instead (only adb can set debug.* properties, and
+   * Kiwimake's package. Development only: `adb shell setprop debug.anyapp.ai.agent <package>`
+   * talks to a side-by-side Kiwimake build instead (only adb can set debug.* properties, and
    * that build still decides which apps it serves).
    */
   private val AGENT_PACKAGE: String by lazy { devProperty("debug.anyapp.ai.agent")?.takeIf { Regex("[a-z][a-z0-9_.]*").matches(it) } ?: "com.anyappagent" }
   private const val ACTION = "com.anyappagent.action.AI"
 
-  // Same numbers as AnyAppAgent's AiProxyService (AI.md).
+  // Same numbers as Kiwimake's AiProxyService (AI.md).
   private const val STATUS = 1
   private const val CHAT = 2
   private const val CANCEL = 3
@@ -100,17 +100,17 @@ object Ai {
     }
 
     override fun onServiceDisconnected(name: ComponentName?) {
-      // AnyAppAgent stopped or was updated: answers in progress are lost.
+      // Kiwimake stopped or was updated: answers in progress are lost.
       handler.post {
         service = null
-        failAll("disconnected", "AnyAppAgent stopped while answering. Try again.")
+        failAll("disconnected", "Kiwimake stopped while answering. Try again.")
       }
     }
 
     override fun onBindingDied(name: ComponentName?) {
       handler.post {
         unbind()
-        failAll("disconnected", "AnyAppAgent was updated or stopped. Try again.")
+        failAll("disconnected", "Kiwimake was updated or stopped. Try again.")
       }
     }
 
@@ -139,7 +139,7 @@ object Ai {
     }
   }
 
-  /** Opens AnyAppAgent's settings, where the AI key is added and each app switched on or off. */
+  /** Opens Kiwimake's settings, where the AI key is added and each app switched on or off. */
   fun openSetup(context: Context): Boolean {
     val deep = Intent(Intent.ACTION_VIEW, Uri.parse("anyappagent://settings")).setPackage(AGENT_PACKAGE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     return try {
@@ -212,7 +212,7 @@ object Ai {
       withService(context) { s ->
         if (s == null) {
           val code = if (agentInstalled(context)) "not_reachable" else "no_anyappagent"
-          return@withService emit(id, code, if (code == "no_anyappagent") "AI needs AnyAppAgent on this phone." else "Could not reach AnyAppAgent. Open it once and try again.")
+          return@withService emit(id, code, if (code == "no_anyappagent") "AI needs Kiwimake on this phone." else "Could not reach Kiwimake. Open it once and try again.")
         }
         var i = 0
         var ok: Boolean
@@ -225,7 +225,7 @@ object Ai {
           })
           i = end
         } while (ok && i < request.length)
-        if (!ok) emit(id, "not_reachable", "Could not reach AnyAppAgent. Try again.")
+        if (!ok) emit(id, "not_reachable", "Could not reach Kiwimake. Try again.")
       }
     }
     cont.invokeOnCancellation {

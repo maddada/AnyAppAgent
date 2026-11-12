@@ -2,7 +2,7 @@
   "name": "anyapp-builder",
   "version": "1.0.0",
   "private": true,
-  "description": "Creates AnyAppAgent apps from the template and builds their signed release APKs.",
+  "description": "Creates Kiwimake apps from the template and builds their signed release APKs.",
   "type": "module",
   "main": "index.mjs",
   "exports": {

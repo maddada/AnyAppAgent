@@ -1189,7 +1189,7 @@ export class AppManager {
     const adopt = this.builder.adoptApp;
     if (!adopt) throw new HttpError(409, "This PC cannot make own versions of apps.");
     const repo = typeof req.repo === "string" ? repoFromText(req.repo) : null;
-    if (!repo) throw new HttpError(400, "That is not the releases page of an app made with AnyAppAgent.");
+    if (!repo) throw new HttpError(400, "That is not the releases page of an app made with Kiwimake.");
     const cleanName = String(req.name ?? "").trim().replace(/\s+/g, " ");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give your version a name of up to 50 characters.");
     const firstChange = typeof req.firstChange === "string" ? req.firstChange.trim().slice(0, 4000) : "";

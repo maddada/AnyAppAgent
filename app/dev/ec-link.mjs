@@ -1,5 +1,5 @@
 // Proof helper: asks a companion (admin token) for its live Easy Connect code and opens the
-// AnyAppAgent deep link anyappagent://pair?ec=<code> on the emulator, as a tapped link would.
+// Kiwimake deep link anyappagent://pair?ec=<code> on the emulator, as a tapped link would.
 // The code is never printed (it holds the PC's address and a one-time secret).
 //
 //   node dev/ec-link.mjs --port 8781 --admin <token> [--serial emulator-5560] [--new]

@@ -57,8 +57,8 @@ How it gets there:
    JavaScript handler (better stack, the screen name) and an error boundary around the app that
    shows a calm "Something went wrong" screen with Try again instead of a white screen (kind
    `error`). The crash is also written to the diary.
-2. **To AnyAppAgent on the phone**: an explicit broadcast to **the app that installed it**
-   (Android's install source record: AnyAppAgent, whatever its package name), never to anyone else:
+2. **To Kiwimake on the phone**: an explicit broadcast to **the app that installed it**
+   (Android's install source record: Kiwimake, whatever its package name), never to anyone else:
 
    | | |
    | --- | --- |
@@ -68,8 +68,8 @@ How it gets there:
    | Extra `sender` | a `PendingIntent` the app made (`getBroadcast`, `FLAG_IMMUTABLE`): Android stamps its creator, so it proves which app sent the broadcast |
 
    An app installed by something else (adb, a file manager) sends nothing.
-3. **AnyAppAgent** (`app/modules/anyapp-native`, `CrashReceiver`) accepts a report only when the
-   `sender`'s creator package is an app AnyAppAgent installed itself (install source), keeps at
+3. **Kiwimake** (`app/modules/anyapp-native`, `CrashReceiver`) accepts a report only when the
+   `sender`'s creator package is an app Kiwimake installed itself (install source), keeps at
    most 20 waiting reports, posts the notification, and the JavaScript side sends them to the PC
    (`POST /api/apps/:id/crashes`) as soon as it is connected. The notification opens the app's
    chat.
@@ -90,10 +90,10 @@ The card: "Apps keep a small private log of what they did ("Asr alarm set for 15
   read). The chat shows a quiet line each time it is read, with "The diary stays on your phone and
   this PC."
 - **How the agent reads it**: the `read_diary` tool (MCP server `app`). The PC sends
-  `diary.request` to the connected phones; AnyAppAgent asks the app with an explicit broadcast
+  `diary.request` to the connected phones; Kiwimake asks the app with an explicit broadcast
   (action `com.anyapp.action.DIARY_REQUEST`, package = the app, extra `requestId`); the app's
   receiver answers only to its installer (action `com.anyappagent.action.DIARY`, extras
-  `requestId`, `diary` = JSON array of `{at, text}`, `sender` as above); AnyAppAgent posts it to
+  `requestId`, `diary` = JSON array of `{at, text}`, `sender` as above); Kiwimake posts it to
   the PC (`POST /api/apps/:id/diary`). While that app is being installed, the phone first waits
   for the install (up to 42 s; still installing then: the tool says so and the agent tries again).
   No phone connected, or no answer within 56 s (the agent's tool call

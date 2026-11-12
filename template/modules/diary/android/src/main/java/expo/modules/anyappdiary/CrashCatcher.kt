@@ -10,7 +10,7 @@ import java.io.PrintWriter
 import java.io.StringWriter
 
 /**
- * Crash catcher (docs in AGENTS.md, "Crashes"). When the app crashes, AnyAppAgent on the phone (the
+ * Crash catcher (docs in AGENTS.md, "Crashes"). When the app crashes, Kiwimake on the phone (the
  * app that installed this one) gets the report and offers the person "Fix it", which sends it to
  * the app's agent. Installed when the app process starts (AnyappDiaryPackage). Fatal JavaScript
  * errors are reported by src/lib/crash.ts first (better stack, the screen) and reach this handler
@@ -79,12 +79,12 @@ object CrashCatcher {
     }
   }
 
-  /** Proves to AnyAppAgent which app sent a broadcast: Android stamps the creator of a PendingIntent. */
+  /** Proves to Kiwimake which app sent a broadcast: Android stamps the creator of a PendingIntent. */
   fun sender(context: Context): PendingIntent = PendingIntent.getBroadcast(
     context, 0, Intent(ACTION_IDENTITY).setPackage(context.packageName), PendingIntent.FLAG_IMMUTABLE,
   )
 
-  /** The app that installed this one (AnyAppAgent), or null when it was installed some other way. */
+  /** The app that installed this one (Kiwimake), or null when it was installed some other way. */
   fun installer(context: Context): String? {
     val pm = context.packageManager
     val name = try {

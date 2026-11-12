@@ -5,11 +5,11 @@
 
   <application>
     <!--
-      "AI for your apps": apps made with AnyAppAgent bind to this service to talk to the AI with
+      "AI for your apps": apps made with Kiwimake bind to this service to talk to the AI with
       the key kept here. It is exported without a permission on purpose: every message is checked
       against the sender's signing certificate (AiTrust.kt), because the apps are signed with the
-      PC's key, not AnyAppAgent's, so an Android signature permission cannot express "apps made
-      by AnyAppAgent". The key itself never leaves this process.
+      PC's key, not Kiwimake's, so an Android signature permission cannot express "apps made
+      by Kiwimake". The key itself never leaves this process.
     -->
     <service
         android:name="com.anyappagent.ai.AiProxyService"

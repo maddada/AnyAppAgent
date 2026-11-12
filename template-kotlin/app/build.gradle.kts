@@ -5,7 +5,7 @@ plugins {
   id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// anyapp.json is written by AnyAppAgent: the app's package id, which never changes (a different
+// anyapp.json is written by Kiwimake: the app's package id, which never changes (a different
 // id would be a different app that cannot update the one on the phone).
 @Suppress("UNCHECKED_CAST")
 val anyapp = JsonSlurper().parse(rootProject.file("anyapp.json")) as Map<String, Any?>
@@ -19,7 +19,7 @@ android {
     applicationId = anyapp["package"] as String
     minSdk = 26
     targetSdk = 36
-    // AnyAppAgent sets versionCode to the build number and signs every build with the same key.
+    // Kiwimake sets versionCode to the build number and signs every build with the same key.
     versionCode = 1
     versionName = "1.0"
   }

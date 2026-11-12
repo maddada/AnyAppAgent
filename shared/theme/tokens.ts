@@ -1,4 +1,4 @@
-// AnyAppAgent theme tokens: the single source of truth for the Android app (React Native) and the
+// Kiwimake theme tokens: the single source of truth for the Android app (React Native) and the
 // desktop app (Electron renderer, through the generated theme.css).
 // Plain objects only: no imports, no platform APIs. Direction: "Workbench".
 // Units: numbers are density-independent pixels (dp on Android, CSS px on desktop).

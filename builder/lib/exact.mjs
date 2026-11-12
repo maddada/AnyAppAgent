@@ -118,7 +118,7 @@ export async function ensureExact(appDir, log = () => {}, { setup = true, env = 
   }, { staleMs: 60 * 60_000, timeoutMs: 60 * 60_000 });
 }
 
-/** Makes an Exact app with `exact new` (Android named in its app.json), plus AnyAppAgent's files. */
+/** Makes an Exact app with `exact new` (Android named in its app.json), plus Kiwimake's files. */
 export async function createExactApp(dir, { name, slug, packageName }, log = () => {}) {
   const exactDir = await ensureExact(dir, log, { setup: false });
   const bun = findBun();
@@ -131,7 +131,7 @@ export async function createExactApp(dir, { name, slug, packageName }, log = () 
   } catch (e) {
     throw new Error(`exact new failed: ${(e.lines ?? []).slice(-8).join('\n')}`);
   }
-  // AnyAppAgent's part: the preset marker, the app agent's instructions, a git-ignored build/.
+  // Kiwimake's part: the preset marker, the app agent's instructions, a git-ignored build/.
   await fsp.writeFile(path.join(dir, KOTLIN_META), JSON.stringify({ preset: 'expo-exact', slug, package: packageName }, null, 2) + '\n');
   const ours = await fsp.readFile(path.join(EXACT_TEMPLATE_DIR, 'AGENTS.md'), 'utf8');
   const agentsPath = path.join(dir, 'AGENTS.md');

@@ -109,7 +109,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
           onClose={() => setConnect(false)}
           intro={
             <p className="callout body">
-              No AnyAppAgent on the phone yet?{" "}
+              No Kiwimake on the phone yet?{" "}
               <button
                 className="btn btn-text"
                 onClick={() => {
@@ -203,7 +203,7 @@ function AppsPage({
         <header className="apps-pane-head">
           <h1 className="title-small">Your apps</h1>
           <button className="btn btn-primary btn-sm" onClick={onNewApp} disabled={!online} data-testid="new-app">
-            <Icon of={Plus} size="sm" /> New app
+            Make a kiwi
           </button>
         </header>
         {blocking && (
@@ -220,9 +220,9 @@ function AppsPage({
         {apps.length === 0 ? (
           <div className="apps-empty">
             <strong className="heading">No apps yet</strong>
-            <p className="callout secondary">Describe your first app here or in AnyAppAgent on your phone. This PC makes it, and it appears on your phone, ready to open.</p>
+            <p className="callout secondary">Describe your first app here or in Kiwimake on your phone. This PC makes it, and it appears on your phone, ready to open.</p>
             <button className="btn btn-primary btn-sm" onClick={onNewApp} disabled={!online}>
-              <Icon of={Plus} size="sm" /> New app
+              <Icon of={Plus} size="sm" /> Make a kiwi
             </button>
           </div>
         ) : (
@@ -295,7 +295,7 @@ function Overview({ s, hasApps, onConnect, onGetApp }: { s: Snapshot; hasApps: b
       <header className="dm-head">
         <div>
           <h2 className="title">{hasApps ? "Pick an app to change it" : "Make your first app"}</h2>
-          <p className="dm-sub callout">{hasApps ? "Its chat opens here. Ask for a change, and the new version goes to your phone." : "Tap New app and say what it should do. This PC makes it."}</p>
+          <p className="dm-sub callout">{hasApps ? "Its chat opens here. Ask for a change, and the new version goes to your phone." : "Tap Make a kiwi and say what it should do. This PC makes it."}</p>
         </div>
         <button className="btn btn-quiet" onClick={() => api.openFolder("apps")}>
           <Icon of={FolderOpen} size="button" /> Open apps folder
@@ -303,8 +303,8 @@ function Overview({ s, hasApps, onConnect, onGetApp }: { s: Snapshot; hasApps: b
       </header>
       <div className="ov-grid">
         <div className="panel">
-          <div className="eyebrow">{hasPhone ? "AnyAppAgent for another phone" : "AnyAppAgent for your phone"}</div>
-          <p className="label secondary">Show a code, scan it with the phone's camera, and the phone downloads AnyAppAgent.</p>
+          <div className="eyebrow">{hasPhone ? "Kiwimake for another phone" : "Kiwimake for your phone"}</div>
+          <p className="label secondary">Show a code, scan it with the phone's camera, and the phone downloads Kiwimake.</p>
           <button className="btn btn-quiet btn-sm btn-block" onClick={onGetApp} data-testid="show-download-code">
             <Icon of={Download} size="sm" /> Show download code
           </button>
@@ -351,7 +351,7 @@ function NewAppDialog({ s, onClose, onMade }: { s: Snapshot; onClose: () => void
   };
   return (
     <Dialog
-      title="New app"
+      title="Make a kiwi"
       onClose={onClose}
       actions={
         <button className="btn btn-primary btn-block" disabled={!ready || busy} onClick={() => void submit()} data-testid="new-app-submit">
@@ -456,7 +456,7 @@ function AddPhonePanel({ hasPhone, onShow }: { hasPhone: boolean; onShow: () => 
   return (
     <div className="panel">
       <div className="eyebrow">{hasPhone ? "Add another phone" : "Connect your phone"}</div>
-      <p className="label secondary">Show a pairing code and scan it with AnyAppAgent on the phone. Keep the code private.</p>
+      <p className="label secondary">Show a pairing code and scan it with Kiwimake on the phone. Keep the code private.</p>
       <button className="btn btn-quiet btn-sm btn-block" onClick={onShow} data-testid="show-pairing-code">
         <Icon of={QrCode} size="sm" /> Show pairing code
       </button>
@@ -506,7 +506,7 @@ function PhonesPage({ s, onConnect }: { s: Snapshot; onConnect: () => void }) {
       <section className="connect-row">
         <div className="grow">
           <h2 className="heading">{devices.length ? "Connect another phone" : "Connect your phone"}</h2>
-          <p className="label secondary">Show a pairing code and scan it with AnyAppAgent on the phone. Keep the code private: anyone who scans it can use this PC.</p>
+          <p className="label secondary">Show a pairing code and scan it with Kiwimake on the phone. Keep the code private: anyone who scans it can use this PC.</p>
         </div>
         <button className="btn btn-quiet" onClick={onConnect} data-testid="show-pairing-code">
           <Icon of={QrCode} size="button" /> Show pairing code
@@ -790,7 +790,7 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
         <div className="srow">
           <div className="srow-main">
             <span className="body">Start with Windows</span>
-            <span className="sub">AnyAppAgent starts quietly next to the clock when you turn on this PC, so your phone can always make apps.</span>
+            <span className="sub">Kiwimake starts quietly next to the clock when you turn on this PC, so your phone can always make apps.</span>
           </div>
           <Switch label="Start with Windows" on={s.settings.startWithWindows} onChange={() => api.setSetting("startWithWindows", !s.settings.startWithWindows)} />
         </div>
@@ -822,8 +822,8 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
       <section className="list">
         <div className="srow">
           <div className="srow-main">
-            <span className="body">Quit AnyAppAgent</span>
-            <span className="sub">Stops making apps until you open AnyAppAgent again. Closing the window does not stop it.</span>
+            <span className="body">Quit Kiwimake</span>
+            <span className="sub">Stops making apps until you open Kiwimake again. Closing the window does not stop it.</span>
           </div>
           <button className="btn btn-quiet btn-sm" onClick={() => api.quit()}>
             Quit

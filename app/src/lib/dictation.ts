@@ -26,7 +26,7 @@ export interface Dictation {
 const MIC = PermissionsAndroid.PERMISSIONS.RECORD_AUDIO;
 
 /** The one-line reason shown while Android asks for the microphone. */
-export const MIC_REASON = "AnyAppAgent listens only while the mic is on, to write what you say.";
+export const MIC_REASON = "Kiwimake listens only while the mic is on, to write what you say.";
 
 const MESSAGES: Record<DictationErrorCode, string> = {
   unavailable: "This phone has no speech recognition to dictate with.",

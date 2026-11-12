@@ -135,11 +135,11 @@ export class SourceError extends Error {
  * published before code was included), 502 when GitHub cannot be reached.
  */
 export async function findReleaseSource(repo: string, build: number | undefined, fetchImpl: Fetch = fetch): Promise<ReleaseSource> {
-  if (!REPO_RE.test(repo)) throw new SourceError(400, "That is not the releases page of an app made with AnyAppAgent.");
+  if (!REPO_RE.test(repo)) throw new SourceError(400, "That is not the releases page of an app made with Kiwimake.");
   let list: GhRelease[];
   try {
     const res = await fetchImpl(`https://api.github.com/repos/${repo}/releases?per_page=100`, {
-      headers: { accept: "application/vnd.github+json", "user-agent": "AnyAppAgent" },
+      headers: { accept: "application/vnd.github+json", "user-agent": "Kiwimake" },
     });
     if (res.status === 404) throw new SourceError(404, "That app is not shared any more (its releases page is gone or private).");
     if (!res.ok) throw new SourceError(502, `GitHub answered ${res.status}. Try again in a while.`);
@@ -165,7 +165,7 @@ export async function findReleaseSource(repo: string, build: number | undefined,
   const feed = wanted.assets.find((a) => a.name === "update.json");
   if (feed) {
     try {
-      const res = await fetchImpl(feed.browser_download_url, { headers: { "user-agent": "AnyAppAgent" } });
+      const res = await fetchImpl(feed.browser_download_url, { headers: { "user-agent": "Kiwimake" } });
       if (res.ok) {
         const doc = (await res.json()) as { version?: string; build?: number; package?: string; source?: { name?: string; sha256?: string } };
         source = {
@@ -187,7 +187,7 @@ export async function findReleaseSource(repo: string, build: number | undefined,
 export async function downloadSource(source: ReleaseSource, fetchImpl: Fetch = fetch): Promise<Buffer> {
   let buf: Buffer;
   try {
-    const res = await fetchImpl(source.zipUrl, { headers: { "user-agent": "AnyAppAgent" } });
+    const res = await fetchImpl(source.zipUrl, { headers: { "user-agent": "Kiwimake" } });
     if (!res.ok) throw new SourceError(502, `GitHub answered ${res.status} for the code file.`);
     buf = Buffer.from(await res.arrayBuffer());
   } catch (error) {

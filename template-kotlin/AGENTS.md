@@ -1,7 +1,7 @@
 # Working on this app
 
 You are changing an Android app for a non-technical person who uses it on their phone. They tell
-you what they want in plain words; they never see the code. When your turn ends, AnyAppAgent
+you what they want in plain words; they never see the code. When your turn ends, Kiwimake
 builds a signed **release** APK from this folder and installs it over the version on their phone.
 If the build fails, the error comes back to you as your next prompt. **Keep the app building, and
 check your work before you finish.**
@@ -25,12 +25,12 @@ app/src/main/java/com/anyapp/app/
   notify/Notifications.kt  notification permission and notifyNow
   alarms/Alarms.kt         exact alarms with sound + spoken text, work while the app is closed
   alarms/*.kt              the machinery behind Alarms.kt (leave it unless a feature needs it)
-  ai/Ai.kt                 AI (chat, streaming, tools, agents) through AnyAppAgent's key
-  ai/AiSetupNotice.kt      the "AI is not set up" card with a button to AnyAppAgent
+  ai/Ai.kt                 AI (chat, streaming, tools, agents) through Kiwimake's key
+  ai/AiSetupNotice.kt      the "AI is not set up" card with a button to Kiwimake
   ai/AiTypes.kt            AiMessage, AiPart, AiTool, AiError ... (AI.md: the wire format, leave it)
   diary/Diary.kt           the app's diary: Diary.note(context, "...") (see "The diary")
-  diary/CrashCatcher.kt    sends crashes to AnyAppAgent (see "Crashes"; leave it)
-  diary/DiaryRequestReceiver.kt  answers AnyAppAgent's request for the diary (leave it)
+  diary/CrashCatcher.kt    sends crashes to Kiwimake (see "Crashes"; leave it)
+  diary/DiaryRequestReceiver.kt  answers Kiwimake's request for the diary (leave it)
   AnyApp.kt                the Application class: installs the crash catcher at start (keep it)
 app/src/main/AndroidManifest.xml   permissions, the activity, the alarm receivers and service, feedback, the diary
 app/src/main/java/com/anyapp/feedback/  "Point at it": shake to send feedback (built in: keep it, leave it as is)
@@ -44,7 +44,7 @@ app/src/main/res/raw/      sound files for alarms (adhan.mp3, beep.ogg, ...)
 app/build.gradle.kts       dependencies and Android settings
 icon.png                   THE launcher icon (1024x1024 PNG)
 scripts/make-icon.mjs      makes icon.png from a colour and a glyph or letter
-anyapp.json                written by AnyAppAgent: preset, slug and package id (read only)
+anyapp.json                written by Kiwimake: preset, slug and package id (read only)
 overview.md                what the person wants the app to do (see below)
 ```
 
@@ -68,7 +68,7 @@ The Kotlin package of the code is `com.anyapp.app` in every app; only the instal
 ## Never
 
 - Never change `anyapp.json`, `applicationId`, `namespace`, `versionCode`, or anything about
-  signing. AnyAppAgent sets the version code to the build number and signs every build with the
+  signing. Kiwimake sets the version code to the build number and signs every build with the
   same key; a different package id would be a different app that cannot update the one on the
   phone.
 - Never run the app, an emulator, `installDebug`, `assembleRelease` or `clean`, and never stop
@@ -215,11 +215,11 @@ if (!permission.granted) PrimaryButton("Turn on reminders", onClick = { permissi
 Notifications.notifyNow(context, "Saved", "Your list was saved")
 ```
 
-### AI: chat, streaming, tools and agents (Claude or OpenRouter, through AnyAppAgent)
+### AI: chat, streaming, tools and agents (Claude or OpenRouter, through Kiwimake)
 
 Use this whenever the person asks for anything AI: a chat, summaries, smart suggestions, reading a
-photo, an assistant that does things in the app. The person adds their AI key once in AnyAppAgent's
-Settings; this app never sees the key. AnyAppAgent sends the requests, shows usage per app and can
+photo, an assistant that does things in the app. The person adds their AI key once in Kiwimake's
+Settings; this app never sees the key. Kiwimake sends the requests, shows usage per app and can
 switch AI off for this app. Nothing to install or declare.
 
 ```kotlin
@@ -274,12 +274,12 @@ try { Ai.ask(context, "Hi") } catch (e: AiError) {
 
 - Always handle "not ready": show `AiSetupNotice` (with `code = e.code` after an `AiError` with
   `needsSetup`) where the AI feature would be, and keep the rest of the app working without AI.
-  Its button opens AnyAppAgent's settings. Never show a key field in this app.
+  Its button opens Kiwimake's settings. Never show a key field in this app.
 - Stream long answers with `onText` (it runs on the main thread, so it can set Compose state).
   Cancelling the coroutine (`job.cancel()`) stops the answer.
 - Keep tools small and safe: the AI decides when to call them, so never give it a tool that
   deletes or spends without the person confirming in the UI.
-- Limits set by AnyAppAgent: about 30 AI calls a minute and 3 at once per app (`AiError` code
+- Limits set by Kiwimake: about 30 AI calls a minute and 3 at once per app (`AiError` code
   `limit`), answers up to `maxTokens` (default 8192). An agent step is one call.
 - Images: let the person pick one with `rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia())`,
   scale it down (`BitmapFactory` + `Bitmap.createScaledBitmap`, JPEG quality 70), then base64 it
@@ -307,11 +307,11 @@ Diary.note(context, "Could not load prayer times: no internet, used yesterday's"
 - **Never personal content**: no names, messages, places, health data, or anything the person
   typed. "Reminder set for 08:00" is fine; the reminder's own text is not.
 - It stays in the app's private storage (the newest 300 notes) and leaves the phone only to the
-  person's own PC, through AnyAppAgent, when you ask for it.
+  person's own PC, through Kiwimake, when you ask for it.
 
 ### Crashes
 
-Crashes are caught by themselves (`AnyApp.kt` installs the catcher when the app starts): AnyAppAgent
+Crashes are caught by themselves (`AnyApp.kt` installs the catcher when the app starts): Kiwimake
 on the phone shows "<app> crashed. Fix it?", and a tap sends you the error, its stack, the version
 and the latest diary notes. For an exception you catch but still want to hear about:
 
@@ -325,27 +325,27 @@ Keep `AnyApp.kt`, its `android:name` in the manifest and the `DiaryRequestReceiv
 
 ### Change this app (built in, keep it)
 
-Every app made with AnyAppAgent has a **Settings screen with a "This app" group** whose first row
+Every app made with Kiwimake has a **Settings screen with a "This app" group** whose first row
 is **Change this app** (`ui/ThisApp.kt`: `ThisAppSection()`, or `ChangeThisAppRow()` alone in a settings list of your
 own design; the starter screen is `SettingsScreen()` in the same file, `Route.Settings` in `MainActivity`).
-The row opens AnyAppAgent at this app: the person who made it lands in this app's chat, anyone else
-can suggest a change or make their own version; without AnyAppAgent it shows an explanation drawn
-by the app. It hides itself on other people's phones when the owner turned it off in AnyAppAgent.
+The row opens Kiwimake at this app: the person who made it lands in this app's chat, anyone else
+can suggest a change or make their own version; without Kiwimake it shows an explanation drawn
+by the app. It hides itself on other people's phones when the owner turned it off in Kiwimake.
 
 - **Never remove the row, the Settings screen, or a way to reach Settings** from the main screen
   (a "Settings" button, a gear, or a tab). When you redesign the app or replace the starter
   screens, keep `ThisAppSection` (or `ChangeThisAppRow`) last in the app's settings and restyle
   nothing else about it.
 - The native part is `com.anyapp.updates.ChangeThisApp` and `ChangeSheet` in
-  `com/anyapp/updates/` with its `ChangeSheet` activity in `AndroidManifest.xml` (the same code in every AnyAppAgent app): never edit them.
+  `com/anyapp/updates/` with its `ChangeSheet` activity in `AndroidManifest.xml` (the same code in every Kiwimake app): never edit them.
 
 ### Updates for people the app is shared with (built in, nothing to do)
 
-When the person shares the app from AnyAppAgent, the PC builds it with its update feed and the
+When the person shares the app from Kiwimake, the PC builds it with its update feed and the
 app updates itself on other people's phones: it checks when it opens and once a day, shows a
 notification when a new version is published, and a tap downloads, checks and installs it. On the
-person's own phone AnyAppAgent installs every build, so the app stays quiet. This is
-`com.anyapp.updates` (the same code in every AnyAppAgent app), started by the
+person's own phone Kiwimake installs every build, so the app stays quiet. This is
+`com.anyapp.updates` (the same code in every Kiwimake app), started by the
 `AppUpdater.onAppStart(this)` line in `MainActivity` and the entries marked in
 `AndroidManifest.xml`, with `res/raw/anyapp_keep.xml`: never edit or remove any of these, and
 never add another updater. Only if the person asks for an update line or a "Check for updates"
@@ -358,7 +358,7 @@ opens the update box.
 
 Use these when the person asks for a home screen widget, a "button in the pull-down menu", a
 long-press shortcut on the icon, or for the app to appear when they share something. The code is
-ready in `com/anyapp/abilities/` (the same core as every AnyAppAgent app; leave it as is). R8
+ready in `com/anyapp/abilities/` (the same core as every Kiwimake app; leave it as is). R8
 removes all of it from apps that do not declare anything, so the app stays small. You declare
 what the app offers in `AndroidManifest.xml` and write the actions in
 `com/anyapp/app/abilities/AppActions.kt`.
@@ -542,7 +542,7 @@ ones at run time as above.
 
 ### Feedback: shake and point at it (built in, keep it)
 
-Every app made with AnyAppAgent has this, including copies the person shares with other people,
+Every app made with Kiwimake has this, including copies the person shares with other people,
 so anyone can tell them what to change. It needs no code and works on its own:
 
 - Shaking the phone (a firm shake, back and forth a few times; walking or a bump never does it)
@@ -551,7 +551,7 @@ so anyone can tell them what to change. It needs no code and works on its own:
   one. Below is a notes box; each new arrow adds its `#n ` line there to fill in.
 - Save makes one picture (the screenshot, the arrows and the notes), copies it to the clipboard
   and keeps it in the gallery's "Feedback" album, says "Copied and saved" and closes. The person
-  pastes it into AnyAppAgent's chat, WhatsApp or anywhere.
+  pastes it into Kiwimake's chat, WhatsApp or anywhere.
 
 Never remove it, never add options to it, and never draw your own feedback screen. When a
 feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbered arrows on the
@@ -561,7 +561,7 @@ screenshot. To also open it from a button (for example "Send feedback" in a sett
 
 ## New versions on the phone
 
-After your turn the PC builds a new APK (a few minutes) and AnyAppAgent installs it. If the person is
+After your turn the PC builds a new APK (a few minutes) and Kiwimake installs it. If the person is
 inside the app when it arrives, the app shows a small "Version N is ready" card with **Reload**,
 which installs it and opens the app again (`com.anyapp.updates.ReadyPopup`, started in
 `MainActivity.onCreate`: keep that line). Kotlin apps have no quick (over-the-air) updates: every

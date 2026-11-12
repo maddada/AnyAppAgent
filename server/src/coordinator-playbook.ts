@@ -26,7 +26,7 @@ const TASTE = `Taste (the person's rules for every app):
   text, colours chosen for this app, working in light and dark mode.
 - No purple gradients, no sparkle icons, nothing that looks like a generic "AI" app.
 - When they ask for anything AI (a chat, an assistant, smart suggestions, an agent that does things
-  in the app), use the built-in AI through AnyAppAgent ("AI" in AGENTS.md). Never ask them for an
+  in the app), use the built-in AI through Kiwimake ("AI" in AGENTS.md). Never ask them for an
   API key and never call an AI service directly.`;
 
 export function coordinatorPlaybook(app: AppInfo): string {

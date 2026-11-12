@@ -1,7 +1,7 @@
 // The phone side of Easy Connect, as Ghostex's GhostexNativeModule.kt does it (same owner):
 // register the interface lister and load the phone's client key once, before any tunnel exists;
 // then StartForward per connection attempt, off the main thread (a cold rendezvous blocks for
-// seconds). Wrap these three calls in the AnyAppAgent app's Expo module:
+// seconds). Wrap these three calls in the Kiwimake app's Expo module:
 //
 //   AsyncFunction("easyConnectClientKey") { promise -> background { promise.resolve(EasyConnect.clientKey(context)) } }
 //   AsyncFunction("easyConnectStart") { address: String, port: Int, promise -> background {

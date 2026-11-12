@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Whether AI can be used, refreshed whenever the app comes back to the front (for example after
- * the person added a key in AnyAppAgent). null while it is being checked.
+ * the person added a key in Kiwimake). null while it is being checked.
  *
  *   val aiStatus by rememberAiStatus()
  *   AiSetupNotice(aiStatus)
@@ -37,8 +37,8 @@ fun rememberAiStatus(): State<AiStatus?> {
 }
 
 /**
- * Shown where an AI feature would be when AI cannot be used yet (no key in AnyAppAgent, or AI
- * switched off for this app). Its button opens AnyAppAgent's settings. Shows nothing when AI is
+ * Shown where an AI feature would be when AI cannot be used yet (no key in Kiwimake, or AI
+ * switched off for this app). Its button opens Kiwimake's settings. Shows nothing when AI is
  * ready or the status is still loading. After an AiError with `needsSetup`, pass `code = e.code`.
  */
 @Composable
@@ -55,6 +55,6 @@ fun AiSetupNotice(status: AiStatus?, modifier: Modifier = Modifier, code: String
   Card(modifier) {
     Text(title, style = AppType.bodyStrong, color = colors.text)
     Text(aiProblemText(reason), style = AppType.small, color = colors.textMuted, modifier = Modifier.padding(bottom = Spacing.xs))
-    if (canOpen) QuietButton("Open AnyAppAgent", onClick = { Ai.openSetup(context) })
+    if (canOpen) QuietButton("Open Kiwimake", onClick = { Ai.openSetup(context) })
   }
 }

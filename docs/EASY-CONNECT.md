@@ -2,12 +2,12 @@
 
 Easy Connect lets the phone pair with the PC by scanning one QR code and then reach the companion
 from anywhere (another Wi-Fi, mobile data), with nothing else to install on either side. It is
-copied from Ghostex's Easy Connect (`C:\dev\Ghostex`, same owner). In AnyAppAgent it carries only
+copied from Ghostex's Easy Connect (`C:\dev\Ghostex`, same owner). In Kiwimake it carries only
 the companion's own HTTP and WebSocket port (8787): the app list, the chat, and the APKs. The
 same-network path (address plus 6-digit code, `anyappagent://pair?...`) stays exactly as it is and
 is what the emulator uses at `10.0.2.2:8787`.
 
-This file has three parts: how Ghostex does it, what AnyAppAgent copies and leaves out, and the
+This file has three parts: how Ghostex does it, what Kiwimake copies and leaves out, and the
 exact contract for the phone side. The phone side can be built from this file alone.
 
 ## 1. How Ghostex's Easy Connect works
@@ -70,9 +70,9 @@ shows a QR; a one-time secret that lives 5 minutes; and, in Ghostex, a second ap
 computer (three words) before any token is issued. Removing a device takes its key off the
 allow-list, so it cannot even reach the computer any more.
 
-## 2. What AnyAppAgent copies, and what it leaves out
+## 2. What Kiwimake copies, and what it leaves out
 
-| Part | AnyAppAgent | Where |
+| Part | Kiwimake | Where |
 | --- | --- | --- |
 | Tailcat helper v0.6.0, installed by building it with a private Go toolchain | Copied (same method, same module and version) into `%USERPROFILE%\.anyappagent\tools\tailcat\` | `server/src/easy-connect/tailcat.ts` |
 | One server key, `genkey --fixed-region`, never regenerated | Copied | `%USERPROFILE%\.anyappagent\easy-connect\server.private.json` |
@@ -82,15 +82,15 @@ allow-list, so it cannot even reach the computer any more.
 | Compact base32 code | Copied, without the SSH fields, prefix `ANYAPP-EC1:` | `server/src/easy-connect/code.ts` |
 | Phone bridge `bridge.go` + `interfaces.go`, `go.mod`/`go.sum` pins | Copied byte for byte | `server/easy-connect/tailcat-bridge/` |
 | Android interface lister | Copied | `server/easy-connect/android/EasyConnectInterfaces.kt` |
-| The public relays (tailcat's default DERP map) | Copied: AnyAppAgent's only relay | |
+| The public relays (tailcat's default DERP map) | Copied: Kiwimake's only relay | |
 | Ghostex's own relay `relay-eu.ghostex.dev` (second lane) | **Left out** (see below) | |
 | SSH, terminals, SFTP, computer-to-computer pairing | **Left out**: the tunnel carries only port 8787 | |
 | Three-word approval, P-256 device keys, signed status polls | **Left out** (see below) | |
-| The `https://ghostex.dev/pair#...` link around the code | **Left out**: AnyAppAgent has no web domain; the QR is the bare code | |
+| The `https://ghostex.dev/pair#...` link around the code | **Left out**: Kiwimake has no web domain; the QR is the bare code | |
 
 **The relay.** Ghostex's own relay is a `derper` that Ghostex operates for Ghostex
-(`relay-eu.ghostex.dev`, its infrastructure and its bill). Pointing AnyAppAgent at it would borrow
-another product's infrastructure without its operator's say, so AnyAppAgent uses the path Ghostex
+(`relay-eu.ghostex.dev`, its infrastructure and its bill). Pointing Kiwimake at it would borrow
+another product's infrastructure without its operator's say, so Kiwimake uses the path Ghostex
 itself falls back to and that every Ghostex phone holds first: the public relays from tailcat's
 default DERP map (`https://tailcat.dev/derpmap.json`, Tailscale-run, no account, no key, no secret).
 No Ghostex secret or key is in this repository. If the user later wants their own relay, the
@@ -99,7 +99,7 @@ Ghostex recipe is: run Tailscale's `derper` on a host, make a second key with
 port and allow-list, and put both addresses in the code (phones try the own relay first).
 
 **The approval.** Ghostex added the three-word approval because its tunnel opens SSH and terminals
-on the computer. AnyAppAgent's tunnel reaches only the companion, and the desktop app shows the QR
+on the computer. Kiwimake's tunnel reaches only the companion, and the desktop app shows the QR
 only when the user asks for it, so a scan of a live code pairs at once, like the same-network
 6-digit code does. What still protects it: the code is in the QR only, lives 5 minutes, works
 once, the allow-list is lifted only while a code is live, failed attempts are rate-limited (10 a
@@ -219,7 +219,7 @@ and `ANYAPP-EC1:...` (Easy Connect). Also offer "paste a code" for the Easy Conn
 2. `easyConnectClientKey()` gives `clientKey`.
 3. `easyConnectStart(address, port)` gives `localPort`. Base URL: `http://127.0.0.1:<localPort>`.
    If it fails ("tailcat: cannot reach paired machine: ..."), say in plain words that the PC could
-   not be reached and to keep the AnyAppAgent desktop app open, and offer to try again.
+   not be reached and to keep the Kiwimake desktop app open, and offer to try again.
 4. `POST http://127.0.0.1:<localPort>/api/pair/easy-connect` with JSON
    `{ "secret": <code.secret>, "deviceName": <phone model>, "clientKey": <clientKey> }`
    (`EasyConnectPairRequest` in `shared/protocol.ts`). Answers:

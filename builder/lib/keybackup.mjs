@@ -104,10 +104,10 @@ function readBackup(file, password) {
   try {
     doc = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
-    throw new Error('That file is not an AnyAppAgent key backup.');
+    throw new Error('That file is not a Kiwimake key backup.');
   }
   if (doc?.format !== BACKUP_FORMAT || doc.version !== 1 || doc.kdf?.name !== 'scrypt' || doc.cipher?.name !== 'aes-256-gcm') {
-    throw new Error('That file is not an AnyAppAgent key backup.');
+    throw new Error('That file is not a Kiwimake key backup.');
   }
   const header = { format: doc.format, version: doc.version, createdAt: doc.createdAt, count: doc.count };
   const key = crypto.scryptSync(password.normalize('NFC'), Buffer.from(doc.kdf.salt, 'base64'), 32, {

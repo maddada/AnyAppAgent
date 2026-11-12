@@ -7,13 +7,13 @@ let stopTimer: ReturnType<typeof setTimeout> | null = null;
 /**
  * How long the service stays after the work ended. A build ends ("idle") a moment before its APK
  * is announced; if the service stopped in between, the download that follows could not start it
- * again from the background (Android refuses) and Android would freeze AnyAppAgent mid-download.
+ * again from the background (Android refuses) and Android would freeze Kiwimake mid-download.
  */
 const LINGER_MS = 30_000;
 
 /**
  * While the PC is making or changing an app, or an APK is on its way to this phone, keep
- * AnyAppAgent alive (a quiet ongoing notification): it hears "ready" from the background, and
+ * Kiwimake alive (a quiet ongoing notification): it hears "ready" from the background, and
  * Android does not freeze it halfway through a download.
  */
 export function updateKeepAlive() {
@@ -49,7 +49,7 @@ export function updateKeepAlive() {
   }
 }
 
-/** True while the keep-alive service runs: AnyAppAgent will not be frozen, even in the background. */
+/** True while the keep-alive service runs: Kiwimake will not be frozen, even in the background. */
 export function keptAlive(): boolean {
   try {
     return AnyAppNative?.keepAliveRunning?.() ?? false;

@@ -125,7 +125,7 @@ function PairingPanel({ s }: { s: Snapshot }) {
         {/* The Easy Connect code is about 354 characters: twice the theme QR size so phones read it. */}
         <QrPlate svg={p.qrSvg} size={easy ? sizeTokens.qr * 2 : sizeTokens.qr * 1.5} label="Code to connect your phone" />
         <div className="pair-side">
-          <p className="heading">In AnyAppAgent on your phone, tap Scan code and point it here.</p>
+          <p className="heading">In Kiwimake on your phone, tap Scan code and point it here.</p>
           {easy ? (
             <>
               <p className="row callout secondary" style={{ alignItems: "flex-start" }}>

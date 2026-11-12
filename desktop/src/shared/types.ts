@@ -116,7 +116,7 @@ export interface Settings {
   githubSkipped: boolean;
   startWithWindows: boolean;
   closeHintShown: boolean;
-  /** The AnyAppAgent phone APK to offer (empty: look in the usual places). */
+  /** The Kiwimake phone APK to offer (empty: look in the usual places). */
   phoneApkPath: string;
   /** The Hex model dictation uses (empty: Hex's first ready model). */
   hexModel: string;

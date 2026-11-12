@@ -9,7 +9,7 @@ test("a suggestion reads back as it was written", () => {
   const text = suggestionText(draft);
   assert.equal(
     text,
-    "Ahmad suggests a change to Prayer Times:\n\nBigger numbers, I can't read Isha.\n\nIf you made Prayer Times with AnyAppAgent, share this message to AnyAppAgent or paste it there.\nanyapp-suggestion: com.anyapp.prayertimes 37",
+    "Ahmad suggests a change to Prayer Times:\n\nBigger numbers, I can't read Isha.\n\nIf you made Prayer Times with Kiwimake, share this message to Kiwimake or paste it there.\nanyapp-suggestion: com.anyapp.prayertimes 37",
   );
   assert.deepEqual(parseSuggestion(text), { packageName: "com.anyapp.prayertimes", appName: "Prayer Times", from: "Ahmad", text: "Bigger numbers, I can't read Isha.", build: 37 });
   assert.equal(text.includes("\u2014"), false);

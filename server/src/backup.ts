@@ -5,7 +5,7 @@
 // Encryption, so the PC can back up by itself without keeping the password:
 //   - Turning it on makes a recovery key pair (X25519). The private half is encrypted with the
 //     person's password (scrypt N=2^16, r=8, p=1, then AES-256-GCM, as the key backup in
-//     builder/lib/keybackup.mjs) and written to <folder>/AnyAppAgent backup/recovery.json. The PC
+//     builder/lib/keybackup.mjs) and written to <folder>/Kiwimake backup/recovery.json. The PC
 //     keeps only the public half (<state>/backup.json). The password is never stored or logged.
 //   - Each backup file: a fresh X25519 key pair, ECDH with the recovery public key, HKDF-SHA256 to
 //     an AES-256-GCM key; the header (format, date, the fresh public key, iv) is the GCM AAD, so a
@@ -115,10 +115,10 @@ export function readRecovery(path: string): RecoveryFile {
   try {
     doc = JSON.parse(readFileSync(path, "utf8")) as RecoveryFile;
   } catch {
-    throw new HttpError(400, "There is no AnyAppAgent backup in that folder.");
+    throw new HttpError(400, "There is no Kiwimake backup in that folder.");
   }
   if (doc?.format !== RECOVERY_FORMAT || doc.version !== 1 || doc.kdf?.name !== "scrypt" || doc.cipher?.name !== "aes-256-gcm") {
-    throw new HttpError(400, "There is no AnyAppAgent backup in that folder.");
+    throw new HttpError(400, "There is no Kiwimake backup in that folder.");
   }
   return doc;
 }
@@ -305,7 +305,7 @@ export class Backups {
   }
 
   /**
-   * Turns backups on (a folder and a password) or off. A folder that already holds an AnyAppAgent
+   * Turns backups on (a folder and a password) or off. A folder that already holds a Kiwimake
    * backup keeps its recovery key, so the password must be the one it was made with.
    */
   async setup(req: { enabled?: unknown; folder?: unknown; password?: unknown }): Promise<BackupState> {
@@ -444,7 +444,7 @@ export class Backups {
   /** The newest backup in `folder` (the picked folder or its "AnyAppAgent backup" folder). */
   private findBackup(folder: string): { dir: string; file: string } {
     const dir = existsSync(join(folder, RECOVERY_FILE)) ? folder : join(folder, BACKUP_DIR_NAME);
-    if (!existsSync(join(dir, RECOVERY_FILE))) throw new HttpError(400, "There is no AnyAppAgent backup in that folder.");
+    if (!existsSync(join(dir, RECOVERY_FILE))) throw new HttpError(400, "There is no Kiwimake backup in that folder.");
     const files = readdirSync(dir).filter((f) => f.startsWith("backup-") && f.endsWith(BACKUP_EXT)).sort();
     if (files.length === 0) throw new HttpError(400, "That folder has the backup's key but no backup yet.");
     return { dir, file: join(dir, files.at(-1)!) };

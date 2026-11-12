@@ -1,4 +1,4 @@
-// AnyAppAgent PC companion: `npm start` in server/, or `node server/bin/anyappagent.mjs`.
+// Kiwimake PC companion: `npm start` in server/, or `node server/bin/anyappagent.mjs`.
 // The desktop app (desktop/) starts it as a child process with ANYAPP_ADMIN_TOKEN set.
 import qrcode from "qrcode-terminal";
 import type { ServerEvent } from "../../shared/protocol.ts";
@@ -91,7 +91,7 @@ export async function main(): Promise<void> {
   const addresses = lanAddresses();
   const lines = [
     "",
-    `  AnyAppAgent is running on ${serverName()} (port ${config.port})`,
+    `  Kiwimake is running on ${serverName()} (port ${config.port})`,
     "",
     `  Pairing code:  ${auth.code.slice(0, 3)} ${auth.code.slice(3)}`,
     "",
@@ -114,7 +114,7 @@ export async function main(): Promise<void> {
     const qrAddress = addresses[0] ?? "10.0.2.2";
     qrcode.generate(pairingUri(qrAddress, config.port, auth.code), { small: true }, (qr: string) => {
       console.log(qr);
-      console.log(`  Scan with AnyAppAgent on the phone (encodes http://${qrAddress}:${config.port} and the code).\n`);
+      console.log(`  Scan with Kiwimake on the phone (encodes http://${qrAddress}:${config.port} and the code).\n`);
     });
   }
 

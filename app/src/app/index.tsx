@@ -65,7 +65,7 @@ export default function Home() {
     router.push(`/chat/${app.id}`);
   }, [params.crash, apps]);
 
-  // Shared into AnyAppAgent from another app ("Like this, but mine"): opens its screen.
+  // Shared into Kiwimake from another app ("Like this, but mine"): opens its screen.
   useEffect(() => {
     void takeShare();
   }, []);
@@ -177,7 +177,7 @@ function Header() {
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, marginRight: -space.md }}>
         <Image source={MARK} style={{ width: markSize, height: markSize, borderRadius: (markSize * radius.appIcon) / size.appIcon }} />
         <T variant="heading" style={{ flex: 1 }}>
-          AnyAppAgent
+          Kiwimake
         </T>
         <IconButton testID="open-settings" icon={Settings} label="Settings" iconSize={icon.size.md} color={t.textSecondary} onPress={() => router.push("/settings")} />
       </View>
@@ -299,7 +299,7 @@ function NewTile({ width, onPress }: { width: number; onPress: () => void }) {
   return (
     <PressScale
       testID="new-app"
-      label="New app"
+      label="Make a kiwi"
       onPress={onPress}
       style={{
         width,
@@ -317,7 +317,7 @@ function NewTile({ width, onPress }: { width: number; onPress: () => void }) {
         <Plus size={NEW_TILE_PLUS} color={t.onAccent} strokeWidth={icon.stroke} absoluteStrokeWidth />
       </View>
       <T variant="name" style={{ marginTop: space.md }}>
-        New app
+        Make a kiwi
       </T>
       <View style={{ flex: 1, minHeight: space.xs }} />
       <T variant="label" color="textSecondary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
@@ -541,7 +541,7 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   return (
     <Sheet visible={visible} onClose={onClose}>
       <T variant="titleSmall" style={{ marginBottom: space.xl }}>
-        New app
+        Make a kiwi
       </T>
       <Field testID="new-app-name" label="Name" value={name} onChangeText={setName} placeholder="For example, Prayer Times" maxLength={40} autoCapitalize="words" returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => promptRef.current?.focus()} />
       <Field
@@ -698,7 +698,7 @@ function AuthLost() {
     <View style={{ flex: 1, paddingTop: insets.top + space["7xl"], paddingHorizontal: size.screenGutter, gap: space.lg }}>
       <T variant="display">Connect again</T>
       <T variant="lede" color="textSecondary">
-        Your PC doesn’t recognise this phone any more. This happens if AnyAppAgent was reset on the PC.
+        Your PC doesn’t recognise this phone any more. This happens if Kiwimake was reset on the PC.
       </T>
       <Button label="Connect your PC" style={{ marginTop: space.lg }} onPress={() => void unpair()} />
     </View>

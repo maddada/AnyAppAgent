@@ -8,7 +8,7 @@ import android.os.Build
 
 /**
  * PackageInstaller's answer for an update (AppUpdater). Android's own confirmation, when it asks
- * for one, is shown from here. Same file in every AnyAppAgent template.
+ * for one, is shown from here. Same file in every Kiwimake template.
  */
 class InstallReceiver : BroadcastReceiver() {
   override fun onReceive(ctx: Context, intent: Intent) {

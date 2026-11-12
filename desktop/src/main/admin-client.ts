@@ -493,21 +493,21 @@ export class AdminClient extends EventEmitter {
 
   /** Signing keys (docs/DISTRIBUTION.md). The password goes only to the companion on 127.0.0.1. */
   async backupKeys(file: string, password: string): Promise<KeysBackupResult> {
-    if (!this.adminRoutes) throw new Error("Backing up keys needs a newer AnyAppAgent companion.");
+    if (!this.adminRoutes) throw new Error("Backing up keys needs a newer Kiwimake companion.");
     const result = await this.request<KeysBackupResult>("POST", "/api/admin/keys/backup", { file, password } satisfies KeysBackupRequest, 120_000);
     await this.refreshState();
     return result;
   }
 
   async restoreKeys(file: string, password: string): Promise<KeysRestoreResult> {
-    if (!this.adminRoutes) throw new Error("Restoring keys needs a newer AnyAppAgent companion.");
+    if (!this.adminRoutes) throw new Error("Restoring keys needs a newer Kiwimake companion.");
     const result = await this.request<KeysRestoreResult>("POST", "/api/admin/keys/restore", { file, password } satisfies KeysRestoreRequest, 120_000);
     await this.refreshState();
     return result;
   }
 
   async removeDevice(id: string): Promise<void> {
-    if (!this.adminRoutes) throw new Error("Removing a phone needs a newer AnyAppAgent companion.");
+    if (!this.adminRoutes) throw new Error("Removing a phone needs a newer Kiwimake companion.");
     await this.request("DELETE", `/api/admin/devices/${encodeURIComponent(id)}`);
     await this.refreshState();
   }

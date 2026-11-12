@@ -101,7 +101,7 @@ export function AiSettingsGroup({
             testID="ai-key-row"
             icon={KeyRound}
             label={`${NAMES[cfg.provider]} key`}
-            sub={`Ends in ${cfg.hint}. Apps you make here can use it; the key stays in AnyAppAgent.`}
+            sub={`Ends in ${cfg.hint}. Apps you make here can use it; the key stays in Kiwimake.`}
             trailing={<Button testID="ai-remove" label="Remove" small variant="quiet" onPress={() => setConfirmRemove(true)} />}
           />
           <Divider />
@@ -182,7 +182,7 @@ export function AiSettingsGroup({
       ) : (
         <View style={{ padding: space.lg, gap: space.md }}>
           <T variant="callout" color="textSecondary">
-            Paste a Claude or OpenRouter key and the apps you make here can use AI. The key stays in AnyAppAgent; apps never see it.
+            Paste a Claude or OpenRouter key and the apps you make here can use AI. The key stays in Kiwimake; apps never see it.
           </T>
           <Field
             testID="ai-key-field"

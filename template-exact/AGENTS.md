@@ -1,13 +1,13 @@
-# Working on this app (AnyAppAgent, Expo Exact alpha)
+# Working on this app (Kiwimake, Expo Exact alpha)
 
 You are changing an app for a non-technical person who uses it on their Android phone. They tell
-you what they want in plain words; they never see the code. When your turn ends, AnyAppAgent
+you what they want in plain words; they never see the code. When your turn ends, Kiwimake
 builds a signed Android APK from this folder and installs it over the version on their phone. If
 the build fails, the error comes back to you as your next prompt. **Keep the app building, and
 check your work before you finish.**
 
 This app is made with **Expo Exact** (https://github.com/expo/exact), which is very new (pre-1.0,
-"alpha" in AnyAppAgent). The view is written in **Contract** (`app.contract`), the data in
+"alpha" in Kiwimake). The view is written in **Contract** (`app.contract`), the data in
 TypeScript (`app.ts`, run by Hermes on the phone). There is no React and no JSX. Exact's own guide
 for this app is the generated block below this section, and `../../exact/docs/start-here.md` is
 the one document you must read before your first change. `bun exact.mjs contract vocab <name>`
@@ -21,7 +21,7 @@ app.contract        the view, state and actions (Contract)
 app.ts              the data module (TypeScript): what the view asks for
 app.test.contract   the app's tests
 app.json            Exact's manifest: name, id and hosts (android is on)
-anyapp.json         written by AnyAppAgent: preset, slug, package id (read only)
+anyapp.json         written by Kiwimake: preset, slug, package id (read only)
 exact.mjs           generated launcher for `bun exact.mjs ...` (never edit)
 .exact/, target/    generated build folders (never edit)
 overview.md         what the person wants the app to do (see below)
@@ -44,12 +44,12 @@ overview.md         what the person wants the app to do (see below)
 ## Never
 
 - Never change `app.id` in `app.json`, `anyapp.json`, or anything about signing or versions.
-  AnyAppAgent sets the version code and signs every build with the same key; a different id
+  Kiwimake sets the version code and signs every build with the same key; a different id
   would be a different app that cannot update the one on the phone. You may change `app.name`
   (the name under the icon) when the person asks to rename the app.
 - Never run anything that needs a phone or builds or installs the app: `bun exact.mjs android`,
   `verify`, `test android`, `agent android`, `ios`, `mac`, `share`, `windows`, Gradle or adb.
-  AnyAppAgent does the Android build after your turn.
+  Kiwimake does the Android build after your turn.
 - Never run `bun exact.mjs update`, and never edit anything in `../../exact`: it is the shared,
   pinned Exact checkout every Exact app on this PC builds with.
 - Never run `bun exact.mjs feedback` (nothing about the person's app leaves this PC).
@@ -85,11 +85,11 @@ The person said: "no purple gradients or AI slop please". So:
 
 ## What this preset does not have yet (alpha)
 
-- **No AI through AnyAppAgent**: the shared AI key is not connected to Exact apps yet. If the
+- **No AI through Kiwimake**: the shared AI key is not connected to Exact apps yet. If the
   person asks for AI, say in one line that this kind of app cannot use AI yet.
 - **No custom launcher icon**: Exact's Android shell has no icon support yet, so the app shows
   Android's default icon. Do not spend the turn on an icon.
-- **No exact alarms or notifications from AnyAppAgent's toolkit** (those are in the React Native
+- **No exact alarms or notifications from Kiwimake's toolkit** (those are in the React Native
   and Kotlin starters). Use what Exact itself offers (its docs), and say plainly when something
   is not possible in this kind of app yet.
 

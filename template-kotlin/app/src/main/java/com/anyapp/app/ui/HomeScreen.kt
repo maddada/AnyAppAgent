@@ -30,7 +30,7 @@ import com.anyapp.app.ui.theme.Spacing
 private data class Step(val title: String, val text: String)
 
 private val steps = listOf(
-  Step("Describe it", "Tell AnyAppAgent what this app should do, in your own words."),
+  Step("Describe it", "Tell Kiwimake what this app should do, in your own words."),
   Step("It gets built", "Your PC makes the new version while you wait."),
   Step("It updates here", "The new version installs over this one. Nothing to set up."),
 )

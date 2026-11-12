@@ -1,4 +1,4 @@
-# AnyAppAgent desktop (Windows)
+# Kiwimake desktop (Windows)
 
 The one program a user installs on their PC. It runs the companion (`../server/`) for them, walks
 them through setup in plain words, shows their apps, and connects their phone. No terminal anywhere.

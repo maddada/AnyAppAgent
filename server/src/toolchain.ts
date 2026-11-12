@@ -9,7 +9,7 @@ import { REPO_DIR } from "./config.ts";
 import { readJson } from "./fs-util.ts";
 
 export const TOOLCHAIN_MISSING =
-  "The Android build tools were not found on this PC, so apps cannot be built yet. Open the AnyAppAgent desktop app to set them up.";
+  "The Android build tools were not found on this PC, so apps cannot be built yet. Open the Kiwimake desktop app to set them up.";
 
 export interface Toolchain {
   javaHome: string;

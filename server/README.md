@@ -1,4 +1,4 @@
-# AnyAppAgent PC companion
+# Kiwimake PC companion
 
 Pairs with the phone, keeps one Claude Code session per app (over ACP, the way bb does it),
 scaffolds and builds apps, does Git and GitHub, and serves the APKs. Contract: `../shared/protocol.ts`.
@@ -29,7 +29,7 @@ stay paired.
 | `ANYAPP_ASK_PERMISSIONS` | off                         | `1` (dev and tests only): the session stays in the default mode and every permission request waits in the chat |
 | `ANYAPP_ACP_LAUNCH`     | `local`                       | `npx` launches Claude with bb's exact registry command (`npx -y @agentclientprotocol/claude-agent-acp@0.102.0`) |
 | `ANYAPP_ADMIN_TOKEN`    | unset                         | The desktop app's secret: accepted on every route, the only key to `/api/admin/*` |
-| `ANYAPP_HOST_APK`       | unset                         | The AnyAppAgent phone app's APK, served at `GET /download/anyappagent.apk` |
+| `ANYAPP_HOST_APK`       | unset                         | The Kiwimake phone app's APK, served at `GET /download/anyappagent.apk` |
 | `ANYAPP_TAILCAT_BIN`    | `tools\tailcat\tailcat.exe` | An existing tailcat v0.6.0+ for Easy Connect instead of building one |
 | `ANYAPP_STOP_ON_STDIN_END` | unset                      | `1`: stop (and stop the Easy Connect helper) when stdin closes, for a parent process |
 | `ANYAPP_FAKE_BUILD_MS`  | `1500`                        | Fake builder: how long a build takes                             |

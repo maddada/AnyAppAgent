@@ -210,7 +210,7 @@ export async function pullBack(
 /** Reads a downloaded update.json (used by tests and the pull back path). */
 export function parseUpdateJson(text: string): UpdateJson {
   const doc = JSON.parse(text) as UpdateJson;
-  if (doc.format !== 1 || typeof doc.build !== "number") throw new Error("not an AnyAppAgent update.json");
+  if (doc.format !== 1 || typeof doc.build !== "number") throw new Error("not a Kiwimake update.json");
   return doc;
 }
 

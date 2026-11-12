@@ -14,7 +14,7 @@ export interface Paths {
   appsDir: string;
   /** Where the desktop app installs JDK, Android SDK, Node, Git and gh. */
   toolsDir: string;
-  /** The AnyAppAgent phone app (APK) the desktop offers for download. */
+  /** The Kiwimake phone app (APK) the desktop offers for download. */
   phoneApkCandidates: string[];
 }
 

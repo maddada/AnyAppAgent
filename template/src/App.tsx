@@ -32,7 +32,7 @@ declare global {
 const Navigation = createStaticNavigation(RootStack);
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-// Crashes reach AnyAppAgent, which offers the person a fix (src/lib/crash.ts). Keep this first.
+// Crashes reach Kiwimake, which offers the person a fix (src/lib/crash.ts). Keep this first.
 installCrashCatcher();
 
 export default function App() {

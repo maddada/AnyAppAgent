@@ -1,4 +1,4 @@
-// Command ecclient is the PC stand-in for the AnyAppAgent phone's Easy Connect side, used by
+// Command ecclient is the PC stand-in for the Kiwimake phone's Easy Connect side, used by
 // server/scripts/easy-connect-check.mjs. It calls this package exactly as the phone's native
 // module calls the gomobile-bound bridge (Ghostex GhostexNativeModule.kt): UseClientKeyFile once,
 // then StartForward(id, address, remotePort), which returns a 127.0.0.1 port that tunnels to the

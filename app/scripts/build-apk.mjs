@@ -1,4 +1,4 @@
-// npm run apk  ->  builds the installable AnyAppAgent APK (release variant, JS bundled inside,
+// npm run apk  ->  builds the installable Kiwimake APK (release variant, JS bundled inside,
 // no dev server needed) and prints its path.
 //
 //   npm run apk               # reuses android/ if it exists

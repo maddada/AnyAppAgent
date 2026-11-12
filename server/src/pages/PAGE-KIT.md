@@ -85,7 +85,7 @@ What the person picks and types comes back as their next message, in this envelo
   outside a `.gx-frame`, no `100vw`.
 - **No page chrome of your own**: no colours, backgrounds or fonts on `html`, `body` or `:root`, no
   padding on `body`, no wrapper with a `max-width`, no Dark/Light switch (the page has one). The page
-  already has AnyAppAgent's look (warm paper, one bottle green, Bricolage Grotesque) in light and
+  already has Kiwimake's look (warm paper, one bottle green, Bricolage Grotesque) in light and
   dark.
 - **Parts you use** (styled already):
   - `<span class="gx-eyebrow">`, `<h1>`, `<p class="gx-lede">` in the `<header>`; `<h2>` for

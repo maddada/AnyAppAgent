@@ -1,4 +1,4 @@
-// "Change this app" (docs/CHANGE-THIS-APP.md): an app made with AnyAppAgent opens
+// "Change this app" (docs/CHANGE-THIS-APP.md): an app made with Kiwimake opens
 // anyappagent://change?package=&name=&owner=&repo=&build=&version=&screen= from the row in its
 // settings. On the person's own app this goes straight to its chat. On someone else's app: Suggest a
 // change (a text to the owner through Android's share menu) and, when this phone is paired with a
@@ -120,7 +120,7 @@ export default function ChangeThisApp() {
       </View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space["2xl"] }}>
         {!link ? (
-          <StateLine kind="problem" label="This link is not from an app made with AnyAppAgent." role="row" lines={0} />
+          <StateLine kind="problem" label="This link is not from an app made with Kiwimake." role="row" lines={0} />
         ) : mine || deciding ? (
           <StateLine kind="working" label="Opening..." role="row" />
         ) : mode === "choose" ? (
@@ -153,7 +153,7 @@ export default function ChangeThisApp() {
             ) : (
               <View style={{ gap: space.xs, paddingHorizontal: space.xs }}>
                 <T variant="caption" color="textSecondary">
-                  Your own version is made by your own PC: a Windows PC with AnyAppAgent and a Claude plan. Connect one in AnyAppAgent to make it.
+                  Your own version is made by your own PC: a Windows PC with Kiwimake and a Claude plan. Connect one in Kiwimake to make it.
                 </T>
                 <T variant="caption" color="textTertiary">
                   A way to change apps without a PC, using cloud credits, is planned.

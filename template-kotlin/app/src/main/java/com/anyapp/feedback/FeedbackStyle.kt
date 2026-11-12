@@ -14,8 +14,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 
 /**
- * AnyAppAgent's Workbench look (shared/theme/tokens.ts): warm paper, graphite ink, bottle green,
- * Bricolage Grotesque and IBM Plex Mono. The feedback screen is AnyAppAgent's own tool inside the
+ * Kiwimake's Workbench look (shared/theme/tokens.ts): warm paper, graphite ink, bottle green,
+ * Bricolage Grotesque and IBM Plex Mono. The feedback screen is Kiwimake's own tool inside the
  * app, so it keeps this look whatever the app's own colours are.
  */
 internal class FeedbackColors(

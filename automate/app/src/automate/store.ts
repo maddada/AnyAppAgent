@@ -1,4 +1,4 @@
-// What Appwin Automate remembers: which automations are on (and which exact version of each the
+// What Automate remembers: which automations are on (and which exact version of each the
 // person approved), the safety locks switch, the pretend clock and the run log. One copy in
 // memory, saved to storage; the screens and the background runs share it (same JavaScript runtime).
 import { useSyncExternalStore } from 'react';

@@ -221,7 +221,7 @@ export class History {
       this.diaryWaits.delete(requestId);
       const problem = "your phone is not connected to the PC";
       this.host.diaryRead(appId, { ok: false, entries: 0, problem });
-      return "The person's phone is not connected to the PC right now, so the diary could not be read. Do not ask them to do anything technical; if you need it, say in one line that you will read it once AnyAppAgent is open on their phone.";
+      return "The person's phone is not connected to the PC right now, so the diary could not be read. Do not ask them to do anything technical; if you need it, say in one line that you will read it once Kiwimake is open on their phone.";
     }
     const answer = await answered;
     if (!answer || answer.problem) {

@@ -159,7 +159,7 @@ export function keepHealthyMessage(health: AppHealth, preset: AppPreset | undefi
     ? `Move it to the Android versions in its app/build.gradle.kts and gradle/libs.versions.toml.`
     : `Copy the missing or older built-in parts from its modules folder exactly as they are, wire them in the way its AGENTS.md says (also the Change this app row: src/components/ChangeThisApp.tsx, kept last in the app's Settings, with a way to reach Settings), and move to the Expo SDK and the dependency versions in its package.json (npx expo install --fix after changing expo).`;
   return [
-    "Keep this app healthy: bring it up to date with the newest AnyAppAgent template. Keep everything it does, its look and its saved data exactly as they are.",
+    "Keep this app healthy: bring it up to date with the newest Kiwimake template. Keep everything it does, its look and its saved data exactly as they are.",
     "",
     "What is behind:",
     ...health.reasons.map((r) => `- ${r}`),

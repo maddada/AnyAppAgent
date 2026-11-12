@@ -39,7 +39,7 @@ A folder the person picks: a OneDrive (or Google Drive, Dropbox) folder, or a US
 
 - Turning it on makes a **recovery key pair** (X25519). The private half is encrypted with the
   password (scrypt N=2^16, r=8, p=1, then AES-256-GCM, the same as the key backup) and saved as
-  `<folder>\AnyAppAgent backup\recovery.json`. The PC keeps only the public half
+  `<folder>\Kiwimake backup\recovery.json`. The PC keeps only the public half
   (`<state>\backup.json`). The password is never stored or logged; it goes from the desktop to the
   companion on `127.0.0.1` only.
 - Each backup file (`backup-<time>.anyappbackup`): a fresh X25519 key, ECDH with the recovery public
@@ -67,7 +67,7 @@ Desktop Settings, "Restore on a new PC": the password, then the folder. The comp
 
 ### Each app's data on the phone
 
-Where Android allows it: AnyAppAgent cannot read another app's private data, and Android's own
+Where Android allows it: Kiwimake cannot read another app's private data, and Android's own
 `adb backup` is gone. What carries an app's data to a new phone today is Android's backup to the
 person's Google account and the device-to-device transfer, which every generated app allows (Expo
 and the Kotlin template both leave `allowBackup` on). An in-app export of an app's data to the PC

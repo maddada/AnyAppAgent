@@ -5,7 +5,7 @@
 The chat screen (`src/chat/`, `src/app/chat/[id].tsx`) keeps the structure of bb's thread view:
 right-aligned user bubbles, assistant text without a bubble, one-line work rows that expand and
 fold, a collapsed thinking row, a plan and a composer. Its colours and type now come from the shared
-AnyAppAgent theme (`../shared/theme`); no bb code is imported. Source: https://github.com/get-bb/bb
+Kiwimake theme (`../shared/theme`); no bb code is imported. Source: https://github.com/get-bb/bb
 
 ```
 MIT License

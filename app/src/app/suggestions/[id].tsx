@@ -1,5 +1,5 @@
 // "From others" (docs/CHANGE-THIS-APP.md): suggestions people sent about one app, as text through
-// WhatsApp, SMS or email. They land here when the message is shared into AnyAppAgent or pasted;
+// WhatsApp, SMS or email. They land here when the message is shared into Kiwimake or pasted;
 // Open in chat puts the words in the app's composer, to send or edit.
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
@@ -80,7 +80,7 @@ export default function FromOthers() {
         {note ? <StateLine kind="ready" label={note} role="caption" /> : null}
         {list.length === 0 ? (
           <T variant="callout" color="textSecondary">
-            {`Suggestions people send you about ${app?.name ?? "this app"} show up here. When one arrives as a message, share it to AnyAppAgent, or copy it and tap Paste a suggestion.`}
+            {`Suggestions people send you about ${app?.name ?? "this app"} show up here. When one arrives as a message, share it to Kiwimake, or copy it and tap Paste a suggestion.`}
           </T>
         ) : (
           list.map((s) => (

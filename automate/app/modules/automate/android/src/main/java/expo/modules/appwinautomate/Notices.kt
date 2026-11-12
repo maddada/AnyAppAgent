@@ -12,7 +12,7 @@ import androidx.core.app.NotificationCompat
 import expo.modules.kotlin.Promise
 import java.util.concurrent.ConcurrentHashMap
 
-/** Appwin Automate's notifications: what automations show, the running notice, and the ask-before-sending question. Every one carries Stop all. */
+/** Automate's notifications: what automations show, the running notice, and the ask-before-sending question. Every one carries Stop all. */
 object Notices {
   private const val CH_SHOW = "automate_show"
   private const val CH_RUN = "automate_running"
@@ -64,7 +64,7 @@ object Notices {
     return NotificationCompat.Builder(c, CH_RUN)
       .setSmallIcon(icon(c))
       .setContentTitle("Running an automation")
-      .setContentText(if (label != null) "Appwin Automate: $label" else "Appwin Automate")
+      .setContentText(if (label != null) "Automate: $label" else "Automate")
       .setOngoing(true)
       .setSilent(true)
       .setContentIntent(openApp(c))
@@ -91,7 +91,7 @@ object Notices {
     val n = NotificationCompat.Builder(c, CH_SHOW)
       .setSmallIcon(icon(c))
       .setContentTitle("Everything stopped")
-      .setContentText("No automation runs until you resume them in Appwin Automate.")
+      .setContentText("No automation runs until you resume them in Automate.")
       .setAutoCancel(true)
       .setContentIntent(openApp(c))
       .build()

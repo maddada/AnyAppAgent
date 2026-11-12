@@ -5,7 +5,7 @@ type AnyappDiaryNative = {
   note(text: string): void;
   /** JSON array of { at, text }, oldest first. */
   read(max: number): string;
-  /** JSON { kind, message, stack?, screen? }; false when nobody can receive it (not installed by AnyAppAgent). */
+  /** JSON { kind, message, stack?, screen? }; false when nobody can receive it (not installed by Kiwimake). */
   report(json: string, fatal: boolean): boolean;
 };
 

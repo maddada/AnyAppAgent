@@ -1,4 +1,4 @@
-// Updates for people the app is shared with (AnyAppAgent docs/DISTRIBUTION.md). It works by
+// Updates for people the app is shared with (Kiwimake docs/DISTRIBUTION.md). It works by
 // itself: when the app is shared, it checks for a new version when it opens and once a day, and
 // shows a notification; a tap downloads, checks and installs it. Use this only to show an update
 // line or a "Check for updates" button. Do not remove the module.
@@ -20,7 +20,7 @@ const native = requireNativeModule<Native>('AnyappUpdates');
 export type UpdateStatus =
   | { state: 'off' } // the app is not shared: no updates here
   | { state: 'up-to-date' }
-  | { state: 'anyappagent' } // AnyAppAgent on this phone handles this app's updates
+  | { state: 'anyappagent' } // Kiwimake on this phone handles this app's updates
   | { state: 'available'; version: string; notes: string; build: number }
   | { state: 'problem'; message: string };
 
@@ -60,7 +60,7 @@ export function changeOwner(): string {
   return native.changeOwner();
 }
 
-/** Opens AnyAppAgent at this app (or, without AnyAppAgent, the explanation sheet). */
+/** Opens Kiwimake at this app (or, without Kiwimake, the explanation sheet). */
 export function openChange(screen?: string): void {
   native.openChange(screen ?? null);
 }

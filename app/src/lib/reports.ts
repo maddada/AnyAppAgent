@@ -1,4 +1,4 @@
-// Crash reports and diaries from the apps made with AnyAppAgent (docs/VERSIONS.md). The native side
+// Crash reports and diaries from the apps made with Kiwimake (docs/VERSIONS.md). The native side
 // (modules/anyapp-native, AppReports.kt) receives them from the apps, checks who sent them and keeps
 // crashes until the PC is reachable; this sends them to the PC, and answers the PC's diary.request.
 import type { CrashReport, DiaryAnswer, DiaryEntry, ServerEvent } from "./protocol";
@@ -54,7 +54,7 @@ const DIARY_ANSWER_MS = 10_000;
 /** After an install that was waited for, before the app is asked. */
 const INSTALL_SETTLE_MS = 2_000;
 
-/** A timer that keeps running while Android's install prompt covers AnyAppAgent (JS timers pause then). */
+/** A timer that keeps running while Android's install prompt covers Kiwimake (JS timers pause then). */
 function after(ms: number): Promise<void> {
   if (AnyAppNative?.delay) return AnyAppNative.delay(ms).catch(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   return new Promise((resolve) => setTimeout(resolve, ms));

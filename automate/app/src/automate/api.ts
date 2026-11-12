@@ -162,7 +162,7 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
     notify: async (title: unknown, body?: unknown) => {
       gate('notify');
       const t = String(title ?? '').slice(0, 120);
-      if (!Native.canNotify()) throw new ScriptError('Notifications are off for Appwin Automate: allow them on its card.');
+      if (!Native.canNotify()) throw new ScriptError('Notifications are off for Automate: allow them on its card.');
       line(`Showed "${t}"`);
       await Native.notifyNow(t, body === undefined ? undefined : String(body).slice(0, 400), ctx.automation);
     },
