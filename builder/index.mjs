@@ -14,7 +14,7 @@ import path from 'node:path';
 import { ABIS, BUILDER_DIR, BUILDER_VERSION, androidEnv, findBuildTool, tool } from './lib/env.mjs';
 import { extractGradle, extractMetro, extractNpm, extractPrebuild, extractTsc, tail } from './lib/errors.mjs';
 import { CommandError, killTree, npmCommand, run } from './lib/exec.mjs';
-import { checkSigning, signWithLineage } from './lib/apksign.mjs';
+import { checkSigning, signApk, signWithLineage } from './lib/apksign.mjs';
 import { ensureAppKey, signingFor } from './lib/keystore.mjs';
 import { renameWithRetry, tryLock } from './lib/lock.mjs';
 import { fillKotlinPlaceholders, KOTLIN_ICON, syncKotlinIcon, xmlString } from './lib/kotlin.mjs';
@@ -378,17 +378,27 @@ async function runBuild(dir, n, onLog, preset, feeds = {}, fast = false) {
     // The native fingerprint after prebuild (it may touch package.json), baked into the APK.
     const runtime = kotlin ? null : await nativeFingerprint(dir, feeds);
 
-    // 4. Gradle release build with the shared key and versionCode = build number.
+    // 4. Gradle release build with the shared key and versionCode = build number. With
+    // ANYAPP_SIGN_LATER=1 (the cloud, docs/CLOUD.md section 6) Gradle never sees the key: it builds
+    // the APKs unsigned and finishApk signs them after Gradle has exited.
+    const signLater = signLaterOn() && !kotlin;
     const gradleEnv = {
       ...env,
       ORG_GRADLE_PROJECT_anyappVersionCode: String(n),
       ...feeds,
       ...(runtime ? { ORG_GRADLE_PROJECT_anyappRuntime: runtime } : {}),
-      ORG_GRADLE_PROJECT_anyappStoreFile: keystore.storeFile,
-      ORG_GRADLE_PROJECT_anyappStorePassword: keystore.storePassword,
-      ORG_GRADLE_PROJECT_anyappKeyAlias: keystore.keyAlias,
-      ORG_GRADLE_PROJECT_anyappKeyPassword: keystore.keyPassword,
+      ...(signLater
+        ? { ORG_GRADLE_PROJECT_anyappSignLater: 'true' }
+        : {
+            ORG_GRADLE_PROJECT_anyappStoreFile: keystore.storeFile,
+            ORG_GRADLE_PROJECT_anyappStorePassword: keystore.storePassword,
+            ORG_GRADLE_PROJECT_anyappKeyAlias: keystore.keyAlias,
+            ORG_GRADLE_PROJECT_anyappKeyPassword: keystore.keyPassword,
+          }),
     };
+    if (signLater) {
+      for (const k of Object.keys(gradleEnv)) if (/^ORG_GRADLE_PROJECT_anyapp(Store|Key)/.test(k)) delete gradleEnv[k];
+    }
     const androidDir = kotlin ? dir : path.join(dir, 'android');
     const gradle = gradleCommand(androidDir, javaHome);
     const gradleArgs = [
@@ -441,18 +451,22 @@ async function runBuild(dir, n, onLog, preset, feeds = {}, fast = false) {
 
     // 5. Check, copy and fingerprint the APK.
     const releaseDir = path.join(androidDir, 'app', 'build', 'outputs', 'apk', 'release');
-    // With ABI splits the full APK is app-universal-release.apk and each ABI has its own.
-    const universal = path.join(releaseDir, 'app-universal-release.apk');
-    const built = fs.existsSync(universal) ? universal : path.join(releaseDir, 'app-release.apk');
+    // With ABI splits the full APK is app-universal-release.apk and each ABI has its own (unsigned,
+    // Gradle names them ...-release-unsigned.apk).
+    const suffix = signLater ? '-release-unsigned.apk' : '-release.apk';
+    const universal = path.join(releaseDir, `app-universal${suffix}`);
+    const built = fs.existsSync(universal) ? universal : path.join(releaseDir, `app${suffix}`);
     if (!fs.existsSync(built)) throw new BuildError(`Gradle succeeded but ${built} is missing`);
     // One APK per ABI next to the full one, when this build made them (anyapp.init.gradle).
     const parts =
       built === universal
         ? ABIS.split(',')
-            .map((abi) => ({ abi, path: path.join(releaseDir, `app-${abi}-release.apk`) }))
+            .map((abi) => ({ abi, path: path.join(releaseDir, `app-${abi}${suffix}`) }))
             .filter((p) => fs.existsSync(p.path) && fs.statSync(p.path).mtimeMs >= fs.statSync(built).mtimeMs - 60_000)
         : [];
-    const result = await finish(built, parts);
+    const result = signLater
+      ? await finishApk({ built, parts, sdk, javaHome, signing, n, dir, slug, packageName, preset, t0, timings, logFile, say, signLater: true })
+      : await finish(built, parts);
     if (kotlin) return { ...result, delivery: 'full' };
     // The base for the next quick build: this build's fingerprint, bundle assets and APKs.
     await writeLast(dir, { build: n, fingerprint: runtime, assets: await assetsHash(path.join(dir, GRADLE_JS_RES)), apkPath: result.apkPath, variants: result.variants });
@@ -472,7 +486,7 @@ async function runBuild(dir, n, onLog, preset, feeds = {}, fast = false) {
  * Checks the built APK (versionCode, package id), copies it to build/apk/ and fingerprints it,
  * with its per-ABI APKs (`parts`, [{ abi, path }]) as `variants`.
  */
-async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, slug, packageName, preset, t0, timings, logFile, say }) {
+async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, slug, packageName, preset, t0, timings, logFile, say, signLater = false }) {
   const badging = await readBadging(sdk, built);
   if (badging && badging.versionCode !== n) {
     throw new BuildError(`APK versionCode is ${badging.versionCode}, expected ${n} (the builder's init script did not apply)`);
@@ -495,10 +509,12 @@ async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, sl
   }
   // A moved app is signed again with its key rotation lineage; then every APK must carry exactly
   // the expected certificates (docs/DISTRIBUTION.md, "Signing").
+  const signStart = Date.now();
   await Promise.all(
     [apkPath, ...copies.map((c) => c.out)].map(async (apk) => {
       try {
         if (signing.resign) await signWithLineage(javaHome, sdk, apk, signing.resign);
+        else if (signLater) await signApk(javaHome, sdk, apk, signing.gradle);
         await checkSigning(javaHome, sdk, apk, signing.expect);
       } catch (e) {
         await fsp.rm(apk, { force: true });
@@ -506,6 +522,7 @@ async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, sl
       }
     }),
   );
+  if (signLater) timings.sign = Date.now() - signStart;
   const variants = [];
   for (const { abi, out } of copies) {
     const data = await fsp.readFile(out);
@@ -728,6 +745,11 @@ async function pruneApks(outDir, keep) {
     .map((f) => ({ f, n: buildNumber(f) }));
   const newest = [...new Set(apks.map((a) => a.n))].sort((a, b) => b - a).slice(0, keep);
   for (const { f, n } of apks) if (!newest.includes(n)) await fsp.rm(path.join(outDir, f), { force: true });
+}
+
+/** ANYAPP_SIGN_LATER=1: Gradle builds unsigned and the builder signs after it (docs/CLOUD.md, section 6). */
+function signLaterOn() {
+  return process.env.ANYAPP_SIGN_LATER === '1';
 }
 
 /** ABI splits are on unless ANYAPP_ABI_SPLITS=0 (then only the full APK is built). */

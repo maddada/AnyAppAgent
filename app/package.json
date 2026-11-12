@@ -3,6 +3,8 @@
   "version": "0.2.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@convex-dev/auth": "0.0.98",
+    "convex": "1.49.0",
     "expo": "~58.0.23",
     "expo-build-properties": "~58.0.12",
     "expo-camera": "~58.0.14",

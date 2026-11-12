@@ -1,0 +1,21 @@
+{
+  "name": "anyapp-cloud",
+  "version": "0.0.1",
+  "private": true,
+  "description": "AnyAppAgent Cloud: the Convex project and the box provider (docs/CLOUD.md). Milestone 0, the spike.",
+  "type": "module",
+  "scripts": {
+    "deploy:dev": "node spike/convex.mjs deploy",
+    "typecheck": "tsc --noEmit -p convex"
+  },
+  "dependencies": {
+    "@auth/core": "0.41.3",
+    "@convex-dev/auth": "0.0.98",
+    "@oslojs/crypto": "1.0.1",
+    "convex": "1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "5.9.3"
+  }
+}

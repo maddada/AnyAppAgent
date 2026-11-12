@@ -28,6 +28,9 @@ gradle.allprojects { p ->
         cfg.keyPassword = p.findProperty('anyappKeyPassword')?.toString()
         cfg.storeType = 'PKCS12'
         android.buildTypes.getByName('release').signingConfig = cfg
+      } else if (p.findProperty('anyappSignLater')?.toString() == 'true') {
+        // The cloud signs after Gradle (ANYAPP_SIGN_LATER=1): no key here, not even the debug one.
+        android.buildTypes.getByName('release').signingConfig = null
       }
       if (code) android.defaultConfig.versionCode = Integer.parseInt(code.toString())
       def feed = p.findProperty('anyappUpdateFeed')?.toString()?.trim()
