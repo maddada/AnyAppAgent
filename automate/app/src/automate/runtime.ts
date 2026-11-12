@@ -49,7 +49,7 @@ export type Status = 'new' | 'on' | 'off' | 'changed' | 'broken';
 const compiled = compiledList as unknown as Compiled[];
 
 function isTrigger(t: unknown): t is Trigger {
-  return !!t && typeof t === 'object' && ['at', 'prayer', 'every', 'charging', 'wifi', 'bluetooth'].includes((t as { kind?: string }).kind ?? '');
+  return !!t && typeof t === 'object' && ['at', 'prayer', 'every', 'charging', 'wifi', 'bluetooth', 'notification'].includes((t as { kind?: string }).kind ?? '');
 }
 
 function defineScript(c: Compiled, ctx: RunContext): Definition {
@@ -60,7 +60,7 @@ function defineScript(c: Compiled, ctx: RunContext): Definition {
   const when = Array.isArray(raw.when) ? raw.when : [raw.when];
   const refused = when.find((t) => (t as { kind?: string } | undefined)?.kind === 'invalid') as { problem?: string } | undefined;
   if (refused) throw Object.assign(new ScriptError(refused.problem ?? 'A trigger was refused.'), { scriptName: name });
-  if (!when.length || !when.every(isTrigger)) throw Object.assign(new ScriptError('"when" needs at(), prayer() or every().'), { scriptName: name });
+  if (!when.length || !when.every(isTrigger)) throw Object.assign(new ScriptError('"when" needs a trigger: at(), prayer(), every(), charging(), wifi(), bluetooth() or notification().'), { scriptName: name });
   if (typeof raw.run !== 'function') throw new ScriptError('"run" must be a function.');
   return { name, says, triggers: when as Trigger[], run: raw.run as Definition['run'] };
 }

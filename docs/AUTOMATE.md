@@ -296,12 +296,13 @@ new needs in `card.ts`, the API in `automations/api.d.ts` and the fence's list).
 as one full build (8, 144 s, the new service and permissions), installed by my phone copy without
 a prompt; the next automations using the new triggers were a quick build again (9, 17 s).
 
-**Not proven on the device yet (M2):** turning on the charger and Wi-Fi automations, and the events
-themselves (`adb emu power ac off/on`, Wi-Fi off and on). The code is built (the full build 8
-compiled the listener service), installed on the phone, and the automations using the triggers
-arrived as quick update 9; at 07:30 three other threads were driving the shared emulator, so the
-taps were stopped rather than land in their apps. Bluetooth connect and disconnect cannot be shown
-on the emulator (no device to pair): the user's phone with the car is the proof.
+**M2 on the device (08:13 to 08:18).** Charger and Wi-Fi back: their cards list "A small notice
+while it listens" (`60-*`, `61-*`, `62-*`); turned on, `ListenerService` ran with "Listening for the
+charger, Wi-Fi" and Stop all (`63-*`, `64-*`). `adb emu power ac off` then `on`: Android sent
+`ACTION_POWER_CONNECTED`, allowed the runner's background start ("uidState: FGS"), and the run
+log says "Charger ran, at charger in", "Started saying "Charging" (still speaking after 15 s, going
+on)", "Showed "Charging started"" (`65-*`). Wi-Fi off for 5 s and on again (`svc wifi`): "Wi-Fi back
+ran, at Wi-Fi connected" and its notification. Bluetooth needs a real device: the user's phone.
 
 ## M3: notifications from other apps (2026-11-12)
 
@@ -311,3 +312,29 @@ is someone's message, used to decide, never logged, spoken or sent unless the pe
 exactly that. It reached the app as one full build (10, 103 s); the first automation using it,
 "Mum wrote" (`notification({ app: 'Shell', text: 'Mum' })`, Shell standing in for WhatsApp on the
 emulator: `adb shell cmd notification post` posts as Shell), was a quick build (11, 7 s).
+
+**M3 on the device (08:22 to 08:29).** Mum wrote's card asks for notification access with the
+restricted-settings hint, and Turn it on waits for it (`66-*`, `67-*`). Allow opened Android's page
+for the app, and even on the emulator it was "Controlled by Restricted Setting" (an app AnyAppAgent
+installs counts as side-loaded): tapping the switch gave "App was denied access" (`69-*`), then App
+info, the three dots, Allow restricted settings (`70-*`), then the switch and Android's question
+"Allow notification access for Appwin Automate?" (`71-*`, `72-*`), Allow. So the card's hint is the
+real flow. `adb shell cmd notification post -t "Mum" ... "Are you coming for dinner tonight?"`
+(posted as Shell): "Mum wrote ran, at a notification from Shell", "Message from Mum" shown; a second
+one from "Dad" ("Dinner is ready") reached the watcher but did not start it (no "Mum"); the log names
+the app, never the message (`74-*`). Dark: `79-*`, `81-*` to `84-*`.
+
+Found on the device: version 11 showed Mum wrote as "Problem: "when" needs at(), prayer() or
+every()": the runtime's list of trigger kinds lacked `notification` (fixed, version 12; it was a full
+build because the cloud spike thread had changed `builder/anyapp.init.gradle`, part of every app's
+native fingerprint, which is the fast lane working as designed).
+
+**The rails fix on the device.** The first fix (moving the deadline after the answer) did not work:
+the run's timer still fired at 60 s while the question waited. Fixed properly (version 13, quick): the
+deadline is lifted while the person is asked and put back afterwards. Proof: Try it now, no answer
+for 70 s and more; the question stayed (`76-*`), the run waited the full 2 minutes and logged "Web
+check did not send anything, No answer in time: nothing was sent, Took 120.0 s" (`77-*`, dark `78-*`).
+"You said no" was shown at 06:52 (`43-*`).
+
+At the end of the sitting the test app was left with Stop all on (`85-*`), so its listeners do not
+react to other threads on the shared emulator; Resume brings everything back.

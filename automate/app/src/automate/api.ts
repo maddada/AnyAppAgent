@@ -104,9 +104,17 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
       const what = method === 'GET' ? `fetch from ${host}` : `send to ${host}`;
       line(`Asked you: ${what}`);
       // The run's clock stops while it waits for the person: a slow answer is not a slow script.
+      // The deadline is lifted during the wait (the run's timer checks it every half second) and
+      // put back afterwards, moved on by the time the person took.
       const asked = Date.now();
-      const answer = await Native.ask(`${ctx.name} wants to ${what}`, method === 'POST' ? `It sends: ${String(typeof body === 'string' ? body : JSON.stringify(body)).slice(0, 160)}` : url, LIMITS.askMs);
-      ctx.deadline += Date.now() - asked;
+      const deadline = ctx.deadline;
+      ctx.deadline = Number.POSITIVE_INFINITY;
+      let answer: 'allow' | 'deny' | 'timeout';
+      try {
+        answer = await Native.ask(`${ctx.name} wants to ${what}`, method === 'POST' ? `It sends: ${String(typeof body === 'string' ? body : JSON.stringify(body)).slice(0, 160)}` : url, LIMITS.askMs);
+      } finally {
+        ctx.deadline = deadline + (Date.now() - asked);
+      }
       if (Native.isStopped()) throw new StoppedError();
       if (answer !== 'allow') throw new RefusedError(answer === 'deny' ? 'no' : 'no answer');
       line('You allowed it');
