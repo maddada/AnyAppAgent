@@ -46,7 +46,7 @@ describe("the playbook in the cloud", () => {
     expect(text).toContain("simple: simple work in one area");
     expect(text).toContain("Kiwimake's AI agent, powered by Claude");
     expect(text).not.toMatch(/\bthe PC\b|\bthis PC\b/);
-    expect(text).not.toContain("—");
+    expect(text).not.toContain(String.fromCharCode(0x2014));
   });
 
   test("a PC's playbook is unchanged", () => {
