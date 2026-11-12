@@ -1,4 +1,4 @@
-// AnyAppAgent Cloud, the spike's slice of the data model (docs/CLOUD.md, section 4). Milestone 1
+// Kiwimake Cloud, the spike's slice of the data model (docs/CLOUD.md, section 4). Milestone 1
 // replaces it with the full schema.
 import { authTables } from '@convex-dev/auth/server';
 import { defineSchema, defineTable } from 'convex/server';

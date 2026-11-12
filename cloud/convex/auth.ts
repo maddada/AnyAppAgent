@@ -25,9 +25,9 @@ const ResendOTP = Resend({
       method: 'POST',
       headers: { Authorization: `Bearer ${provider.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'AnyAppAgent <onboarding@resend.dev>',
+        from: 'Kiwimake <onboarding@resend.dev>',
         to: [email],
-        subject: `Your AnyAppAgent code: ${token}`,
+        subject: `Your Kiwimake code: ${token}`,
         text: `Your sign-in code is ${token}. It works for 10 minutes. If you did not ask for it, ignore this email.`,
       }),
     });

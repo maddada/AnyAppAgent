@@ -1,4 +1,4 @@
-# cloud/: AnyAppAgent Cloud
+# cloud/: Kiwimake Cloud
 
 The plan is `docs/CLOUD.md`. This folder holds the cloud's own code. Today that is **milestone 0,
 the spike**: it proves the risky parts and measures them; it is not the product.

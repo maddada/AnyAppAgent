@@ -1,4 +1,4 @@
-// AnyAppAgent Cloud, the spike's screen (milestone 0 of docs/CLOUD.md). Not linked from the app:
+// Kiwimake Cloud, the spike's screen (milestone 0 of docs/CLOUD.md). Not linked from the app:
 // opened with `adb shell am start -d anyappagent://cloud-spike <package>`, only in builds made with
 // EXPO_PUBLIC_CONVEX_URL. Proves sign-in (Google, a code by email) with Convex Auth and one round
 // trip phone -> Convex -> box -> Convex -> phone with the Convex React Native client. Milestone 4
