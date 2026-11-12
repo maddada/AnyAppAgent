@@ -182,6 +182,7 @@ export function AutomationScreen({ route }: Props) {
         {status === 'on' ? (
           <>
             <Button title="Try it now" variant="secondary" disabled={busy || stopped} onPress={run(() => tryNow(l.id))} />
+            {l.triggers.some((t) => t.kind === 'at' || t.kind === 'prayer' || t.kind === 'every') ? (
             <Button
               title="Test with a pretend clock"
               variant="secondary"
@@ -191,6 +192,7 @@ export function AutomationScreen({ route }: Props) {
                 navigation.goBack();
               })}
             />
+            ) : null}
             <Button title="Turn off" variant="secondary" disabled={busy} onPress={run(() => turnOff(l.id))} />
           </>
         ) : status !== 'broken' ? (

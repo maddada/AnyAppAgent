@@ -74,7 +74,10 @@ export function needsOf(actions: CardAction[], triggers: Trigger[] = []): Need[]
     if (t.kind === 'bluetooth') needs.add('nearby');
     if (t.kind === 'wifi' && t.network) needs.add('locationAlways');
     if (t.kind === 'notification') needs.add('notificationAccess');
-    if (t.kind === 'place') needs.add('locationAlways');
+    if (t.kind === 'place') {
+      needs.add('listening');
+      needs.add('locationAlways');
+    }
     if (t.kind === 'app') {
       needs.add('listening');
       needs.add('usageAccess');
@@ -93,7 +96,7 @@ export const NEED_LABEL: Record<Need, { title: string; why: string }> = {
   exact: { title: 'Exact times', why: 'So it runs on the minute, even when the phone sleeps' },
   notifications: { title: 'Notifications', why: 'To show what it does' },
   dnd: { title: 'Do Not Disturb access', why: 'One switch in Settings, so it can turn Do Not Disturb on and off' },
-  listening: { title: 'A small notice while it listens', why: 'Android needs it to keep listening for the charger, Wi-Fi or Bluetooth. Stop all is on it' },
+  listening: { title: 'A small notice while it listens', why: 'Android needs it to keep listening (the charger, Wi-Fi, Bluetooth, places or the app in front). Stop all is on it' },
   nearby: { title: 'Nearby devices', why: 'To see which Bluetooth device connects' },
   notificationAccess: {
     title: 'Notification access',

@@ -54,7 +54,7 @@ class AppwinAutomateModule : Module() {
       NotificationWatcher.update(context, "notification" in kinds, apps)
       ListenerService.setAppWatches(context, appWatches)
       Places.update(context, places)
-      ListenerService.update(context, kinds.filter { it != "notification" && it != "place" }.toSet())
+      ListenerService.update(context, kinds.filter { it != "notification" }.toSet())
     }
     Function("usageAccess") { ListenerService.usageAccess(context) }
     AsyncFunction("openUsageAccess") {

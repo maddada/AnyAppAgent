@@ -30,7 +30,6 @@
   <application>
     <receiver android:name="expo.modules.appwinautomate.TriggerReceiver" android:exported="false" />
     <receiver android:name="expo.modules.appwinautomate.ActionReceiver" android:exported="false" />
-    <receiver android:name="expo.modules.appwinautomate.PlaceReceiver" android:exported="false" />
     <!-- M6: read the screen and tap, off until the person turns it on. -->
     <service
       android:name="expo.modules.appwinautomate.ScreenService"

@@ -45,6 +45,7 @@ class ListenerService : Service() {
   private var frontSince = 0L
   private var lastPoll = 0L
   private val sentMinutes = HashSet<Int>()
+  private var places: android.location.LocationListener? = null
   private val poll = object : Runnable {
     override fun run() {
       try {
@@ -138,6 +139,13 @@ class ListenerService : Service() {
       wifi = null
     }
 
+    if ("place" in kinds && places == null) {
+      places = Places.start(this)
+    } else if ("place" !in kinds && places != null) {
+      Places.stop(this, places)
+      places = null
+    }
+
     if ("app" in kinds && !polling) {
       polling = true
       lastPoll = System.currentTimeMillis() - 15_000
@@ -227,6 +235,8 @@ class ListenerService : Service() {
   }
 
   override fun onDestroy() {
+    Places.stop(this, places)
+    places = null
     polling = false
     main.removeCallbacks(poll)
     unregister(power)

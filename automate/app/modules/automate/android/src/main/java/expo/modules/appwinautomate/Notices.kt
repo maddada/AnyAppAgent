@@ -87,6 +87,7 @@ object Notices {
         "wifi" -> "Wi-Fi"
         "bluetooth" -> "Bluetooth"
         "app" -> "the app in front"
+        "place" -> "places"
         else -> "the charger"
       }
     }

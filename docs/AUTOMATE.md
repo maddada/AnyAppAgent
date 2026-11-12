@@ -132,10 +132,10 @@ card from that record.
 | Do Not Disturb | `NotificationManager.setInterruptionFilter(PRIORITY)` with a timed restore alarm; `ACCESS_NOTIFICATION_POLICY` | Card: "Allow" opens the Do Not Disturb access page, one switch | `doNotDisturb.on/off/isOn` | First slice |
 | Bluetooth, Wi-Fi, charging | `ListenerService`: a foreground service of type `connectedDevice` (its Android 14 prerequisite `CHANGE_NETWORK_STATE` is granted without asking) with receivers for `ACTION_POWER_CONNECTED/DISCONNECTED` and Bluetooth `ACTION_ACL_CONNECTED/DISCONNECTED`, and a Wi-Fi `NetworkCallback` (with `FLAG_INCLUDE_LOCATION_INFO` for the name). It runs only while an automation that is on uses one of these triggers (the runtime calls `listen()` in every plan), shows "Listening for ..." with Stop all, restarts after a reboot, and starts the headless runner with `{ event }` | Card: "A small notice while it listens"; Bluetooth asks Nearby devices; a Wi-Fi name asks Location, all the time (Android shows Wi-Fi names only then) | `charging({ plugged? })`, `wifi({ connected?, network? })`, `bluetooth({ connected?, device? })` | M2 (built) |
 | Notifications from other apps | `NotificationWatcher`, a `NotificationListenerService` Android binds once the person allows notification access. It reports a notification only when an automation that is on watches its app (or any app), never this app's own, ongoing or group-summary ones, the same one again within 5 s is one event, and it starts the headless runner with `{ event: { kind: 'notification', app, package, title, text } }`. The script gets `event.notification`; the run log names the app, never the message | Card: "Notification access" opens that page for this app; its line says what to do when Android answers "Restricted setting" (App info, the three dots, Allow restricted settings) | `notification({ app?, text? })` | M3 (built) |
-| Location (arrive, leave) | `LocationManager.addProximityAlert` (no Play services needed) or the fused geofencing API; `ACCESS_BACKGROUND_LOCATION` ("Allow all the time") | Card | `arrive('Mosque')`, `leave(...)`, places saved in the app | M4 |
-| The app in front | `UsageStatsManager` events (`PACKAGE_USAGE_STATS`, one switch), polled by the listener service only while an automation needs it | Card | `appOpened('YouTube', { forMinutes? })` | M5 |
-| Accessibility | An `AccessibilityService` that reads the window and taps; restricted settings again; Android 16 refuses it during calls | Card, with a plain warning | `screen.find(text)`, `screen.tap(text)`, with a deny-list (password fields, Settings security pages, the package installer, banking) that the safety locks cannot turn off | M6 |
-| Shizuku | The Shizuku API (the Shizuku app runs a privileged process after a wireless-debugging pairing, again after every restart) | Card: walkthrough, then Shizuku's own Allow | `shizuku.run(...)` limited to a list of commands (mobile data, Wi-Fi on and off, stop an app, secure settings) | M7 |
+| Location (arrive, leave) | Places the person saves in the app (Places: "Save where I am now", a name, 150 m). While an automation that is on watches a place, the listener service asks for a balanced location about once a minute (fused provider; Wi-Fi and cell on a phone) and decides itself when the phone crossed the edge: the first fix only sets inside or outside (being there already is not an arrival), and a 30 m margin keeps it from flickering. Android's proximity alerts were tried first and dropped: they repeated "entering" while inside and checked only every 30 minutes | Saving a place asks for location while in use; the card asks Location, all the time (Android's own page, "Allow all the time") | `arrive(place)`, `leave(place)`: a saved name or `{ lat, lon, name }`; an unsaved name is a Problem on the card ("Save a place called ... first") | M4 (built) |
+| The app in front | The listener service reads Android's usage events every 10 s while an automation watches an app (`UsageStatsManager`, `ACTIVITY_RESUMED`) and reports when it comes to the front, and again at each `forMinutes` mark | Card: Usage access, one switch | `appOpened(app, { forMinutes? })` | M5 (built) |
+| Accessibility | `ScreenService`, an accessibility service that does nothing by itself: it answers `screen.read()` (the texts of the window in front, never password fields) and `screen.tap(text)` (the first visible item with that text, or its clickable parent) from a running automation. Fixed deny-list the safety locks never change: password and text fields, package installers, Settings, permission screens, the Play Store, System UI, and this app (an automation can not approve its own card) | Card: Screen access opens Android's Accessibility page; the restricted-settings hint as for notifications; Android's own full-control warning | `screen.read()`, `screen.tap(text)` | M6 (built) |
+| Shizuku | The Shizuku API (`dev.rikka.shizuku:api` and `provider` 13.1.5): only `svc wifi enable/disable`, `svc data enable/disable` and `am force-stop` of a named app (never this app, Android's own apps or Shizuku), never a command a script writes | Card: Shizuku with its state (Get it, Start it, Allow, Ready); Allow is Shizuku's own permission | `shizuku.wifi(on)`, `shizuku.mobileData(on)`, `shizuku.stopApp(app)` | M7 (built) |
 
 **Permissions only when needed**: the manifest declares what a power needs (declaring is not
 granting), but nothing is asked until an automation using that power is shown on its card. The card's
@@ -197,10 +197,10 @@ The first version is all nine powers. In working days, one thread:
 | M1 | First slice (this): the app made through Kiwimake, the fence and runtime, all safety rails and the Advanced toggle, time and prayer times, speak and notify, Do Not Disturb | 2 (done) |
 | M2 | Bluetooth, Wi-Fi and charging triggers: the listener service (always-on notice with Stop all), Nearby devices | 2 (built) |
 | M3 | Notifications from other apps: the listener service, the restricted-settings walkthrough | 1.5 (built) |
-| M4 | Location arrive and leave: places in the app, proximity alerts, "Allow all the time" walkthrough | 1.5 |
-| M5 | The app in front (usage access) | 1 |
-| M6 | Accessibility: read and tap, the deny-list, the warning card | 2.5 |
-| M7 | Shizuku: setup walkthrough, the command list, its own ask | 2 |
+| M4 | Location arrive and leave: places in the app, proximity alerts, "Allow all the time" walkthrough | 1.5 (built) |
+| M5 | The app in front (usage access) | 1 (built) |
+| M6 | Accessibility: read and tap, the deny-list, the warning card | 2.5 (built) |
+| M7 | Shizuku: setup walkthrough, the command list, its own ask | 2 (built) |
 | M8 | Unused powers list, ask-before-sending for SMS and calls, publish and clone check, docs | 1 |
 
 About 14 days in all, 12 after this slice. M2 to M7 each end with one APK; everything after is the
@@ -338,3 +338,41 @@ check did not send anything, No answer in time: nothing was sent, Took 120.0 s" 
 
 At the end of the sitting the test app was left with Stop all on (`85-*`), so its listeners do not
 react to other threads on the shared emulator; Resume brings everything back.
+
+## M4 to M7 (2026-11-12)
+
+Built together (one full build) and proven in one sitting on `emulator-5560` (screenshots `90-*` to
+`116-*`, dark `113-*` to `116-*`); the test automations came from one prompt as a quick update:
+Mosque (`arrive('Mosque')`, Do Not Disturb 30 minutes), Clock open (`appOpened('Clock')`, then
+`screen.read()`, `screen.tap('Stopwatch')`, a notification), Night Wi-Fi (`at('23:00')`,
+`shizuku.wifi(false)`), and later Office (`arrive('Office')` and `leave('Office')`).
+
+**M4, places.** Saving a place asks for location while in use (`91-*`); the card asks Location, all
+the time, which is Android's own page (`93-*`, `94-*`). The first version used Android's proximity
+alerts, and the device showed both of its problems: every plan registered the alert again and
+Android answered "entering" again while the phone was inside, so Mosque ran until the hard limit
+stopped it ("It already ran 12 times this hour (safety lock)", `95-*`, the rail doing its job),
+and leaving was noticed only by a location check every 30 minutes. Replaced (build 18) by the
+listener's own once-a-minute balanced location with a baseline and a margin. Proof with Office:
+standing there when it was turned on and four more fixes inside: no event; away 3 km: "Office ran,
+at left Office"; back: "Office ran, at arrived at Office" and "Back at the office", exactly once each
+(`107-*`, `108-*`, `109-*`). On the emulator a balanced request never turns GPS on and there is no
+Wi-Fi or cell location, so the fused provider was fed for those two minutes with Android's test
+provider (`cmd location providers add-test-provider fused`), removed straight after; on a phone the
+balanced location comes from Wi-Fi and cell towers.
+
+**M5 and M6, the app in front, read and tap.** Usage access is one switch (`98-*`); screen access
+is Android's Accessibility page with the service's own description of the deny-list and Android's
+full-control warning (`99-*` to `101-*`). Clock opened by itself: within one poll Clock open ran,
+read the screen, tapped Stopwatch (Clock switched to its Stopwatch tab) and showed "Stopwatch
+ready" (`103-*`, `104-*`). Try it now inside this app: "Clock open failed, Try it now: Not in this
+app: an automation can not touch its own cards" (`110-*`).
+
+**M7, Shizuku.** Built and compiled; the card shows "Shizuku: Get it" with the steps, and Turn it on
+waits for it (`111-*`, `112-*`, dark `113-*`). The emulator has no Shizuku, so the actions
+themselves are for the user's phone (install Shizuku, start it with wireless debugging, allow
+this app in it, then Try it now on Night Wi-Fi).
+
+At the end of the sitting: Stop all (listener, alarms and location requests stopped). A geofence
+from test build 16 stays registered on the emulator until it restarts or the app is reinstalled
+(that build never left it).
