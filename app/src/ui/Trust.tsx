@@ -4,10 +4,11 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Gauge, TriangleAlert } from "lucide-react-native";
-import { BEHIND_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, PLAN_UNKNOWN, planLines, reminderText, usageLine } from "@shared/chat/index";
+import { BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, PLAN_UNKNOWN, planLines, reminderText, usageLine } from "@shared/chat/index";
 import type { App, CareState, ChatItem } from "@/lib/protocol";
 import { useStore } from "@/lib/store";
 import { Button } from "./Button";
+import { StateLine } from "./StateLine";
 import { T } from "./Text";
 import { border, icon, radius, size, space, useTheme } from "./theme";
 
@@ -44,7 +45,10 @@ export function HealthBadge({ app, big, onPress }: { app: App; big?: boolean; on
   );
 }
 
-/** In an app's sheet while it is behind: what is behind, and "Update it" after a heads-up. */
+/**
+ * In an app's sheet while it is behind: what is behind, and "Update it" after a heads-up. While the
+ * update runs (AppHealth.updating) one calm line instead; still behind afterwards, the card is back.
+ */
 export function HealthCard({ app, onSent }: { app: App; onSent: () => void }) {
   const t = useTheme();
   const client = useStore((s) => s.client);
@@ -53,6 +57,13 @@ export function HealthCard({ app, onSent }: { app: App; onSent: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!app.health?.behind) return null;
+  if (app.health.updating) {
+    return (
+      <View testID="health-updating" style={{ padding: space.lg, borderRadius: radius.card, backgroundColor: t.surfaceSunken, marginBottom: space.md }}>
+        <StateLine kind="working" label={UPDATING_LABEL} lines={0} />
+      </View>
+    );
+  }
   const h = headsUp({ text: "", keepHealthy: true, usage: care?.usage, appUsage: app.usage })!;
   const send = async () => {
     if (!client) return;
@@ -71,36 +82,38 @@ export function HealthCard({ app, onSent }: { app: App; onSent: () => void }) {
   return (
     <View
       testID="health-card"
-      style={{ flexDirection: "row", gap: space.md, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surfaceSunken, marginBottom: space.md, borderLeftWidth: 3, borderLeftColor: t.attention }}
+      style={{ gap: space.xs, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surfaceSunken, marginBottom: space.md, borderLeftWidth: 3, borderLeftColor: t.attention }}
     >
-      <HealthBadge app={app} big />
-      <View style={{ flex: 1, gap: space.xs }}>
-        <T variant="body">Behind the newest template</T>
-        {app.health.reasons.map((r) => (
-          <T key={r} variant="label" color="textSecondary">
-            {r}
-          </T>
-        ))}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <HealthBadge app={app} big />
+        <T variant="body" style={{ flex: 1 }}>
+          Behind the newest template
+        </T>
+      </View>
+      {app.health.reasons.map((r) => (
+        <T key={r} variant="label" color="textSecondary">
+          {r}
+        </T>
+      ))}
+      {asking ? (
+        <T variant="label" style={{ marginTop: space.xs }}>
+          {h.body}
+        </T>
+      ) : null}
+      {error ? (
+        <T variant="label" color="problem">
+          {error}
+        </T>
+      ) : null}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: space.sm, marginTop: space.sm }}>
         {asking ? (
-          <T variant="label" style={{ marginTop: space.xs }}>
-            {h.body}
-          </T>
-        ) : null}
-        {error ? (
-          <T variant="label" color="problem">
-            {error}
-          </T>
-        ) : null}
-        <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.sm }}>
-          {asking ? (
-            <>
-              <Button testID="keep-healthy-send" label={h.send} small busy={busy} onPress={() => void send()} />
-              <Button label="Not now" variant="quiet" small onPress={() => setAsking(false)} />
-            </>
-          ) : (
-            <Button testID="keep-healthy" label="Update it" small onPress={() => setAsking(true)} />
-          )}
-        </View>
+          <>
+            <Button label="Not now" variant="quiet" small onPress={() => setAsking(false)} />
+            <Button testID="keep-healthy-send" label={h.send} small busy={busy} onPress={() => void send()} />
+          </>
+        ) : (
+          <Button testID="keep-healthy" label="Update it" small onPress={() => setAsking(true)} />
+        )}
       </View>
     </View>
   );
@@ -116,30 +129,35 @@ export function ReminderBanner() {
   return (
     <View
       testID="health-reminder"
-      style={{ flexDirection: "row", gap: space.md, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surface, borderWidth: border.width, borderColor: t.border, marginBottom: space.md, alignItems: "flex-start" }}
+      style={{ gap: space.xs, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surface, borderWidth: border.width, borderColor: t.border, marginBottom: space.md }}
     >
-      <View style={{ width: BADGE, height: BADGE, borderRadius: BADGE / 2, backgroundColor: t.attention, alignItems: "center", justifyContent: "center" }}>
-        <T variant="label" style={{ color: t.onAttention, fontWeight: "700", lineHeight: undefined }} maxFontSizeMultiplier={1.2}>
-          !
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+        <View style={{ width: BADGE, height: BADGE, borderRadius: BADGE / 2, backgroundColor: t.attention, alignItems: "center", justifyContent: "center" }}>
+          <T variant="label" style={{ color: t.onAttention, fontWeight: "700", lineHeight: undefined }} maxFontSizeMultiplier={1.2}>
+            !
+          </T>
+        </View>
+        <T variant="body" style={{ flex: 1 }}>
+          {words.title}
         </T>
       </View>
-      <View style={{ flex: 1, gap: space.xs }}>
-        <T variant="body">{words.title}</T>
-        <T variant="label" color="textSecondary">
-          {words.body}
-        </T>
-        <Button
-          testID="reminder-dismiss"
-          label="Got it"
-          variant="quiet"
-          small
-          style={{ alignSelf: "flex-start", marginTop: space.sm }}
-          onPress={() => {
-            if (!client) return;
-            void client.dismissReminder().then((next) => useStore.setState({ care: next }), () => {});
-          }}
-        />
-      </View>
+      <T variant="label" color="textSecondary">
+        {words.body}
+      </T>
+      <Button
+        testID="reminder-dismiss"
+        label="Got it"
+        variant="quiet"
+        small
+        style={{ alignSelf: "flex-end", marginTop: space.sm }}
+        onPress={() => {
+          if (!client) return;
+          void client.dismissReminder().then(
+            (next) => useStore.setState({ care: next }),
+            () => {},
+          );
+        }}
+      />
     </View>
   );
 }
@@ -150,7 +168,11 @@ export function UsageNote({ item }: { item: ChatItem }) {
   const line = usageLine(item.usage);
   if (!line) return null;
   return (
-    <View testID="usage-note" accessibilityHint={cacheLine(item.usage) ?? undefined} style={{ flexDirection: "row", alignItems: "center", gap: space.xs, marginTop: space.xs, paddingHorizontal: space.xs }}>
+    <View
+      testID="usage-note"
+      accessibilityHint={cacheLine(item.usage) ?? undefined}
+      style={{ flexDirection: "row", alignItems: "center", gap: space.xs, marginTop: space.xs, paddingHorizontal: space.xs }}
+    >
       <Gauge size={size.stateIcon} color={t.textTertiary} strokeWidth={icon.stroke} absoluteStrokeWidth />
       <T variant="caption" color="textTertiary">
         {line}
@@ -163,7 +185,10 @@ export function UsageNote({ item }: { item: ChatItem }) {
 export function HeadsUpCard({ h, onSend, onCancel, busy }: { h: HeadsUp; onSend: () => void; onCancel: () => void; busy?: boolean }) {
   const t = useTheme();
   return (
-    <View testID="heads-up" style={{ gap: space.sm, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surface, borderWidth: border.width, borderColor: t.border, marginBottom: space.sm }}>
+    <View
+      testID="heads-up"
+      style={{ gap: space.sm, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surface, borderWidth: border.width, borderColor: t.border, marginBottom: space.sm }}
+    >
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
         <TriangleAlert size={size.stateIcon + 3} color={t.attentionText} strokeWidth={icon.stroke} absoluteStrokeWidth />
         <T variant="body">{h.title}</T>
@@ -171,9 +196,9 @@ export function HeadsUpCard({ h, onSend, onCancel, busy }: { h: HeadsUp; onSend:
       <T variant="label" color="textSecondary">
         {h.body}
       </T>
-      <View style={{ flexDirection: "row", gap: space.sm }}>
-        <Button testID="heads-up-send" label={h.send} small busy={busy} onPress={onSend} />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: space.sm }}>
         <Button label="Not now" variant="quiet" small onPress={onCancel} />
+        <Button testID="heads-up-send" label={h.send} small busy={busy} onPress={onSend} />
       </View>
     </View>
   );
@@ -234,7 +259,7 @@ export function CareSettings({ care }: { care: CareState | null }) {
             : whenText
               ? `Your apps were backed up ${whenText} (${b.apps} ${b.apps === 1 ? "app" : "apps"}).`
               : "Backups are on; the first one is on its way."
-          : "Not backed up. Turn on \"Back up my apps\" in Kiwimake's Settings on your PC."}
+          : 'Not backed up. Turn on "Back up my apps" in Kiwimake\'s Settings on your PC.'}
       </T>
     </View>
   );

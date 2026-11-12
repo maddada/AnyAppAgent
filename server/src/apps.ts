@@ -38,6 +38,7 @@ import { Backups } from "./backup.ts";
 import { REPO_DIR } from "./config.ts";
 import { ownerName, setOwnerName, Suggestions } from "./change.ts";
 import { parseSuggestion } from "../../shared/chat/suggestions.ts";
+import { KEEP_HEALTHY_TEXT } from "../../shared/chat/trust.ts";
 import { downloadSource, extractZip, findReleaseSource, makeSourceZip, repoFromText, SourceError } from "./release-source.ts";
 import { cloneNote } from "./playbook.ts";
 
@@ -85,6 +86,11 @@ interface Runtime {
   turnActive: boolean;
   /** The usage meter: the person's message the current job works for (its chat item), if any. */
   usageItem?: string;
+  /**
+   * "Update it" (AppHealth.updating): its message's chat item, and whether its turn has started.
+   * Settled (the flag goes, the health is read again) once the app's agent, helpers and build are done.
+   */
+  healthUpdate?: { itemId: string; started: boolean; timer?: ReturnType<typeof setTimeout> };
 }
 
 interface ReadyRecord extends AppRecord {
@@ -122,6 +128,8 @@ export function withoutEmDashes(text: string): string {
   return text.replace(/\s*\u{2014}\s*/gu, ", ");
 }
 
+/** How long after the app goes quiet an "Update it" counts as done (a helper's report is queued by then). */
+const HEALTH_SETTLE_MS = 1500;
 /** What a build cut off by a restart of the companion says (it is built again by itself). */
 const INTERRUPTED_BUILD = "The PC restarted during this build, so it is building again.";
 
@@ -472,6 +480,7 @@ export class AppManager {
     if (error === undefined) delete record.app.error;
     else record.app.error = error;
     this.touch(record);
+    this.settleHealthUpdate(record);
   }
 
   private busy(record: AppRecord): boolean {
@@ -491,6 +500,7 @@ export class AppManager {
     const busy = this.busy(record);
     if (busy && status !== "working") this.setStatus(record, "working");
     else if (!busy && status === "working") this.setStatus(record, "idle");
+    this.settleHealthUpdate(record);
   }
 
   // ---------- commands
@@ -602,6 +612,7 @@ export class AppManager {
       return;
     }
     const before = JSON.stringify(record.app.health?.reasons ?? null);
+    if (health && this.runtimes.get(record.app.id)?.healthUpdate) health.updating = true;
     if (health) record.app.health = health;
     else delete record.app.health;
     if (JSON.stringify(health?.reasons ?? null) === before) return;
@@ -641,7 +652,39 @@ export class AppManager {
     this.refreshHealth(record);
     const health = record.app.health;
     if (!health) throw new HttpError(409, `${record.app.name} is already up to date.`);
-    this.sendMessage(id, keepHealthyMessage(health, record.app.preset, this.templates));
+    // The chat shows one short line; the whole instruction (paths, commands) is for the agent only.
+    const itemId = this.sendMessage(id, KEEP_HEALTHY_TEXT, [], keepHealthyMessage(health, record.app.preset, this.templates));
+    const rt = this.runtime(record.app.id);
+    clearTimeout(rt.healthUpdate?.timer);
+    // Its turn may have started already (an idle app takes the message at once).
+    rt.healthUpdate = { itemId, started: !rt.queue.some((job) => job.kind === "prompt" && job.itemId === itemId) };
+    health.updating = true;
+    this.touch(record);
+  }
+
+  /**
+   * Ends AppHealth.updating once the "Update it" turn ran and nothing works on the app any more (its
+   * agent, helpers, queue, build), or at once when its message was dropped before it ran. Checked a
+   * moment later, so a helper that just finished has its report queued for the agent first. The
+   * health is read again: up to date means the notice goes; still behind means it comes back.
+   */
+  private settleHealthUpdate(record: AppRecord, dropped = false): void {
+    const rt = this.runtimes.get(record.app.id);
+    const update = rt?.healthUpdate;
+    if (!rt || !update || (!update.started && !dropped)) return;
+    clearTimeout(update.timer);
+    update.timer = setTimeout(() => {
+      if (rt.healthUpdate !== update) return;
+      const status = record.app.status;
+      if (!dropped && (rt.running || rt.queue.length > 0 || this.busy(record) || status === "building" || status === "creating")) return;
+      delete rt.healthUpdate;
+      if (record.deleted) return;
+      delete record.app.health?.updating;
+      this.refreshHealth(record, false);
+      this.touch(record);
+      this.careChanged();
+    }, HEALTH_SETTLE_MS);
+    update.timer.unref?.();
   }
 
   /** An app brought back by a backup restore (backup.ts): it joins the list with its chat and to-dos. */
@@ -718,7 +761,7 @@ export class AppManager {
     this.broadcast({ type: "app.updated", app: record.app });
   }
 
-  sendMessage(id: string, text: string, uploads: ImageUpload[] = [], agentExtra = ""): void {
+  sendMessage(id: string, text: string, uploads: ImageUpload[] = [], agentExtra = ""): string {
     const record = this.record(id);
     if (text.trim() === "" && uploads.length === 0) throw new HttpError(400, "The message is empty.");
     const problem = checkImages(uploads.map((u) => ({ mimeType: String(u?.mimeType ?? ""), data: String(u?.data ?? "") })));
@@ -739,6 +782,7 @@ export class AppManager {
     this.touch(record);
     const agentText = agentExtra ? `${text.trim()}\n\n${agentExtra}` : text.trim();
     this.enqueue(record, { kind: "prompt", text: agentText, itemId, images: saved.map(({ prompt }) => prompt) });
+    return itemId;
   }
 
   private imagesDir(appId: string): string {
@@ -1298,6 +1342,7 @@ export class AppManager {
     rt.queue = rt.queue.filter((job) => job.kind === "report");
     for (const job of dropped) {
       if (job.kind === "prompt" && job.itemId) this.emitItem(record, { id: job.itemId, kind: "user", queued: false, dropped: true });
+      if (job.kind === "prompt" && job.itemId && job.itemId === rt.healthUpdate?.itemId && !rt.healthUpdate.started) this.settleHealthUpdate(record, true);
     }
   }
 
@@ -1312,6 +1357,7 @@ export class AppManager {
         // What this job's tokens count toward: the person's message, or for helpers' reports the
         // message that started the first of them.
         rt.usageItem = job.kind === "prompt" ? job.itemId : job.kind === "report" ? this.workers?.usageItemOf(record.app.id, job.workerId) : undefined;
+        if (job.kind === "prompt" && job.itemId && job.itemId === rt.healthUpdate?.itemId) rt.healthUpdate.started = true;
         if (job.kind === "prompt" && job.itemId && this.store.chat(record.app.id).get(job.itemId)?.queued) {
           this.emitItem(record, { id: job.itemId, kind: "user", queued: false });
         }
@@ -1330,6 +1376,7 @@ export class AppManager {
     } finally {
       rt.running = false;
       this.setReplying(record, false);
+      this.settleHealthUpdate(record);
     }
   }
 

@@ -614,6 +614,10 @@ export interface AppHealth {
   behind: true;
   reasons: string[]; // plain sentences, e.g. "Made with Expo SDK 57; the newest is 58."
   checkedAt: string;
+  // Added: true from "Update it" until the app's agent, its helpers and the build after them are all
+  // done; the notice then says "Updating to the newest template..." with no button. Absent otherwise
+  // and from older PCs. If the app is still behind afterwards, the notice comes back.
+  updating?: true;
 }
 export interface HealthReminder {
   due: boolean; // show the monthly reminder now
@@ -622,7 +626,8 @@ export interface HealthReminder {
   nextAt: string | null; // when it is due next (null while no app is behind)
 }
 // POST /api/apps/:id/keep-healthy -> 202: sends the app's agent the update message as the person's own
-//   message (it shows in the chat as such); 409 when the app is not behind.
+//   message; 409 when the app is not behind. The chat shows the short line "Update to the newest
+//   template"; the full instruction goes to the agent only (changed: it showed the whole instruction).
 
 // ---------- Backup (added: "Never lose your apps", docs/TRUST.md)
 export interface BackupSummary {

@@ -211,9 +211,11 @@ function AppsPage({
             <div className="grow">
               <StateLine state="problem" text={blocking.problemText ?? blocking.sub} />
             </div>
-            <button className="btn btn-quiet btn-sm" onClick={() => (blocking.step ? openSetup(blocking.step) : goSetup())}>
-              Fix it
-            </button>
+            <div className="notice-actions">
+              <button className="btn btn-quiet btn-sm" onClick={() => (blocking.step ? openSetup(blocking.step) : goSetup())}>
+                Fix it
+              </button>
+            </div>
           </div>
         )}
         <ReminderCard care={s.care} />
@@ -508,9 +510,11 @@ function PhonesPage({ s, onConnect }: { s: Snapshot; onConnect: () => void }) {
           <h2 className="heading">{devices.length ? "Connect another phone" : "Connect your phone"}</h2>
           <p className="label secondary">Show a pairing code and scan it with Kiwimake on the phone. Keep the code private: anyone who scans it can use this PC.</p>
         </div>
-        <button className="btn btn-quiet" onClick={onConnect} data-testid="show-pairing-code">
-          <Icon of={QrCode} size="button" /> Show pairing code
-        </button>
+        <div className="notice-actions">
+          <button className="btn btn-quiet" onClick={onConnect} data-testid="show-pairing-code">
+            <Icon of={QrCode} size="button" /> Show pairing code
+          </button>
+        </div>
       </section>
       {forget && (
         <Dialog
@@ -637,9 +641,11 @@ function SetupPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) =>
               <StateLine state={r.state} text={r.sub} />
             </div>
             {r.state !== "ready" && r.state !== "working" && r.step && (
-              <button className="btn btn-quiet btn-sm" onClick={() => openSetup(r.step!)}>
-                {r.button}
-              </button>
+              <div className="notice-actions">
+                <button className="btn btn-quiet btn-sm" onClick={() => openSetup(r.step!)}>
+                  {r.button}
+                </button>
+              </div>
             )}
           </div>
         ))}
@@ -725,7 +731,7 @@ function SigningKeysGroup({ s }: { s: Snapshot }) {
             last && <span className="sub">Last backup: {last}.</span>
           )}
         </div>
-        <div className="row">
+        <div className="notice-actions">
           <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => (setNote(null), setMode(mode === "backup" ? null : "backup"))}>
             Back up
           </button>
@@ -756,7 +762,7 @@ function SigningKeysGroup({ s }: { s: Snapshot }) {
             </div>
             {mode === "backup" && pw2.length > 0 && mismatch && <span className="sub problem-text">The two passwords are not the same.</span>}
           </div>
-          <div className="row">
+          <div className="notice-actions">
             <button className="btn btn-quiet btn-sm" type="button" disabled={busy} onClick={close}>
               Cancel
             </button>
@@ -806,9 +812,11 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
             <span className="body">The setup steps</span>
             <span className="sub">Go through the steps again, for example to connect another account.</span>
           </div>
-          <button className="btn btn-quiet btn-sm" onClick={() => openSetup("welcome")}>
-            Show again
-          </button>
+          <div className="notice-actions">
+            <button className="btn btn-quiet btn-sm" onClick={() => openSetup("welcome")}>
+              Show again
+            </button>
+          </div>
         </div>
       </section>
       <BackupGroup s={s} />
@@ -825,9 +833,11 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
             <span className="body">Quit Kiwimake</span>
             <span className="sub">Stops making apps until you open Kiwimake again. Closing the window does not stop it.</span>
           </div>
-          <button className="btn btn-quiet btn-sm" onClick={() => api.quit()}>
-            Quit
-          </button>
+          <div className="notice-actions">
+            <button className="btn btn-quiet btn-sm" onClick={() => api.quit()}>
+              Quit
+            </button>
+          </div>
         </div>
       </section>
       <details className="adv">

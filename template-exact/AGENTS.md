@@ -82,6 +82,8 @@ The person said: "no purple gradients or AI slop please". So:
   one restrained accent colour, light and dark both deliberate.
 - Exact gives the platform's own controls, colours and type when you leave them unsaid: say less
   and the app looks more at home. Add colour only where it helps.
+- **Notices and cards: text takes the full width; their buttons go below the text, aligned right,
+  never beside it.**
 
 ## What this preset does not have yet (alpha)
 

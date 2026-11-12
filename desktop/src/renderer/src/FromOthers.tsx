@@ -96,12 +96,14 @@ export function FromOthersDialog({ app, onClose, onOpenApp }: { app: App; onClos
                   {s.opened ? ", opened" : ""}
                 </span>
               </div>
-              <button className={`btn btn-sm ${s.opened ? "btn-quiet" : "btn-primary"}`} onClick={() => void openInChat(s)} data-testid="suggestion-open">
-                <Icon of={MessageCircle} size="sm" /> Open in chat
-              </button>
-              <button className="btn btn-icon btn-quiet btn-sm" aria-label="Remove" title="Remove" onClick={() => void remove(s)}>
-                <Icon of={X} size="sm" />
-              </button>
+              <div className="notice-actions">
+                <button className="btn btn-quiet btn-sm" onClick={() => void remove(s)}>
+                  <Icon of={X} size="sm" /> Remove
+                </button>
+                <button className={`btn btn-sm ${s.opened ? "btn-quiet" : "btn-primary"}`} onClick={() => void openInChat(s)} data-testid="suggestion-open">
+                  <Icon of={MessageCircle} size="sm" /> Open in chat
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -113,9 +115,11 @@ export function FromOthersDialog({ app, onClose, onOpenApp }: { app: App; onClos
             <span className="sub">Copy the whole message someone sent you, with its last line, and paste it here. It is filed under the right app.</span>
             <textarea className="field" rows={4} style={{ height: "auto", paddingTop: "var(--aa-space-sm)", paddingBottom: "var(--aa-space-sm)" }} placeholder="Ahmad suggests a change to ..." value={paste} onChange={(e) => setPaste(e.target.value)} data-testid="suggestion-paste" />
           </div>
-          <button className="btn btn-primary btn-sm" disabled={busy || !paste.trim()} onClick={() => void file()} data-testid="suggestion-add">
-            Add
-          </button>
+          <div className="notice-actions">
+            <button className="btn btn-primary btn-sm" disabled={busy || !paste.trim()} onClick={() => void file()} data-testid="suggestion-add">
+              Add
+            </button>
+          </div>
         </div>
       </section>
       {error && <p className="label problem-text">{error}</p>}

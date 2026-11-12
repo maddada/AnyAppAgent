@@ -838,7 +838,7 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
         </div>
       )}
       {card.state === "failed" && card.canRetry && (
-        <div>
+        <div className="notice-actions">
           <button
             className="btn btn-quiet btn-sm"
             disabled={retrying}
@@ -878,7 +878,8 @@ function CrashCard({ item, app }: { item: ChatItem; app: App }) {
       </div>
       {card.detail ? <div className="crash-detail mono">{card.detail}</div> : null}
       {card.canFix ? (
-        <div className="crash-actions">
+        <div className="notice-actions">
+          {error ? <StateLine state="problem" text={error} /> : null}
           <button
             className="btn btn-primary btn-sm"
             data-testid="crash-fix"
@@ -895,7 +896,6 @@ function CrashCard({ item, app }: { item: ChatItem; app: App }) {
           >
             {sending ? <Spinner /> : <Icon of={Wrench} size="sm" />} {sending ? "Sending" : "Fix it"}
           </button>
-          {error ? <StateLine state="problem" text={error} /> : null}
         </div>
       ) : (
         <StateLine state="ready" text={card.asked ?? "Sent to the agent"} />
@@ -943,7 +943,7 @@ function PageCard({ page }: { page: PageInfo }) {
           {view.from ? <span className="caption tertiary">{view.from}</span> : null}
         </span>
       </button>
-      <div className="page-card-actions">
+      <div className="notice-actions page-card-actions">
         <button className={`btn btn-sm ${waiting ? "btn-primary" : "btn-quiet"}`} onClick={open} disabled={opening} data-testid={`page-open-${page.id}`}>
           {opening ? <Spinner /> : null} {view.action}
         </button>

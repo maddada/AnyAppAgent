@@ -181,7 +181,7 @@ function CheckCard({ state, icon, title, status, action }: { state: CardState; i
         <strong>{title}</strong>
         <span className={state === "problem" ? "problem-text" : undefined}>{status}</span>
       </div>
-      {action}
+      {action ? <div className="notice-actions">{action}</div> : null}
     </div>
   );
 }

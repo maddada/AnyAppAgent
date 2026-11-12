@@ -113,11 +113,15 @@ Honest numbers only, from what Claude Code reports through ACP:
   with "Needs an update" under the PC row). The colour is new in the Workbench theme:
   `attention` / `onAttention` / `attentionText` in `shared/theme/tokens.ts`.
 - **Update it**: the app's sheet on the phone and the top of its chat on the PC say what is behind
-  and offer "Update it". After the heads-up it sends the app's agent one message (as the person's
-  own, so it shows in the chat) that names what is behind, where the newest template is (read
-  only) and what to keep (everything the app does, its look and its data). The agent hands it to a
-  helper as usual, and the PC builds it: the fast lane (`docs/FAST-LANE.md`) makes it a quick
-  update or a full build by itself (a module or SDK change is a full build).
+  and offer "Update it". After the heads-up it sends the app's agent one message as the person's
+  own: the chat shows the short line "Update to the newest template", and the agent alone gets the
+  instruction that names what is behind, where the newest template is (read only) and what to keep
+  (everything the app does, its look and its data). The agent hands it to a helper as usual, and
+  the PC builds it: the fast lane (`docs/FAST-LANE.md`) makes it a quick update or a full build by
+  itself (a module or SDK change is a full build). From the tap until the agent, its helpers and
+  the build are all done, the app carries `health.updating` and the notice is one calm line,
+  "Updating to the newest template...", with no button; if the app is still behind after it (the
+  update failed or was stopped), the notice comes back.
 - **Monthly reminder**: while any app is behind, a card on the phone's home and at the top of the
   PC's app list ("Your monthly app check: 2 apps are behind ..."). "Got it" puts it away for 30
   days. The apps are checked at start, after every build and every 6 hours.

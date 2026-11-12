@@ -172,3 +172,7 @@ export function reminderText(h: HealthReminder | undefined): { title: string; bo
 }
 
 export const BEHIND_LABEL = "Needs an update";
+/** While "Update it" runs (AppHealth.updating): the calm line that takes the notice's place. */
+export const UPDATING_LABEL = "Updating to the newest template...";
+/** What the chat shows as the person's message for "Update it" (the agent gets the full instruction). */
+export const KEEP_HEALTHY_TEXT = "Update to the newest template";

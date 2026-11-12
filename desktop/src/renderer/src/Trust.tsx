@@ -4,9 +4,9 @@
 import { useState } from "react";
 import { CloudUpload, FolderOpen, Gauge, RotateCcw, TriangleAlert } from "lucide-react";
 import type { App, AppUsage, CareState, ChatItem, UsageState } from "../../../../shared/protocol.ts";
-import { BEHIND_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, PLAN_UNKNOWN, planLines, reminderText, usageLine, usageRows } from "../../../../shared/chat/index.ts";
+import { BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, PLAN_UNKNOWN, planLines, reminderText, usageLine, usageRows } from "../../../../shared/chat/index.ts";
 import type { Snapshot } from "../../shared/types.ts";
-import { Icon } from "./ui.tsx";
+import { Icon, Spinner } from "./ui.tsx";
 
 const api = window.anyapp;
 
@@ -30,12 +30,24 @@ export function HealthBadge({ app }: { app: App }) {
   );
 }
 
-/** Above an app's chat while it is behind: what is behind, and "Update it" (after a heads-up). */
+/**
+ * Above an app's chat while it is behind: what is behind, and "Update it" (after a heads-up). While
+ * the update runs (AppHealth.updating) only a calm line shows; if the app is still behind after it,
+ * the notice comes back.
+ */
 export function HealthNotice({ app, care, online }: { app: App; care: CareState | null; online: boolean }) {
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!app.health?.behind) return null;
+  if (app.health.updating) {
+    return (
+      <div className="health-notice is-updating" role="status" data-testid="health-updating">
+        <Spinner />
+        <span className="label secondary">{UPDATING_LABEL}</span>
+      </div>
+    );
+  }
   const h = headsUp({ text: "", keepHealthy: true, usage: care?.usage, appUsage: app.usage })!;
   const go = async () => {
     setBusy(true);
@@ -60,20 +72,22 @@ export function HealthNotice({ app, care, online }: { app: App; care: CareState 
         {asking && <p className="label heads-up-body">{h.body}</p>}
         {error && <div className="label problem-text">{error}</div>}
       </div>
-      {asking ? (
-        <div className="row">
-          <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => setAsking(false)}>
-            Not now
+      <div className="notice-actions">
+        {asking ? (
+          <>
+            <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => setAsking(false)}>
+              Not now
+            </button>
+            <button className="btn btn-primary btn-sm" disabled={busy || !online} onClick={() => void go()} data-testid="keep-healthy-send">
+              {busy ? "Sending..." : h.send}
+            </button>
+          </>
+        ) : (
+          <button className="btn btn-primary btn-sm" disabled={!online || app.status === "creating"} onClick={() => setAsking(true)} data-testid="keep-healthy">
+            Update it
           </button>
-          <button className="btn btn-primary btn-sm" disabled={busy || !online} onClick={() => void go()} data-testid="keep-healthy-send">
-            {busy ? "Sending..." : h.send}
-          </button>
-        </div>
-      ) : (
-        <button className="btn btn-primary btn-sm" disabled={!online || app.status === "creating"} onClick={() => setAsking(true)} data-testid="keep-healthy">
-          Update it
-        </button>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -91,9 +105,11 @@ export function ReminderCard({ care }: { care: CareState | null }) {
         <div className="body">{words.title}</div>
         <div className="label secondary">{words.body}</div>
       </div>
-      <button className="btn btn-quiet btn-sm" onClick={() => void api.dismissReminder()}>
-        Got it
-      </button>
+      <div className="notice-actions">
+        <button className="btn btn-quiet btn-sm" onClick={() => void api.dismissReminder()}>
+          Got it
+        </button>
+      </div>
     </div>
   );
 }
@@ -120,7 +136,7 @@ export function HeadsUpCard({ h, onSend, onCancel, busy }: { h: HeadsUp; onSend:
         <div className="body">{h.title}</div>
         <div className="label secondary">{h.body}</div>
       </div>
-      <div className="row">
+      <div className="notice-actions">
         <button className="btn btn-quiet btn-sm" onClick={onCancel} disabled={busy}>
           Not now
         </button>
@@ -284,11 +300,6 @@ export function BackupGroup({ s }: { s: Snapshot }) {
               <span className="sub">Off. Your apps' keys are only on this PC.</span>
             )}
           </div>
-          {b.enabled && (
-            <button className="btn btn-quiet btn-sm" disabled={busy || b.running} onClick={() => void run()} data-testid="backup-now">
-              Back up now
-            </button>
-          )}
           <button
             type="button"
             className={`switch${b.enabled ? " on" : ""}`}
@@ -303,6 +314,13 @@ export function BackupGroup({ s }: { s: Snapshot }) {
               else setMode(mode === "on" ? null : "on");
             }}
           />
+          {b.enabled && (
+            <div className="notice-actions">
+              <button className="btn btn-quiet btn-sm" disabled={busy || b.running} onClick={() => void run()} data-testid="backup-now">
+                Back up now
+              </button>
+            </div>
+          )}
         </div>
         <div className="srow">
           <Icon of={RotateCcw} size="sm" />
@@ -310,9 +328,11 @@ export function BackupGroup({ s }: { s: Snapshot }) {
             <span className="body">Restore on a new PC</span>
             <span className="sub">Brings back every app from a backup folder, with its key, so your phone keeps updating the apps it already has.</span>
           </div>
-          <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => (setNote(null), setMode(mode === "restore" ? null : "restore"))} data-testid="backup-restore">
-            Restore
-          </button>
+          <div className="notice-actions">
+            <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => (setNote(null), setMode(mode === "restore" ? null : "restore"))} data-testid="backup-restore">
+              Restore
+            </button>
+          </div>
         </div>
         {mode && (
           <form
@@ -334,7 +354,7 @@ export function BackupGroup({ s }: { s: Snapshot }) {
               </div>
               {mode === "on" && pw2.length > 0 && mismatch && <span className="sub problem-text">The two passwords are not the same.</span>}
             </div>
-            <div className="row">
+            <div className="notice-actions">
               <button className="btn btn-quiet btn-sm" type="button" disabled={busy} onClick={close}>
                 Cancel
               </button>

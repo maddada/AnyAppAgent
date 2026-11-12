@@ -86,7 +86,7 @@ export function HexCard({ hex, hexModel }: { hex: HexCheck; hexModel: string }) 
           <strong>{v.title}</strong>
           <span className={v.tone === "problem" ? "problem-text hex-line" : "hex-line"}>{v.line}</span>
         </div>
-        {action}
+        {action ? <div className="notice-actions">{action}</div> : null}
       </div>
       <div className="under-card">
         {hex.state === "ready" && hex.models.length > 0 && (

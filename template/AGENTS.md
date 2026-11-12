@@ -110,6 +110,8 @@ The user said: "no purple gradients or AI slop please". So, in every app:
 - **Calm and well made**: good typography with a clear hierarchy (one large title per screen,
   then headings, body, small labels), generous spacing, one restrained accent colour used
   sparingly, and light and dark both looking deliberate.
+- **Notices and cards: text takes the full width; their buttons go below the text, aligned right,
+  never beside it.**
 - No em dashes (see above).
 
 How: everything visual comes from `src/theme.ts`. Use `useColors()` (`background`, `surface`,

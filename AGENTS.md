@@ -9,3 +9,5 @@
 - `shared/protocol.ts` is the contract between the phone app, the companion and the desktop app:
   additive changes only, and say so in your report.
 - `.reference/` is read only and never imported from. `C:\dev\Ghostex` is read only.
+- Design, in the desktop app, the phone app and every app Kiwimake makes: Notices and cards: text
+  takes the full width; their buttons go below the text, aligned right, never beside it.

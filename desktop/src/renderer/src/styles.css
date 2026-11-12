@@ -23,6 +23,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .ic { flex: none; display: block; }
 /* Lines break between words that read well together: no lone last word, headings balanced. */
 p, .label, .caption, .callout, .lede, .sub, .bubble, .prose { text-wrap: pretty; }
+/* A long word, path or link wraps inside its box instead of running out of the bubble or the window
+   (every text block, not only the chat). Tables keep whole words and scroll sideways in .md-table. */
+body { overflow-wrap: anywhere; }
+.prose table { overflow-wrap: break-word; }
 .hero, .title, .title-small, .heading { text-wrap: balance; }
 /* A phrase that must not break in the middle (for example "over Wi-Fi"). */
 .keep { white-space: nowrap; }
@@ -238,6 +242,12 @@ button.lrow:hover { background: var(--aa-selected-bg); }
 .empty { padding: var(--aa-space-3xl) var(--aa-space-xl); display: flex; flex-direction: column; gap: var(--aa-space-sm); }
 .notice { display: flex; align-items: center; gap: var(--aa-space-md); padding: var(--aa-space-md) var(--aa-space-lg); }
 .notice .grow { flex: 1; min-width: 0; }
+/* Notices and cards: the text takes the full width and the buttons go below it, aligned right,
+   never beside it (AGENTS.md, design). A row container wraps, and the actions take a line of their own. */
+.notice-actions { width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--aa-space-sm); }
+.notice-actions > .state { flex: 1; min-width: 0; }
+:is(.notice, .health-notice, .heads-up, .check-card, .connect-row, .srow):has(> .notice-actions) { flex-wrap: wrap; }
+.srow:has(> .notice-actions) { padding-bottom: var(--aa-space-md); }
 
 /* ---------- 4. dialog */
 .scrim { position: fixed; inset: 0; background: var(--aa-scrim); display: grid; place-items: center; z-index: 10; animation: fade var(--aa-duration-base); }
@@ -343,7 +353,7 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 /* ---------- chat additions: jump to latest, notes, composer states, detail blocks, cards */
 .chat-scroll-wrap { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
 .chat-loading { display: flex; justify-content: center; padding: var(--aa-space-2xl); }
-.jump { position: absolute; left: 50%; bottom: var(--aa-space-md); transform: translateX(-50%); display: inline-flex; align-items: center; gap: var(--aa-space-sm); height: var(--aa-size-button-height-small); padding: 0 var(--aa-space-lg); border-radius: var(--aa-radius-full); background: var(--aa-surface-overlay); color: var(--aa-text); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border), var(--aa-shadow-2); font-family: var(--aa-type-button-small-family); font-size: var(--aa-type-button-small-size); font-weight: var(--aa-type-button-small-weight); }
+.jump { position: absolute; left: 50%; bottom: var(--aa-space-md); transform: translateX(-50%); display: inline-flex; white-space: nowrap; align-items: center; gap: var(--aa-space-sm); height: var(--aa-size-button-height-small); padding: 0 var(--aa-space-lg); border-radius: var(--aa-radius-full); background: var(--aa-surface-overlay); color: var(--aa-text); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border), var(--aa-shadow-2); font-family: var(--aa-type-button-small-family); font-size: var(--aa-type-button-small-size); font-weight: var(--aa-type-button-small-weight); }
 .jump:hover { background: var(--aa-selected-bg); }
 .user-note { display: flex; align-items: center; gap: var(--aa-space-sm); margin-top: var(--aa-space-xs); padding: 0 var(--aa-space-xs); color: var(--aa-text-tertiary); }
 .user-note .btn-text { font-size: inherit; }
@@ -363,7 +373,6 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .perm-actions { display: flex; flex-wrap: wrap; gap: var(--aa-space-sm); }
 .perm-actions .btn { flex: 1; }
 .build .grow { flex: 1; min-width: 0; }
-.build .btn-sm { align-self: flex-start; }
 
 /* ---------- markdown blocks from the shared parser (shared/chat/markdown.ts) */
 .prose p { margin: 0; }
@@ -433,7 +442,7 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .page-card-title { overflow-wrap: anywhere; }
 .page-card-status { color: var(--aa-text-secondary); }
 .page-card-status.is-waiting { color: var(--aa-text); }
-.page-card-actions { display: flex; gap: var(--aa-space-sm); padding-left: calc(var(--aa-size-badge) + var(--aa-space-md)); }
+.page-card-actions { padding-left: calc(var(--aa-size-badge) + var(--aa-space-md)); }
 .answers-card { max-width: 70%; display: flex; flex-direction: column; gap: var(--aa-space-sm); background: var(--aa-bubble-bg); color: var(--aa-bubble-text); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-bubble-border); border-radius: var(--aa-radius-bubble); padding: var(--aa-space-md) var(--aa-space-lg); }
 .answers-head { display: flex; align-items: center; gap: var(--aa-space-sm); color: var(--aa-text-secondary); }
 .answers-title { font-family: var(--aa-type-label-family); font-size: var(--aa-type-label-size); line-height: var(--aa-type-label-line); font-weight: var(--aa-type-label-weight); color: var(--aa-text); overflow-wrap: anywhere; }
@@ -592,7 +601,7 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 
 .crash { padding: var(--aa-space-lg); display: flex; flex-direction: column; gap: var(--aa-space-md); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-problem), var(--aa-shadow-1); }
 .crash-detail { background: var(--aa-code-bg); border-radius: var(--aa-radius-badge); padding: var(--aa-space-sm) var(--aa-space-md); color: var(--aa-text-secondary); overflow-wrap: anywhere; white-space: pre-wrap; }
-.crash-actions { display: flex; align-items: center; gap: var(--aa-space-md); }
+.crash .notice-actions .state > span:last-child { white-space: normal; }
 
 .diary-row { display: flex; flex-direction: column; }
 .diary-privacy { padding-left: calc(var(--aa-space-xs) + 16px + var(--aa-space-sm)); } /* under the line's text: icon width, no token */
@@ -605,9 +614,9 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .attention-text { color: var(--aa-attention-text); }
 .health-notice { display: flex; align-items: flex-start; gap: var(--aa-space-md); margin: 0 var(--aa-space-lg) var(--aa-space-sm); padding: var(--aa-space-md) var(--aa-space-lg); border-radius: var(--aa-radius-card); background: var(--aa-surface); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border), inset 3px 0 0 var(--aa-attention); }
 .health-notice .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-hair); }
-.health-notice .row { flex: none; }
+.health-notice.is-updating { align-items: center; gap: var(--aa-space-sm); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border); }
 .heads-up-body { color: var(--aa-text); margin: var(--aa-space-xs) 0 0; }
-.apps-notice.reminder { align-items: flex-start; }
+.apps-notice.reminder { align-items: flex-start; flex-direction: row; }
 .heads-up { display: flex; align-items: flex-start; gap: var(--aa-space-md); padding: var(--aa-space-md) var(--aa-space-lg); margin-bottom: var(--aa-space-sm); }
 .heads-up > .ic, .heads-up > svg { color: var(--aa-attention-text); margin-top: 2px; }
 .heads-up .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-hair); }
