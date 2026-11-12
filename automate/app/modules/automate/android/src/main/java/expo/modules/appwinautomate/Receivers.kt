@@ -39,6 +39,7 @@ class AutomateBootReceiver : BroadcastReceiver() {
     Automate.rearmAll(context)
     Automate.rearmDnd(context)
     ListenerService.restart(context)
+    Places.rearm(context)
     if (!Automate.isStopped(context)) AutomateTaskService.start(context, "{\"plan\":true}", null)
   }
 }

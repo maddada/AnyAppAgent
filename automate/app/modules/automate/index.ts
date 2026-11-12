@@ -27,7 +27,16 @@ type Native = {
   stopAll(): Promise<void>;
   resume(): Promise<void>;
 
-  listen(kinds: string[], apps: string[]): Promise<void>;
+  listen(kinds: string[], apps: string[], appWatches: string, places: string): Promise<void>;
+  usageAccess(): boolean;
+  openUsageAccess(): Promise<void>;
+  screenOn(): boolean;
+  openScreenSettings(): Promise<void>;
+  screenRead(): Promise<string>;
+  screenTap(text: string): Promise<string>;
+  shizukuState(): string;
+  shizukuRequest(): Promise<void>;
+  shizukuAct(action: string, arg: string | null): Promise<string>;
   notificationAccess(): boolean;
   openNotificationAccess(): Promise<void>;
   openAppInfo(): Promise<void>;
@@ -71,7 +80,29 @@ export const resume = () => native.resume();
  * Starts the listener for these events ('bluetooth', 'charging', 'wifi'), or stops it for none;
  * 'notification' turns the notification watcher on for these apps (none: any app).
  */
-export const listen = (kinds: string[], apps: string[] = []) => native.listen(kinds, apps);
+export const listen = (
+  kinds: string[],
+  apps: string[] = [],
+  appWatches: { app: string; minutes: number[] }[] = [],
+  places: { id: string; name: string; lat: number; lon: number; radius: number }[] = [],
+) => native.listen(kinds, apps, JSON.stringify(appWatches), JSON.stringify(places));
+
+/** M5: which app is in front (usage access, one switch in Settings). */
+export const usageAccess = () => native.usageAccess();
+export const openUsageAccess = () => native.openUsageAccess();
+
+/** M6: read the screen and tap (an accessibility service the person turns on). */
+export const screenOn = () => native.screenOn();
+export const openScreenSettings = () => native.openScreenSettings();
+export const screenRead = async (): Promise<{ app?: string; texts?: string[]; refused?: string }> => JSON.parse(await native.screenRead());
+/** "" when the tap went through, else why not. */
+export const screenTap = (text: string) => native.screenTap(text);
+
+/** M7: Shizuku. "missing", "stopped", "denied" or "ready". */
+export const shizukuState = () => native.shizukuState() as 'missing' | 'stopped' | 'denied' | 'ready';
+export const shizukuRequest = () => native.shizukuRequest();
+/** "" when done, else why not. */
+export const shizukuAct = (action: 'wifiOn' | 'wifiOff' | 'dataOn' | 'dataOff' | 'stopApp', arg?: string) => native.shizukuAct(action, arg ?? null);
 /** Notifications from other apps: whether the person allowed access, and the pages to allow it. */
 export const notificationAccess = () => native.notificationAccess();
 export const openNotificationAccess = () => native.openNotificationAccess();

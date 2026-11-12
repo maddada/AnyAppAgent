@@ -82,7 +82,14 @@ object Notices {
 
   fun listening(c: Context, kinds: Set<String>): Notification {
     channels(c)
-    val what = kinds.sorted().map { if (it == "wifi") "Wi-Fi" else if (it == "bluetooth") "Bluetooth" else "the charger" }
+    val what = kinds.sorted().map {
+      when (it) {
+        "wifi" -> "Wi-Fi"
+        "bluetooth" -> "Bluetooth"
+        "app" -> "the app in front"
+        else -> "the charger"
+      }
+    }
     return NotificationCompat.Builder(c, CH_LISTEN)
       .setSmallIcon(icon(c))
       .setContentTitle("Listening for ${what.joinToString(", ")}")

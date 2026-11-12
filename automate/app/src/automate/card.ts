@@ -4,7 +4,7 @@
 import type { CardAction } from './store';
 import type { Trigger } from './triggers';
 
-export type Need = 'notifications' | 'dnd' | 'exact' | 'listening' | 'nearby' | 'locationAlways' | 'notificationAccess';
+export type Need = 'notifications' | 'dnd' | 'exact' | 'listening' | 'nearby' | 'locationAlways' | 'notificationAccess' | 'usageAccess' | 'screen' | 'shizuku';
 
 function text(v: unknown): string | null {
   return typeof v === 'string' ? v : null;
@@ -42,6 +42,20 @@ export function actionLine(a: CardAction): string {
       return `Fetch from ${host(first)} (asks you first, every time)`;
     case 'web.post':
       return `Send to ${host(first)} (asks you first, every time)`;
+    case 'screen.read':
+      return 'Read what is on the screen (never password fields)';
+    case 'screen.tap': {
+      const t = text(first);
+      return t ? `Tap "${t}" on the screen` : 'Tap a button on the screen (worked out when it runs)';
+    }
+    case 'shizuku.wifi':
+      return first === true ? 'Turn Wi-Fi on (Shizuku)' : first === false ? 'Turn Wi-Fi off (Shizuku)' : 'Turn Wi-Fi on or off (Shizuku)';
+    case 'shizuku.mobileData':
+      return first === true ? 'Turn mobile data on (Shizuku)' : first === false ? 'Turn mobile data off (Shizuku)' : 'Turn mobile data on or off (Shizuku)';
+    case 'shizuku.stopApp': {
+      const t = text(first);
+      return t ? `Stop the app ${t} (Shizuku)` : 'Stop an app (Shizuku)';
+    }
     default:
       return `Use ${a.call}`;
   }
@@ -60,10 +74,17 @@ export function needsOf(actions: CardAction[], triggers: Trigger[] = []): Need[]
     if (t.kind === 'bluetooth') needs.add('nearby');
     if (t.kind === 'wifi' && t.network) needs.add('locationAlways');
     if (t.kind === 'notification') needs.add('notificationAccess');
+    if (t.kind === 'place') needs.add('locationAlways');
+    if (t.kind === 'app') {
+      needs.add('listening');
+      needs.add('usageAccess');
+    }
   }
   for (const a of actions) {
     if (a.call === 'notify') needs.add('notifications');
     if (a.call === 'doNotDisturb.on' || a.call === 'doNotDisturb.off') needs.add('dnd');
+    if (a.call.startsWith('screen.')) needs.add('screen');
+    if (a.call.startsWith('shizuku.')) needs.add('shizuku');
   }
   return [...needs];
 }
@@ -78,7 +99,13 @@ export const NEED_LABEL: Record<Need, { title: string; why: string }> = {
     title: 'Notification access',
     why: 'To see notifications from other apps. If Android says "Restricted setting": App info, the three dots, Allow restricted settings, then try again',
   },
-  locationAlways: { title: 'Location, all the time', why: 'Android shows Wi-Fi names only with it (the app does not track where you are)' },
+  usageAccess: { title: 'Usage access', why: 'One switch in Settings, so it can see which app is in front' },
+  screen: {
+    title: 'Screen access (Accessibility)',
+    why: 'Lets it read the screen and tap, only for the steps above. Never password fields, installers, Settings or this app. If Android says "Restricted setting": App info, the three dots, Allow restricted settings',
+  },
+  shizuku: { title: 'Shizuku', why: 'Install Shizuku and start it (wireless debugging; again after every restart), then allow this app in it' },
+  locationAlways: { title: 'Location, all the time', why: 'For places, and for Wi-Fi names (Android shows them only with it). The app keeps no record of where you are' },
 };
 
 /** What a changed script adds and drops, compared with the version the person approved. */

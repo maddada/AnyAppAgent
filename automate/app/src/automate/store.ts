@@ -25,8 +25,12 @@ export type AutoState = {
 
 export type Pretend = { offset: number; automation: string; due: number };
 
+/** A place the person saved (Places screen): arrive()/leave() use it by name. */
+export type Place = { id: string; name: string; lat: number; lon: number; radius: number };
+
 export type State = {
   autos: Record<string, AutoState>;
+  places?: Place[];
   locksOff: boolean;
   pretend?: Pretend;
   recentSends?: number[];

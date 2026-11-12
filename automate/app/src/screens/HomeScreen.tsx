@@ -123,6 +123,7 @@ export function HomeScreen() {
         </Text>
         <View style={styles.pair}>
           <Button title="Run log" variant="secondary" style={styles.grow} onPress={() => navigation.navigate('RunLog')} />
+          <Button title="Places" variant="secondary" style={styles.grow} onPress={() => navigation.navigate('Places')} />
           <Button title="Stop all" variant="danger" style={styles.grow} disabled={stopped} onPress={confirmStop} />
         </View>
       </View>

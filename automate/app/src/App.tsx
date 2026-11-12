@@ -11,6 +11,7 @@ import { installCrashCatcher, setCurrentScreen } from '@/lib/crash';
 import { setupNotifications } from '@/lib/notifications';
 import { AutomationScreen } from '@/screens/AutomationScreen';
 import { HomeScreen } from '@/screens/HomeScreen';
+import { PlacesScreen } from '@/screens/PlacesScreen';
 import { RunLogScreen } from '@/screens/RunLogScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useColors, useIsDark } from '@/theme';
@@ -21,6 +22,7 @@ const RootStack = createNativeStackNavigator({
     // The card of one automation (check it, turn it on, test it).
     Automation: { screen: AutomationScreen, options: { title: '' } },
     RunLog: { screen: RunLogScreen, options: { title: '' } },
+    Places: { screen: PlacesScreen, options: { title: '' } },
     // Every app keeps a Settings screen with the "This app" group (Change this app): see AGENTS.md.
     Settings: { screen: SettingsScreen, options: { headerShown: false } },
   },

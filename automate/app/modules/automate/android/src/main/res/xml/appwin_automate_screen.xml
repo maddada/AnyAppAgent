@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- M6: read the screen and tap for automations (ScreenService). It listens to no events of its
+     own; it only reads the window in front when an automation asks. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+  android:accessibilityEventTypes="typeWindowStateChanged"
+  android:accessibilityFeedbackType="feedbackGeneric"
+  android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+  android:canRetrieveWindowContent="true"
+  android:notificationTimeout="200"
+  android:description="@string/appwin_automate_screen_description" />

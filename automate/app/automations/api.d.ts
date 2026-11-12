@@ -3,8 +3,8 @@
 // The runtime behind it is src/automate/api.ts; the fence that enforces it is
 // tools/automate-fence.js. Read AGENTS.md, "Automations", before writing one.
 
-/** One thing that starts an automation. Make them with at(), prayer(), every(), charging(), wifi(), bluetooth() or notification(). */
-type AutomationTrigger = { readonly kind: 'at' | 'prayer' | 'every' | 'charging' | 'wifi' | 'bluetooth' | 'notification'; readonly [key: string]: unknown };
+/** One thing that starts an automation: at(), prayer(), every(), charging(), wifi(), bluetooth(), notification(), arrive(), leave() or appOpened(). */
+type AutomationTrigger = { readonly kind: 'at' | 'prayer' | 'every' | 'charging' | 'wifi' | 'bluetooth' | 'notification' | 'place' | 'app'; readonly [key: string]: unknown };
 
 type PrayerName = 'fajr' | 'sunrise' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 
@@ -80,6 +80,18 @@ declare function bluetooth(options?: { connected?: boolean; device?: string }): 
  */
 declare function notification(options?: { app?: string; text?: string }): AutomationTrigger;
 
+/** A place: the name of a place the person saved in Places ("Mosque"), or exact coordinates. */
+type PlaceSpec = string | { lat: number; lon: number; name?: string };
+
+/** When the person arrives at a place (within `radius` metres, default 150). Needs Location, all the time. */
+declare function arrive(place: PlaceSpec, options?: { radius?: number }): AutomationTrigger;
+
+/** When the person leaves a place. */
+declare function leave(place: PlaceSpec, options?: { radius?: number }): AutomationTrigger;
+
+/** When an app comes to the front (`app`: part of its name), or with `forMinutes` once it has stayed there that long. Needs Usage access. */
+declare function appOpened(app: string, options?: { forMinutes?: number }): AutomationTrigger;
+
 // ---------- Powers (each one shows on the card, and asks Android once for what it needs)
 
 /** Says the text aloud on the alarm volume (heard in Do Not Disturb too). Up to 300 characters. */
@@ -101,6 +113,25 @@ declare const doNotDisturb: {
 declare const web: {
   get(url: string): Promise<{ status: number; text: string }>;
   post(url: string, body: string | Record<string, unknown>): Promise<{ status: number; text: string }>;
+};
+
+/**
+ * Reading the screen and tapping (Accessibility, turned on once on the card). Never in password
+ * fields, app installers, Settings, permission screens or this app: that is fixed.
+ */
+declare const screen: {
+  /** What the app in front shows: its name and up to 200 lines of text. */
+  read(): Promise<{ app: string; texts: readonly string[] }>;
+  /** Taps the first button or item showing this text. */
+  tap(text: string): Promise<void>;
+};
+
+/** Things no normal app can do, through the person's Shizuku app. Only these, nothing else. */
+declare const shizuku: {
+  wifi(on: boolean): Promise<void>;
+  mobileData(on: boolean): Promise<void>;
+  /** Stops another app (by its name). */
+  stopApp(app: string): Promise<void>;
 };
 
 // ---------- Helpers

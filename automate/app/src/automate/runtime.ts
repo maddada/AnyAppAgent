@@ -49,7 +49,7 @@ export type Status = 'new' | 'on' | 'off' | 'changed' | 'broken';
 const compiled = compiledList as unknown as Compiled[];
 
 function isTrigger(t: unknown): t is Trigger {
-  return !!t && typeof t === 'object' && ['at', 'prayer', 'every', 'charging', 'wifi', 'bluetooth', 'notification'].includes((t as { kind?: string }).kind ?? '');
+  return !!t && typeof t === 'object' && ['at', 'prayer', 'every', 'charging', 'wifi', 'bluetooth', 'notification', 'place', 'app'].includes((t as { kind?: string }).kind ?? '');
 }
 
 function defineScript(c: Compiled, ctx: RunContext): Definition {
@@ -75,7 +75,19 @@ export function loadAll(locksOff = getState().locksOff): Loaded[] {
     const base = { id: c.id, hash: c.hash, source: c.source, powers: c.powers, actions: c.actions, lines: actionLines(c.actions), needs: needsOf(c.actions) };
     try {
       const d = defineScript(c, loadingContext(c.id, locksOff));
-      return { ...base, needs: needsOf(c.actions, d.triggers), name: d.name, says: d.says, triggers: d.triggers, when: d.triggers.map(describeTrigger) };
+      const missing = d.triggers.find(
+        (t) => t.kind === 'place' && t.lat === undefined && !(getState().places ?? []).some((p) => p.name.toLowerCase() === t.place.toLowerCase()),
+      );
+      const problem = missing && missing.kind === 'place' ? `Save a place called "${missing.place}" first (Places, on the home screen).` : undefined;
+      return {
+        ...base,
+        needs: needsOf(c.actions, d.triggers),
+        name: d.name,
+        says: d.says,
+        triggers: d.triggers,
+        when: d.triggers.map(describeTrigger),
+        ...(problem ? { error: problem } : {}),
+      };
     } catch (e) {
       const name = (e as { scriptName?: string }).scriptName ?? c.id;
       return { ...base, name, says: '', triggers: [], when: [], error: e instanceof Error ? e.message : String(e) };
@@ -144,7 +156,7 @@ export async function plan(): Promise<void> {
   await ready();
   if (Native.isStopped()) {
     await Native.disarmAll();
-    await Native.listen([], []);
+    await Native.listen([], [], [], []);
     return;
   }
   const s = getState();
@@ -152,6 +164,8 @@ export async function plan(): Promise<void> {
   const listen = new Set<EventKind>();
   const apps = new Set<string>();
   let anyApp = false;
+  const appMarks = new Map<string, Set<number>>();
+  const places = new Map<string, { id: string; name: string; lat: number; lon: number; radius: number }>();
   for (const l of loadAll(s.locksOff)) {
     if (statusOf(l, s) !== 'on') continue;
     for (const t of l.triggers) {
@@ -160,6 +174,19 @@ export async function plan(): Promise<void> {
       if (t.kind === 'notification') {
         if (t.app) apps.add(t.app.toLowerCase());
         else anyApp = true;
+      }
+      if (t.kind === 'app') {
+        const k = t.app.toLowerCase();
+        appMarks.set(k, new Set([...(appMarks.get(k) ?? []), t.minutes]));
+      }
+      if (t.kind === 'place') {
+        const saved = (s.places ?? []).find((p) => p.name.toLowerCase() === t.place.toLowerCase());
+        const lat = t.lat ?? saved?.lat;
+        const lon = t.lon ?? saved?.lon;
+        if (lat !== undefined && lon !== undefined) {
+          const key = t.place.toLowerCase();
+          places.set(key, { id: key, name: t.place, lat, lon, radius: t.radius ?? saved?.radius ?? 150 });
+        }
       }
     }
     const pretend = s.pretend?.automation === l.id ? s.pretend : undefined;
@@ -178,7 +205,12 @@ export async function plan(): Promise<void> {
   }
   for (const a of await Native.armed()) if (!wanted.has(a.id)) await Native.disarm(a.id);
   // The listener (charger, Wi-Fi, Bluetooth) runs only while an automation that is on needs it.
-  await Native.listen([...listen].sort(), anyApp ? [] : [...apps].sort());
+  await Native.listen(
+    [...listen].sort(),
+    anyApp ? [] : [...apps].sort(),
+    [...appMarks].map(([app, marks]) => ({ app, minutes: [...marks].sort((a, b) => a - b) })),
+    [...places.values()],
+  );
 }
 
 type Payload = { automation?: string; due?: number; trigger?: string; test?: boolean; plan?: boolean; event?: PhoneEvent };
@@ -214,6 +246,7 @@ export async function runEvent(e: PhoneEvent): Promise<void> {
     // The message goes to the script only (event.notification); the log names the app, never the text.
     const notification = e.kind === 'notification' ? Object.freeze({ app: e.app, title: e.title ?? '', text: e.text ?? '' }) : undefined;
     await runOne(l.id, { trigger: e.kind === 'notification' ? `a notification from ${e.app}` : triggerLabel(hit), due: Date.now(), test: false, manual: false, notification });
+    // (a place or an app event carries no private data: the label says it all)
   }
 }
 
@@ -406,7 +439,8 @@ export function useAutomate() {
   const version = useStoreVersion();
   const [focus, setFocus] = useState(0);
   const s = getState();
-  const list = useMemo(() => loadAll(s.locksOff), [s.locksOff]);
+  // loadAll reads the saved places from the store, so a new place refreshes the list.
+  const list = useMemo(() => loadAll(s.locksOff), [s.locksOff, s.places]); // eslint-disable-line react-hooks/exhaustive-deps
   // Stop all can also come from a notification: read it again whenever the app comes back.
   const stopped = useMemo(() => Native.isStopped(), [version, focus]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

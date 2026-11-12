@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="appwin_automate_screen_description">Lets your automations read what is on the screen and tap a button, only while an automation runs and only for the steps its card shows. It never touches password fields, app installers, Settings or permission screens, and never this app.</string>
+</resources>

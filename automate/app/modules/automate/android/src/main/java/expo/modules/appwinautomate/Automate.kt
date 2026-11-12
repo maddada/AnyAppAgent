@@ -112,12 +112,14 @@ object Automate {
     Speaker.stop()
     Notices.denyAllQuestions(c)
     c.stopService(Intent(c, ListenerService::class.java))
+    Places.unarmAll(c)
     Log.i(TAG, "Stop all")
   }
 
   fun resume(c: Context) {
     prefs(c).edit().putBoolean("stopped", false).apply()
     ListenerService.restart(c)
+    Places.rearm(c)
   }
 
   // ---------- Do Not Disturb

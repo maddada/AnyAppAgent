@@ -5,7 +5,7 @@ import * as Native from '../../modules/automate';
 import { LIMITS, isPrivateHost } from './limits';
 import { prayerTimesFor, ajmanDay, PRAYER_KEYS, ajmanClock } from './prayer';
 import { getState, update } from './store';
-import { makeAt, makeBluetooth, makeCharging, makeEvery, makeNotification, makePrayer, makeWifi, ScriptError } from './triggers';
+import { makeAppOpened, makeArrive, makeAt, makeBluetooth, makeCharging, makeEvery, makeLeave, makeNotification, makePrayer, makeWifi, ScriptError } from './triggers';
 import { APP_NAME } from './brand';
 import { load, save } from '@/lib/storage';
 
@@ -161,6 +161,54 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
     wifi: (options?: { connected?: unknown; network?: unknown }) => trigger(() => makeWifi(options)),
     bluetooth: (options?: { connected?: unknown; device?: unknown }) => trigger(() => makeBluetooth(options)),
     notification: (options?: { app?: unknown; text?: unknown }) => trigger(() => makeNotification(options)),
+    arrive: (spec: unknown, options?: { radius?: unknown }) => trigger(() => makeArrive(spec, options)),
+    leave: (spec: unknown, options?: { radius?: unknown }) => trigger(() => makeLeave(spec, options)),
+    appOpened: (app: unknown, options?: { forMinutes?: unknown }) => trigger(() => makeAppOpened(app, options)),
+
+    // M6: read the screen and tap. The deny-list lives in the native service and the locks never turn it off.
+    screen: Object.freeze({
+      read: async () => {
+        gate('screen.read');
+        if (!Native.screenOn()) throw new ScriptError('Screen access is off: turn it on on the card.');
+        const r = await Native.screenRead();
+        if (r.refused) throw new ScriptError(r.refused);
+        line(`Read the screen of ${r.app ?? 'an app'} (${r.texts?.length ?? 0} lines)`);
+        return Object.freeze({ app: r.app ?? '', texts: Object.freeze([...(r.texts ?? [])]) });
+      },
+      tap: async (text: unknown) => {
+        gate('screen.tap');
+        const t = String(text ?? '').trim();
+        if (!t) throw new ScriptError('screen.tap() needs the words on the button.');
+        if (!Native.screenOn()) throw new ScriptError('Screen access is off: turn it on on the card.');
+        const problem = await Native.screenTap(t);
+        if (problem) throw new ScriptError(problem);
+        line(`Tapped "${t.slice(0, 60)}"`);
+      },
+    }),
+
+    // M7: Shizuku, a fixed set of actions only.
+    shizuku: Object.freeze({
+      wifi: async (on: unknown) => {
+        gate('shizuku.wifi');
+        const problem = await Native.shizukuAct(on ? 'wifiOn' : 'wifiOff');
+        if (problem) throw new ScriptError(problem);
+        line(`Wi-Fi ${on ? 'on' : 'off'} (Shizuku)`);
+      },
+      mobileData: async (on: unknown) => {
+        gate('shizuku.mobileData');
+        const problem = await Native.shizukuAct(on ? 'dataOn' : 'dataOff');
+        if (problem) throw new ScriptError(problem);
+        line(`Mobile data ${on ? 'on' : 'off'} (Shizuku)`);
+      },
+      stopApp: async (app: unknown) => {
+        gate('shizuku.stopApp');
+        const a = String(app ?? '').trim();
+        if (!a) throw new ScriptError('stopApp() needs the app\'s name.');
+        const problem = await Native.shizukuAct('stopApp', a);
+        if (problem) throw new ScriptError(problem);
+        line(`Stopped ${a.slice(0, 40)} (Shizuku)`);
+      },
+    }),
 
     speak: async (text: unknown, options?: { language?: unknown }) => {
       gate('speak');

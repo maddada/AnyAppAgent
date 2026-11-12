@@ -62,6 +62,10 @@ The whole API (types and comments: `automations/api.d.ts`):
 | `charging({ plugged? })` | The charger plugged in (default) or unplugged |
 | `wifi({ connected?, network? })` | Wi-Fi connects (default) or drops; `network` is its name (then the card also asks for Location, all the time) |
 | `bluetooth({ connected?, device? })` | A Bluetooth device connects (default) or disconnects; `device` is part of its name (Nearby devices is asked on the card) |
+| `arrive(place)`, `leave(place)` | Arriving at or leaving a place: the name of a place the person saved in the app's Places ("Mosque"), or `{ lat, lon, name }`. If the place is not saved yet, tell the person to save it in Places (Location, all the time is asked on the card) |
+| `appOpened(app, { forMinutes? })` | An app comes to the front, or has been there `forMinutes` (Usage access is asked on the card) |
+| `screen.read()`, `screen.tap(text)` | Read the screen of the app in front, tap a button by its words (Accessibility, asked on the card). Never in password fields, installers, Settings, permission screens or this app |
+| `shizuku.wifi(on)`, `shizuku.mobileData(on)`, `shizuku.stopApp(app)` | Through the person's Shizuku app; only these three |
 | `notification({ app?, text? })` | A notification from another app (`app`: part of its name) that mentions `text`; the notification is in `event.notification` (notification access is asked on the card) |
 | `speak(text, { language? })` | Says it aloud on the alarm volume (heard in Do Not Disturb) |
 | `notify(title, body?)` | A notification |
@@ -97,7 +101,7 @@ While an automation that is on uses `charging`, `wifi` or `bluetooth`, a small "
 notice stays (Android needs it to keep listening); it carries Stop all.
 
 **What is not in this version yet** (say so in one line and offer to add it, as a change to the
-app that needs a new install): location (arrive and leave), the app in front, Accessibility (read the screen and tap), and Shizuku powers. `docs/AUTOMATE.md` in Kiwimake has the plan for each.
+app that needs a new install): anything outside the table above. `docs/AUTOMATE.md` in Kiwimake has the plan.
 
 **How it reaches the phone**: an automation is JavaScript only, so it goes out as a quick update
 (the fast lane, no install). Do not touch `app.json`, `package.json`, `assets/` or native code for

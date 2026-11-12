@@ -50,10 +50,25 @@ class AppwinAutomateModule : Module() {
     AsyncFunction("stopAll") { Automate.stopAll(context) }
     AsyncFunction("resume") { Automate.resume(context) }
 
-    AsyncFunction("listen") { kinds: List<String>, apps: List<String> ->
+    AsyncFunction("listen") { kinds: List<String>, apps: List<String>, appWatches: String, places: String ->
       NotificationWatcher.update(context, "notification" in kinds, apps)
-      ListenerService.update(context, kinds.filter { it != "notification" }.toSet())
+      ListenerService.setAppWatches(context, appWatches)
+      Places.update(context, places)
+      ListenerService.update(context, kinds.filter { it != "notification" && it != "place" }.toSet())
     }
+    Function("usageAccess") { ListenerService.usageAccess(context) }
+    AsyncFunction("openUsageAccess") {
+      context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    Function("screenOn") { ScreenService.isOn(context) }
+    AsyncFunction("openScreenSettings") {
+      context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    AsyncFunction("screenRead") { ScreenService.read(context) }
+    AsyncFunction("screenTap") { text: String -> ScreenService.tap(context, text) }
+    Function("shizukuState") { ShizukuPower.state(context) }
+    AsyncFunction("shizukuRequest") { ShizukuPower.request() }
+    AsyncFunction("shizukuAct") { action: String, arg: String? -> ShizukuPower.act(context, action, arg) }
     Function("notificationAccess") { NotificationWatcher.hasAccess(context) }
     AsyncFunction("openNotificationAccess") {
       val intent = if (android.os.Build.VERSION.SDK_INT >= 30) {
