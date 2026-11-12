@@ -131,11 +131,11 @@ card from that record.
 | Speak, notify | `TextToSpeech` on the alarm stream (heard in Do Not Disturb), notification channels, `POST_NOTIFICATIONS` | Notifications: on the card of the first automation that notifies | `speak`, `notify` | First slice |
 | Do Not Disturb | `NotificationManager.setInterruptionFilter(PRIORITY)` with a timed restore alarm; `ACCESS_NOTIFICATION_POLICY` | Card: "Allow" opens the Do Not Disturb access page, one switch | `doNotDisturb.on/off/isOn` | First slice |
 | Bluetooth, Wi-Fi, charging | `ListenerService`: a foreground service of type `connectedDevice` (its Android 14 prerequisite `CHANGE_NETWORK_STATE` is granted without asking) with receivers for `ACTION_POWER_CONNECTED/DISCONNECTED` and Bluetooth `ACTION_ACL_CONNECTED/DISCONNECTED`, and a Wi-Fi `NetworkCallback` (with `FLAG_INCLUDE_LOCATION_INFO` for the name). It runs only while an automation that is on uses one of these triggers (the runtime calls `listen()` in every plan), shows "Listening for ..." with Stop all, restarts after a reboot, and starts the headless runner with `{ event }` | Card: "A small notice while it listens"; Bluetooth asks Nearby devices; a Wi-Fi name asks Location, all the time (Android shows Wi-Fi names only then) | `charging({ plugged? })`, `wifi({ connected?, network? })`, `bluetooth({ connected?, device? })` | M2 (built) |
-| Notifications from other apps | `NotificationListenerService`; side-loaded apps need "Allow restricted settings" in App info first (Android 13+) | Card: a short walkthrough (App info, then the listener switch) | `notificationFrom('WhatsApp', { text? })` trigger | M3 |
-| Location (arrive, leave) | `LocationManager.addProximityAlert` (no Play services needed) or the fused geofencing API; `ACCESS_BACKGROUND_LOCATION` ("Allow all the time") | Card | `arrive('Mosque')`, `leave(...)`, places saved in the app | M4 |
-| The app in front | `UsageStatsManager` events (`PACKAGE_USAGE_STATS`, one switch), polled by the listener service only while an automation needs it | Card | `appOpened('YouTube', { forMinutes? })` | M5 |
-| Accessibility | An `AccessibilityService` that reads the window and taps; restricted settings again; Android 16 refuses it during calls | Card, with a plain warning | `screen.find(text)`, `screen.tap(text)`, with a deny-list (password fields, Settings security pages, the package installer, banking) that the safety locks cannot turn off | M6 |
-| Shizuku | The Shizuku API (the Shizuku app runs a privileged process after a wireless-debugging pairing, again after every restart) | Card: walkthrough, then Shizuku's own Allow | `shizuku.run(...)` limited to a list of commands (mobile data, Wi-Fi on and off, stop an app, secure settings) | M7 |
+| Notifications from other apps | `NotificationWatcher`, a `NotificationListenerService` Android binds once the person allows notification access. It reports a notification only when an automation that is on watches its app (or any app), never this app's own, ongoing or group-summary ones, the same one again within 5 s is one event, and it starts the headless runner with `{ event: { kind: 'notification', app, package, title, text } }`. The script gets `event.notification`; the run log names the app, never the message | Card: "Notification access" opens that page for this app; its line says what to do when Android answers "Restricted setting" (App info, the three dots, Allow restricted settings) | `notification({ app?, text? })` | M3 (built) |
+| Location (arrive, leave) | Places the person saves in the app (Places: "Save where I am now", a name, 150 m). While an automation that is on watches a place, the listener service asks for a balanced location about once a minute (fused provider; Wi-Fi and cell on a phone) and decides itself when the phone crossed the edge: the first fix only sets inside or outside (being there already is not an arrival), and a 30 m margin keeps it from flickering. Android's proximity alerts were tried first and dropped: they repeated "entering" while inside and checked only every 30 minutes | Saving a place asks for location while in use; the card asks Location, all the time (Android's own page, "Allow all the time") | `arrive(place)`, `leave(place)`: a saved name or `{ lat, lon, name }`; an unsaved name is a Problem on the card ("Save a place called ... first") | M4 (built) |
+| The app in front | The listener service reads Android's usage events every 10 s while an automation watches an app (`UsageStatsManager`, `ACTIVITY_RESUMED`) and reports when it comes to the front, and again at each `forMinutes` mark | Card: Usage access, one switch | `appOpened(app, { forMinutes? })` | M5 (built) |
+| Accessibility | `ScreenService`, an accessibility service that does nothing by itself: it answers `screen.read()` (the texts of the window in front, never password fields) and `screen.tap(text)` (the first visible item with that text, or its clickable parent) from a running automation. Fixed deny-list the safety locks never change: password and text fields, package installers, Settings, permission screens, the Play Store, System UI, and this app (an automation can not approve its own card) | Card: Screen access opens Android's Accessibility page; the restricted-settings hint as for notifications; Android's own full-control warning | `screen.read()`, `screen.tap(text)` | M6 (built) |
+| Shizuku | The Shizuku API (`dev.rikka.shizuku:api` and `provider` 13.1.5): only `svc wifi enable/disable`, `svc data enable/disable` and `am force-stop` of a named app (never this app, Android's own apps or Shizuku), never a command a script writes | Card: Shizuku with its state (Get it, Start it, Allow, Ready); Allow is Shizuku's own permission | `shizuku.wifi(on)`, `shizuku.mobileData(on)`, `shizuku.stopApp(app)` | M7 (built) |
 
 **Permissions only when needed**: the manifest declares what a power needs (declaring is not
 granting), but nothing is asked until an automation using that power is shown on its card. The card's
@@ -147,7 +147,7 @@ later version lists powers no automation uses any more, so the person can switch
 | Rail | How |
 | --- | --- |
 | A card before on | `AutomationScreen`: When and It will from the code, You asked for (the agent's sentence, labelled), It needs, Hard limits, Show the script. Nothing runs before Turn it on. The approval is tied to the source hash: a changed script stops running and shows its card again with the new lines marked |
-| Ask before sending | `web.get` / `web.post` (and in later versions SMS, calls, messages) go through `ask()`: a high-priority notification "Maghrib quiet time wants to send to example.com", Allow / Don't allow, two minutes, then no. https only, never to this phone or its home network |
+| Ask before sending | `web.get` / `web.post` go through `ask()`; texts and calls (`message.text`, `phone.call`) are never sent by the app at all: a notification opens Messages with the text written, or the dialer, and the person sends or calls: a high-priority notification "Maghrib quiet time wants to send to example.com", Allow / Don't allow, two minutes, then no. https only, never to this phone or its home network |
 | Run log | Every run, failure, skip, block by a limit, change, turn on and off, Stop all, locks change. On the phone only (and short notes in the app's diary, which the agent can read with `read_diary`) |
 | Stop all | Home (with a confirm) and every notice the app posts. Natively: a stop flag every power checks, all wake-ups cancelled, Do Not Disturb this app turned on goes off, speech stops, open questions answered no. Resume on Home |
 | Hard limits | `src/automate/limits.ts`: at most 12 runs an hour per automation and 60 for all, a run stops after 60 s and 20 power calls, `every` at least 15 minutes, Do Not Disturb at most 12 hours and always timed, speech 300 characters, 10 sends an hour, each asked. Never install apps, change security settings or read passwords: there is no API for them |
@@ -196,12 +196,12 @@ The first version is all nine powers. In working days, one thread:
 | --- | --- | --- |
 | M1 | First slice (this): the app made through Kiwimake, the fence and runtime, all safety rails and the Advanced toggle, time and prayer times, speak and notify, Do Not Disturb | 2 (done) |
 | M2 | Bluetooth, Wi-Fi and charging triggers: the listener service (always-on notice with Stop all), Nearby devices | 2 (built) |
-| M3 | Notifications from other apps: the listener service, the restricted-settings walkthrough | 1.5 |
-| M4 | Location arrive and leave: places in the app, proximity alerts, "Allow all the time" walkthrough | 1.5 |
-| M5 | The app in front (usage access) | 1 |
-| M6 | Accessibility: read and tap, the deny-list, the warning card | 2.5 |
-| M7 | Shizuku: setup walkthrough, the command list, its own ask | 2 |
-| M8 | Unused powers list, ask-before-sending for SMS and calls, publish and clone check, docs | 1 |
+| M3 | Notifications from other apps: the listener service, the restricted-settings walkthrough | 1.5 (built) |
+| M4 | Location arrive and leave: places in the app, the listener's own location checks, "Allow all the time" walkthrough | 1.5 (built) |
+| M5 | The app in front (usage access) | 1 (built) |
+| M6 | Accessibility: read and tap, the deny-list, the warning card | 2.5 (built) |
+| M7 | Shizuku: setup walkthrough, the command list, its own ask | 2 (built) |
+| M8 | Unused powers list, ask-before-sending for SMS and calls, publish and clone check, docs | 1 (built) |
 
 About 14 days in all, 12 after this slice. M2 to M7 each end with one APK; everything after is the
 fast lane.
@@ -296,9 +296,110 @@ new needs in `card.ts`, the API in `automations/api.d.ts` and the fence's list).
 as one full build (8, 144 s, the new service and permissions), installed by my phone copy without
 a prompt; the next automations using the new triggers were a quick build again (9, 17 s).
 
-**Not proven on the device yet (M2):** turning on the charger and Wi-Fi automations, and the events
-themselves (`adb emu power ac off/on`, Wi-Fi off and on). The code is built (the full build 8
-compiled the listener service), installed on the phone, and the automations using the triggers
-arrived as quick update 9; at 07:30 three other threads were driving the shared emulator, so the
-taps were stopped rather than land in their apps. Bluetooth connect and disconnect cannot be shown
-on the emulator (no device to pair): the user's phone with the car is the proof.
+**M2 on the device (08:13 to 08:18).** Charger and Wi-Fi back: their cards list "A small notice
+while it listens" (`60-*`, `61-*`, `62-*`); turned on, `ListenerService` ran with "Listening for the
+charger, Wi-Fi" and Stop all (`63-*`, `64-*`). `adb emu power ac off` then `on`: Android sent
+`ACTION_POWER_CONNECTED`, allowed the runner's background start ("uidState: FGS"), and the run
+log says "Charger ran, at charger in", "Started saying "Charging" (still speaking after 15 s, going
+on)", "Showed "Charging started"" (`65-*`). Wi-Fi off for 5 s and on again (`svc wifi`): "Wi-Fi back
+ran, at Wi-Fi connected" and its notification. Bluetooth needs a real device: the user's phone.
+
+## M3: notifications from other apps (2026-11-12)
+
+Built as in the table (`NotificationWatcher.kt`, `notification()` in `triggers.ts`, the need in
+`card.ts`, `event.notification` in `automations/api.d.ts`). The app's AGENTS.md: the notification
+is someone's message, used to decide, never logged, spoken or sent unless the person asked for
+exactly that. It reached the app as one full build (10, 103 s); the first automation using it,
+"Mum wrote" (`notification({ app: 'Shell', text: 'Mum' })`, Shell standing in for WhatsApp on the
+emulator: `adb shell cmd notification post` posts as Shell), was a quick build (11, 7 s).
+
+**M3 on the device (08:22 to 08:29).** Mum wrote's card asks for notification access with the
+restricted-settings hint, and Turn it on waits for it (`66-*`, `67-*`). Allow opened Android's page
+for the app, and even on the emulator it was "Controlled by Restricted Setting" (an app AnyAppAgent
+installs counts as side-loaded): tapping the switch gave "App was denied access" (`69-*`), then App
+info, the three dots, Allow restricted settings (`70-*`), then the switch and Android's question
+"Allow notification access for Appwin Automate?" (`71-*`, `72-*`), Allow. So the card's hint is the
+real flow. `adb shell cmd notification post -t "Mum" ... "Are you coming for dinner tonight?"`
+(posted as Shell): "Mum wrote ran, at a notification from Shell", "Message from Mum" shown; a second
+one from "Dad" ("Dinner is ready") reached the watcher but did not start it (no "Mum"); the log names
+the app, never the message (`74-*`). Dark: `79-*`, `81-*` to `84-*`.
+
+Found on the device: version 11 showed Mum wrote as "Problem: "when" needs at(), prayer() or
+every()": the runtime's list of trigger kinds lacked `notification` (fixed, version 12; it was a full
+build because the cloud spike thread had changed `builder/anyapp.init.gradle`, part of every app's
+native fingerprint, which is the fast lane working as designed).
+
+**The rails fix on the device.** The first fix (moving the deadline after the answer) did not work:
+the run's timer still fired at 60 s while the question waited. Fixed properly (version 13, quick): the
+deadline is lifted while the person is asked and put back afterwards. Proof: Try it now, no answer
+for 70 s and more; the question stayed (`76-*`), the run waited the full 2 minutes and logged "Web
+check did not send anything, No answer in time: nothing was sent, Took 120.0 s" (`77-*`, dark `78-*`).
+"You said no" was shown at 06:52 (`43-*`).
+
+At the end of the sitting the test app was left with Stop all on (`85-*`), so its listeners do not
+react to other threads on the shared emulator; Resume brings everything back.
+
+## M4 to M7 (2026-11-12)
+
+Built together (one full build) and proven in one sitting on `emulator-5560` (screenshots `90-*` to
+`116-*`, dark `113-*` to `116-*`); the test automations came from one prompt as a quick update:
+Mosque (`arrive('Mosque')`, Do Not Disturb 30 minutes), Clock open (`appOpened('Clock')`, then
+`screen.read()`, `screen.tap('Stopwatch')`, a notification), Night Wi-Fi (`at('23:00')`,
+`shizuku.wifi(false)`), and later Office (`arrive('Office')` and `leave('Office')`).
+
+**M4, places.** Saving a place asks for location while in use (`91-*`); the card asks Location, all
+the time, which is Android's own page (`93-*`, `94-*`). The first version used Android's proximity
+alerts, and the device showed both of its problems: every plan registered the alert again and
+Android answered "entering" again while the phone was inside, so Mosque ran until the hard limit
+stopped it ("It already ran 12 times this hour (safety lock)", `95-*`, the rail doing its job),
+and leaving was noticed only by a location check every 30 minutes. Replaced (build 18) by the
+listener's own once-a-minute balanced location with a baseline and a margin. Proof with Office:
+standing there when it was turned on and four more fixes inside: no event; away 3 km: "Office ran,
+at left Office"; back: "Office ran, at arrived at Office" and "Back at the office", exactly once each
+(`107-*`, `108-*`, `109-*`). On the emulator a balanced request never turns GPS on and there is no
+Wi-Fi or cell location, so the fused provider was fed for those two minutes with Android's test
+provider (`cmd location providers add-test-provider fused`), removed straight after; on a phone the
+balanced location comes from Wi-Fi and cell towers.
+
+**M5 and M6, the app in front, read and tap.** Usage access is one switch (`98-*`); screen access
+is Android's Accessibility page with the service's own description of the deny-list and Android's
+full-control warning (`99-*` to `101-*`). Clock opened by itself: within one poll Clock open ran,
+read the screen, tapped Stopwatch (Clock switched to its Stopwatch tab) and showed "Stopwatch
+ready" (`103-*`, `104-*`). Try it now inside this app: "Clock open failed, Try it now: Not in this
+app: an automation can not touch its own cards" (`110-*`).
+
+**M7, Shizuku.** Built and compiled; the card shows "Shizuku: Get it" with the steps, and Turn it on
+waits for it (`111-*`, `112-*`, dark `113-*`). The emulator has no Shizuku, so the actions
+themselves are for the user's phone (install Shizuku, start it with wireless debugging, allow
+this app in it, then Try it now on Night Wi-Fi).
+
+At the end of the sitting: Stop all (listener, alarms and location requests stopped). A geofence
+from test build 16 stays registered on the emulator until it restarts or the app is reinstalled
+(that build never left it).
+
+## M8 (2026-11-12)
+
+- **Texts and calls the person sends.** `message.text(number, body)` and `phone.call(number)` post
+  "<automation> wrote a text for you" with Open Messages (or Open the dialer): the person sends or
+  calls, the app never does, so no SMS or call permission and nothing the safety locks could turn
+  off. They count toward the 10 sends an hour. Proof: Text home (`at('18:00')`, from one prompt, a
+  quick update) said "Write a text to 0501234567 (you send it yourself)" on its card (`120-*`); Try
+  it now posted the offer (`121-*`), and Open Messages opened Google Messages on 0501234567 with "On my
+  way home" written and not sent (`122-*`; the draft was cleared, nothing was sent).
+- **Powers no automation uses.** Settings, Powers lists every strong power Android allowed (Do Not
+  Disturb, notification access, usage access, screen access, Location all the time, Nearby
+  devices, Shizuku) with the automations that are on and use it, or "No automation uses it now: you
+  can switch it off", and opens Android's page for it (`123-*`; after turning Mum wrote off,
+  notification access shows as unused, `125-*`; dark `126-*`).
+- **The run log after a flood.** The same entry again and again (a blocked automation) is one entry
+  with "N times", so a flood can not push the history out of the 300 entries any more; and Home
+  shows "Ran / Failed / Did not send <when>" from each automation's own record (`124-*`). Both came
+  from the Mosque flood seen in M4.
+- **Publishing and clones.** Unchanged and not run here: Appwin Automate is an ordinary app, so
+  Share with others, Publish and Make my own version (`docs/DISTRIBUTION.md`,
+  `docs/CHANGE-THIS-APP.md`) work for it as for any app; publishing makes a public GitHub release
+  under the user's account, which is the user's call.
+
+At the end of the sitting: Stop all (listener and alarms stopped). One tap of mine missed my own
+notification's Stop all (the shade had closed) and landed on an empty part of another thread's
+app screen; nothing happened there, and Stop all was done from the app.

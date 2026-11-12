@@ -3,10 +3,11 @@
 // fence found in its code); "You asked for" is the agent's sentence, labelled as such.
 import { useFocusEffect, useNavigation, type StaticScreenProps } from '@react-navigation/native';
 import { useCallback, useEffect, useState } from 'react';
-import { AppState, PermissionsAndroid, StyleSheet, Text, View } from 'react-native';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 
 import * as Native from '../../modules/automate';
 import { NEED_LABEL, type Need } from '@/automate/card';
+import { needReady, openNeed } from '@/automate/needs';
 import { LIMIT_LINES } from '@/automate/limits';
 import { ajmanClock } from '@/automate/prayer';
 import { approve, changesOf, pretendBefore, statusOf, tryNow, turnOff, useAutomate } from '@/automate/runtime';
@@ -14,19 +15,12 @@ import { nextOf } from '@/automate/triggers';
 import { Label, List, Row, StatusPill, useNow, when } from '@/components/Bits';
 import { Button } from '@/components/Button';
 import { Screen } from '@/components/Screen';
-import { ensureNotificationPermission } from '@/lib/notifications';
 import { radius, spacing, type, useColors } from '@/theme';
 
 type Props = StaticScreenProps<{ id: string }>;
 
-function needReady(n: Need): boolean {
-  if (n === 'dnd') return Native.dnd.hasAccess();
-  if (n === 'notifications') return Native.canNotify();
-  if (n === 'listening') return Native.canNotify();
-  if (n === 'nearby') return Native.hasPermission('android.permission.BLUETOOTH_CONNECT');
-  if (n === 'locationAlways') return Native.hasPermission('android.permission.ACCESS_FINE_LOCATION') && Native.hasPermission('android.permission.ACCESS_BACKGROUND_LOCATION');
-  return Native.canExact();
-}
+const SHIZUKU_LABEL = { missing: 'Get it', stopped: 'Start it', denied: 'Allow', ready: 'Ready' } as const;
+
 
 export function AutomationScreen({ route }: Props) {
   const colors = useColors();
@@ -62,14 +56,7 @@ export function AutomationScreen({ route }: Props) {
   const runs = log.filter((e) => e.automation === l.id && ['ran', 'error', 'stop', 'blocked', 'skipped'].includes(e.kind)).slice(0, 3);
 
   const allow = async (n: Need) => {
-    if (n === 'dnd') await Native.dnd.openSettings();
-    if (n === 'notifications' || n === 'listening') await ensureNotificationPermission();
-    if (n === 'nearby') await PermissionsAndroid.request('android.permission.BLUETOOTH_CONNECT');
-    if (n === 'locationAlways') {
-      // Android asks in two steps: while in use first, then "Allow all the time" in Settings.
-      const fine = await PermissionsAndroid.request('android.permission.ACCESS_FINE_LOCATION');
-      if (fine === 'granted') await PermissionsAndroid.request('android.permission.ACCESS_BACKGROUND_LOCATION');
-    }
+    await openNeed(n);
     setRefresh((x) => x + 1);
   };
   const run = (fn: () => Promise<unknown>) => async () => {
@@ -145,7 +132,11 @@ export function AutomationScreen({ route }: Props) {
                   detail={NEED_LABEL[n].why}
                   testID={`need-${n}`}
                   onPress={ok ? undefined : () => void allow(n)}
-                  right={<Text style={[type.bodyStrong, { color: ok ? colors.accent : colors.warning }]}>{ok ? 'Ready' : 'Allow'}</Text>}
+                  right={
+                    <Text style={[type.bodyStrong, { color: ok ? colors.accent : colors.warning }]}>
+                      {ok ? 'Ready' : n === 'shizuku' ? SHIZUKU_LABEL[Native.shizukuState()] : 'Allow'}
+                    </Text>
+                  }
                 />
               );
             })}
@@ -165,6 +156,7 @@ export function AutomationScreen({ route }: Props) {
         {status === 'on' ? (
           <>
             <Button title="Try it now" variant="secondary" disabled={busy || stopped} onPress={run(() => tryNow(l.id))} />
+            {l.triggers.some((t) => t.kind === 'at' || t.kind === 'prayer' || t.kind === 'every') ? (
             <Button
               title="Test with a pretend clock"
               variant="secondary"
@@ -174,6 +166,7 @@ export function AutomationScreen({ route }: Props) {
                 navigation.goBack();
               })}
             />
+            ) : null}
             <Button title="Turn off" variant="secondary" disabled={busy} onPress={run(() => turnOff(l.id))} />
           </>
         ) : status !== 'broken' ? (

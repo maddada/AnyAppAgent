@@ -19,10 +19,36 @@
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
   <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
   <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+  <!-- M4: places (proximity alerts) need precise location. -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+  <!-- M5: which app is in front (one switch in Settings, Usage access). -->
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" xmlns:tools="http://schemas.android.com/tools" tools:ignore="ProtectedPermissions" />
+  <!-- M7: finding an app by its name to stop it (Shizuku). -->
+  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" xmlns:tools="http://schemas.android.com/tools" tools:ignore="QueryAllPackagesPermission" />
 
   <application>
     <receiver android:name="expo.modules.appwinautomate.TriggerReceiver" android:exported="false" />
     <receiver android:name="expo.modules.appwinautomate.ActionReceiver" android:exported="false" />
+    <!-- M6: read the screen and tap, off until the person turns it on. -->
+    <service
+      android:name="expo.modules.appwinautomate.ScreenService"
+      android:exported="true"
+      android:label="Automations: read and tap"
+      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+      </intent-filter>
+      <meta-data android:name="android.accessibilityservice" android:resource="@xml/appwin_automate_screen" />
+    </service>
+    <!-- M7: Shizuku hands this app its binder through this provider. -->
+    <provider
+      android:name="rikka.shizuku.ShizukuProvider"
+      android:authorities="${applicationId}.shizuku"
+      android:enabled="true"
+      android:exported="true"
+      android:multiprocess="false"
+      android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     <receiver android:name="expo.modules.appwinautomate.AutomateBootReceiver" android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -31,6 +57,16 @@
         <action android:name="android.intent.action.TIME_SET" />
       </intent-filter>
     </receiver>
+    <!-- M3: notifications from other apps. Off until the person allows notification access. -->
+    <service
+      android:name="expo.modules.appwinautomate.NotificationWatcher"
+      android:exported="true"
+      android:label="Automations"
+      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+      <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
+    </service>
     <service
       android:name="expo.modules.appwinautomate.ListenerService"
       android:exported="false"

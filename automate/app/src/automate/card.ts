@@ -4,7 +4,7 @@
 import type { CardAction } from './store';
 import type { Trigger } from './triggers';
 
-export type Need = 'notifications' | 'dnd' | 'exact' | 'listening' | 'nearby' | 'locationAlways';
+export type Need = 'notifications' | 'dnd' | 'exact' | 'listening' | 'nearby' | 'locationAlways' | 'notificationAccess' | 'usageAccess' | 'screen' | 'shizuku';
 
 function text(v: unknown): string | null {
   return typeof v === 'string' ? v : null;
@@ -42,6 +42,28 @@ export function actionLine(a: CardAction): string {
       return `Fetch from ${host(first)} (asks you first, every time)`;
     case 'web.post':
       return `Send to ${host(first)} (asks you first, every time)`;
+    case 'message.text': {
+      const n = typeof first === 'string' ? first : 'someone';
+      return `Write a text to ${n} (you send it yourself)`;
+    }
+    case 'phone.call': {
+      const n = typeof first === 'string' ? first : 'someone';
+      return `Offer to call ${n} (you make the call)`;
+    }
+    case 'screen.read':
+      return 'Read what is on the screen (never password fields)';
+    case 'screen.tap': {
+      const t = text(first);
+      return t ? `Tap "${t}" on the screen` : 'Tap a button on the screen (worked out when it runs)';
+    }
+    case 'shizuku.wifi':
+      return first === true ? 'Turn Wi-Fi on (Shizuku)' : first === false ? 'Turn Wi-Fi off (Shizuku)' : 'Turn Wi-Fi on or off (Shizuku)';
+    case 'shizuku.mobileData':
+      return first === true ? 'Turn mobile data on (Shizuku)' : first === false ? 'Turn mobile data off (Shizuku)' : 'Turn mobile data on or off (Shizuku)';
+    case 'shizuku.stopApp': {
+      const t = text(first);
+      return t ? `Stop the app ${t} (Shizuku)` : 'Stop an app (Shizuku)';
+    }
     default:
       return `Use ${a.call}`;
   }
@@ -59,10 +81,21 @@ export function needsOf(actions: CardAction[], triggers: Trigger[] = []): Need[]
     if (t.kind === 'charging' || t.kind === 'wifi' || t.kind === 'bluetooth') needs.add('listening');
     if (t.kind === 'bluetooth') needs.add('nearby');
     if (t.kind === 'wifi' && t.network) needs.add('locationAlways');
+    if (t.kind === 'notification') needs.add('notificationAccess');
+    if (t.kind === 'place') {
+      needs.add('listening');
+      needs.add('locationAlways');
+    }
+    if (t.kind === 'app') {
+      needs.add('listening');
+      needs.add('usageAccess');
+    }
   }
   for (const a of actions) {
-    if (a.call === 'notify') needs.add('notifications');
+    if (a.call === 'notify' || a.call === 'message.text' || a.call === 'phone.call') needs.add('notifications');
     if (a.call === 'doNotDisturb.on' || a.call === 'doNotDisturb.off') needs.add('dnd');
+    if (a.call.startsWith('screen.')) needs.add('screen');
+    if (a.call.startsWith('shizuku.')) needs.add('shizuku');
   }
   return [...needs];
 }
@@ -71,9 +104,19 @@ export const NEED_LABEL: Record<Need, { title: string; why: string }> = {
   exact: { title: 'Exact times', why: 'So it runs on the minute, even when the phone sleeps' },
   notifications: { title: 'Notifications', why: 'To show what it does' },
   dnd: { title: 'Do Not Disturb access', why: 'One switch in Settings, so it can turn Do Not Disturb on and off' },
-  listening: { title: 'A small notice while it listens', why: 'Android needs it to keep listening for the charger, Wi-Fi or Bluetooth. Stop all is on it' },
+  listening: { title: 'A small notice while it listens', why: 'Android needs it to keep listening (the charger, Wi-Fi, Bluetooth, places or the app in front). Stop all is on it' },
   nearby: { title: 'Nearby devices', why: 'To see which Bluetooth device connects' },
-  locationAlways: { title: 'Location, all the time', why: 'Android shows Wi-Fi names only with it (the app does not track where you are)' },
+  notificationAccess: {
+    title: 'Notification access',
+    why: 'To see notifications from other apps. If Android says "Restricted setting": App info, the three dots, Allow restricted settings, then try again',
+  },
+  usageAccess: { title: 'Usage access', why: 'One switch in Settings, so it can see which app is in front' },
+  screen: {
+    title: 'Screen access (Accessibility)',
+    why: 'Lets it read the screen and tap, only for the steps above. Never password fields, installers, Settings or this app. If Android says "Restricted setting": App info, the three dots, Allow restricted settings',
+  },
+  shizuku: { title: 'Shizuku', why: 'Install Shizuku and start it (wireless debugging; again after every restart), then allow this app in it' },
+  locationAlways: { title: 'Location, all the time', why: 'For places, and for Wi-Fi names (Android shows them only with it). The app keeps no record of where you are' },
 };
 
 /** What a changed script adds and drops, compared with the version the person approved. */

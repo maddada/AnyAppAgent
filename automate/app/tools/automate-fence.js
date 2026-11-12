@@ -30,11 +30,19 @@ const API = [
   'charging',
   'wifi',
   'bluetooth',
+  'notification',
+  'arrive',
+  'leave',
+  'appOpened',
   // powers
   'speak',
   'notify',
   'doNotDisturb',
   'web',
+  'screen',
+  'shizuku',
+  'message',
+  'phone',
   // helpers
   'sleep',
   'log',
@@ -52,6 +60,10 @@ const POWERS = {
   notify: 'notify',
   doNotDisturb: 'doNotDisturb',
   web: 'web',
+  screen: 'screen',
+  shizuku: 'shizuku',
+  message: 'message',
+  phone: 'phone',
 };
 
 /** Built-ins a script may use. Everything else (fetch, require, globalThis, Function, Object, Reflect, Proxy, setTimeout, ...) is out of reach. */

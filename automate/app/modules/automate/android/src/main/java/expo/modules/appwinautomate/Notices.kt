@@ -82,7 +82,15 @@ object Notices {
 
   fun listening(c: Context, kinds: Set<String>): Notification {
     channels(c)
-    val what = kinds.sorted().map { if (it == "wifi") "Wi-Fi" else if (it == "bluetooth") "Bluetooth" else "the charger" }
+    val what = kinds.sorted().map {
+      when (it) {
+        "wifi" -> "Wi-Fi"
+        "bluetooth" -> "Bluetooth"
+        "app" -> "the app in front"
+        "place" -> "places"
+        else -> "the charger"
+      }
+    }
     return NotificationCompat.Builder(c, CH_LISTEN)
       .setSmallIcon(icon(c))
       .setContentTitle("Listening for ${what.joinToString(", ")}")
@@ -105,6 +113,33 @@ object Notices {
       .addAction(stopAllAction(c))
       .build()
     nm(c).notify(tag, tag.hashCode(), n)
+  }
+
+  /**
+   * M8: a text or a call an automation prepared. The person sends or calls: the notification opens
+   * Messages with the text written, or the dialer with the number. Nothing is sent by the app.
+   */
+  fun offer(c: Context, kind: String, number: String, body: String?, title: String, tag: String) {
+    channels(c)
+    val intent = if (kind == "call") {
+      Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + android.net.Uri.encode(number)))
+    } else {
+      Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:" + android.net.Uri.encode(number))).putExtra("sms_body", body ?: "")
+    }
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val pi = PendingIntent.getActivity(c, (tag + kind).hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    val text = if (kind == "call") "Tap to open the dialer with $number. You make the call." else "To $number: ${body ?: ""}"
+    val n = NotificationCompat.Builder(c, CH_ASK)
+      .setSmallIcon(icon(c))
+      .setContentTitle(title)
+      .setContentText(text)
+      .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+      .setPriority(NotificationCompat.PRIORITY_HIGH)
+      .setAutoCancel(true)
+      .setContentIntent(pi)
+      .addAction(NotificationCompat.Action(0, if (kind == "call") "Open the dialer" else "Open Messages", pi))
+      .build()
+    nm(c).notify("offer-$tag", (tag + kind).hashCode(), n)
   }
 
   fun stoppedNotice(c: Context) {

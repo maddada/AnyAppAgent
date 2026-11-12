@@ -5,7 +5,7 @@ import * as Native from '../../modules/automate';
 import { LIMITS, isPrivateHost } from './limits';
 import { prayerTimesFor, ajmanDay, PRAYER_KEYS, ajmanClock } from './prayer';
 import { getState, update } from './store';
-import { makeAt, makeBluetooth, makeCharging, makeEvery, makePrayer, makeWifi, ScriptError } from './triggers';
+import { makeAppOpened, makeArrive, makeAt, makeBluetooth, makeCharging, makeEvery, makeLeave, makeNotification, makePrayer, makeWifi, ScriptError } from './triggers';
 import { APP_NAME } from './brand';
 import { load, save } from '@/lib/storage';
 
@@ -104,9 +104,17 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
       const what = method === 'GET' ? `fetch from ${host}` : `send to ${host}`;
       line(`Asked you: ${what}`);
       // The run's clock stops while it waits for the person: a slow answer is not a slow script.
+      // The deadline is lifted during the wait (the run's timer checks it every half second) and
+      // put back afterwards, moved on by the time the person took.
       const asked = Date.now();
-      const answer = await Native.ask(`${ctx.name} wants to ${what}`, method === 'POST' ? `It sends: ${String(typeof body === 'string' ? body : JSON.stringify(body)).slice(0, 160)}` : url, LIMITS.askMs);
-      ctx.deadline += Date.now() - asked;
+      const deadline = ctx.deadline;
+      ctx.deadline = Number.POSITIVE_INFINITY;
+      let answer: 'allow' | 'deny' | 'timeout';
+      try {
+        answer = await Native.ask(`${ctx.name} wants to ${what}`, method === 'POST' ? `It sends: ${String(typeof body === 'string' ? body : JSON.stringify(body)).slice(0, 160)}` : url, LIMITS.askMs);
+      } finally {
+        ctx.deadline = deadline + (Date.now() - asked);
+      }
       if (Native.isStopped()) throw new StoppedError();
       if (answer !== 'allow') throw new RefusedError(answer === 'deny' ? 'no' : 'no answer');
       line('You allowed it');
@@ -133,6 +141,19 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
 
   const memoryKey = `automate.memory.${ctx.automation}`;
 
+  const phoneNumber = (v: unknown) => {
+    const n = String(v ?? '').replace(/[^\d+*#]/g, '');
+    if (n.length < 3 || n.length > 20) throw new ScriptError('That is not a phone number.');
+    return n;
+  };
+  const countSend = async () => {
+    if (ctx.locksOff) return;
+    const hourAgo = Date.now() - 3600_000;
+    const recent = (getState().recentSends ?? []).filter((t) => t > hourAgo);
+    if (recent.length >= LIMITS.sendsPerHour) throw new ScriptError(`More than ${LIMITS.sendsPerHour} sends in an hour (safety lock).`);
+    await update((s) => ({ ...s, recentSends: [...recent, Date.now()] }));
+  };
+
   // A refused trigger (every 1 minute while the locks are on) becomes a marker, so the card still
   // shows the automation's own name with the reason, instead of a bare error.
   const trigger = (make: () => unknown) => {
@@ -152,6 +173,76 @@ export function buildApi(ctx: RunContext): Record<string, unknown> {
     charging: (options?: { plugged?: unknown }) => trigger(() => makeCharging(options)),
     wifi: (options?: { connected?: unknown; network?: unknown }) => trigger(() => makeWifi(options)),
     bluetooth: (options?: { connected?: unknown; device?: unknown }) => trigger(() => makeBluetooth(options)),
+    notification: (options?: { app?: unknown; text?: unknown }) => trigger(() => makeNotification(options)),
+    arrive: (spec: unknown, options?: { radius?: unknown }) => trigger(() => makeArrive(spec, options)),
+    leave: (spec: unknown, options?: { radius?: unknown }) => trigger(() => makeLeave(spec, options)),
+    appOpened: (app: unknown, options?: { forMinutes?: unknown }) => trigger(() => makeAppOpened(app, options)),
+
+    // M6: read the screen and tap. The deny-list lives in the native service and the locks never turn it off.
+    screen: Object.freeze({
+      read: async () => {
+        gate('screen.read');
+        if (!Native.screenOn()) throw new ScriptError('Screen access is off: turn it on on the card.');
+        const r = await Native.screenRead();
+        if (r.refused) throw new ScriptError(r.refused);
+        line(`Read the screen of ${r.app ?? 'an app'} (${r.texts?.length ?? 0} lines)`);
+        return Object.freeze({ app: r.app ?? '', texts: Object.freeze([...(r.texts ?? [])]) });
+      },
+      tap: async (text: unknown) => {
+        gate('screen.tap');
+        const t = String(text ?? '').trim();
+        if (!t) throw new ScriptError('screen.tap() needs the words on the button.');
+        if (!Native.screenOn()) throw new ScriptError('Screen access is off: turn it on on the card.');
+        const problem = await Native.screenTap(t);
+        if (problem) throw new ScriptError(problem);
+        line(`Tapped "${t.slice(0, 60)}"`);
+      },
+    }),
+
+    // M8: messages and calls. Always the person's own tap: the app prepares, never sends.
+    message: Object.freeze({
+      text: async (number: unknown, body: unknown) => {
+        gate('message.text');
+        const n = phoneNumber(number);
+        const t = String(body ?? '').slice(0, 500);
+        await countSend();
+        await Native.offer('text', n, t, `${ctx.name} wrote a text for you`, ctx.automation);
+        line(`Wrote a text to ${n} for you to send`);
+      },
+    }),
+    phone: Object.freeze({
+      call: async (number: unknown) => {
+        gate('phone.call');
+        const n = phoneNumber(number);
+        await countSend();
+        await Native.offer('call', n, undefined, `${ctx.name} wants you to call ${n}`, ctx.automation);
+        line(`Offered a call to ${n}`);
+      },
+    }),
+
+    // M7: Shizuku, a fixed set of actions only.
+    shizuku: Object.freeze({
+      wifi: async (on: unknown) => {
+        gate('shizuku.wifi');
+        const problem = await Native.shizukuAct(on ? 'wifiOn' : 'wifiOff');
+        if (problem) throw new ScriptError(problem);
+        line(`Wi-Fi ${on ? 'on' : 'off'} (Shizuku)`);
+      },
+      mobileData: async (on: unknown) => {
+        gate('shizuku.mobileData');
+        const problem = await Native.shizukuAct(on ? 'dataOn' : 'dataOff');
+        if (problem) throw new ScriptError(problem);
+        line(`Mobile data ${on ? 'on' : 'off'} (Shizuku)`);
+      },
+      stopApp: async (app: unknown) => {
+        gate('shizuku.stopApp');
+        const a = String(app ?? '').trim();
+        if (!a) throw new ScriptError('stopApp() needs the app\'s name.');
+        const problem = await Native.shizukuAct('stopApp', a);
+        if (problem) throw new ScriptError(problem);
+        line(`Stopped ${a.slice(0, 40)} (Shizuku)`);
+      },
+    }),
 
     speak: async (text: unknown, options?: { language?: unknown }) => {
       gate('speak');

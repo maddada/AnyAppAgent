@@ -13,8 +13,14 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiInfo
+import android.app.AppOpsManager
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import org.json.JSONArray
 import android.os.SystemClock
 import android.util.Log
 import org.json.JSONObject
@@ -31,6 +37,25 @@ class ListenerService : Service() {
   private var wifi: ConnectivityManager.NetworkCallback? = null
   private var wifiSince = 0L
   private val wifiNames = HashMap<Network, String?>()
+
+  // M5: the app in front, from usage events, polled only while an automation needs it.
+  private val main = Handler(Looper.getMainLooper())
+  private var polling = false
+  private var frontPkg: String? = null
+  private var frontSince = 0L
+  private var lastPoll = 0L
+  private val sentMinutes = HashSet<Int>()
+  private var places: android.location.LocationListener? = null
+  private val poll = object : Runnable {
+    override fun run() {
+      try {
+        pollFront()
+      } catch (e: Exception) {
+        Log.w(Automate.TAG, "App in front: poll failed", e)
+      }
+      if (polling) main.postDelayed(this, 10_000)
+    }
+  }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -113,6 +138,59 @@ class ListenerService : Service() {
       }
       wifi = null
     }
+
+    if ("place" in kinds && places == null) {
+      places = Places.start(this)
+    } else if ("place" !in kinds && places != null) {
+      Places.stop(this, places)
+      places = null
+    }
+
+    if ("app" in kinds && !polling) {
+      polling = true
+      lastPoll = System.currentTimeMillis() - 15_000
+      main.post(poll)
+    } else if ("app" !in kinds && polling) {
+      polling = false
+      main.removeCallbacks(poll)
+    }
+  }
+
+  /** The newest app that came to the front, and minutes marks for the apps automations watch. */
+  private fun pollFront() {
+    if (!usageAccess(this)) return
+    val usm = getSystemService(UsageStatsManager::class.java)
+    val now = System.currentTimeMillis()
+    val events = usm.queryEvents(lastPoll, now)
+    lastPoll = now
+    var newest: String? = null
+    val e = UsageEvents.Event()
+    while (events.hasNextEvent()) {
+      events.getNextEvent(e)
+      if (e.eventType == UsageEvents.Event.ACTIVITY_RESUMED) newest = e.packageName
+    }
+    if (newest != null && newest != frontPkg) {
+      frontPkg = newest
+      frontSince = now
+      sentMinutes.clear()
+    }
+    val pkg = frontPkg ?: return
+    if (pkg == packageName) return
+    val label = try {
+      packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    } catch (ex: Exception) {
+      pkg
+    }
+    val elapsed = ((now - frontSince) / 60_000).toInt()
+    for ((app, marks) in appWatches(this)) {
+      if (!(label.lowercase().contains(app) || pkg.lowercase() == app)) continue
+      for (m in marks) {
+        if (m <= elapsed && m !in sentMinutes) {
+          sentMinutes.add(m)
+          emit(JSONObject().put("kind", "app").put("app", label).put("package", pkg).put("minutes", m), label)
+        }
+      }
+    }
   }
 
   private fun ssid(caps: NetworkCapabilities): String? {
@@ -157,6 +235,10 @@ class ListenerService : Service() {
   }
 
   override fun onDestroy() {
+    Places.stop(this, places)
+    places = null
+    polling = false
+    main.removeCallbacks(poll)
     unregister(power)
     unregister(bluetooth)
     wifi?.let {
@@ -174,6 +256,37 @@ class ListenerService : Service() {
 
     fun wanted(c: Context): Set<String> =
       c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet("kinds", emptySet())?.toSet() ?: emptySet()
+
+    private const val APPS = "appwin_automate_apps"
+
+    /** Watched apps: lowercase name or package to the minute marks that matter (0: when it opens). */
+    fun appWatches(c: Context): Map<String, List<Int>> {
+      val raw = c.getSharedPreferences(APPS, Context.MODE_PRIVATE).getString("watches", "[]") ?: "[]"
+      return try {
+        val a = JSONArray(raw)
+        (0 until a.length()).associate { i ->
+          val o = a.getJSONObject(i)
+          val marks = o.getJSONArray("minutes")
+          o.getString("app").lowercase() to (0 until marks.length()).map { marks.getInt(it) }
+        }
+      } catch (e: Exception) {
+        emptyMap()
+      }
+    }
+
+    fun setAppWatches(c: Context, json: String) {
+      c.getSharedPreferences(APPS, Context.MODE_PRIVATE).edit().putString("watches", json).apply()
+    }
+
+    fun usageAccess(c: Context): Boolean {
+      val ops = c.getSystemService(AppOpsManager::class.java)
+      val mode = if (Build.VERSION.SDK_INT >= 29) {
+        ops.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), c.packageName)
+      } else {
+        @Suppress("DEPRECATION") ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), c.packageName)
+      }
+      return mode == AppOpsManager.MODE_ALLOWED
+    }
 
     /** Remembers what to listen for and starts, updates or stops the listener. */
     fun update(c: Context, kinds: Set<String>) {

@@ -14,18 +14,24 @@ export type Trigger =
   | { kind: 'every'; minutes: number }
   | { kind: 'charging'; plugged: boolean }
   | { kind: 'wifi'; connected: boolean; network?: string }
-  | { kind: 'bluetooth'; connected: boolean; device?: string };
+  | { kind: 'bluetooth'; connected: boolean; device?: string }
+  | { kind: 'notification'; app?: string; text?: string }
+  | { kind: 'place'; place: string; entering: boolean; lat?: number; lon?: number; radius?: number }
+  | { kind: 'app'; app: string; minutes: number };
 
 /** What the phone reports (modules/automate ListenerService). */
 export type PhoneEvent =
   | { kind: 'charging'; plugged: boolean }
   | { kind: 'wifi'; connected: boolean; network?: string | null }
-  | { kind: 'bluetooth'; connected: boolean; device?: string | null };
+  | { kind: 'bluetooth'; connected: boolean; device?: string | null }
+  | { kind: 'notification'; app: string; package: string; title?: string | null; text?: string | null }
+  | { kind: 'place'; name: string; entering: boolean }
+  | { kind: 'app'; app: string; package: string; minutes: number };
 
 export type EventKind = PhoneEvent['kind'];
 
 export function isEventTrigger(t: Trigger): t is Extract<Trigger, { kind: EventKind }> {
-  return t.kind === 'charging' || t.kind === 'wifi' || t.kind === 'bluetooth';
+  return t.kind === 'charging' || t.kind === 'wifi' || t.kind === 'bluetooth' || t.kind === 'notification' || t.kind === 'place' || t.kind === 'app';
 }
 
 export class ScriptError extends Error {}
@@ -93,6 +99,46 @@ export function makeBluetooth(options?: { connected?: unknown; device?: unknown 
   return Object.freeze({ kind: 'bluetooth', connected: flag(options?.connected, 'connected', true), ...(device ? { device } : {}) });
 }
 
+/** notification({ app, text }): a notification from an app (part of its name), optionally mentioning some text. */
+export function makeNotification(options?: { app?: unknown; text?: unknown }): Trigger {
+  const app = name(options?.app, 'app');
+  const text = name(options?.text, 'text');
+  return Object.freeze({ kind: 'notification', ...(app ? { app } : {}), ...(text ? { text } : {}) });
+}
+
+function place(spec: unknown, entering: boolean, options?: { radius?: unknown }): Trigger {
+  const radius = options?.radius === undefined ? undefined : Number(options.radius);
+  if (radius !== undefined && (!isFinite(radius) || radius < 50 || radius > 5000)) throw new ScriptError('radius must be 50 to 5000 metres.');
+  if (typeof spec === 'string') {
+    const n = name(spec, 'place');
+    return Object.freeze({ kind: 'place', place: n as string, entering, ...(radius ? { radius } : {}) });
+  }
+  const o = spec as { lat?: unknown; lon?: unknown; name?: unknown } | undefined;
+  const lat = Number(o?.lat);
+  const lon = Number(o?.lon);
+  if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) throw new ScriptError('A place is a saved name ("Mosque") or { lat, lon, name }.');
+  return Object.freeze({ kind: 'place', place: name(o?.name ?? `${lat.toFixed(4)}, ${lon.toFixed(4)}`, 'name') as string, entering, lat, lon, ...(radius ? { radius } : {}) });
+}
+
+/** arrive('Mosque') or arrive({ lat, lon, name }): getting there. */
+export function makeArrive(spec: unknown, options?: { radius?: unknown }): Trigger {
+  return place(spec, true, options);
+}
+
+/** leave('Work'): going away from it. */
+export function makeLeave(spec: unknown, options?: { radius?: unknown }): Trigger {
+  return place(spec, false, options);
+}
+
+/** appOpened('YouTube', { forMinutes: 30 }): an app comes to the front (or has stayed there that long). */
+export function makeAppOpened(app: unknown, options?: { forMinutes?: unknown }): Trigger {
+  const a = name(app, 'app');
+  if (!a) throw new ScriptError('appOpened() needs the app\'s name.');
+  const m = options?.forMinutes === undefined ? 0 : Number(options.forMinutes);
+  if (!isFinite(m) || m < 0 || m > 600) throw new ScriptError('forMinutes must be 0 to 600.');
+  return Object.freeze({ kind: 'app', app: a, minutes: Math.round(m) });
+}
+
 /** Whether an event the phone reported starts this trigger. */
 export function matches(t: Trigger, e: PhoneEvent): boolean {
   if (t.kind === 'charging' && e.kind === 'charging') return t.plugged === e.plugged;
@@ -103,6 +149,17 @@ export function matches(t: Trigger, e: PhoneEvent): boolean {
   if (t.kind === 'bluetooth' && e.kind === 'bluetooth') {
     if (t.connected !== e.connected) return false;
     return !t.device || (!!e.device && e.device.toLowerCase().includes(t.device.toLowerCase()));
+  }
+  if (t.kind === 'place' && e.kind === 'place') return t.entering === e.entering && t.place.toLowerCase() === e.name.toLowerCase();
+  if (t.kind === 'app' && e.kind === 'app') {
+    const a = t.app.toLowerCase();
+    return t.minutes === e.minutes && (e.app.toLowerCase().includes(a) || e.package.toLowerCase() === a);
+  }
+  if (t.kind === 'notification' && e.kind === 'notification') {
+    const app = t.app?.toLowerCase();
+    if (app && !e.app.toLowerCase().includes(app) && e.package.toLowerCase() !== app) return false;
+    const words = `${e.title ?? ''}\n${e.text ?? ''}`.toLowerCase();
+    return !t.text || words.includes(t.text.toLowerCase());
   }
   return false;
 }
@@ -150,6 +207,9 @@ export function triggerLabel(t: Trigger): string {
   if (t.kind === 'charging') return t.plugged ? 'charger in' : 'charger out';
   if (t.kind === 'wifi') return `${t.network ?? 'Wi-Fi'} ${t.connected ? 'connected' : 'lost'}`;
   if (t.kind === 'bluetooth') return `${t.device ?? 'Bluetooth'} ${t.connected ? 'connected' : 'disconnected'}`;
+  if (t.kind === 'notification') return `a notification from ${t.app ?? 'an app'}`;
+  if (t.kind === 'place') return `${t.entering ? 'arrived at' : 'left'} ${t.place}`;
+  if (t.kind === 'app') return t.minutes ? `${t.app} for ${t.minutes} min` : `${t.app} opened`;
   return `every ${t.minutes === 1 ? 'minute' : `${t.minutes} minutes`}`;
 }
 
@@ -168,6 +228,12 @@ export function describeTrigger(t: Trigger): string {
   if (t.kind === 'bluetooth') {
     const which = t.device ? `a Bluetooth device called "${t.device}"` : 'any Bluetooth device';
     return t.connected ? `When ${which} connects` : `When ${which} disconnects`;
+  }
+  if (t.kind === 'place') return t.entering ? `When you arrive at ${t.place}` : `When you leave ${t.place}`;
+  if (t.kind === 'app') return t.minutes ? `When ${t.app} has been open for ${t.minutes} minutes` : `When ${t.app} opens`;
+  if (t.kind === 'notification') {
+    const from = t.app ? `from ${t.app}` : 'from any app';
+    return t.text ? `When a notification ${from} mentions "${t.text}"` : `When a notification comes ${from}`;
   }
   if (t.kind === 'at') {
     const days = t.days ? t.days.map((d) => DAY_LABEL[d]).join(', ') : 'every day';

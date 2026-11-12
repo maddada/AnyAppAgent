@@ -20,4 +20,7 @@ android {
 dependencies {
   // HeadlessJsTaskService: runs automations while the app is closed.
   implementation 'com.facebook.react:react-android'
+  // M7: Shizuku (the person's Shizuku app gives this app a privileged binder).
+  implementation 'dev.rikka.shizuku:api:13.1.5'
+  implementation 'dev.rikka.shizuku:provider:13.1.5'
 }
