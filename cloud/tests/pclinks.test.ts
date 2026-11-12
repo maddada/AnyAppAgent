@@ -104,6 +104,12 @@ describe('the desktop signs in through the browser', () => {
     await expect(as.mutation(api.pclinks.approve, { code: s.code })).rejects.toThrow(/run out/);
     expect((await post(t, '/pc/link/poll', { code: s.code, poll: s.poll })).status).toBe(410);
   });
+
+  test('starting a browser sign-in is limited to 30 a minute for everyone', async () => {
+    const { t } = await setup();
+    for (let i = 0; i < 30; i++) expect((await post(t, '/pc/link/start', { deviceName: `PC ${i}` })).status).toBe(200);
+    expect((await post(t, '/pc/link/start', { deviceName: 'one too many' })).status).toBe(429);
+  });
 });
 
 describe('the PC hands its sign-in to its phone', () => {

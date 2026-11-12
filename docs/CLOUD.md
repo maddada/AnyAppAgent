@@ -720,6 +720,45 @@ deleting old builds revokes them. If downloads grow, the `@convex-dev/r2` compon
 to Cloudflare R2 (expiring links, no egress fee) without changing the phone. APKs are build output,
 not code, so keeping them in Convex does not go against "no code stored".
 
+### Limits, egress and abuse (milestone 10)
+
+What keeps one account from costing more than it pays for, or from using the boxes for something
+else. Each is enforced in Convex unless it says otherwise.
+
+- **One change at a time per app.** A message sent while the app's change is queued or running
+  belongs to that change (`billing.joinOrOpenChange`): no second credit gate, no second box, the
+  runner takes it in the same session. Only a message to an idle app opens a change. The cloud's
+  Rebuild (which runs a helper) is a change like any other.
+- **5 machines per person** (`BOX.maxPerUser`): a sixth app's box waits ("Your other apps are using
+  all 5 machines") and starts when one pauses. Boxes pause after 5 idle minutes and are deleted
+  after an hour (a snapshot stays), so a person rarely holds more than one or two.
+- **Credits first.** A change starts only with its estimate's high end in credits; past the
+  balance plus half a credit the runner is told to stop (milestone 6). The first app stops
+  charging at 3 credits; the Own key plan's 30 machine hours a month, then half a credit an hour.
+- **What a box can reach.** Instabox documents no outbound allowlist, so a box can reach the
+  internet; what limits harm is that the box holds nothing worth taking and costs its owner
+  credits by the minute. The AI key reaches it only as the Secrets proxy's placeholder (or, on the
+  Own key plan, through the runner's local forwarder); the GitHub token is one repo for one hour
+  and lives only in the runner's git child; the signing key only on a tmpfs, as another Unix user
+  than the agent's, for one build. The agent runs as `agent`, not as the runner. Instabox's own
+  abuse checks can lock a box for 24 hours (not seen in any run; the 10-minute reconcile would find
+  the box unreachable, and how a locked box reports itself is not tested).
+- **Accounts.** `users.blocked` stops an account at once (the person's every query and mutation
+  and every PC route check it; a running box finishes its turn). New repos are only ever
+  `anyapp-cloud-*` on the person's own account, through the
+  App with their user token. The browser sign-in start, which needs no account, is limited to 30
+  a minute for everyone together; its codes live 10 minutes and are deleted as new ones come. The
+  spike's anonymous sign-in is off (milestone 10).
+- **Egress.** Convex serves the APKs and quick updates from file storage, which counts as egress:
+  1 GB a month on the free plan, then $0.132 a GB on Starter (section 8). A first install is about
+  25 MB (one ABI), a quick update about 2 MB, so the free GB covers about 40 first installs or 500
+  quick updates a month across all users. Above that the plan in section 3 holds: APKs move to
+  Cloudflare R2 (no egress fee) behind the same expiring links, with no change on the phone.
+  Old builds' files are not deleted yet: storage grows with every build (to add with R2).
+- **Not built yet:** a daily credit or machine-hour ceiling per account beyond what credits
+  allow, and an alarm when the month's Anthropic or Instabox bill passes a threshold (both are a
+  cron over `usage` and `boxes`, after launch numbers exist).
+
 ## 4. The data model in Convex
 
 Field names follow `shared/protocol.ts` where a type already exists. `_id` and `_creationTime` are
@@ -1356,6 +1395,20 @@ brought back are only those made since the change began. **Not run:** the phone'
 the switch flipped from the phone (the emulator was down: the change was asked for with the dev-only
 `pcoff.devChange`, the switch set with `admin.devSetPcOffSwitch`), and the merge prompt path (both
 sides changing the same lines; covered by the code, not by a test).
+
+**Milestone 10, so far (12 Nov 2026):** the spike's anonymous sign-in is off on the dev deployment
+(`node scripts/dev.mjs anonymous-off`; a sign-in with it is refused, and the browser page no longer
+offers the test account; accounts already signed in with it keep their sessions). Limits: one
+change at a time per app, the cloud's Rebuild metered, 30 browser sign-in starts a minute, and the
+notes above ("Limits, egress and abuse"). Already shown by milestones 8 and 9 and not run again: a
+box that no longer exists, the app restored from GitHub with its chat (three fresh boxes did it), a
+phone with a PC paired and the cloud added in one grid (`m8/phone/03-grid-after-move.png`), a PC
+app moved to the cloud and back with one key, a change made while the PC was off and pulled back.
+**Blocked:** the Ajman prayer alarm in cloud mode on a Starter plan in Stripe test mode, and the two
+live Stripe test payments (no `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` in `cloud-dev.env`
+yet), and everything that needs the phone (the shared emulator stopped at 16:57 and does not start
+from this session): installing the moved app's versions over each other with its data, the phone's
+"Do it in the cloud" card, a second prompt arriving as a quick update.
 
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account

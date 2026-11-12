@@ -6,6 +6,7 @@
 //   node scripts/dev.mjs bundle     upload the runner bundle that boxes download
 //   node scripts/dev.mjs run <fn> '<json>'
 //   node scripts/dev.mjs codegen
+//   node scripts/dev.mjs anonymous-off   remove the spike's anonymous sign-in (milestone 10)
 import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -94,10 +95,14 @@ if (cmd === 'env') {
   await bundle();
 } else if (cmd === 'run') {
   console.log(JSON.stringify(run(process.argv[3], JSON.parse(process.argv[4] ?? '{}')), null, 2));
+} else if (cmd === 'anonymous-off') {
+  // Milestone 10: the spike's dev-only anonymous sign-in goes (accounts signed in with it keep their sessions).
+  convex(['env', 'remove', 'SPIKE_ANONYMOUS']);
+  console.log('SPIKE_ANONYMOUS removed');
 } else if (cmd === 'codegen') {
   convex(['codegen', '--typecheck', 'disable']);
   console.log('codegen done');
 } else if (cmd) {
-  console.error('usage: node scripts/dev.mjs env | deploy | bundle | run <fn> <json> | codegen');
+  console.error('usage: node scripts/dev.mjs env | deploy | bundle | run <fn> <json> | codegen | anonymous-off');
   process.exit(2);
 }

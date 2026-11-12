@@ -213,7 +213,8 @@ http.route({
     const deviceName = typeof body.deviceName === 'string' ? body.deviceName : 'My PC';
     const code = linkCode();
     const poll = randomToken(32);
-    await ctx.runMutation(internal.pclinks.startRequest, { code, pollHash: await sha256Hex(poll), deviceName });
+    const started = await ctx.runMutation(internal.pclinks.startRequest, { code, pollHash: await sha256Hex(poll), deviceName });
+    if (!started.ok) return json(429, { error: 'Too many sign-ins are starting right now. Try again in a minute.' });
     const site = process.env.CONVEX_SITE_URL ?? new URL(req.url).origin;
     return json(200, { code, shown: showCode(code), poll, url: `${site}/pc/link?l=${code}`, expiresInMs: REQUEST_MS });
   }),

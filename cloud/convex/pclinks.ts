@@ -14,6 +14,8 @@ export const ALL_SCOPES: PcScope[] = ['share', 'web', 'move'];
 /** A browser sign-in code lives 10 minutes; a phone hand-over code two. */
 export const REQUEST_MS = 10 * 60_000;
 export const HANDOFF_MS = 2 * 60_000;
+/** Browser sign-ins started a minute, for everyone (the start needs no account). */
+export const START_PER_MINUTE = 30;
 /** lastSeenAt is written at most once a minute. */
 const SEEN_EVERY_MS = 60_000;
 
@@ -93,7 +95,11 @@ export const startRequest = internalMutation({
     // Old codes go as new ones come (no cron needed for a table this small).
     const old = await ctx.db.query('pcLinkRequests').withIndex('by_expiry', (q) => q.lt('expiresAt', Date.now() - REQUEST_MS)).take(20);
     for (const r of old) await ctx.db.delete(r._id);
+    // Anyone may start one (it needs no account yet): at most 30 a minute for everyone together.
+    const recent = await ctx.db.query('pcLinkRequests').withIndex('by_expiry', (q) => q.gt('expiresAt', Date.now() + REQUEST_MS - 60_000)).take(START_PER_MINUTE);
+    if (recent.length >= START_PER_MINUTE) return { ok: false as const };
     await ctx.db.insert('pcLinkRequests', { code, pollHash, deviceName: deviceName.trim().slice(0, 60) || 'My PC', expiresAt: Date.now() + REQUEST_MS });
+    return { ok: true as const };
   },
 });
 
