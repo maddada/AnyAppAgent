@@ -100,7 +100,8 @@ describe('credits on the first cloud change', () => {
     });
     await makeApp(as);
     const twin = t.withIdentity({ subject: `${twinId}|s` });
-    await makeApp(twin);
+    // No free credit for the twin, so the credit gate refuses its first app.
+    await expect(makeApp(twin)).rejects.toThrow(/needs about 3 credits and you have 0/);
     expect((await twin.query(api.accounts.me, {}))!.credits).toBe(0);
     expect((await as.query(api.accounts.me, {}))!.credits).toBe(3);
   });

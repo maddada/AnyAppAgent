@@ -2,10 +2,10 @@
 // extra credit with or without a plan, and the Own key plan with the person's own Anthropic key.
 // The person only ever sees credits and prices: never tokens or what anything costs Kiwimake.
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
-import { router } from "expo-router";
+import { Pressable, ScrollView, View , Linking } from "react-native";
+import { router , useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Check, KeyRound } from "lucide-react-native";
 import { api, cloudMessage } from "@/lib/cloud";
 import { useStore } from "@/lib/store";
@@ -20,8 +20,6 @@ type Plans = { plans: PlanRow[]; extra: { cents: number; credits: number; months
 
 const dollars = (cents: number) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`);
 
-/** Buying waits for payments (milestone 6 of docs/CLOUD.md); until then the buttons say so. */
-const PAYMENTS_READY = false;
 
 function Card({ children, chosen, testID }: { children: React.ReactNode; chosen?: boolean; testID?: string }) {
   const t = useTheme();
@@ -61,6 +59,14 @@ export default function PlanScreen() {
   const setOwnKey = useMutation(api.accounts.setOwnKey);
   const removeOwnKey = useMutation(api.accounts.removeOwnKey);
   const [interval, setInterval] = useState<"month" | "year">("month");
+  const checkout = useAction(api.stripe.checkout);
+  const params = useLocalSearchParams<{ paid?: string }>();
+  // Stripe's Checkout in the browser, then back here through anyappagent://plan?paid=1.
+  const buy = (what: string, args: { kind: "plan" | "extra"; plan?: string; interval?: "month" | "year" }) =>
+    run(what, async () => {
+      const { url } = (await checkout(args)) as { url: string };
+      await Linking.openURL(url);
+    });
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +97,11 @@ export default function PlanScreen() {
         <T variant="caption" color="textSecondary">
           A credit covers everything a change needs: the AI, the machine, the build and getting it to your phone. You get {plans?.free.credits ?? 3} free credits every month.
         </T>
+        {params.paid === "1" ? (
+          <T color="ready" testID="plan-paid">
+            Thank you. Your credits arrive in a moment.
+          </T>
+        ) : null}
         <Toggle value={interval} onChange={setInterval} />
         {(plans?.plans ?? [])
           .filter((p) => p.id !== "ownKey")
@@ -112,7 +123,7 @@ export default function PlanScreen() {
                     <T variant="buttonSmall">Your plan</T>
                   </View>
                 ) : (
-                  <Button small label={PAYMENTS_READY ? `Choose ${p.name}` : "Coming soon"} disabled={!PAYMENTS_READY} />
+                  <Button small label={`Choose ${p.name}`} busy={busy === p.id} testID={`plan-choose-${p.id}`} onPress={() => buy(p.id, { kind: "plan", plan: p.id, interval })} />
                 )}
               </View>
             </Card>
@@ -124,7 +135,7 @@ export default function PlanScreen() {
               {dollars(plans.extra.cents)} for {plans.extra.credits} credits, with or without a plan. They last {plans.extra.months} months.
             </T>
             <View style={{ alignItems: "flex-end" }}>
-              <Button small variant="quiet" label={PAYMENTS_READY ? "Buy extra credit" : "Coming soon"} disabled={!PAYMENTS_READY} />
+              <Button small variant="quiet" label="Buy extra credit" busy={busy === "extra"} testID="plan-buy-extra" onPress={() => buy("extra", { kind: "extra" })} />
             </View>
           </Card>
         ) : null}
@@ -149,7 +160,12 @@ export default function PlanScreen() {
               )}
               <View style={{ alignItems: "flex-end" }}>
                 {ownKey ? (
-                  <Button small variant="text" label="Remove my key" busy={busy === "remove"} onPress={() => run("remove", () => removeOwnKey({}))} testID="own-key-remove" />
+                  <View style={{ alignItems: "flex-end", gap: space.sm }}>
+                    {current !== "ownKey" ? (
+                      <Button small label="Choose Own key" busy={busy === "ownKey"} testID="plan-choose-ownKey" onPress={() => buy("ownKey", { kind: "plan", plan: "ownKey", interval })} />
+                    ) : null}
+                    <Button small variant="text" label="Remove my key" busy={busy === "remove"} onPress={() => run("remove", () => removeOwnKey({}))} testID="own-key-remove" />
+                  </View>
                 ) : (
                   <Button
                     small

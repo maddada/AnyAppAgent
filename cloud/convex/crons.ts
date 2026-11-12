@@ -6,4 +6,8 @@ import { internal } from './_generated/api';
 const crons = cronJobs();
 crons.interval('box lifecycle', { minutes: 1 }, internal.boxes.tick, {});
 crons.interval('box reconcile', { minutes: 10 }, internal.boxes.reconcile, {});
+// Credits (section 5): expiry daily, everyone's medians daily, yearly plans' monthly grants hourly.
+crons.daily('credits expire', { hourUTC: 0, minuteUTC: 5 }, internal.billing.expire, {});
+crons.daily('estimate medians', { hourUTC: 0, minuteUTC: 15 }, internal.billing.medians, {});
+crons.interval('yearly plan grants', { hours: 1 }, internal.stripe.yearlyGrants, {});
 export default crons;

@@ -63,7 +63,8 @@ export const thread = internalQuery({
     if (!t) return null;
     const box = t.boxId ? await ctx.db.get(t.boxId) : null;
     const app = await ctx.db.get(t.appId);
-    return { thread: t, box, app };
+    const user = await ctx.db.get(t.userId);
+    return { thread: t, box, app, ownKey: user?.aiMode === 'ownAnthropic' };
   },
 });
 
@@ -178,8 +179,9 @@ export const create = internalAction({
         name,
         snapshot: fromSnapshot ?? BOX.imageSnapshot,
         metadata: { kiwiThread: String(threadId), kiwiUser: String(s.thread.userId) },
-        // The AI key reaches the box only as Instabox's proxy placeholder (section 2).
-        secrets: (process.env.BOX_PROXY_SECRETS ?? 'ANTHROPIC_API_KEY').split(',').filter(Boolean),
+        // The AI key reaches the box only as Instabox's proxy placeholder (section 2). On the Own key
+        // plan the box gets none of ours: the runner brings the person's own key.
+        secrets: s.ownKey ? [] : (process.env.BOX_PROXY_SECRETS ?? 'ANTHROPIC_API_KEY').split(',').filter(Boolean),
       });
       await ctx.runMutation(internal.boxes.patchBox, { boxId, patch: { providerId: b.id } });
       await p.waitFor(b.id, ['running'], 5 * 60_000);

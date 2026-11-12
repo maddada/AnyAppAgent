@@ -39,19 +39,63 @@ export async function grant(
   g: { source: Doc<'grants'>['source']; millicredits: number; expiresAt: number; period?: string; stripePaymentId?: string; note?: string },
 ) {
   const now = Date.now();
+  // A change that ran into the overdraft left the balance below zero: the new credit pays that first.
+  const before = await balanceOf(ctx, userId);
+  const debt = before < 0 ? Math.min(-before, g.millicredits) : 0;
   const grantId = await ctx.db.insert('grants', {
     userId,
     source: g.source,
     millicredits: g.millicredits,
-    remaining: g.millicredits,
+    remaining: g.millicredits - debt,
     grantedAt: now,
     expiresAt: g.expiresAt,
     ...(g.period ? { period: g.period } : {}),
     ...(g.stripePaymentId ? { stripePaymentId: g.stripePaymentId } : {}),
   });
   await ctx.db.insert('ledger', { userId, kind: 'grant', millicredits: g.millicredits, grantId, at: now, ...(g.note ? { note: g.note } : {}) });
+  if (debt > 0) await ctx.db.insert('ledger', { userId, kind: 'adjust', millicredits: 0, grantId, at: now, note: `${debt} millicredits of overdraft paid from this grant` });
   await addToBalance(ctx, userId, g.millicredits);
   return grantId;
+}
+
+/**
+ * Takes credits, closest to expiry first (this month's free credit, then last month's plan
+ * credit, then this month's, then extra credit), writing a spend row per grant touched. What the
+ * grants cannot cover is spent from the overdraft: the balance goes below zero and the next grant
+ * pays it back. Returns the balance after.
+ */
+export async function spend(ctx: MutationCtx, userId: Id<'users'>, millicredits: number, why: { changeId?: Id<'changes'>; usageIds?: Id<'usage'>[]; note?: string }) {
+  if (millicredits <= 0) return balanceOf(ctx, userId);
+  const now = Date.now();
+  let left = millicredits;
+  const grants = await ctx.db.query('grants').withIndex('by_user_expires', (q) => q.eq('userId', userId).gt('expiresAt', now)).collect();
+  for (const g of grants) {
+    if (left <= 0) break;
+    if (g.remaining <= 0) continue;
+    const take = Math.min(g.remaining, left);
+    await ctx.db.patch(g._id, { remaining: g.remaining - take });
+    await ctx.db.insert('ledger', { userId, kind: 'spend', millicredits: -take, grantId: g._id, at: now, ...(why.changeId ? { changeId: why.changeId } : {}), ...(why.usageIds ? { usageIds: why.usageIds } : {}), ...(why.note ? { note: why.note } : {}) });
+    left -= take;
+  }
+  if (left > 0) {
+    await ctx.db.insert('ledger', { userId, kind: 'spend', millicredits: -left, at: now, note: 'overdraft', ...(why.changeId ? { changeId: why.changeId } : {}), ...(why.usageIds ? { usageIds: why.usageIds } : {}) });
+  }
+  await addToBalance(ctx, userId, -millicredits);
+  return balanceOf(ctx, userId);
+}
+
+/** Grants past their date with credits left: an expire row each, the balance lowered in the same mutation. */
+export async function expireGrants(ctx: MutationCtx, now: number, limit = 200) {
+  const due = await ctx.db.query('grants').withIndex('by_expires', (q) => q.lte('expiresAt', now)).take(limit);
+  let n = 0;
+  for (const g of due) {
+    if (g.remaining <= 0) continue;
+    await ctx.db.insert('ledger', { userId: g.userId, kind: 'expire', millicredits: -g.remaining, grantId: g._id, at: now });
+    await addToBalance(ctx, g.userId, -g.remaining);
+    await ctx.db.patch(g._id, { remaining: 0 });
+    n++;
+  }
+  return n;
 }
 
 /**

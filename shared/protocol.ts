@@ -248,6 +248,10 @@ export interface ChatItem {
   usage?: TokenUsage;
   crash?: CrashInfo; // added: on a "crash" item; upserted when it happens again or "Fix it" is tapped
   diary?: DiaryReadInfo; // added: on a "diary" item
+  // Added for the cloud (docs/CLOUD.md section 2): on a user item, what its change used in credits
+  // ("Used 2.2 credits (est. 2)"), in millicredits; never tokens. ownKey: the AI ran on the
+  // person's own key (only machine time past fair use counts). Absent on a PC's chats.
+  cost?: { millicredits: number; estimateMillicredits?: number; ownKey?: boolean; running?: boolean };
   createdAt: string;
   updatedAt: string;
 }

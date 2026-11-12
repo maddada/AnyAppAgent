@@ -6,6 +6,7 @@ import { v } from 'convex/values';
 import type { App, ChatItem, WorkerInfo } from '../../shared/protocol';
 import type { Doc, Id } from './_generated/dataModel';
 import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from './_generated/server';
+import { linkMessage, recordUsage, settleChanges } from './billing';
 
 const now = () => Date.now();
 
@@ -19,6 +20,19 @@ export const byToken = internalQuery({
 });
 
 /** What the runner needs to know at start: the app it works on and the account's AI mode. */
+/** The person's own Anthropic key, still sealed (the HTTP action opens it and seals it to the runner). */
+export const ownKeyRow = internalQuery({
+  args: { threadId: v.id('threads') },
+  handler: async (ctx, { threadId }) => {
+    const t = await ctx.db.get(threadId);
+    if (!t) return null;
+    const user = await ctx.db.get(t.userId);
+    if (user?.aiMode !== 'ownAnthropic') return null;
+    const row = await ctx.db.query('secrets').withIndex('by_user_kind', (q) => q.eq('userId', t.userId).eq('kind', 'anthropic')).first();
+    return row ? { row, aad: `anthropic:${t.userId}` } : null;
+  },
+});
+
 export const hello = internalMutation({
   args: { threadId: v.id('threads') },
   handler: async (ctx, { threadId }) => {
@@ -99,6 +113,11 @@ export const take = internalMutation({
     const item = await offerable(ctx, threadId);
     if (!item) return null;
     await ctx.db.patch(item._id, { leasedUntil: now() + LEASE_MS });
+    // Its change starts when the box takes it.
+    if (item.changeId) {
+      const c = await ctx.db.get(item.changeId);
+      if (c && c.state === 'queued') await ctx.db.patch(c._id, { state: 'running', startedAt: now() });
+    }
     await ctx.db.patch(threadId, { lastActiveAt: now() });
     const payload = { ...(item.payload ?? {}) };
     if (Array.isArray(payload.images)) {
@@ -164,6 +183,8 @@ export const events = internalMutation({
         }
         case 'inbox.done': {
           const id = String((e as { inboxId: string }).inboxId);
+          const itemId = (e as { itemId?: string }).itemId;
+          if (itemId) await linkMessage(ctx, id, String(itemId));
           const row = await ctx.db.query('messages').withIndex('by_thread_item', (q) => q.eq('threadId', threadId).eq('itemId', `inbox-${id}`)).first();
           if (row) await ctx.db.delete(row._id);
           break;
@@ -171,6 +192,13 @@ export const events = internalMutation({
         case 'runner.state': {
           const s = e as { busy: boolean; agentSessionId?: string };
           await ctx.db.patch(threadId, { busy: Boolean(s.busy), ...(s.agentSessionId ? { agentSessionId: s.agentSessionId } : {}) });
+          // Idle: the work of the running changes is done; they are settled now.
+          if (!s.busy) await settleChanges(ctx, threadId);
+          break;
+        }
+        case 'usage': {
+          const u = e as { model?: string; effort?: string; tag?: Record<string, string>; usage?: { inputTokens: number; outputTokens: number; cacheWriteTokens: number; cacheReadTokens: number } };
+          if (u.usage) await recordUsage(ctx, threadId, { model: u.model, effort: u.effort, tag: u.tag, usage: u.usage });
           break;
         }
         default:

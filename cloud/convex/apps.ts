@@ -7,6 +7,7 @@ import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { CLOUD_PACKAGE_PREFIX } from './config';
 import { onCloudChange } from './lib/credits';
+import { openChange } from './billing';
 import { ownApp, requireUser } from './lib/session';
 
 const JAVA_KEYWORDS = new Set(
@@ -171,8 +172,11 @@ export const create = mutation({
       updatedAt: now,
     });
     const threadId = await ctx.db.insert('threads', { appId, userId: user._id, boxState: 'none', lastActiveAt: now, seq: 1 });
+    // The credit gate: refused (and nothing made) when the credits do not cover it.
+    const changeId = await openChange(ctx, user, (await ctx.db.get(appId))!, threadId);
     const inboxId = await ctx.db.insert('inbox', {
       threadId,
+      changeId,
       kind: 'prompt',
       payload: {
         create: { name, slug, packageName: `${CLOUD_PACKAGE_PREFIX}${slug}`, preset: args.preset ?? 'react-native', askMore: Boolean(args.askMore) },

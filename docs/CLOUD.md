@@ -1219,6 +1219,38 @@ no key generation inside a mutation ("Can't use cryptographic randomness"), so t
 sealed in the HTTP action; three fix turns were spent on it first. AI used: $0.81. **Not run:** version 2 (KMS): it needs the Google Cloud KMS key and its service account
 (section 11, item 9).
 
+**Milestone 6, what ran (12 Nov 2026):** `cloud/convex/billing.ts` and `cloud/convex/stripe.ts`.
+Sending (or making an app) opens a **change** after the credit gate (the high end of its estimate;
+the first app asks for 3); the box taking the message starts it; every agent turn's usage
+(`usage` events: model, effort, orchestrator or helper and level) is priced at that model's list
+price and spent at once from the grants closest to expiry (into the half-credit overdraft at most:
+past it the change is stopped, the runner gets a cancel and the chat says "Stopped: you are out of
+credits"); when the runner goes idle the change gets its machine time and is rounded up to a tenth.
+The first app stops taking credits at 3 (the rest is an `adjust` row on us). A cloud chat shows
+"Used 1.1 credits (est. 1)" under each message and never tokens (`ChatItem.cost`; Convex strips
+`usage`). Own key plan: the box gets none of our key's proxy placeholders, the runner receives the
+person's key sealed to a one-time key and serves the agent through a forwarder on 127.0.0.1, the AI
+costs no credits and machine time counts toward 30 hours, then half a credit an hour. Grants: free
+(milestone 1), plan (`invoice.paid`, one month of rollover; a yearly plan's other months from an
+hourly job), extra (`checkout.session.completed`, 12 months), a daily expiry job, and a debt from
+the overdraft paid by the next grant. Estimates: this app's last changes (three or more), else
+everyone's 25th, 50th and 75th percentiles per change kind from a daily job (a `meta` row, not the
+aggregate component: one query a day is enough at this size), else section 7's defaults. Stripe:
+Checkout for plans (monthly or yearly, prices from `config.ts`) and extra credit, opened from "Your
+plan", back through `/billing/done`; the webhook checks Stripe's signature and handles
+`checkout.session.completed`, `invoice.paid`, `invoice.payment_failed` and subscription updates;
+only a `sk_test_` key is accepted. Upgrades and downgrades go through Stripe's own proration; the
+pro rata grant on upgrade is not built. Proven: 9 new tests (`cloud/tests/billing.test.ts`, Stripe
+as a fake with real signatures), and live from the phone (`C:/aa/e2e/cloud-build/m6/`): "show a
+Well done line" on Water Sips was metered at **$0.355 of AI** (orchestrator, Opus 5.5 high, $0.196;
+one `simple` helper, Sonnet 5.5 high, $0.158) **and 294 s of machine, 1.83 credits against an
+estimate of 1**; the chat said "Used 1.8 credits (est. 1)"; with 1.2 credits left the next change was
+refused with "This change needs about 1.5 credits and you have 1.2". **So section 7's "simple change
+about 1 credit" is low**: the orchestrator alone costs about $0.20 a change, so a simple change
+through a helper is nearer 1.8 credits at the $0.20 basis; the daily medians job takes over the
+estimates as changes pile up. **Not run:** a real Stripe test payment (it needs the Stripe test
+key, section 11 item 8, and the webhook's signing secret).
+
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account
 sheet and one grid (+1.5), the PC link (+1, which circles and web apps then reuse), moving apps

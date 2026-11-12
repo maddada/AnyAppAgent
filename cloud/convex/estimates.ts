@@ -41,16 +41,30 @@ function estimate(sorted: number[], fallback: { low: number; mid: number; high: 
   return { millicredits: 0, low: 0, high: 0, basis: e.basis, ownKeyCents: Math.max(1, Math.round((e.millicredits * CREDIT_COST_MICROS) / 1000 / 10_000)) };
 }
 
-export const forApp = query({
-  args: { appId: v.string() },
-  handler: async (ctx, { appId }) => {
-    const user = await requireUser(ctx);
-    const app: Doc<'apps'> = await ownApp(ctx, user._id, appId);
+/** Everyone's medians (a daily job writes them to meta "medians"): the basis for a new app's estimate. */
+async function everyone(ctx: QueryCtx): Promise<{ newApp?: number[]; change?: number[] } | null> {
+  const row = await ctx.db.query('meta').withIndex('by_key', (q) => q.eq('key', 'medians')).first();
+  return (row?.value as { newApp?: number[]; change?: number[] }) ?? null;
+}
+
+function fromEveryone(q: number[] | undefined, ownKey: boolean): CreditEstimate | null {
+  if (!q || q.length !== 3) return null;
+  const e: CreditEstimate = { low: tenth(q[0]!), millicredits: tenth(q[1]!), high: tenth(q[2]!), basis: 'everyone' };
+  return ownKey ? { millicredits: 0, low: 0, high: 0, basis: 'everyone', ownKeyCents: Math.max(1, Math.round((e.millicredits * CREDIT_COST_MICROS) / 1000 / 10_000)) } : e;
+}
+
+/** The estimates for one app (the message box, a plan card, the app's month), for queries and the credit gate. */
+export async function estimateFor(ctx: QueryCtx, user: Doc<'users'>, app: Doc<'apps'>) {
+  {
     const sub = await subscriptionOf(ctx, user._id);
     const ownKey = sub?.plan === 'ownKey';
     const past = await pastChanges(ctx, app._id);
     const firstApp = !(sub?.firstAppDone ?? false) && app.buildHigh === 0;
-    const next = estimate(past, app.buildHigh === 0 ? DEFAULTS.newApp : DEFAULTS.small, ownKey);
+    const all = await everyone(ctx);
+    const next =
+      past.length >= 3
+        ? estimate(past, DEFAULTS.small, ownKey)
+        : (fromEveryone(app.buildHigh === 0 ? all?.newApp : all?.change, ownKey) ?? estimate([], app.buildHigh === 0 ? DEFAULTS.newApp : DEFAULTS.small, ownKey));
     // The first new app uses at most 3 credits (section 2).
     if (firstApp && !ownKey) Object.assign(next, { millicredits: Math.min(next.millicredits, FIRST_APP_CAP_MILLICREDITS), low: Math.min(next.low, FIRST_APP_CAP_MILLICREDITS), high: Math.min(next.high, FIRST_APP_CAP_MILLICREDITS) });
     // A plan card stands for a bigger change: across areas, or a new app.
@@ -63,5 +77,14 @@ export const forApp = query({
     const used = recent.filter((c) => c.startedAt >= monthStart).reduce((n, c) => n + c.actual.millicredits, 0);
     const pace = recent.reduce((n, c) => n + c.actual.millicredits, 0);
     return { next, plan, month: { usedMillicredits: tenth(used), paceMillicredits: tenth(pace), changes: recent.length }, firstApp };
+  }
+}
+
+export const forApp = query({
+  args: { appId: v.string() },
+  handler: async (ctx, { appId }) => {
+    const user = await requireUser(ctx);
+    const app: Doc<'apps'> = await ownApp(ctx, user._id, appId);
+    return estimateFor(ctx, user, app);
   },
 });

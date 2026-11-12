@@ -12,6 +12,7 @@ import type * as accounts from "../accounts.js";
 import type * as admin from "../admin.js";
 import type * as apps from "../apps.js";
 import type * as auth from "../auth.js";
+import type * as billing from "../billing.js";
 import type * as boxes from "../boxes.js";
 import type * as chat from "../chat.js";
 import type * as config from "../config.js";
@@ -29,6 +30,7 @@ import type * as lib_transport from "../lib/transport.js";
 import type * as pages from "../pages.js";
 import type * as runner from "../runner.js";
 import type * as signing from "../signing.js";
+import type * as stripe from "../stripe.js";
 import type * as todos from "../todos.js";
 import type * as webhooks from "../webhooks.js";
 
@@ -43,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   apps: typeof apps;
   auth: typeof auth;
+  billing: typeof billing;
   boxes: typeof boxes;
   chat: typeof chat;
   config: typeof config;
@@ -60,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   pages: typeof pages;
   runner: typeof runner;
   signing: typeof signing;
+  stripe: typeof stripe;
   todos: typeof todos;
   webhooks: typeof webhooks;
 }>;

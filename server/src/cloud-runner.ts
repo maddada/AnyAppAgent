@@ -266,10 +266,48 @@ export interface RunnerOptions {
   stopped?: () => boolean;
 }
 
+/**
+ * The Own key plan: the person's Anthropic key, held in this process's memory only, added by a
+ * forwarder on 127.0.0.1 to the agent's requests (the agent gets ANTHROPIC_BASE_URL and a dummy
+ * key, and runs as another Unix user, so it cannot read the real one). Proven in the spike.
+ */
+export async function startOwnKeyForwarder(key: string): Promise<{ port: number; close(): void }> {
+  const http = await import("node:http");
+  const https = await import("node:https");
+  const server = http.createServer((req, res) => {
+    const headers: Record<string, string | string[] | undefined> = { ...req.headers, host: "api.anthropic.com", "x-api-key": key };
+    delete headers.authorization;
+    const up = https.request({ host: "api.anthropic.com", port: 443, method: req.method, path: req.url, headers }, (r) => {
+      res.writeHead(r.statusCode ?? 502, r.headers);
+      r.pipe(res);
+    });
+    up.on("error", (e) => {
+      res.writeHead(502, { "content-type": "application/json" });
+      res.end(JSON.stringify({ type: "error", error: { type: "proxy_error", message: e.message } }));
+    });
+    req.pipe(up);
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  const address = server.address();
+  return { port: typeof address === "object" && address ? address.port : 0, close: () => server.close() };
+}
+
 /** Runs until the runner token stops working. */
 export async function runCloudRunner({ link, hello, log, stopped }: RunnerOptions): Promise<void> {
   const config: Config = loadConfig();
   if (!config.cloud) throw new Error("ANYAPP_CLOUD=1 is not set");
+  // The Own key plan: the agent's AI goes through the person's own key (never ours).
+  let forwarder: { port: number; close(): void } | null = null;
+  if (hello.aiMode === "ownAnthropic") {
+    const once = await oneTimeKey();
+    const { box } = await link.post<{ box: Sealed }>("/runner/own-key", { runnerKey: once.publicRaw });
+    const key = new TextDecoder().decode(await openWith(once.key, box, `ownkey:${hello.threadId}`));
+    forwarder = await startOwnKeyForwarder(key);
+    if (existsSync("/opt/kiwi/agent-env")) {
+      writeFileSync("/opt/kiwi/agent-env", `export ANTHROPIC_BASE_URL=http://127.0.0.1:${forwarder.port}\nexport ANTHROPIC_API_KEY=sk-ant-placeholder-not-a-key\n`);
+    }
+    log(`own key: the agent reaches Anthropic through 127.0.0.1:${forwarder.port}`);
+  }
   mkdirSync(config.stateDir, { recursive: true });
   mkdirSync(config.appsDir, { recursive: true });
   const store = new Store(config.stateDir);
@@ -446,11 +484,14 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
           const app = apps.create(c.name, String(item.payload.text ?? ""), c.preset, c.askMore, images, false, { slug: c.slug, packageName: c.packageName });
           localId = app.id;
           writeFileSync(mapFile, JSON.stringify({ localId }));
+          // The person's message is the new app's first chat item: its change is linked to it.
+          const first = apps.messages(localId, 0).find((i) => i.kind === "user");
+          link.emit({ type: "inbox.done", inboxId: item.id, ...(first ? { itemId: first.id } : {}) });
         } else {
           if (!localId) throw new Error("This app is not on its machine yet.");
-          apps.sendMessage(localId, String(item.payload?.text ?? ""), images);
+          const itemId = apps.sendMessage(localId, String(item.payload?.text ?? ""), images);
+          link.emit({ type: "inbox.done", inboxId: item.id, itemId });
         }
-        link.emit({ type: "inbox.done", inboxId: item.id });
         return;
       }
       case "cancel":
@@ -477,6 +518,7 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
   }
 
   await Promise.allSettled(uploads);
+  forwarder?.close();
   http.close();
   await apps.shutdown();
 }

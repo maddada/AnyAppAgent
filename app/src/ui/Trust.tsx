@@ -162,10 +162,22 @@ export function ReminderBanner() {
   );
 }
 
+function costLine(c: NonNullable<ChatItem["cost"]>): string | null {
+  const n = (m: number) => {
+    const x = Math.round(m / 100) / 10;
+    return Number.isInteger(x) ? String(x) : x.toFixed(1);
+  };
+  if (c.ownKey) return c.millicredits > 0 ? `Used ${n(c.millicredits)} credits of machine time` : "On your own Claude key";
+  if (c.running) return c.millicredits > 0 ? `Using credits: ${n(c.millicredits)} so far` : null;
+  const est = c.estimateMillicredits ? ` (est. ${n(c.estimateMillicredits)})` : "";
+  return `Used ${n(c.millicredits)} ${c.millicredits === 1000 ? "credit" : "credits"}${est}`;
+}
+
 /** Under a message from the person: what its work used. */
 export function UsageNote({ item }: { item: ChatItem }) {
   const t = useTheme();
-  const line = usageLine(item.usage);
+  // The cloud shows credits, never tokens (docs/CLOUD.md section 2): "Used 2.2 credits (est. 2)".
+  const line = item.cost ? costLine(item.cost) : usageLine(item.usage);
   if (!line) return null;
   return (
     <View

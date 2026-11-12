@@ -9,11 +9,16 @@ import { auth } from './auth';
 import { callback } from './github';
 import { route as pageRoute, storePage } from './pages';
 import { sealTicket } from './signing';
-import { hmacSha256B64, sha256Hex, unb64 } from './lib/crypto';
+import { done as billingDone, webhook as stripeWebhook } from './stripe';
+import { hmacSha256B64, openSecret, sha256Hex, unb64 } from './lib/crypto';
+import { sealTo } from './lib/transport';
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
 http.route({ path: '/github/callback', method: 'GET', handler: callback });
+// Stripe: the signed webhook, and the page a payment returns to.
+http.route({ path: '/stripe/webhook', method: 'POST', handler: stripeWebhook });
+http.route({ path: '/billing/done', method: 'GET', handler: billingDone });
 // Pages the phone opens (signed ticket in the path, no phone token).
 http.route({ pathPrefix: '/page/', method: 'GET', handler: pageRoute });
 http.route({ pathPrefix: '/page/', method: 'POST', handler: pageRoute });
@@ -83,6 +88,16 @@ runnerRoute('/runner/key', async (ctx, req, r) => {
   const b = await req.json();
   return json(200, await ctx.runMutation(internal.signing.storeKey, { threadId: r.threadId, box: b.box, certSha256: String(b.certSha256) }));
 });
+// The Own key plan: the person's Anthropic key, sealed to the runner's one-time key; the runner
+// keeps it in memory and the agent reaches Anthropic through the runner's local forwarder.
+runnerRoute('/runner/own-key', async (ctx, req, r) => {
+  const b = await req.json();
+  const found = await ctx.runQuery(internal.runner.ownKeyRow, { threadId: r.threadId });
+  if (!found) return json(404, { error: 'no own key' });
+  const key = await openSecret(found.row, found.aad);
+  return json(200, { box: await sealTo(String(b.runnerKey), new TextEncoder().encode(key), `ownkey:${r.threadId}`) });
+});
+
 // Convex's transport public key: a new app's key goes up sealed to it.
 runnerRoute('/runner/transport-key', async () => json(200, { publicRaw: process.env.KEYS_TRANSPORT_PUBLIC ?? '' }));
 runnerRoute('/runner/sign-ticket', async (ctx, req, r) => {
