@@ -131,7 +131,7 @@ card from that record.
 | Speak, notify | `TextToSpeech` on the alarm stream (heard in Do Not Disturb), notification channels, `POST_NOTIFICATIONS` | Notifications: on the card of the first automation that notifies | `speak`, `notify` | First slice |
 | Do Not Disturb | `NotificationManager.setInterruptionFilter(PRIORITY)` with a timed restore alarm; `ACCESS_NOTIFICATION_POLICY` | Card: "Allow" opens the Do Not Disturb access page, one switch | `doNotDisturb.on/off/isOn` | First slice |
 | Bluetooth, Wi-Fi, charging | `ListenerService`: a foreground service of type `connectedDevice` (its Android 14 prerequisite `CHANGE_NETWORK_STATE` is granted without asking) with receivers for `ACTION_POWER_CONNECTED/DISCONNECTED` and Bluetooth `ACTION_ACL_CONNECTED/DISCONNECTED`, and a Wi-Fi `NetworkCallback` (with `FLAG_INCLUDE_LOCATION_INFO` for the name). It runs only while an automation that is on uses one of these triggers (the runtime calls `listen()` in every plan), shows "Listening for ..." with Stop all, restarts after a reboot, and starts the headless runner with `{ event }` | Card: "A small notice while it listens"; Bluetooth asks Nearby devices; a Wi-Fi name asks Location, all the time (Android shows Wi-Fi names only then) | `charging({ plugged? })`, `wifi({ connected?, network? })`, `bluetooth({ connected?, device? })` | M2 (built) |
-| Notifications from other apps | `NotificationListenerService`; side-loaded apps need "Allow restricted settings" in App info first (Android 13+) | Card: a short walkthrough (App info, then the listener switch) | `notificationFrom('WhatsApp', { text? })` trigger | M3 |
+| Notifications from other apps | `NotificationWatcher`, a `NotificationListenerService` Android binds once the person allows notification access. It reports a notification only when an automation that is on watches its app (or any app), never this app's own, ongoing or group-summary ones, the same one again within 5 s is one event, and it starts the headless runner with `{ event: { kind: 'notification', app, package, title, text } }`. The script gets `event.notification`; the run log names the app, never the message | Card: "Notification access" opens that page for this app; its line says what to do when Android answers "Restricted setting" (App info, the three dots, Allow restricted settings) | `notification({ app?, text? })` | M3 (built) |
 | Location (arrive, leave) | `LocationManager.addProximityAlert` (no Play services needed) or the fused geofencing API; `ACCESS_BACKGROUND_LOCATION` ("Allow all the time") | Card | `arrive('Mosque')`, `leave(...)`, places saved in the app | M4 |
 | The app in front | `UsageStatsManager` events (`PACKAGE_USAGE_STATS`, one switch), polled by the listener service only while an automation needs it | Card | `appOpened('YouTube', { forMinutes? })` | M5 |
 | Accessibility | An `AccessibilityService` that reads the window and taps; restricted settings again; Android 16 refuses it during calls | Card, with a plain warning | `screen.find(text)`, `screen.tap(text)`, with a deny-list (password fields, Settings security pages, the package installer, banking) that the safety locks cannot turn off | M6 |
@@ -196,7 +196,7 @@ The first version is all nine powers. In working days, one thread:
 | --- | --- | --- |
 | M1 | First slice (this): the app made through Kiwimake, the fence and runtime, all safety rails and the Advanced toggle, time and prayer times, speak and notify, Do Not Disturb | 2 (done) |
 | M2 | Bluetooth, Wi-Fi and charging triggers: the listener service (always-on notice with Stop all), Nearby devices | 2 (built) |
-| M3 | Notifications from other apps: the listener service, the restricted-settings walkthrough | 1.5 |
+| M3 | Notifications from other apps: the listener service, the restricted-settings walkthrough | 1.5 (built) |
 | M4 | Location arrive and leave: places in the app, proximity alerts, "Allow all the time" walkthrough | 1.5 |
 | M5 | The app in front (usage access) | 1 |
 | M6 | Accessibility: read and tap, the deny-list, the warning card | 2.5 |
@@ -302,3 +302,12 @@ compiled the listener service), installed on the phone, and the automations usin
 arrived as quick update 9; at 07:30 three other threads were driving the shared emulator, so the
 taps were stopped rather than land in their apps. Bluetooth connect and disconnect cannot be shown
 on the emulator (no device to pair): the user's phone with the car is the proof.
+
+## M3: notifications from other apps (2026-11-12)
+
+Built as in the table (`NotificationWatcher.kt`, `notification()` in `triggers.ts`, the need in
+`card.ts`, `event.notification` in `automations/api.d.ts`). The app's AGENTS.md: the notification
+is someone's message, used to decide, never logged, spoken or sent unless the person asked for
+exactly that. It reached the app as one full build (10, 103 s); the first automation using it,
+"Mum wrote" (`notification({ app: 'Shell', text: 'Mum' })`, Shell standing in for WhatsApp on the
+emulator: `adb shell cmd notification post` posts as Shell), was a quick build (11, 7 s).
