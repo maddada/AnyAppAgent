@@ -25,12 +25,16 @@ from credit waits for Anthropic's answer.
 ## 1. The terms question first
 
 **Short version.** Selling tokens through our OpenRouter key while the agent is Claude Code is what
-Anthropic's Claude Code terms forbid by name, unless Anthropic agrees in writing. People bringing
-their own Anthropic API key is allowed in so many words. Selling usage through a different agent
-(not Claude Code) moves us under Anthropic's Commercial Terms and OpenRouter's terms, which allow
-building products for end users but also forbid "reselling" access; whether cost plus 10% on tokens
-counts as reselling is a question for Anthropic or a lawyer. Charging for **machine time** from our
-own credit is not Claude usage, so it is ours to sell.
+Anthropic's Claude Code terms forbid by name ("pay for, resell, or intermediate", so even AI at cost
+or free is out), unless Anthropic agrees otherwise. People bringing their own Anthropic API key is
+allowed in so many words. Our own agent on the Messages API (or Anthropic's Managed Agents) with our
+key is what the Commercial Terms allow ("to power products and services Customer makes available to
+its own customers and end users"); the only open point there is whether pricing the tokens as cost
+plus 10% reads as "resell the Services", a question for Anthropic or a lawyer. An agent on the Claude
+Agent SDK with our key sits in between: the SDK pages invite exactly that (end-user products, API key
+auth, multi-tenant hosting), but the SDK runs the Claude Code binary, so the hosted-Claude-Code
+condition could be read to cover it. Charging for **machine time** from our own credit is not Claude
+usage, so it is ours to sell. (Texts rechecked on the live pages on 12 Nov 2026, below.)
 
 ### What the texts say (verbatim)
 
@@ -40,6 +44,11 @@ Claude Code, Legal and compliance (https://code.claude.com/docs/en/legal-and-com
 > "Unless we've mutually agreed otherwise, preinstalling or running Claude Code in your products or
 > services (e.g. in hosted sandboxes or other agent infrastructure) requires agreeing to our
 > Commercial Terms of Service and complying with the conditions below:"
+>
+> "**The Claude Code binary must not be modified.** Claude Code must be installed and run as
+> published by Anthropic, and customers may not remove, disable, or restrict any authentication
+> method built into it (including methods that permit signing in with a Claude account or the user's
+> own API key)."
 >
 > "**Customers may not pay for, resell, or intermediate Claude usage on their end users' behalf.**
 > Each end user must authenticate with their own Anthropic API key, Claude subscription plan
@@ -58,7 +67,10 @@ Same page, "Authentication and credential use":
 > "This does not restrict how customers provision and manage their own API keys or third-party
 > inference provider credentials (...) for use by the customer's own authorized users, provided the
 > resulting usage is billed to the key owner under their agreement with Anthropic (or the
-> applicable provider) and is not resold or intermediated as described above."
+> applicable provider) and is not resold or intermediated as described above. Nor does it prevent an
+> end user from signing in to the unmodified Claude Code binary with their own Claude subscription,
+> including where a platform hosts Claude Code as described under *Can customers offer Claude Code
+> in their products?* above."
 >
 > "Anthropic reserves the right to take measures to enforce these restrictions and may do so
 > without prior notice."
@@ -68,6 +80,20 @@ Claude Agent SDK overview (https://code.claude.com/docs/en/agent-sdk/overview):
 > "Use of the Claude Agent SDK is governed by Anthropic's Commercial Terms of Service, including when
 > you use it to power products and services that you make available to your own customers and end
 > users"
+>
+> "Unless previously approved, Anthropic does not allow third party developers to offer claude.ai
+> login or rate limits for their products, including agents built on the Claude Agent SDK. Use the
+> API key authentication methods described in the Quickstart instead."
+
+That note restricts **claude.ai login and plan rate limits only**; it points developers to API keys.
+The same page describes the SDK as "A library that runs the Claude Code binary", and its branding
+rules forbid calling the product "Claude Code". Hosting the Agent SDK
+(https://code.claude.com/docs/en/agent-sdk/hosting) is written for products serving many users on the
+developer's key: "the subprocess reads `ANTHROPIC_API_KEY` from its environment. Supply it from your
+secret manager", with a "Multi-tenant isolation" section and examples such as "a site builder that
+hosts a per-user editable site". It also points to Managed Agents
+(https://platform.claude.com/docs/en/managed-agents/overview), where "Anthropic hosts the agent loop",
+on our own API key, as the alternative to self-hosting.
 
 Anthropic Commercial Terms (https://www.anthropic.com/legal/commercial-terms, effective 17 Jun 2025):
 
@@ -91,17 +117,27 @@ allowed, 5.1 "the Service enables you, your Authorized Users, and your customers
 incorporate the Service into your own products and services) access to Models"; and 5.1 "you agree,
 and will ensure that your Authorized Users and customers agree, to comply with the applicable terms
 for each Model ("Model Terms")". OpenRouter lists Anthropic's Commercial Terms as Anthropic's Model
-Terms.
+Terms (its providers API gives `"terms_of_service_url":"https://www.anthropic.com/legal/commercial-terms"`
+for Anthropic), so Anthropic's rules reach us through OpenRouter too; 5.5 makes us "solely
+responsible for any violation by yourself, your Authorized Users, and your customers".
+
+What others do (12 Nov 2026): Replit, "You're billed at the provider's public API rate, deducted from
+your Replit credits" (https://docs.replit.com/billing); Cursor bills third-party models such as
+Claude at API list price from its plans' credit; Cline's and Kilo Code's own credits charge Claude at
+provider cost with no token markup (Kilo adds a 5% fee on buying credit). These are their own agents,
+not Claude Code, and none of them was found adding a markup on the tokens themselves. The hosted
+Claude Code services found (Murmell, Droneship) have users bring their own key or plan. GitHub's
+Claude agent in Agent HQ is paid from Copilot requests, under a partnership announced with Anthropic.
 
 ### What that means for each way of paying for AI
 
 | Way | Agent | What the texts say | Needs whose answer |
 | --- | ----- | ------------------ | ------------------ |
-| **A. Our OpenRouter key, AI paid from credit** | Claude Code | "may not pay for, resell, or intermediate". Per-person OpenRouter keys made under our account are still our account and our bill. OpenRouter is also not in the listed 3P providers. Pointing Claude Code at OpenRouter with `ANTHROPIC_BASE_URL` works technically (OpenRouter's own guide) but does not change who pays. | **Anthropic's written agreement** ("Unless we've mutually agreed otherwise"). Asked (section 12). |
+| **A. Our OpenRouter key, AI paid from credit** | Claude Code | "may not pay for, resell, or intermediate". Per-person OpenRouter keys made under our account are still our account and our bill. OpenRouter is also not in the listed 3P providers. Pointing Claude Code at OpenRouter with `ANTHROPIC_BASE_URL` works technically (OpenRouter's own guide) but does not change who pays. | **An agreement with Anthropic** ("Unless we've mutually agreed otherwise"; the text does not say written, but any such deal will be). Asked (section 12). |
 | **B. The person's own Anthropic API key** | Claude Code | Named as allowed: "their own Anthropic API key". | None. **The first version.** Machines are still paid from credit. |
 | **C. The person's own OpenRouter key** | Claude Code | Billed to them under their own OpenRouter agreement, but OpenRouter is not one of the three named 3P providers. | Anthropic: is OpenRouter an accepted "3P inference provider credential"? Asked. |
-| **D. Our credit, a different agent** (an open agent loop over the API, for example OpenCode, which speaks ACP) | Not Claude Code | The Claude Code conditions do not apply. Commercial Terms A.1 allows powering products for end users; D.4 forbids reselling "except as expressly approved"; OpenRouter forbids "reselling API access to Models" but allows incorporating it into our product. | Decided only if Anthropic says no to A (Q2). |
-| **E. The Claude Agent SDK with our key** | Agent SDK (it runs Claude Code underneath; our ACP adapter `claude-agent-acp` is built on it) | The SDK page puts it under the Commercial Terms for end-user products, but the legal page names "products or services that interact with Claude's capabilities, including those using the Agent SDK" in the same breath. It is not a clean way around the Claude Code condition. | Anthropic. Treated like A. Asked. |
+| **D. Our credit, a different agent** (an open agent loop over the API, for example OpenCode, which speaks ACP) | Not Claude Code | Allowed as written: the Claude Code conditions do not apply, and Commercial Terms A.1 allows powering products for end users. Open point: D.4 forbids "resell the Services except as expressly approved", and OpenRouter forbids "reselling API access to Models" but allows incorporating it into our product. Selling an app-building agent is a product; listing "Claude tokens at cost plus 10%" looks more like resale (a reading, not settled). Anthropic's Managed Agents on our key is the same case. | Only the markup question, for Anthropic or a lawyer. Decided only if Anthropic says no to A (Q2). |
+| **E. The Claude Agent SDK with our key** | Agent SDK (it runs Claude Code underneath; our ACP adapter `claude-agent-acp` is built on it) | Unclear, leaning allowed. For: the SDK page puts it under the Commercial Terms "including when you use it to power products and services that you make available to your own customers and end users", its only restriction is on claude.ai login and plan rate limits, the legal page tells SDK developers to "use API key authentication", and the hosting guide is written for multi-tenant products on our key. Against: the SDK "runs the Claude Code binary", and the legal page's condition covers "running Claude Code in your products or services (e.g. in hosted sandboxes or other agent infrastructure)". | Anthropic (one line of confirmation). Kept behind the same switch as A until then. Asked. |
 | **F. Claude Pro, Max or Ultra sign-in** | Claude Code | Allowed only as the person signing in to the unmodified binary through Anthropic's own flow; "developers may not collect, store, or intermediate Claude.ai credentials or session tokens". Keeping a sign-in alive across boxes looks like storing. | Anthropic. Out of the first version. Asked. |
 
 ### "The $200 Claude plan has $200 free"
