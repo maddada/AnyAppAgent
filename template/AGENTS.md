@@ -1,7 +1,7 @@
 # Working on this app
 
 You are changing an Android app for a non-technical person who uses it on their phone. They tell
-you what they want in plain words; they never see the code. When your turn ends, AnyAppAgent
+you what they want in plain words; they never see the code. When your turn ends, Kiwimake
 builds a signed **release** APK from this folder (the JavaScript is embedded, there is no dev
 server) and installs it over the version on their phone. If the build fails, the error comes back
 to you as your next prompt. **Keep the app building, and check your work before you finish.**
@@ -22,11 +22,11 @@ src/components/          Screen (safe area + scroll), Card, Button: reuse them
 src/lib/storage.ts       persistent JSON storage + usePersistentState hook
 src/lib/notifications.ts notification permission, notify now, exact scheduled reminders
 src/lib/alarms.ts        exact alarms with sound + spoken text, work while the app is closed
-src/lib/ai.ts            AI (chat, streaming, tools, agents) through AnyAppAgent's key
+src/lib/ai.ts            AI (chat, streaming, tools, agents) through Kiwimake's key
 src/lib/diary.ts         the app's diary: short private notes of what the app did (see "The diary")
-src/lib/crash.ts         crash catcher: crashes reach AnyAppAgent, which offers a fix (see "Crashes")
+src/lib/crash.ts         crash catcher: crashes reach Kiwimake, which offers a fix (see "Crashes")
 src/components/CrashBoundary.tsx  "Something went wrong" screen instead of a blank one (leave it)
-src/components/AiSetupNotice.tsx  the "AI is not set up" card with a button to AnyAppAgent
+src/components/AiSetupNotice.tsx  the "AI is not set up" card with a button to Kiwimake
 src/theme.ts             colours (light + dark), spacing, radius, font sizes
 assets/icon.png          THE launcher icon (1024x1024 PNG); also the splash and starter image
 assets/sounds/           sound files for alarms and in-app playback (adhan.mp3, beep.wav, …)
@@ -271,11 +271,11 @@ DateTimePickerAndroid.open({
 });
 ```
 
-### AI: chat, streaming, tools and agents (Claude or OpenRouter, through AnyAppAgent)
+### AI: chat, streaming, tools and agents (Claude or OpenRouter, through Kiwimake)
 
 Use this whenever the person asks for anything AI: a chat, summaries, smart suggestions, reading a
-photo, an assistant that does things in the app. The person adds their AI key once in AnyAppAgent's
-Settings; this app never sees the key. AnyAppAgent sends the requests, shows usage per app and can
+photo, an assistant that does things in the app. The person adds their AI key once in Kiwimake's
+Settings; this app never sees the key. Kiwimake sends the requests, shows usage per app and can
 switch AI off for this app. Nothing to install or declare.
 
 ```tsx
@@ -323,11 +323,11 @@ try { await ask('Hi'); } catch (e) {
 
 - Always handle "not ready": show `<AiSetupNotice status={status} />` (or `code={err.code}` after an
   `AiError` with `needsSetup`) where the AI feature would be, and keep the rest of the app working
-  without AI. Its button opens AnyAppAgent's settings. Never show a key field in this app.
+  without AI. Its button opens Kiwimake's settings. Never show a key field in this app.
 - Stream long answers with `onText`; pass `signal` (an `AbortController`'s) to let the person stop.
 - Keep tools small and safe: the AI decides when to call them, so never give it a tool that deletes
   or spends without the person confirming in the UI.
-- Limits set by AnyAppAgent: about 30 AI calls a minute and 3 at once per app (`AiError` code
+- Limits set by Kiwimake: about 30 AI calls a minute and 3 at once per app (`AiError` code
   `limit`), answers up to `maxTokens` (default 8192). An agent step is one call.
 - Images: to let the person pick or take a photo, install `expo-image-picker`
   (`npx expo install expo-image-picker`, then `launchImageLibraryAsync({ base64: true, quality: 0.6 })`)
@@ -336,7 +336,7 @@ try { await ask('Hi'); } catch (e) {
 
 ### Feedback: shake and point at it (built in, keep it)
 
-Every app made with AnyAppAgent has this, including copies the person shares with other people,
+Every app made with Kiwimake has this, including copies the person shares with other people,
 so anyone can tell them what to change. It needs no code and works on its own:
 
 - Shaking the phone (a firm shake, back and forth a few times; walking or a bump never does it)
@@ -345,7 +345,7 @@ so anyone can tell them what to change. It needs no code and works on its own:
   one. Below is a notes box; each new arrow adds its `#n ` line there to fill in.
 - Save makes one picture (the screenshot, the arrows and the notes), copies it to the clipboard
   and keeps it in the gallery's "Feedback" album, says "Copied and saved" and closes. The person
-  pastes it into AnyAppAgent's chat, WhatsApp or anywhere.
+  pastes it into Kiwimake's chat, WhatsApp or anywhere.
 
 Never remove it, never add options to it, and never draw your own feedback screen. When a
 feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbered arrows on the
@@ -360,27 +360,27 @@ It does not open while a full-screen alarm shows.
 
 ### Change this app (built in, keep it)
 
-Every app made with AnyAppAgent has a **Settings screen with a "This app" group** whose first row
+Every app made with Kiwimake has a **Settings screen with a "This app" group** whose first row
 is **Change this app** (`src/components/ChangeThisApp.tsx`: `ThisAppSection`, or `ChangeThisAppRow`
 alone in a settings list of your own design; the starter screen is `src/screens/SettingsScreen.tsx`).
-The row opens AnyAppAgent at this app: the person who made it lands in this app's chat, anyone else
-can suggest a change or make their own version; without AnyAppAgent it shows an explanation drawn
-by the app. It hides itself on other people's phones when the owner turned it off in AnyAppAgent.
+The row opens Kiwimake at this app: the person who made it lands in this app's chat, anyone else
+can suggest a change or make their own version; without Kiwimake it shows an explanation drawn
+by the app. It hides itself on other people's phones when the owner turned it off in Kiwimake.
 
 - **Never remove the row, the Settings screen, or a way to reach Settings** from the main screen
   (a "Settings" button, a gear, or a tab). When you redesign the app or replace the starter
   screens, keep `ThisAppSection` (or `ChangeThisAppRow`) last in the app's settings and restyle
   nothing else about it.
 - The native part is `com.anyapp.updates.ChangeThisApp` and `ChangeSheet` in `modules/updates`
-  (the same code in every AnyAppAgent app): never edit them.
+  (the same code in every Kiwimake app): never edit them.
 
 ### Updates for people the app is shared with (built in, nothing to do)
 
-When the person shares the app from AnyAppAgent, the PC builds it with its update feed and the
+When the person shares the app from Kiwimake, the PC builds it with its update feed and the
 app updates itself on other people's phones: it checks when it opens and once a day, shows a
 notification when a new version is published, and a tap downloads, checks and installs it. On the
-person's own phone AnyAppAgent installs every build, so the app stays quiet. This lives in
-`modules/updates` (Kotlin, the same code as every AnyAppAgent app): never edit or remove it, and
+person's own phone Kiwimake installs every build, so the app stays quiet. This lives in
+`modules/updates` (Kotlin, the same code as every Kiwimake app): never edit or remove it, and
 never add another updater. Only if the person asks for an update line or a "Check for updates"
 button, use `modules/updates/index.ts`:
 
@@ -397,7 +397,7 @@ if (updatesOn()) {
 
 Use these when the person asks for a home screen widget, a "button in the pull-down menu", a
 long-press shortcut on the icon, or for the app to appear when they share something. Everything is
-ready in `modules/abilities` (the same Kotlin code as every AnyAppAgent app): you only declare
+ready in `modules/abilities` (the same Kotlin code as every Kiwimake app): you only declare
 what the app offers in `app.json` and write JavaScript. Add one plugin entry (all keys optional):
 
 ```json
@@ -571,7 +571,7 @@ diary('Could not load the weather: offline');
 ### Crashes
 
 Crashes are caught by themselves (`src/lib/crash.ts`, `modules/diary`, `src/components/CrashBoundary.tsx`,
-set up in `src/App.tsx`: leave that in place). AnyAppAgent shows the person "<app> crashed. Fix
+set up in `src/App.tsx`: leave that in place). Kiwimake shows the person "<app> crashed. Fix
 it?" and a tap sends you the report (message, stack, screen, version, the latest diary notes) as
 "Fix the crash". The stack comes from the release bundle, so match it to the code by the error
 message and the screen. An error you catch but want to hear about: `reportError(error)` from
@@ -597,7 +597,7 @@ After your turn the PC looks at what changed and picks how the new version reach
 
 - **Quick update (seconds, no install):** only the JavaScript changed: anything in `src/`, the
   TypeScript in `modules/*/index.ts`, texts, colours, layout, logic, new screens. The PC bundles it
-  without Gradle and sends it over the air through AnyAppAgent. The app shows a small "Version N is
+  without Gradle and sends it over the air through Kiwimake. The app shows a small "Version N is
   ready" card with **Reload**, which starts the new code in place in about a second. If the app is
   closed, it simply opens with the new version next time.
 - **New install (a few minutes):** anything native changed: `app.json` (name, permissions,
@@ -605,7 +605,7 @@ After your turn the PC looks at what changed and picks how the new version reach
   pictures, sounds, fonts), native files in `modules/` (Kotlin, manifests, `app.plugin.js`). The PC
   runs the full build; the same card appears and Reload installs the new APK and opens the app again.
 - A quick update that crashes when it starts is rolled back on the phone by itself (to the last
-  version that worked) and AnyAppAgent is told.
+  version that worked) and Kiwimake is told.
 
 So: prefer a solution in code when it is as good (an icon from `@expo/vector-icons` instead of a
 new picture, a library already installed instead of a new one), and say in your last sentence which

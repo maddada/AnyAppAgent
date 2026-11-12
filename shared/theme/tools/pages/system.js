@@ -38,7 +38,7 @@
     name: "Daily Habits",
     body: "Every prayer will get two reminders, and a screen where you set both times.",
     prose: "Done. Reminders now come 15 and 5 minutes before each prayer.",
-    lede: "AnyAppAgent can keep a private copy of every app you make.",
+    lede: "Kiwimake can keep a private copy of every app you make.",
     callout: "Connected to your PC",
     label: "Update ready",
     row: "Run the tests, 14 passed",
@@ -96,7 +96,7 @@
       <li class="step is-current"><span class="step-n">3</span><span class="step-l">A safe copy of your apps<span class="step-tag">Optional</span></span></li>
       <li class="step is-todo"><span class="step-n">4</span><span class="step-l">Connect your phone</span></li>
     </ol></div>`;
-  const qr = `<div class="panel qr-card qr-standalone"><div class="panel-label">Add another phone</div><div class="qr-wrap">${S.qr(136)}</div><p>Open AnyAppAgent on the phone and scan this code.</p><button class="btn btn-quiet btn-sm">Use a code instead</button></div>`;
+  const qr = `<div class="panel qr-card qr-standalone"><div class="panel-label">Add another phone</div><div class="qr-wrap">${S.qr(136)}</div><p>Open Kiwimake on the phone and scan this code.</p><button class="btn btn-quiet btn-sm">Use a code instead</button></div>`;
   const progress = `<div class="col" style="width:100%;max-width:358px">
     <div class="note">Determinate</div><div class="progress" style="width:100%"><span style="width:58%"></span></div>
     <div class="note">Indeterminate (sweeps)</div><div class="progress is-indeterminate" style="width:100%"><span></span></div>
@@ -153,7 +153,7 @@
     <div class="adapt" style="border-radius:50%"><img src="mark/android/adaptive-background.svg" alt=""><img src="mark/android/adaptive-foreground.svg" alt=""></div>
     <div class="adapt" style="border-radius:32%"><img src="mark/android/adaptive-background.svg" alt=""><img src="mark/android/adaptive-foreground.svg" alt=""></div>
     <div class="adapt adapt-mono" style="border-radius:50%;background:var(--aa-ready-soft)"><img src="mark/android/adaptive-monochrome.svg" alt="" style="opacity:.72"></div>
-    <img src="mark/${m === "light" ? "lockup.svg" : "lockup-dark.svg"}" height="40" alt="AnyAppAgent">
+    <img src="mark/${m === "light" ? "lockup.svg" : "lockup-dark.svg"}" height="40" alt="Kiwimake">
   </div>`;
 
   const sections = `

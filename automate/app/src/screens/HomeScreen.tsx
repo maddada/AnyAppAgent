@@ -1,4 +1,4 @@
-// Appwin Automate's first screen: the automations, Stop all, today's prayer times in Ajman, and
+// Automate's first screen: the automations, Stop all, today's prayer times in Ajman, and
 // the way to make a new automation (Change this app: the one place to type).
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { openChange } from '../../modules/updates';
+import { APP_NAME } from '@/automate/brand';
 import { ajmanClock, ajmanDay, PRAYER_KEYS, PRAYER_LABEL, prayerTimesFor } from '@/automate/prayer';
 import { addLog, getLog } from '@/automate/store';
 import { cancelPretend, resumeEverything, statusOf, stopEverything, sync, useAutomate } from '@/automate/runtime';
@@ -44,7 +45,7 @@ export function HomeScreen() {
     <Screen>
       <View style={styles.top}>
         <View style={styles.grow}>
-          <Text style={[type.label, { color: colors.accent }]}>APPWIN AUTOMATE</Text>
+          <Text style={[type.label, { color: colors.accent }]}>{APP_NAME.toUpperCase()}</Text>
           <Text style={[type.title, { color: colors.text }]}>Automations</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Settings" testID="open-settings" onPress={() => navigation.navigate('Settings')} hitSlop={12} style={styles.iconButton}>

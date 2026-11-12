@@ -214,7 +214,7 @@ export class EasyConnect {
       throw new PairingRefused(401, "This Easy Connect code is used up or too old. Show a new QR code on your PC and scan it again.");
     }
     const clientKey = typeof body.clientKey === "string" ? body.clientKey.trim() : "";
-    if (!CLIENT_KEY_PATTERN.test(clientKey)) throw new PairingRefused(400, "The phone did not send its Easy Connect key. Update the AnyAppAgent app.");
+    if (!CLIENT_KEY_PATTERN.test(clientKey)) throw new PairingRefused(400, "The phone did not send its Easy Connect key. Update the Kiwimake app.");
     live!.used = true;
     const deviceName = typeof body.deviceName === "string" ? body.deviceName : "Phone";
     const { token } = this.auth.issue(deviceName, "easy-connect", clientKey);

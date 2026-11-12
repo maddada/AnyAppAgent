@@ -119,7 +119,7 @@ function Forward({ step, s, onNext, onFinish }: { step: StepId; s: Snapshot; onN
     case "welcome":
       return primary("Get started", onNext);
     case "done":
-      return primary("Open AnyAppAgent", onFinish);
+      return primary("Open Kiwimake", onFinish);
     case "phone-get":
       return primary("It's on my phone", onNext);
     case "github":
@@ -200,7 +200,7 @@ function Welcome() {
     <>
       <div className="eyebrow">Welcome</div>
       <h1 className="hero">Make your own Android apps by describing them</h1>
-      <p className="lede">AnyAppAgent turns your ideas into real apps. You tell it what you want, on your phone or right here, and this PC does the rest.</p>
+      <p className="lede">Kiwimake turns your ideas into real apps. You tell it what you want, on your phone or right here, and this PC does the rest.</p>
       <div className="loop">
         {loop.map(([of, title, line], i) => (
           <Fragment key={title}>
@@ -244,7 +244,7 @@ function ClaudeStep({ s }: { s: Snapshot }) {
       <Head
         eyebrow={stepOf("claude")}
         title="Claude writes your apps"
-        lede="Claude is an AI from Anthropic. AnyAppAgent asks it to write each app for you. It needs a paid Claude plan (Pro or Max), signed in once on this PC."
+        lede="Claude is an AI from Anthropic. Kiwimake asks it to write each app for you. It needs a paid Claude plan (Pro or Max), signed in once on this PC."
       />
       <How
         items={[
@@ -340,13 +340,13 @@ function ToolsStep({ s }: { s: Snapshot }) {
       <Head
         eyebrow={stepOf("tools")}
         title="Tools for building apps"
-        lede="Turning code into an Android app needs a few free tools from Google, Microsoft and others. AnyAppAgent gets them and sets them up for you, in its own folder."
+        lede="Turning code into an Android app needs a few free tools from Google, Microsoft and others. Kiwimake gets them and sets them up for you, in its own folder."
       />
       <How
         items={[
           ["One download, about 2.5 GB", "It takes a few minutes on a good connection."],
           ["Nothing else on your PC changes", "Tools you already have are used as they are."],
-          ["Licences accepted for you", "AnyAppAgent accepts the Android SDK licence on your behalf."],
+          ["Licences accepted for you", "Kiwimake accepts the Android SDK licence on your behalf."],
         ]}
       />
       <CheckCard
@@ -444,7 +444,7 @@ function GitHubStep({ s }: { s: Snapshot }) {
       <Head
         eyebrow={`${stepOf("github")}, optional`}
         title="A safe copy of your apps"
-        lede="AnyAppAgent can keep a private copy of every app you make on GitHub, a free service for storing apps. If this PC ever breaks, nothing is lost."
+        lede="Kiwimake can keep a private copy of every app you make on GitHub, a free service for storing apps. If this PC ever breaks, nothing is lost."
       />
       {/* While a code shows, the list gives way so the code and its instructions stay in view. */}
       {!showCode && <How
@@ -478,7 +478,7 @@ function PhoneGetStep() {
   }, []);
   return (
     <>
-      <Head eyebrow={stepOf("phone-get")} title="Put AnyAppAgent on your phone" lede="Your phone needs the AnyAppAgent app. It downloads from AnyAppAgent's page on GitHub, not from the Play Store." />
+      <Head eyebrow={stepOf("phone-get")} title="Put Kiwimake on your phone" lede="Your phone needs the Kiwimake app. It downloads from Kiwimake's page on GitHub, not from the Play Store." />
       <div className="code-cta">
         <button className="btn btn-primary" onClick={() => setShow(true)} data-testid="show-download-code">
           <Icon of={Download} size="button" /> Show download code
@@ -510,7 +510,7 @@ function PhonePairStep({ s, onPaired }: { s: Snapshot; onPaired: () => void }) {
   const name = s.admin?.devices.at(-1)?.name;
   return (
     <>
-      <Head eyebrow={stepOf("phone-pair")} title="Connect your phone" lede="Show the pairing code here, then scan it with AnyAppAgent on your phone. Your phone and this PC then stay connected." />
+      <Head eyebrow={stepOf("phone-pair")} title="Connect your phone" lede="Show the pairing code here, then scan it with Kiwimake on your phone. Your phone and this PC then stay connected." />
       {justPaired ? (
         <CheckCard state="ready" icon={Smartphone} title={name ? `${name} is connected` : "Your phone is connected"} status="Your phone and this PC can make apps together now." />
       ) : (
@@ -555,13 +555,13 @@ function DoneStep() {
       <p className="lede">Everything on this PC is ready. Start an app on your phone or right here in this window.</p>
       <How
         items={[
-          ["Tap New app and describe it", "In AnyAppAgent on your phone or here, in your own words, like “a shopping list I can share with my family”."],
+          ["Tap Make a kiwi and describe it", "In Kiwimake on your phone or here, in your own words, like “a shopping list I can share with my family”."],
           ["Wait a few minutes", "This PC makes it, and it appears on your phone, ready to open."],
           ["Ask for changes in its chat", "From your phone or from this PC. Each new version goes to your phone by itself."],
         ]}
       />
       <p className="label secondary" style={{ marginTop: "var(--aa-space-2xl)", maxWidth: "var(--aa-size-reading-width)" }}>
-        AnyAppAgent keeps working next to the clock, even when this window is closed. Keep this PC on while it makes apps.
+        Kiwimake keeps working next to the clock, even when this window is closed. Keep this PC on while it makes apps.
       </p>
     </>
   );

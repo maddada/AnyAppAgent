@@ -56,7 +56,7 @@
     return `<div class="phone mk">
 ${statusBar()}
 <div class="home-head">
-  <div class="home-top"><span class="wordmark-sm">${mark("mark-xs")}<span>AnyAppAgent</span></span><button class="icon-btn" aria-label="Settings">${ic("settings", 22)}</button></div>
+  <div class="home-top"><span class="wordmark-sm">${mark("mark-xs")}<span>Kiwimake</span></span><button class="icon-btn" aria-label="Settings">${ic("settings", 22)}</button></div>
   <h1 class="t-display home-title">Your apps</h1>
   <p class="home-sub"><span class="conn-dot"></span>Connected to your PC</p>
 </div>
@@ -129,10 +129,10 @@ ${gesture()}
 
   function deskOnboarding() {
     return `<div class="win mk">
-${winBar("AnyAppAgent setup")}
+${winBar("Kiwimake setup")}
 <div class="win-body onb">
   <aside class="onb-rail">
-    <div class="wordmark">${mark("mark-sm")}<span>AnyAppAgent</span></div>
+    <div class="wordmark">${mark("mark-sm")}<span>Kiwimake</span></div>
     <ol class="steps">
       ${stepItem(1, "Welcome", "done")}
       ${stepItem(2, "Tools for building apps", "done")}
@@ -145,7 +145,7 @@ ${winBar("AnyAppAgent setup")}
     <div class="onb-content">
       <div class="eyebrow">Step 3 of 4, optional</div>
       <h1 class="t-display onb-title">A safe copy of your apps</h1>
-      <p class="lede">AnyAppAgent can keep a private copy of every app you make on GitHub, a free service for storing apps. If this PC ever breaks, nothing is lost.</p>
+      <p class="lede">Kiwimake can keep a private copy of every app you make on GitHub, a free service for storing apps. If this PC ever breaks, nothing is lost.</p>
       <ol class="how">
         <li><span class="how-n">1</span><div><strong>Sign in to GitHub</strong><span>Or make a free account. It takes about a minute.</span></div></li>
         <li><span class="how-n">2</span><div><strong>We make one private copy per app</strong><span>Only you can see them. Nothing is shared.</span></div></li>
@@ -183,10 +183,10 @@ ${winBar("AnyAppAgent setup")}
 
   function deskMain() {
     return `<div class="win mk">
-${winBar("AnyAppAgent")}
+${winBar("Kiwimake")}
 <div class="win-body dm">
   <aside class="dm-side">
-    <div class="wordmark">${mark("mark-sm")}<span>AnyAppAgent</span></div>
+    <div class="wordmark">${mark("mark-sm")}<span>Kiwimake</span></div>
     <nav class="nav">
       <a class="nav-i is-active">${ic("layout-grid", 18)}Apps</a>
       <a class="nav-i">${ic("smartphone", 18)}Phones</a>
@@ -211,7 +211,7 @@ ${winBar("AnyAppAgent")}
       </section></div>
       <aside class="dm-aside">
         <div class="panel"><div class="panel-label">Your phone</div><div class="phone-card">${ic("smartphone", 22)}<div><strong>Pixel 8</strong><span>Connected, seen just now</span></div></div></div>
-        <div class="panel qr-card"><div class="panel-label">Add another phone</div><div class="qr-wrap">${qr(136)}</div><p>Open AnyAppAgent on the phone and scan this code.</p><button class="btn btn-quiet btn-sm">Use a code instead</button></div>
+        <div class="panel qr-card"><div class="panel-label">Add another phone</div><div class="qr-wrap">${qr(136)}</div><p>Open Kiwimake on the phone and scan this code.</p><button class="btn btn-quiet btn-sm">Use a code instead</button></div>
       </aside>
     </div>
   </main>

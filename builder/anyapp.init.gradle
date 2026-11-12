@@ -1,6 +1,6 @@
-// Gradle init script applied by the AnyAppAgent builder (--init-script). It keeps everything about
+// Gradle init script applied by the Kiwimake builder (--init-script). It keeps everything about
 // signing and versioning out of the app's own files:
-//   - signs release builds with the shared AnyAppAgent key (properties passed as
+//   - signs release builds with the shared Kiwimake key (properties passed as
 //     ORG_GRADLE_PROJECT_anyapp* environment variables, never written to disk in the app),
 //   - sets versionCode to the build number (-PanyappVersionCode=<n>),
 //   - with -PanyappUpdateFeed=<url> (and -PanyappUpdateTestingFeed): the shared app's update feeds

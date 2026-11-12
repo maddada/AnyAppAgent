@@ -77,7 +77,7 @@ class AiCall(
         if (usesFallbacks()) c.setRequestProperty("anthropic-beta", "server-side-fallback-2026-07-01")
       } else {
         c.setRequestProperty("authorization", "Bearer $sentKey")
-        c.setRequestProperty("x-title", "AnyAppAgent")
+        c.setRequestProperty("x-title", "Kiwimake")
       }
       val bytes = body.toString().toByteArray(Charsets.UTF_8)
       c.setFixedLengthStreamingMode(bytes.size)
@@ -401,7 +401,7 @@ class AiCall(
       ""
     }.orEmpty().take(500)
     return when (status) {
-      401, 403 -> Failure("bad_key", "The AI key was not accepted. Check it in AnyAppAgent's settings.")
+      401, 403 -> Failure("bad_key", "The AI key was not accepted. Check it in Kiwimake's settings.")
       402 -> Failure("no_credit", "The AI account is out of credit.")
       429 -> Failure("busy", "Too many requests to the AI service right now. Try again in a moment.")
       400, 404, 413, 422 -> Failure("bad_request", msg.ifEmpty { "The AI service did not accept the request." })

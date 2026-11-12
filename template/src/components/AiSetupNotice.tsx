@@ -6,8 +6,8 @@ import { aiProblemText, openAiSetup, type AiStatus } from '@/lib/ai';
 import { type, useColors } from '@/theme';
 
 /**
- * Shown where an AI feature would be when AI cannot be used yet (no key in AnyAppAgent, or AI
- * switched off for this app). Its button opens AnyAppAgent's settings. Renders nothing when AI is
+ * Shown where an AI feature would be when AI cannot be used yet (no key in Kiwimake, or AI
+ * switched off for this app). Its button opens Kiwimake's settings. Renders nothing when AI is
  * ready or the status is still loading. Pair it with useAiStatus():
  *
  *   const { status } = useAiStatus();
@@ -24,7 +24,7 @@ export function AiSetupNotice({ status, code }: { status?: AiStatus | null; code
     <Card>
       <Text style={[type.bodyStrong, { color: colors.text }]}>{title}</Text>
       <Text style={[type.small, styles.line, { color: colors.textMuted }]}>{aiProblemText(reason)}</Text>
-      {canOpen ? <Button title="Open AnyAppAgent" variant="secondary" onPress={() => openAiSetup()} /> : null}
+      {canOpen ? <Button title="Open Kiwimake" variant="secondary" onPress={() => openAiSetup()} /> : null}
     </Card>
   );
 }

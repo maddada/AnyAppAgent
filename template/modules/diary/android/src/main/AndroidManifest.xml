@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
-    <!-- AnyAppAgent asks for the app's diary (its agent on the PC wants to read it). The answer goes
-         only to the app that installed this one (AnyAppAgent), so asking is harmless. -->
+    <!-- Kiwimake asks for the app's diary (its agent on the PC wants to read it). The answer goes
+         only to the app that installed this one (Kiwimake), so asking is harmless. -->
     <receiver
         android:name="expo.modules.anyappdiary.DiaryRequestReceiver"
         android:exported="true">

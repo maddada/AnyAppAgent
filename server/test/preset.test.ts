@@ -82,7 +82,7 @@ describe("app presets", () => {
     expect(PRESETS).toEqual(["react-native", "kotlin", "expo-exact"]);
     const exact = appPlaybook({ name: "T", packageName: "com.anyapp.t", dir: "d", preset: "expo-exact" });
     expect(exact).toContain("bun exact.mjs contract build app.contract --json");
-    expect(exact).toContain("no AI through AnyAppAgent yet");
+    expect(exact).toContain("no AI through Kiwimake yet");
     expect(exact).not.toContain("npm run check");
     expect(checkCommand(undefined)).toBe("npm run check");
     const kotlin = appPlaybook({ name: "T", packageName: "com.anyapp.t", dir: "C:\\aa\\apps\\t", preset: "kotlin" });

@@ -68,7 +68,7 @@ export function releasesReadme(app: Pick<App, "name" | "slug">, owner: string, l
     "",
     `<img src="icon.png" alt="${app.name}" width="96" height="96">`,
     "",
-    "An Android app made with AnyAppAgent.",
+    "An Android app made with Kiwimake.",
     "",
     status,
     "",
@@ -100,7 +100,7 @@ export async function shareApp(app: App, deps: ShareDeps): Promise<{ sharing: Ap
   const full = `${owner}/${releasesRepoName(app.slug)}`;
   const visibility = await wrap("GitHub is not reachable", () => deps.github.visibility(full));
   if (visibility === null) {
-    await wrap("The public releases repository could not be made", () => deps.github.createPublic(full, `${app.name}: installs and updates (made with AnyAppAgent)`));
+    await wrap("The public releases repository could not be made", () => deps.github.createPublic(full, `${app.name}: installs and updates (made with Kiwimake)`));
   } else if (visibility !== "PUBLIC") {
     await wrap("The releases repository could not be made public", () => deps.github.setVisibility(full, "public"));
   }

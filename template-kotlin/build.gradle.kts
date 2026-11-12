@@ -5,5 +5,5 @@ plugins {
   id("org.jetbrains.kotlin.plugin.compose") version "2.2.10" apply false
 }
 
-// The root build/ folder holds AnyAppAgent's APKs and logs; Gradle's own root output goes below it.
+// The root build/ folder holds Kiwimake's APKs and logs; Gradle's own root output goes below it.
 layout.buildDirectory.set(file("build/gradle"))

@@ -57,7 +57,7 @@ export default function Connect() {
         await pairWithEasyConnect(text, setStep);
       } else {
         const found = parsePairingQr(text);
-        if (!found) throw new Error("That isn't an AnyAppAgent code. On your PC, choose Connect a phone and use the code it shows.");
+        if (!found) throw new Error("That isn't a Kiwimake code. On your PC, choose Connect a phone and use the code it shows.");
         setAddress(found.address);
         setCode(found.code);
         await pairWith(found.address, found.code, setStep);
@@ -116,7 +116,7 @@ export default function Connect() {
         Connect your PC
       </T>
       <T variant="lede" color="textSecondary" style={{ marginTop: space.md }}>
-        On your PC, open AnyAppAgent and choose Connect a phone. Then scan the code it shows.
+        On your PC, open Kiwimake and choose Connect a phone. Then scan the code it shows.
       </T>
 
       <Button
@@ -319,7 +319,7 @@ function Scanner({ visible, onClose, onCode }: { visible: boolean; onClose: () =
                 done.current = true;
                 onCode(data);
               } else {
-                setHint("That's not the AnyAppAgent code. Scan the one your PC shows.");
+                setHint("That's not the Kiwimake code. Scan the one your PC shows.");
               }
             }}
           />

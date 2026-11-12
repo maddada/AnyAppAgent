@@ -234,7 +234,7 @@ export function CareSettings({ care }: { care: CareState | null }) {
             : whenText
               ? `Your apps were backed up ${whenText} (${b.apps} ${b.apps === 1 ? "app" : "apps"}).`
               : "Backups are on; the first one is on its way."
-          : "Not backed up. Turn on \"Back up my apps\" in AnyAppAgent's Settings on your PC."}
+          : "Not backed up. Turn on \"Back up my apps\" in Kiwimake's Settings on your PC."}
       </T>
     </View>
   );

@@ -1,4 +1,4 @@
-// The Expo Exact preset (alpha): createApp makes an `exact new` app with AnyAppAgent's files from the
+// The Expo Exact preset (alpha): createApp makes an `exact new` app with Kiwimake's files from the
 // pinned, patched Exact checkout; buildApk builds it with the shared key and versionCode.
 //   node --test builder/test/          (needs Bun 1.4.2 and the Exact checkout beside the apps;
 //                                       skipped without them)
@@ -48,7 +48,7 @@ test('the pin and the Windows patch are in the builder', () => {
   assert.doesNotMatch(patch, /\u2014/);
 });
 
-test('createApp makes an Expo Exact app with AnyAppAgent files', { skip: missing ?? false, timeout: 5 * 60_000 }, async () => {
+test('createApp makes an Expo Exact app with Kiwimake files', { skip: missing ?? false, timeout: 5 * 60_000 }, async () => {
   await createApp({ dir, name: 'Exact Check', slug: 'exact-check', packageName: 'com.anyapp.exactcheck', preset: 'expo-exact' });
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'anyapp.json'), 'utf8')), { preset: 'expo-exact', slug: 'exact-check', package: 'com.anyapp.exactcheck' });
   const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'app.json'), 'utf8'));
@@ -56,7 +56,7 @@ test('createApp makes an Expo Exact app with AnyAppAgent files', { skip: missing
   assert.equal(manifest.app.name, 'Exact Check');
   assert.ok(manifest.host?.android, 'Android is not named in app.json');
   const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
-  assert.match(agents, /^# Working on this app \(AnyAppAgent, Expo Exact alpha\)/);
+  assert.match(agents, /^# Working on this app \(Kiwimake, Expo Exact alpha\)/);
   assert.match(agents, /exact:begin/, "Exact's own block is kept below ours");
   assert.equal(fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
   assert.match(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), /^\/build\/$/m);

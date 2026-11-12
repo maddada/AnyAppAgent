@@ -31,8 +31,8 @@ writeFileSync(
   join(work, "AndroidManifest.xml"),
   `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.anyappagent.testkeyboard">
-  <application android:label="AnyAppAgent test keyboard">
-    <service android:name=".TestKeyboard" android:label="AnyAppAgent test keyboard"
+  <application android:label="Kiwimake test keyboard">
+    <service android:name=".TestKeyboard" android:label="Kiwimake test keyboard"
         android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true">
       <intent-filter><action android:name="android.view.InputMethod"/></intent-filter>
       <meta-data android:name="android.view.im" android:resource="@xml/method"/>

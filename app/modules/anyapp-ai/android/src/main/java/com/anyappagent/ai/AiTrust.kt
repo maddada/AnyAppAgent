@@ -7,13 +7,13 @@ import android.os.Process
 import java.security.MessageDigest
 
 /**
- * Who may use the AI key: apps signed with the same certificate as an app AnyAppAgent installed
+ * Who may use the AI key: apps signed with the same certificate as an app Kiwimake installed
  * itself. Every app the PC makes is signed with the PC's one signing key, so this means "apps
- * made with AnyAppAgent", and nothing else on the phone (another app cannot be signed with that
+ * made with Kiwimake", and nothing else on the phone (another app cannot be signed with that
  * key without the PC's private key).
  *
- * How AnyAppAgent learns the certificate: the first time an app calls, if Android says
- * AnyAppAgent is the app that installed it (install source, recorded by the system and not
+ * How Kiwimake learns the certificate: the first time an app calls, if Android says
+ * Kiwimake is the app that installed it (install source, recorded by the system and not
  * settable by the app), its certificate is remembered. From then on any app with that
  * certificate is allowed, however it was installed (a later update, adb during development).
  * A second PC (another key) is learned the same way.
@@ -54,7 +54,7 @@ object AiTrust {
         return Result.Allowed(pkg)
       }
     }
-    return Result.Refused("not made with AnyAppAgent")
+    return Result.Refused("not made with Kiwimake")
   }
 
   /** SHA-256 of the app's one signing certificate; null if it has several signers or none. */

@@ -1,4 +1,4 @@
-// The AnyAppAgent phone app's own release signing key (docs/RELEASING.md). It lives on this PC
+// The Kiwimake phone app's own release signing key (docs/RELEASING.md). It lives on this PC
 // only, never in Git:
 //
 //   %USERPROFILE%\.anyappagent-release\anyappagent-release.p12      the key (PKCS12)
@@ -7,7 +7,7 @@
 //
 // The folder is readable by the current Windows user only. The backup is AES-256-GCM encrypted
 // with a key derived from the same password by scrypt: copy it somewhere off this PC and keep the
-// password in a password manager, or a lost PC means AnyAppAgent can never update in place again.
+// password in a password manager, or a lost PC means Kiwimake can never update in place again.
 //
 //   node scripts/release-key.mjs create      makes the key, the backup and stores the password (once)
 //   node scripts/release-key.mjs status      where the key is and its certificate SHA-256
@@ -61,7 +61,7 @@ if ($env:ANYAPP_CRED_OP -eq 'write') {
   $bytes = [Text.Encoding]::Unicode.GetBytes($secret)
   $c = New-Object AnyApp.Cred+CREDENTIAL
   $c.Type = 1; $c.TargetName = $target; $c.Persist = 2; $c.UserName = 'release'
-  $c.Comment = 'Password of the AnyAppAgent phone app release key (docs/RELEASING.md)'
+  $c.Comment = 'Password of the Kiwimake phone app release key (docs/RELEASING.md)'
   $c.CredentialBlobSize = $bytes.Length
   $c.CredentialBlob = [Runtime.InteropServices.Marshal]::AllocHGlobal($bytes.Length)
   [Runtime.InteropServices.Marshal]::Copy($bytes, 0, $c.CredentialBlob, $bytes.Length)
@@ -131,7 +131,7 @@ function writeBackup(password) {
 
 function restoreBackup(from, password) {
   const file = JSON.parse(readFileSync(from, "utf8"));
-  if (file.header?.format !== BACKUP_FORMAT) throw new Error("That file is not a backup of the AnyAppAgent phone release key.");
+  if (file.header?.format !== BACKUP_FORMAT) throw new Error("That file is not a backup of the Kiwimake phone release key.");
   const key = crypto.scryptSync(password.normalize("NFC"), Buffer.from(file.salt, "base64"), 32, SCRYPT);
   const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(file.iv, "base64"));
   decipher.setAAD(Buffer.from(JSON.stringify(file.header), "utf8"));
@@ -153,7 +153,7 @@ export function releaseSigning() {
 function main() {
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "create") {
-    if (existsSync(STORE_FILE)) throw new Error(`A release key already exists (${STORE_FILE}). Never replace it: phones could no longer update AnyAppAgent.`);
+    if (existsSync(STORE_FILE)) throw new Error(`A release key already exists (${STORE_FILE}). Never replace it: phones could no longer update Kiwimake.`);
     if (credman("read")) throw new Error(`Credential Manager already holds "${CRED_TARGET}" without a key file. Restore the key from its backup instead.`);
     mkdirSync(RELEASE_DIR, { recursive: true });
     restrictFolder();

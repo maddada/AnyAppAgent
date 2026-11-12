@@ -58,7 +58,7 @@ export class Companion extends EventEmitter {
     this.stopping = false;
     const entry = this.opts.mode === "fake" ? this.opts.fakeScript : join(this.opts.serverDir, "bin", "anyappagent.mjs");
     if (!existsSync(entry)) {
-      this.set({ phase: "failed", message: "Part of AnyAppAgent is missing. Reinstalling AnyAppAgent fixes this." });
+      this.set({ phase: "failed", message: "Part of Kiwimake is missing. Reinstalling Kiwimake fixes this." });
       this.opts.log(`[companion] missing ${entry}`);
       return;
     }
@@ -96,7 +96,7 @@ export class Companion extends EventEmitter {
         if (!line.trim() || /^[\s▀▄█]+$/.test(line)) continue; // skip the terminal QR art
         this.opts.log(line);
         if (/Could not listen on/.test(line)) {
-          this.set({ message: "Another copy of AnyAppAgent seems to be running on this PC." });
+          this.set({ message: "Another copy of Kiwimake seems to be running on this PC." });
         }
       }
     };

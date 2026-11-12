@@ -166,8 +166,8 @@ export function reminderText(h: HealthReminder | undefined): { title: string; bo
     title: "Your monthly app check",
     body:
       h.behind === 1
-        ? "One app is behind the newest version of AnyAppAgent's template. Tap the yellow sign on it to update it."
-        : `${h.behind} apps are behind the newest version of AnyAppAgent's template. Tap the yellow sign on one to update it.`,
+        ? "One app is behind the newest version of Kiwimake's template. Tap the yellow sign on it to update it."
+        : `${h.behind} apps are behind the newest version of Kiwimake's template. Tap the yellow sign on one to update it.`,
   };
 }
 

@@ -1,6 +1,6 @@
 // The app's diary: a small private log on the phone of what the app did ("Asr alarm set for 15:42",
 // "Reminders loaded: 3"), so when something does not work the agent can read what really happened.
-// It stays on the phone and the person's own PC (AnyAppAgent sends it only when the agent asks).
+// It stays on the phone and the person's own PC (Kiwimake sends it only when the agent asks).
 //
 //   import { diary } from '@/lib/diary';
 //   diary('Fajr alarm set for 05:12');

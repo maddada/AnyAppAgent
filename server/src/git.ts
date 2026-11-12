@@ -74,14 +74,14 @@ export function ensureGitignore(dir: string): void {
   const missing = wanted.filter((line) => !have.has(line) && !(line === ".env" && [...have].some((l) => l.startsWith(".env"))));
   if (missing.length === 0) return;
   const sep = current === "" || current.endsWith("\n") ? "" : "\n";
-  writeFileSync(path, `${current}${sep}${current === "" ? "" : "\n# Added by AnyAppAgent\n"}${missing.join("\n")}\n`);
+  writeFileSync(path, `${current}${sep}${current === "" ? "" : "\n# Added by Kiwimake\n"}${missing.join("\n")}\n`);
 }
 
 async function identityArgs(dir: string): Promise<string[]> {
   const name = (await git(dir, ["config", "user.name"])).stdout.trim();
   const email = (await git(dir, ["config", "user.email"])).stdout.trim();
   return [
-    ...(name ? [] : ["-c", "user.name=AnyAppAgent"]),
+    ...(name ? [] : ["-c", "user.name=Kiwimake"]),
     ...(email ? [] : ["-c", "user.email=anyappagent@localhost"]),
   ];
 }

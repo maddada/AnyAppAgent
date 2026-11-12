@@ -19,7 +19,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import org.json.JSONObject
 
 /**
- * AI through AnyAppAgent. This app never has an AI key: AnyAppAgent (com.anyappagent) keeps the
+ * AI through Kiwimake. This app never has an AI key: Kiwimake (com.anyappagent) keeps the
  * user's key and runs a local service that apps made with it bind to. This module sends the
  * chat request there and passes the streamed answer to JavaScript as `onEvent` events.
  * JavaScript API: src/lib/ai.ts. Wire format: modules/ai/README.md.
@@ -29,7 +29,7 @@ class AnyappAiModule : Module() {
     const val AGENT_PACKAGE = "com.anyappagent"
     const val ACTION = "com.anyappagent.action.AI"
 
-    // Same numbers as AnyAppAgent's AiProxyService.
+    // Same numbers as Kiwimake's AiProxyService.
     const val STATUS = 1
     const val CHAT = 2
     const val CANCEL = 3
@@ -89,17 +89,17 @@ class AnyappAiModule : Module() {
     }
 
     override fun onServiceDisconnected(name: ComponentName?) {
-      // AnyAppAgent stopped or was updated: answers in progress are lost.
+      // Kiwimake stopped or was updated: answers in progress are lost.
       handler.post {
         service = null
-        failAll("disconnected", "AnyAppAgent stopped while answering. Try again.")
+        failAll("disconnected", "Kiwimake stopped while answering. Try again.")
       }
     }
 
     override fun onBindingDied(name: ComponentName?) {
       handler.post {
         unbind()
-        failAll("disconnected", "AnyAppAgent was updated or stopped. Try again.")
+        failAll("disconnected", "Kiwimake was updated or stopped. Try again.")
       }
     }
 
@@ -142,7 +142,7 @@ class AnyappAiModule : Module() {
         withService { s ->
           if (s == null) {
             val code = if (agentInstalled()) "not_reachable" else "no_anyappagent"
-            val msg = if (code == "no_anyappagent") "AI needs AnyAppAgent on this phone." else "Could not reach AnyAppAgent. Open it once and try again."
+            val msg = if (code == "no_anyappagent") "AI needs Kiwimake on this phone." else "Could not reach Kiwimake. Open it once and try again."
             emitError(id, code, msg)
             return@withService
           }
@@ -157,7 +157,7 @@ class AnyappAiModule : Module() {
             })
             i = end
           } while (ok && i < request.length)
-          if (!ok) emitError(id, "not_reachable", "Could not reach AnyAppAgent. Try again.")
+          if (!ok) emitError(id, "not_reachable", "Could not reach Kiwimake. Try again.")
         }
       }
       true
@@ -171,7 +171,7 @@ class AnyappAiModule : Module() {
 
     Function("isAgentInstalled") { agentInstalled() }
 
-    /** Opens AnyAppAgent's settings, where the AI key is added and each app switched on or off. */
+    /** Opens Kiwimake's settings, where the AI key is added and each app switched on or off. */
     Function("openSetup") {
       val ctx = context
       val deep = Intent(Intent.ACTION_VIEW, Uri.parse("anyappagent://settings")).setPackage(AGENT_PACKAGE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -1,5 +1,5 @@
 // "From others" (docs/CHANGE-THIS-APP.md): suggestions people sent the owner as text. A message
-// shared into AnyAppAgent or pasted is recognised by its last line and filed under its app by the PC.
+// shared into Kiwimake or pasted is recognised by its last line and filed under its app by the PC.
 import { router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { parseSuggestion, suggestionPrompt } from "@shared/chat/index";
@@ -33,7 +33,7 @@ export async function pasteSuggestion(): Promise<{ appId: string; suggestion: Su
   return fileSuggestionText(text);
 }
 
-/** Shared into AnyAppAgent: file it and show that app's inbox. False when the text is not a suggestion. */
+/** Shared into Kiwimake: file it and show that app's inbox. False when the text is not a suggestion. */
 export async function takeSharedSuggestion(text: string): Promise<boolean> {
   if (!isSuggestionText(text)) return false;
   try {

@@ -20,8 +20,8 @@ export interface Prefs {
   askedNotifications: boolean; // Android gave a real answer (allowed, or "don't ask again")
   notificationAsks: number;
   /**
-   * Downloads and installs that started but did not finish (AnyAppAgent was closed, replaced or
-   * lost the PC). Retried once, by themselves, after AnyAppAgent starts again.
+   * Downloads and installs that started but did not finish (Kiwimake was closed, replaced or
+   * lost the PC). Retried once, by themselves, after Kiwimake starts again.
    */
   unfinishedInstalls: Record<string, { build: number; retried: boolean }>;
   /** The name this phone pairs under, chosen once and reused (the PC recognises it by name). */

@@ -1,4 +1,4 @@
-# Loads the AnyAppAgent Android toolchain into the CURRENT PowerShell session only.
+# Loads the Kiwimake Android toolchain into the CURRENT PowerShell session only.
 # Usage (dot-source it):   . C:\dev\AnyAppAgent\scripts\android-env.ps1
 # It never touches machine-wide or user-wide environment variables.
 # See docs/ENVIRONMENT.md for the versions and pitfalls.

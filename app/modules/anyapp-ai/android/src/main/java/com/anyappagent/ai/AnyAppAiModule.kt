@@ -10,7 +10,7 @@ import org.json.JSONObject
 import kotlin.concurrent.thread
 
 /**
- * What AnyAppAgent's own Settings screen uses for "AI for your apps". The key goes in once and
+ * What Kiwimake's own Settings screen uses for "AI for your apps". The key goes in once and
  * is never handed back to JavaScript: only the provider, the model and the key's last 4 characters.
  */
 class AnyAppAiModule : Module() {

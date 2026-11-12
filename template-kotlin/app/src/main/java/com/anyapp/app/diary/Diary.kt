@@ -12,7 +12,7 @@ import java.util.TimeZone
 /**
  * The app's diary: a small private log of what the app did ("Asr alarm set for 15:42", "Asr alarm
  * rang"), kept in the app's own storage on the phone. The agent that makes the app reads it (only
- * through AnyAppAgent, only to the person's own PC) when something did not work.
+ * through Kiwimake, only to the person's own PC) when something did not work.
  *
  * Write what the app did and why. Never personal content: no names, messages, places, health
  * data, or anything the person typed.

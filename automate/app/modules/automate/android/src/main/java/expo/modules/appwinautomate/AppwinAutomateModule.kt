@@ -49,5 +49,10 @@ class AppwinAutomateModule : Module() {
     Function("isStopped") { Automate.isStopped(context) }
     AsyncFunction("stopAll") { Automate.stopAll(context) }
     AsyncFunction("resume") { Automate.resume(context) }
+
+    AsyncFunction("listen") { kinds: List<String> -> ListenerService.update(context, kinds.toSet()) }
+    Function("hasPermission") { name: String ->
+      context.checkSelfPermission(name) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
   }
 }

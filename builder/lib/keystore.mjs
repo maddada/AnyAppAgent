@@ -46,7 +46,7 @@ export async function ensureKeystore(javaHome, log = () => {}) {
     if (fs.existsSync(storeFile)) {
       throw new Error(`${storeFile} exists but ${info} (its password) is missing; refusing to replace the key.`);
     }
-    log(`Generating the AnyAppAgent signing key in ${KEYSTORE_DIR} (once)…`);
+    log(`Generating the Kiwimake signing key in ${KEYSTORE_DIR} (once)…`);
     const data = await generateKey(javaHome, { storeFile, alias: 'anyapp', dname: 'CN=AnyAppAgent, O=AnyAppAgent' });
     await writeJson(info, data);
     return data;

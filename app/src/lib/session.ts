@@ -45,7 +45,7 @@ export async function boot() {
   startUnpairRetries();
   AnyAppNative?.addListener("onNetworkChanged", () => onNetworkChanged());
   AnyAppNative?.addListener("onAppReport", (e) => onAppReport(e.packageName));
-  // "Change this app" (docs/CHANGE-THIS-APP.md): apps ask AnyAppAgent whether they are this
+  // "Change this app" (docs/CHANGE-THIS-APP.md): apps ask Kiwimake whether they are this
   // person's own, so their row shows even when hidden from others. Kept in step with the app list.
   let ownKey = "";
   const syncOwn = (apps: Record<string, { packageName: string }>) => {
@@ -125,7 +125,7 @@ export async function pairWith(address: string, code: string, onStep?: (step: st
   if (!baseUrl) throw new PairError("That address doesn't look right. It looks like 192.168.1.20:8787.");
   onStep?.("Looking for your PC…");
   if (!(await findPc(baseUrl))) {
-    throw new PairError(`Can't find your PC at ${address.trim()}. Check that AnyAppAgent is running on it and that both are on the same Wi-Fi.`);
+    throw new PairError(`Can't find your PC at ${address.trim()}. Check that Kiwimake is running on it and that both are on the same Wi-Fi.`);
   }
   onStep?.("Connecting…");
   try {
@@ -162,9 +162,9 @@ export async function pairWith(address: string, code: string, onStep?: (step: st
  */
 export async function pairWithEasyConnect(text: string, onStep?: (step: string) => void): Promise<void> {
   const code = decodeEasyConnectCode(text);
-  if (!code) throw new PairError("That isn't an AnyAppAgent code. On your PC, choose Connect a phone and use the code it shows.");
+  if (!code) throw new PairError("That isn't a Kiwimake code. On your PC, choose Connect a phone and use the code it shows.");
   if (!AnyAppNative || !AnyAppNative.easyConnectAvailable()) {
-    throw new PairError("This copy of AnyAppAgent can't use Easy Connect. Connect another way, on the same Wi-Fi.");
+    throw new PairError("This copy of Kiwimake can't use Easy Connect. Connect another way, on the same Wi-Fi.");
   }
   onStep?.(`Reaching ${code.name}…`);
   let clientKey: string;
@@ -173,7 +173,7 @@ export async function pairWithEasyConnect(text: string, onStep?: (step: string) 
     clientKey = await AnyAppNative.easyConnectClientKey();
     base = await dialEasyConnect(code.address, code.port, true);
   } catch {
-    throw new PairError(`Can't reach ${code.name}. Keep AnyAppAgent open on your PC and check that both have internet, then try again.`);
+    throw new PairError(`Can't reach ${code.name}. Keep Kiwimake open on your PC and check that both have internet, then try again.`);
   }
   onStep?.(`Connecting to ${code.name}…`);
   try {
@@ -190,7 +190,7 @@ export async function pairWithEasyConnect(text: string, onStep?: (step: string) 
     }
     if (e instanceof ApiError && e.status === 429) throw new PairError("Too many tries. Wait a minute, then try again.");
     if (e instanceof ApiError && !e.unreachable) throw new PairError(e.message);
-    throw new PairError(`Reached ${code.name}, but AnyAppAgent there did not answer. Keep it open on your PC and try again.`);
+    throw new PairError(`Reached ${code.name}, but Kiwimake there did not answer. Keep it open on your PC and try again.`);
   }
 }
 
@@ -464,7 +464,7 @@ function repair() {
  * network does not pass it on; some routers and sleeping Wi-Fi do the same), so the socket looks
  * open for minutes while nothing arrives. Writing to it reveals that at once: a write on a dead
  * connection fails and the socket closes, which starts the reconnect. The companion ignores
- * these frames (shared/protocol.ts). Only while AnyAppAgent is in front.
+ * these frames (shared/protocol.ts). Only while Kiwimake is in front.
  */
 let livenessTimer: ReturnType<typeof setInterval> | null = null;
 function startLivenessPings() {
@@ -487,7 +487,7 @@ function startLivenessPings() {
  */
 function startHealthChecks() {
   if (healthTimer) return;
-  // Every 5 s while AnyAppAgent is in front (one tiny request). If the PC stopped answering and
+  // Every 5 s while Kiwimake is in front (one tiny request). If the PC stopped answering and
   // answers again, it restarted: its old socket is dead even when the phone was never told (the
   // emulator's network never passes the close on), so reconnect at once instead of waiting.
   healthTimer = setInterval(async () => {

@@ -1,4 +1,4 @@
-# Appwin Automate
+# Automate
 
 Automations the person describes in plain words, run on their phone by themselves (in the
 spirit of Tasker, without its screens).

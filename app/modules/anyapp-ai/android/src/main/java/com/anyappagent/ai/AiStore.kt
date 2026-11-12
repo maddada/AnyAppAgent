@@ -13,12 +13,12 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Everything "AI for your apps" keeps on the phone, all in AnyAppAgent's private storage:
+ * Everything "AI for your apps" keeps on the phone, all in Kiwimake's private storage:
  * - the AI key, encrypted with an AES-256-GCM key that lives in the Android Keystore (it cannot be
  *   read out of the phone, and the encrypted key is useless anywhere else),
  * - the provider and model,
  * - per app: on/off and usage (calls, tokens),
- * - the signing certificates of apps AnyAppAgent installed (AiTrust.kt).
+ * - the signing certificates of apps Kiwimake installed (AiTrust.kt).
  */
 object AiStore {
   private const val PREFS = "anyapp_ai"
@@ -173,7 +173,7 @@ object AiStore {
 
   fun forgetApp(ctx: Context, pkg: String) = synchronized(lock) { prefs(ctx).edit().remove(appKey(pkg)).apply() }
 
-  // ---- signing certificates of apps AnyAppAgent installed (SHA-256, hex) ----
+  // ---- signing certificates of apps Kiwimake installed (SHA-256, hex) ----
 
   fun trustedSigners(ctx: Context): Set<String> = prefs(ctx).getStringSet("signers", emptySet()) ?: emptySet()
 

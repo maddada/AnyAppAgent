@@ -129,7 +129,7 @@ export default function Settings() {
         <Button testID="disconnect" label="Disconnect from your PC" variant="quiet" onPress={() => setConfirm(true)} />
 
         <T variant="caption" color="textTertiary" style={{ textAlign: "center" }}>
-          AnyAppAgent {Constants.expoConfig?.version ?? ""}
+          Kiwimake {Constants.expoConfig?.version ?? ""}
         </T>
       </ScrollView>
 

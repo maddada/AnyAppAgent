@@ -2,8 +2,9 @@
 // asked for" is drawn from the script's own code (the fence records every power call with its
 // literal arguments) and from its triggers, never from the agent's description.
 import type { CardAction } from './store';
+import type { Trigger } from './triggers';
 
-export type Need = 'notifications' | 'dnd' | 'exact';
+export type Need = 'notifications' | 'dnd' | 'exact' | 'listening' | 'nearby' | 'locationAlways';
 
 function text(v: unknown): string | null {
   return typeof v === 'string' ? v : null;
@@ -51,9 +52,14 @@ export function actionLines(actions: CardAction[]): string[] {
   return [...new Set(actions.map(actionLine))];
 }
 
-/** What Android has to allow, from the powers in the code. */
-export function needsOf(actions: CardAction[]): Need[] {
+/** What Android has to allow, from the powers in the code and the triggers. */
+export function needsOf(actions: CardAction[], triggers: Trigger[] = []): Need[] {
   const needs = new Set<Need>(['exact']);
+  for (const t of triggers) {
+    if (t.kind === 'charging' || t.kind === 'wifi' || t.kind === 'bluetooth') needs.add('listening');
+    if (t.kind === 'bluetooth') needs.add('nearby');
+    if (t.kind === 'wifi' && t.network) needs.add('locationAlways');
+  }
   for (const a of actions) {
     if (a.call === 'notify') needs.add('notifications');
     if (a.call === 'doNotDisturb.on' || a.call === 'doNotDisturb.off') needs.add('dnd');
@@ -65,6 +71,9 @@ export const NEED_LABEL: Record<Need, { title: string; why: string }> = {
   exact: { title: 'Exact times', why: 'So it runs on the minute, even when the phone sleeps' },
   notifications: { title: 'Notifications', why: 'To show what it does' },
   dnd: { title: 'Do Not Disturb access', why: 'One switch in Settings, so it can turn Do Not Disturb on and off' },
+  listening: { title: 'A small notice while it listens', why: 'Android needs it to keep listening for the charger, Wi-Fi or Bluetooth. Stop all is on it' },
+  nearby: { title: 'Nearby devices', why: 'To see which Bluetooth device connects' },
+  locationAlways: { title: 'Location, all the time', why: 'Android shows Wi-Fi names only with it (the app does not track where you are)' },
 };
 
 /** What a changed script adds and drops, compared with the version the person approved. */

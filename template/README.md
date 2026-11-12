@@ -1,6 +1,6 @@
-# AnyAppAgent app template
+# Kiwimake app template
 
-Every app AnyAppAgent makes starts as a copy of this folder (`builder/` copies it and fills in the
+Every app Kiwimake makes starts as a copy of this folder (`builder/` copies it and fills in the
 placeholders `__APP_NAME__`, `__APP_SLUG__` and `__APP_PACKAGE__` in `app.json`). The agent that
 edits a copy reads [AGENTS.md](AGENTS.md); this file is for people working on the template itself.
 

@@ -1,9 +1,9 @@
-// "Change this app" (AnyAppAgent docs/CHANGE-THIS-APP.md): the "This app" group every app has in its
+// "Change this app" (Kiwimake docs/CHANGE-THIS-APP.md): the "This app" group every app has in its
 // settings. Built in: keep it in the app's Settings screen (or wherever its settings live).
-// The row opens AnyAppAgent at this app: the person who made the app lands in its chat; anyone else
-// can suggest a change or make their own version. Without AnyAppAgent it explains, in the app.
+// The row opens Kiwimake at this app: the person who made the app lands in its chat; anyone else
+// can suggest a change or make their own version. Without Kiwimake it explains, in the app.
 // It hides itself on other people's phones when the owner switched "Show Change this app to
-// others" off in AnyAppAgent.
+// others" off in Kiwimake.
 import Constants from 'expo-constants';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -58,7 +58,7 @@ export function ThisAppSection({ screen = 'settings' }: { screen?: string }) {
         </View>
         <View style={[styles.row, styles.line, { borderColor: colors.border }]}>
           <Text style={[type.body, styles.grow, { color: colors.text }]}>{owner ? `Made by ${owner}` : 'Made'}</Text>
-          <Text style={[type.small, { color: colors.textMuted }]}>with AnyAppAgent</Text>
+          <Text style={[type.small, { color: colors.textMuted }]}>with Kiwimake</Text>
         </View>
       </View>
     </View>

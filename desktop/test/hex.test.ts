@@ -109,7 +109,7 @@ describe("Hex's state", () => {
   it("a Hex speaking another API version is refused with what to update", async () => {
     const s = await hexState({ env: envFor(hexDir({ version: "9.0.0", port: 1, apiVersion: "3" })), home: "", ...win });
     expect(s.state).toBe("problem");
-    expect(s.summary).toMatch(/Update AnyAppAgent/);
+    expect(s.summary).toMatch(/Update Kiwimake/);
   });
   it("never shows the token", async () => {
     const { port } = await fakeHex();

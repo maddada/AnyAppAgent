@@ -22,7 +22,12 @@ class TriggerReceiver : BroadcastReceiver() {
           Log.i(Automate.TAG, "Not running $id: Stop all is on")
           return
         }
-        AutomateTaskService.start(context, payload, id)
+        val name = try {
+          org.json.JSONObject(payload).optString("name", id)
+        } catch (e: Exception) {
+          id
+        }
+        AutomateTaskService.start(context, payload, name)
       }
     }
   }
@@ -33,6 +38,7 @@ class AutomateBootReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     Automate.rearmAll(context)
     Automate.rearmDnd(context)
+    ListenerService.restart(context)
     if (!Automate.isStopped(context)) AutomateTaskService.start(context, "{\"plan\":true}", null)
   }
 }

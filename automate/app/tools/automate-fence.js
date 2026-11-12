@@ -27,6 +27,9 @@ const API = [
   'at',
   'prayer',
   'every',
+  'charging',
+  'wifi',
+  'bluetooth',
   // powers
   'speak',
   'notify',

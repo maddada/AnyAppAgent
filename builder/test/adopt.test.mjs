@@ -54,7 +54,7 @@ test('a Kotlin app gets its new name in strings.xml and anyapp.json', async () =
 test('not an app, or an Expo Exact app, is refused', async () => {
   const src = path.join(home, 'src-none');
   write(path.join(src, 'readme.txt'), 'hi');
-  await assert.rejects(adoptApp({ src, dir: path.join(home, 'apps', 'x'), name: 'X', slug: 'x', packageName: 'com.anyapp.x' }), /not an app made with AnyAppAgent/);
+  await assert.rejects(adoptApp({ src, dir: path.join(home, 'apps', 'x'), name: 'X', slug: 'x', packageName: 'com.anyapp.x' }), /not an app made with Kiwimake/);
 });
 
 test('the Change this app build values are plain and only what differs from the defaults', () => {

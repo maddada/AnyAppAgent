@@ -60,7 +60,7 @@ export function phoneAbis(): string[] {
 
 // ---------- offering new builds by themselves, once each
 
-/** Called for `apk.ready`: install an update now, or notify if AnyAppAgent is in the background. */
+/** Called for `apk.ready`: install an update now, or notify if Kiwimake is in the background. */
 export async function onApkReady(app: App) {
   await autoInstallIfNew(app);
 }
@@ -94,7 +94,7 @@ export async function autoInstallIfNew(app: App) {
   }
 
   // In the background the update still downloads and installs by itself when the keep-alive
-  // service runs (it kept AnyAppAgent alive while the PC built it): Android will not freeze the
+  // service runs (it kept Kiwimake alive while the PC built it): Android will not freeze the
   // download. Without it, a notification asks for the tap instead.
   if (AppState.currentState !== "active" && !keptAlive()) {
     pendingFromBackground.add(app.id);
@@ -182,7 +182,7 @@ export function onAppReport(packageName: string) {
   }
 }
 
-// ---------- unfinished installs survive a restart of AnyAppAgent
+// ---------- unfinished installs survive a restart of Kiwimake
 
 function patchUnfinished(change: (u: Prefs["unfinishedInstalls"]) => Prefs["unfinishedInstalls"]) {
   const prefs = getState().prefs;
@@ -204,8 +204,8 @@ function clearUnfinished(appId: string) {
 let resumedThisRun = false;
 
 /**
- * After AnyAppAgent starts (the first time the app list arrives): carry on, once, with an update
- * that was cut off, for example when AnyAppAgent itself was replaced mid-download. The part
+ * After Kiwimake starts (the first time the app list arrives): carry on, once, with an update
+ * that was cut off, for example when Kiwimake itself was replaced mid-download. The part
  * already downloaded is kept, so it resumes where it stopped. First installs are not resumed by
  * themselves (they wait for a tap).
  */
@@ -228,7 +228,7 @@ export function resumeUnfinishedInstalls() {
 
 /** Back in front after a "ready" notification (tapped or not): install what was waiting. */
 export async function resumePendingInstall() {
-  // An install waiting for the person's yes: Android may have blocked its prompt while AnyAppAgent
+  // An install waiting for the person's yes: Android may have blocked its prompt while Kiwimake
   // was in the background, or another prompt covered it. Show it again.
   if (current && getState().installs[current]?.phase === "installing") AnyAppNative?.reopenInstallPrompt?.();
   const waiting = getState().needInstallPermission;
@@ -354,7 +354,7 @@ async function installOne(appId: string, options: InstallOptions = {}) {
   const file = new File(dir, name);
   try {
     if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
-    // A part downloaded before (cut off, or AnyAppAgent restarted) is kept and resumed.
+    // A part downloaded before (cut off, or Kiwimake restarted) is kept and resumed.
     dropOtherDownloads(app, name);
     markUnfinished(appId, build.number);
     await download(appId, build.number, file, want);

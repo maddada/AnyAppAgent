@@ -47,11 +47,11 @@ Small changes (a colour, a word, a fix, a bug) need no plan: just do them.`;
 
 /** The first message of a new app as the agent gets it (the chat shows only the person's words). */
 /**
- * "Like this, but mine" (shared into AnyAppAgent from another app's share sheet): the note the agent
+ * "Like this, but mine" (shared into Kiwimake from another app's share sheet): the note the agent
  * gets with the person's message. The person sees only their own words, the link and the pictures.
  */
 export function sharedInNote(hasLink: boolean): string {
-  return `(From the PC: the person shared this from another app with AnyAppAgent's share button: "Like
+  return `(From the PC: the person shared this from another app with Kiwimake's share button: "Like
 this, but mine". They want what the picture${hasLink ? " or the link" : ""} shows, made their own, with
 what they wrote about what to keep and what to change. Take the idea, layout and features, not the
 other app's name, logo or artwork.${hasLink ? ` Read the linked page with your web tools if you have
@@ -170,7 +170,7 @@ export function deliveryRules(preset: AppPreset | undefined, who: "you" | "worke
   const subject = who === "you" ? "your turn" : "a worker's change";
   if (preset === "kotlin" || preset === "expo-exact") {
     return `How the new version reaches the phone: after ${subject} the PC builds a new APK (a few
-minutes) and AnyAppAgent installs it. If the person is inside the app when it arrives, the app shows
+minutes) and Kiwimake installs it. If the person is inside the app when it arrives, the app shows
 "Version N is ready" with a Reload button that installs it and opens the app again.`;
   }
   return `How the new version reaches the phone (the PC decides by itself after ${subject}):
@@ -188,13 +188,13 @@ minutes) and AnyAppAgent installs it. If the person is inside the app when it ar
 
 function iconAndAiLines(preset: AppPreset | undefined): string {
   if (preset === "expo-exact") {
-    return `- This kind of app has no custom launcher icon and no AI through AnyAppAgent yet: if they ask
+    return `- This kind of app has no custom launcher icon and no AI through Kiwimake yet: if they ask
   for either, say in one line that it is not possible in this kind of app yet.`;
   }
   return `- On your first turn give the app an icon of its own that matches what it does (see "The app
   icon" in AGENTS.md), never the starter icon.
 - When they ask for anything AI (a chat, an assistant, smart suggestions, an agent that does things
-  in the app), use the built-in AI through AnyAppAgent ("AI" in AGENTS.md, ${aiFile(preset)}). Never ask
+  in the app), use the built-in AI through Kiwimake ("AI" in AGENTS.md, ${aiFile(preset)}). Never ask
   them for an API key and never call an AI service directly.`;
 }
 

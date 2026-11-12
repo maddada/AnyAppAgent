@@ -17,16 +17,16 @@ import java.io.FileNotFoundException
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * "AnyAppAgent first" (docs/DISTRIBUTION.md, stage 5) and the fast lane (docs/FAST-LANE.md). An app
- * made with AnyAppAgent talks to it here, always about itself only (the caller's package must be
+ * "Kiwimake first" (docs/DISTRIBUTION.md, stage 5) and the fast lane (docs/FAST-LANE.md). An app
+ * made with Kiwimake talks to it here, always about itself only (the caller's package must be
  * the package in the address, so no app learns anything about another one):
  *
- * - `handles/<pkg>` (query): 1 when AnyAppAgent handles this app's updates (it installed it, or the
+ * - `handles/<pkg>` (query): 1 when Kiwimake handles this app's updates (it installed it, or the
  *   person follows it), so the app shows no update notification of its own.
- * - `ready/<pkg>` (query): what AnyAppAgent has ready for the app now, kind "ota" (a quick update)
+ * - `ready/<pkg>` (query): what Kiwimake has ready for the app now, kind "ota" (a quick update)
  *   or "apk", and the build. Only newer than what the app runs.
  * - `ota/<pkg>` (open): the quick update file. The app checks its signature itself.
- * - `presence/<pkg>` (update, front=1|0): the app is on screen, so AnyAppAgent leaves the install of
+ * - `presence/<pkg>` (update, front=1|0): the app is on screen, so Kiwimake leaves the install of
  *   a new APK to the app's Reload popup instead of replacing the app under the person's finger.
  * - `report/<pkg>` (update, running=<build> and/or bad=<build>): the version the app runs now, or a
  *   quick update it refused or rolled back.
@@ -46,7 +46,7 @@ class UpdatesProvider : ContentProvider() {
 
     /**
      * Apps to open again the moment their install succeeds (their Reload popup asked for it).
-     * Done in [InstallResultReceiver], while AnyAppAgent is still on screen: Android refuses an
+     * Done in [InstallResultReceiver], while Kiwimake is still on screen: Android refuses an
      * activity start from an app that is no longer visible.
      */
     val reopenAfterInstall: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -58,7 +58,7 @@ class UpdatesProvider : ContentProvider() {
 
     fun followed(ctx: Context): Set<String> = prefs(ctx).getStringSet(FOLLOWED, emptySet()) ?: emptySet()
 
-    /** Apps the person added in AnyAppAgent from someone's share link: AnyAppAgent updates them. */
+    /** Apps the person added in Kiwimake from someone's share link: Kiwimake updates them. */
     fun setFollowed(ctx: Context, packages: Collection<String>) {
       prefs(ctx).edit().putStringSet(FOLLOWED, packages.toSet()).apply()
     }
@@ -246,7 +246,7 @@ class UpdatesProvider : ContentProvider() {
   override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
 }
 
-/** Lets apps made with AnyAppAgent find it (action com.anyappagent.action.UPDATES). Nothing binds to it. */
+/** Lets apps made with Kiwimake find it (action com.anyappagent.action.UPDATES). Nothing binds to it. */
 class UpdatesHostService : android.app.Service() {
   override fun onBind(intent: android.content.Intent?): android.os.IBinder? = null
 }

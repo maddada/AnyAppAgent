@@ -11,7 +11,7 @@ import android.util.Log
 import org.json.JSONObject
 
 /**
- * The native core of Appwin Automate: wake-ups for automations (exact alarms that start the
+ * The native core of Automate: wake-ups for automations (exact alarms that start the
  * headless runner), Stop all, and Do Not Disturb with a timed restore. All state is in
  * SharedPreferences so it works with the app closed and after a reboot.
  */
@@ -111,11 +111,13 @@ object Automate {
     dndOff(c)
     Speaker.stop()
     Notices.denyAllQuestions(c)
+    c.stopService(Intent(c, ListenerService::class.java))
     Log.i(TAG, "Stop all")
   }
 
   fun resume(c: Context) {
     prefs(c).edit().putBoolean("stopped", false).apply()
+    ListenerService.restart(c)
   }
 
   // ---------- Do Not Disturb

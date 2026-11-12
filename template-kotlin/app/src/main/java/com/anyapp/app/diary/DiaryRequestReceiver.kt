@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 
 /**
- * AnyAppAgent asks for the diary (the app's agent on the PC wants to read it). The answer goes
+ * Kiwimake asks for the diary (the app's agent on the PC wants to read it). The answer goes
  * only to the app that installed this one, so asking is harmless: nobody else ever gets the diary.
  */
 class DiaryRequestReceiver : BroadcastReceiver() {

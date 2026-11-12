@@ -18,7 +18,7 @@ import expo.modules.core.interfaces.ReactNativeHostHandler
 import java.lang.ref.WeakReference
 
 /**
- * Quick updates for React Native apps (AnyAppAgent docs/FAST-LANE.md): picks the JavaScript bundle
+ * Quick updates for React Native apps (Kiwimake docs/FAST-LANE.md): picks the JavaScript bundle
  * the app starts with (a checked quick update, or the APK's own: com.anyapp.updates.Ota), reloads
  * it in place when the person taps Reload, and goes back to the last good bundle when a new one
  * fails at start. Expo finds this class by itself (autolinking): do not remove it.

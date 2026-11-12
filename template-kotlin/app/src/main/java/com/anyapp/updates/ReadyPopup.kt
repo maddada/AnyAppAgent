@@ -27,15 +27,15 @@ import java.lang.ref.WeakReference
 import java.util.concurrent.Executors
 
 /**
- * The Reload popup (AnyAppAgent docs/FAST-LANE.md). Same file in every AnyAppAgent template: do not
+ * The Reload popup (Kiwimake docs/FAST-LANE.md). Same file in every Kiwimake template: do not
  * edit it in an app.
  *
- * While the person is in this app and AnyAppAgent has a new version of it ready, a small card at
+ * While the person is in this app and Kiwimake has a new version of it ready, a small card at
  * the bottom says "Version 7 is ready" with Later and Reload:
  * - a quick update (React Native only): Reload starts the new JavaScript in place, in about a second;
- * - a new APK: Reload hands the install to AnyAppAgent, which installs it and opens the app again.
- * It checks when an activity comes to the front and when AnyAppAgent says something is ready
- * ([ReadyReceiver]). It also tells AnyAppAgent whether the app is on screen, so AnyAppAgent does not
+ * - a new APK: Reload hands the install to Kiwimake, which installs it and opens the app again.
+ * It checks when an activity comes to the front and when Kiwimake says something is ready
+ * ([ReadyReceiver]). It also tells Kiwimake whether the app is on screen, so Kiwimake does not
  * install an APK over the app while the person uses it.
  */
 object ReadyPopup : Application.ActivityLifecycleCallbacks {
@@ -99,7 +99,7 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
   override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
   override fun onActivityDestroyed(activity: Activity) {}
 
-  /** Something may be ready (AnyAppAgent's broadcast, or this app came to the front). Background thread. */
+  /** Something may be ready (Kiwimake's broadcast, or this app came to the front). Background thread. */
   fun refresh(ctx: Context) {
     val offer = runCatching { findOffer(ctx) }.onFailure { Log.w(TAG, "ready check failed", it) }.getOrNull()
     main.post { show(offer) }
@@ -115,12 +115,12 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
   private fun findOffer(ctx: Context): Offer? {
     val ready = HostLink.ready(ctx)
     val reload = reloadInPlace
-    // A quick update AnyAppAgent holds: fetch and check it now (it is small), before offering it,
+    // A quick update Kiwimake holds: fetch and check it now (it is small), before offering it,
     // also when the app is not open (the next start runs it). Only builds that can run one have a
     // native fingerprint (React Native apps).
     if (ready != null && ready.kind == "ota" && Ota.runtime(ctx).isNotEmpty() && ready.build > Ota.runningBuild(ctx) && !Ota.isBad(ctx, ready.build) && Ota.stagedBuild(ctx) < ready.build) {
       try {
-        val input = HostLink.openOta(ctx, ready.host) ?: throw Ota.Refused("AnyAppAgent did not hand it over")
+        val input = HostLink.openOta(ctx, ready.host) ?: throw Ota.Refused("Kiwimake did not hand it over")
         Ota.stage(ctx, input)
       } catch (e: Ota.Refused) {
         Ota.refuse(ctx, ready.build, e.message ?: "refused")
@@ -158,7 +158,7 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
 
   private class Palette(val surface: Int, val border: Int, val text: Int, val muted: Int, val accent: Int, val onAccent: Int)
 
-  // AnyAppAgent's Workbench colours (shared/theme/tokens.ts): warm paper, graphite, bottle green.
+  // Kiwimake's Workbench colours (shared/theme/tokens.ts): warm paper, graphite, bottle green.
   private fun isDark(ctx: Context) =
     (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
@@ -263,7 +263,7 @@ object ReadyPopup : Application.ActivityLifecycleCallbacks {
 }
 
 /**
- * AnyAppAgent's "something is ready for you" (action com.anyapp.updates.READY, sent only to this
+ * Kiwimake's "something is ready for you" (action com.anyapp.updates.READY, sent only to this
  * package). A quick update is fetched and checked at once, so the next start already runs it; if the
  * app is on screen, the Reload popup appears.
  */
