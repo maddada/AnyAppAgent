@@ -25,6 +25,7 @@ import { Sheet } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
 import { HealthBadge, HealthCard, ReminderBanner } from "@/ui/Trust";
+import { LinkAskBanner } from "@/ui/LinkAsk";
 import { border, elevation, icon, look, radius, size, space, useTheme } from "@/ui/theme";
 
 const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
@@ -125,6 +126,7 @@ function AppGrid() {
           <>
             <Header />
             <ReminderBanner />
+            <LinkAskBanner />
           </>
         }
         renderItem={({ item }) =>

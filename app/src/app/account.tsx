@@ -6,6 +6,7 @@ import { Pressable, ScrollView, Switch, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation } from "convex/react";
+import { linkPairedPc, pcLinkedHere, unlinkPairedPc } from "@/lib/pcLink";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { ArrowLeft, ChevronRight, Cloud, CreditCard, LogOut, Monitor } from "lucide-react-native";
 import { api, cloudMessage } from "@/lib/cloud";
@@ -57,6 +58,9 @@ export default function AccountScreen() {
   const pcOnline = useStore((s) => s.connection === "online");
   const { signOut } = useAuthActions();
   const setSwitch = useMutation(api.accounts.setPcOffSwitch);
+  const revokePc = useMutation(api.accounts.revokePcLink);
+  const pcAccount = useStore((s) => s.pcAccount);
+  const [linking, setLinking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
 
@@ -85,6 +89,27 @@ export default function AccountScreen() {
   }
 
   const github = account.cloud.github;
+  const linkedHere = pcLinkedHere(account.pcs);
+  const otherAccount = pcAccount?.state === "linked" && !linkedHere ? (pcAccount.account?.email ?? (pcAccount.account?.test ? "a test account" : "another account")) : null;
+  const pcLine = !pcOnline
+    ? "Paired, off right now"
+    : linkedHere
+      ? "Paired, and linked to this account"
+      : otherAccount
+        ? `Paired, linked to ${otherAccount}`
+        : "Paired with this phone";
+  const otherPcs = account.pcs.filter((p) => !(pairing && p.name === serverName));
+  const act = async (what: string, fn: () => Promise<unknown>) => {
+    setLinking(what);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(cloudMessage(e));
+    } finally {
+      setLinking(null);
+    }
+  };
   const who = account.email ?? account.name ?? (account.anonymous ? "A test account (dev)" : "Your account");
   return (
     <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top }}>
@@ -103,7 +128,7 @@ export default function AccountScreen() {
           </T>
           <Card>
             {pairing ? (
-              <Row icon={Monitor} title={serverName ?? "Your PC"} line={pcOnline ? "Paired with this phone" : "Paired, off right now"} />
+              <Row icon={Monitor} title={serverName ?? "Your PC"} line={pcLine} testID="account-pc" />
             ) : (
               <Row icon={Monitor} title="My PC" line="Make apps on your own computer with your Claude" action="Add" onPress={() => router.push("/connect")} testID="account-add-pc" />
             )}
@@ -122,6 +147,50 @@ export default function AccountScreen() {
             )}
           </Card>
         </View>
+
+        {pairing && pcOnline && pcAccount ? (
+          <Card>
+            <View style={{ padding: space.lg, gap: space.md }} testID="account-pc-link">
+              <T>
+                {linkedHere
+                  ? `${serverName ?? "Your PC"} can share your apps, publish web apps and move apps to the cloud for this account.`
+                  : otherAccount
+                    ? `${serverName ?? "Your PC"} is linked to ${otherAccount}. Link it to this account instead?`
+                    : `Link ${serverName ?? "your PC"} to this account, so it can share your apps, publish web apps and move apps to the cloud. You will not need to sign in on the PC.`}
+              </T>
+              <View style={{ alignItems: "flex-end" }}>
+                {linkedHere ? (
+                  <Button small variant="text" label="Unlink this PC" busy={linking === "unlink"} onPress={() => act("unlink", unlinkPairedPc)} testID="account-pc-unlink" />
+                ) : (
+                  <Button small label="Link this PC" busy={linking === "link"} onPress={() => act("link", linkPairedPc)} testID="account-pc-link-go" />
+                )}
+              </View>
+            </View>
+          </Card>
+        ) : null}
+
+        {otherPcs.length ? (
+          <View style={{ gap: space.sm }}>
+            <T variant="eyebrow" color="textTertiary">
+              Other linked PCs
+            </T>
+            <Card>
+              {otherPcs.map((p, i) => (
+                <View key={p.id}>
+                  {i ? <View style={{ height: border.width, backgroundColor: t.border }} /> : null}
+                  <Row
+                    icon={Monitor}
+                    title={p.name}
+                    line={p.fromName ? `Linked from ${p.fromName}` : p.linkedFrom === "pc" ? "Signed in on the PC" : "Linked from a phone"}
+                    action={linking === p.id ? "Unlinking" : "Unlink"}
+                    onPress={() => act(p.id, () => revokePc({ id: p.id }))}
+                    testID={`account-other-pc-${i}`}
+                  />
+                </View>
+              ))}
+            </Card>
+          </View>
+        ) : null}
 
         <View style={{ gap: space.sm }}>
           <T variant="eyebrow" color="textTertiary">

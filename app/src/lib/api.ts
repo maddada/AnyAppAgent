@@ -23,6 +23,9 @@ import type {
   FileSuggestionResponse,
   CloneRequest,
   OwnerInfo,
+  AccountLinkInfo,
+  AccountLinkRequest,
+  AccountHandoff,
 } from "./protocol";
 
 /** An error with a sentence that can be shown to the user as is. */
@@ -171,6 +174,11 @@ export class Client {
   setShowToOthers = (id: string, showToOthers: boolean) => this.call<App>(`/api/apps/${encodeURIComponent(id)}/change`, "POST", { showToOthers });
   owner = () => this.call<OwnerInfo>("/api/owner");
   // The PC downloads the version's code from GitHub first: give it a minute.
+  // The PC link (docs/CLOUD.md section 3): this phone hands its PC a link, takes its sign-in, or unlinks it.
+  pcAccount = () => this.call<AccountLinkInfo>("/api/account");
+  linkPc = (body: AccountLinkRequest) => request<AccountLinkInfo>(this.baseUrl, "/api/account/link", { method: "POST", body, token: this.token, timeoutMs: 30000 });
+  pcHandoff = () => request<AccountHandoff>(this.baseUrl, "/api/account/handoff", { method: "POST", body: {}, token: this.token, timeoutMs: 30000 });
+  unlinkPc = () => request<AccountLinkInfo>(this.baseUrl, "/api/account/unlink", { method: "POST", body: {}, token: this.token, timeoutMs: 30000 });
   clone = (body: CloneRequest) => request<App>(this.baseUrl, "/api/clones", { method: "POST", body, token: this.token, timeoutMs: 120000 });
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;

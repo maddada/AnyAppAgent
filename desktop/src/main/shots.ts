@@ -4,7 +4,7 @@
 // used together with ANYAPP_DESKTOP_SIMULATE), "real" (against the real companion) or "qr" (the
 // screens with nothing secret on them, each QR popup, and a check that no pairing code is made or
 // renewed while no popup is open).
-import { nativeTheme, type BrowserWindow } from "electron";
+import { BrowserWindow, nativeTheme } from "electron";
 import { openPageWindows } from "./page-window.ts";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -35,6 +35,7 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
   if (set === "pages") return pagesSet(win, js, shot, log).catch((e) => log(`[shots] pages set failed: ${(e as Error).message}`));
   if (set === "history") return historySet(js, shot, log).catch((e) => log(`[shots] history set failed: ${(e as Error).message}`));
   if (set === "change") return changeSet(js, shot, log).catch((e) => log(`[shots] change set failed: ${(e as Error).message}`));
+  if (set === "account") return accountSet(dir, js, shot, log).catch((e) => log(`[shots] account set failed: ${(e as Error).message}`));
   if (set === "real") {
     // Against the real companion: a phone pairs (an outside script plays the phone), then an app is
     // created through the companion and must show up in the main window.
@@ -152,6 +153,98 @@ type Js = (code: string) => Promise<unknown>;
  * window, and the New app sheet with "Ask me more" on. Needs an app whose chat has a page (the fake
  * companion's FAKE_SEED=1 idle apps, or a real one).
  */
+/**
+ * The Account page (the PC link, cloud milestone 7) against the real companion: not linked, the
+ * browser sign-in under way (its page address goes to signin-url.txt instead of a browser, for the
+ * proof to open), then linked once someone approves it there (up to 5 minutes), each in light and dark.
+ * ANYAPP_DESKTOP_SHOTS_ACCOUNT=phone waits for a phone to link the PC instead ("Ask my phone").
+ */
+async function accountSet(dir: string, js: (code: string) => Promise<unknown>, shot: (name: string) => Promise<void>, log: (l: string) => void): Promise<void> {
+  await js(`window.anyapp.setSetting("onboardingDone", true); window.__app.setup(null)`);
+  await wait(600);
+  await js(`window.__main.page("account")`);
+  const state = async () => (await js(`window.anyapp.getSnapshot().then((s) => s.admin?.account?.state ?? null)`)) as string | null;
+  const both = async (name: string) => {
+    for (const theme of ["light", "dark"] as const) {
+      nativeTheme.themeSource = theme;
+      await wait(400);
+      await shot(`${theme}-${name}`);
+    }
+  };
+  const until = async (want: string, ms: number) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if ((await state()) === want) return true;
+      await wait(1000);
+    }
+    log(`[shots] timed out waiting for the account to be ${want}`);
+    return false;
+  };
+  if ((await state()) === "linked") {
+    await both("account-0-was-linked");
+    await js(`window.anyapp.accountUnlink()`);
+    await until("none", 20_000);
+  }
+  await both("account-1-none");
+  if (process.env.ANYAPP_DESKTOP_SHOTS_ACCOUNT === "phone") {
+    const asked = await js(`window.anyapp.accountAskPhone()`);
+    log(`[shots] asked the phone: ${JSON.stringify(asked)}`);
+    await wait(1500);
+    await both("account-2-asked");
+  } else {
+    const r = await js(`window.anyapp.accountSignIn()`);
+    log(`[shots] sign-in started: ${JSON.stringify(r)}`);
+    const url = (await js(`window.anyapp.getSnapshot().then((s) => s.admin?.account?.signIn?.url ?? "")`)) as string;
+    writeFileSync(join(dir, "signin-url.txt"), url);
+    await wait(800);
+    await both("account-2-signing-in");
+    // ANYAPP_DESKTOP_SHOTS_APPROVE=test: the page opens here in a window of its own (its own
+    // session, like a browser) and approves with the dev deployment's test account.
+    if (process.env.ANYAPP_DESKTOP_SHOTS_APPROVE === "test" && url) await approveInWindow(dir, url, log);
+  }
+  if (await until("linked", 5 * 60_000)) {
+    await wait(800);
+    await both("account-3-linked");
+  }
+  // Stays linked (the proof goes on with the phone); unlink happens from the phone or a later run.
+}
+
+async function approveInWindow(dir: string, url: string, log: (l: string) => void): Promise<void> {
+  const page = new BrowserWindow({ width: 520, height: 820, show: true, webPreferences: { partition: "shots-browser" } });
+  const run = (code: string) => page.webContents.executeJavaScript(code, true);
+  const capture = async (name: string) => {
+    await wait(700);
+    page.webContents.invalidate();
+    await page.webContents.capturePage();
+    await wait(250);
+    writeFileSync(join(dir, `${name}.png`), (await page.webContents.capturePage()).toPNG());
+    log(`[shots] ${name}`);
+  };
+  try {
+    await page.loadURL(url);
+    await wait(2500);
+    for (const theme of ["light", "dark"] as const) {
+      nativeTheme.themeSource = theme;
+      await capture(`${theme}-browser-1-sign-in`);
+    }
+    nativeTheme.themeSource = "light";
+    await run(`document.getElementById("test").click()`);
+    for (let i = 0; i < 40; i++) {
+      await wait(500);
+      if (await run(`!document.getElementById("done").hidden || !document.getElementById("problem").hidden`)) break;
+    }
+    log(`[shots] the page says: ${String(await run(`document.getElementById("done").innerText + " | " + document.getElementById("problem").innerText`))}`);
+    for (const theme of ["light", "dark"] as const) {
+      nativeTheme.themeSource = theme;
+      await capture(`${theme}-browser-2-linked`);
+    }
+  } catch (e) {
+    log(`[shots] the sign-in page failed: ${(e as Error).message}`);
+  } finally {
+    page.close();
+  }
+}
+
 async function pagesSet(win: BrowserWindow, js: (code: string) => Promise<unknown>, shot: (name: string) => Promise<void>, log: (l: string) => void): Promise<void> {
   await js(`window.anyapp.setSetting("onboardingDone", true); window.__app.setup(null)`);
   await wait(600);

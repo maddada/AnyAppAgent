@@ -537,7 +537,9 @@ export type ServerEvent =
   | { type: "todos.updated"; appId: string; todos: TodoItem[] } // added: the app's whole to-do list after a change
   | { type: "care.updated"; care: CareState } // added: the usage meter, the health reminder or the backup changed
   | { type: "diary.request"; appId: string; packageName: string; requestId: string } // added: send this app's diary (POST /diary)
-  | { type: "suggestions.updated"; appId: string; suggestions: Suggestion[] }; // added: the app's "From others" inbox after a change
+  | { type: "suggestions.updated"; appId: string; suggestions: Suggestion[] } // added: the app's "From others" inbox after a change
+  | { type: "account.updated"; account: AccountLinkInfo } // added (cloud milestone 7): this PC was linked, unlinked or is signing in
+  | { type: "account.asked"; serverName: string }; // added (cloud milestone 7): the desktop asks a signed-in phone to link this PC
 
 // ---------- Desktop app (desktop/, Electron) to companion. The desktop app starts the companion
 // as a child process with the env var ANYAPP_ADMIN_TOKEN=<random secret>. That token is accepted
@@ -577,6 +579,43 @@ export interface AdminState {
   devices: PairedDevice[];
   signing?: SigningKeysState; // absent with the fake builder (added for docs/DISTRIBUTION.md)
   backup?: BackupState; // added with "Never lose your apps" (see "Backup"); absent from older PCs
+  account?: AccountLinkInfo; // added (cloud milestone 7): the PC link; absent from older PCs
+}
+
+// ---------- The PC link (docs/CLOUD.md section 3, "The PC link"; added for the cloud's milestone
+// 7). A credential that lets this PC act for its owner's Kiwimake account in Convex. The token
+// itself never leaves the companion: none of these carry it back.
+export type PcLinkScope = "share" | "web" | "move";
+export interface AccountLinkInfo {
+  state: "none" | "signingIn" | "linked";
+  account?: { email: string | null; name: string | null; test?: boolean }; // when linked; test: the dev test account
+  linkedFrom?: "phone" | "pc"; // the phone handed the link over, or the desktop signed in in the browser
+  linkedFromName?: string | null; // the phone's name ("Pixel 8") when linkedFrom is "phone"
+  linkedAt?: string;
+  scopes?: PcLinkScope[];
+  canHandOff?: boolean; // the PC can hand its sign-in to its phone (it signed in itself)
+  signIn?: { url: string; code: string; expiresAt: string }; // while signingIn: the browser page and the code it shows ("ABCD-EFGH")
+  error?: string; // plain sentence: the last sign-in or link that failed
+}
+// GET  /api/account                 -> AccountLinkInfo (a paired phone)
+// POST /api/account/link            AccountLinkRequest -> AccountLinkInfo (the phone hands its PC a link)
+// POST /api/account/handoff         -> AccountHandoff (the PC hands its sign-in to its phone)
+// POST /api/account/unlink          -> AccountLinkInfo
+// POST /api/admin/account/sign-in   -> AccountLinkInfo (starts the browser sign-in; the desktop opens signIn.url)
+// POST /api/admin/account/cancel    -> AccountLinkInfo
+// POST /api/admin/account/unlink    -> AccountLinkInfo
+// POST /api/admin/account/ask-phone -> AccountAskResult (sends account.asked to the connected phones)
+export interface AccountLinkRequest {
+  token: string; // kpc_..., from the phone's accounts.createPcLink, shown once
+  site: string; // the Convex site the phone is signed in to (https://<deployment>.convex.site)
+  phoneName?: string;
+}
+export interface AccountHandoff {
+  code: string; // one-time, two minutes: the phone signs in with it ("pc-handoff")
+  site: string;
+}
+export interface AccountAskResult {
+  phones: number; // connected phones that were asked
 }
 
 // ---------- Signing keys (docs/DISTRIBUTION.md, "Signing"). Nothing here ever holds a password or

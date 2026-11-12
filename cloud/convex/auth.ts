@@ -2,6 +2,10 @@
 import Google from '@auth/core/providers/google';
 import Resend from '@auth/core/providers/resend';
 import { Anonymous } from '@convex-dev/auth/providers/Anonymous';
+import { ConvexCredentials } from '@convex-dev/auth/providers/ConvexCredentials';
+import { internal } from './_generated/api';
+import type { Id } from './_generated/dataModel';
+import { sha256Hex } from './lib/crypto';
 import { convexAuth } from '@convex-dev/auth/server';
 
 /** The phone app's deep link scheme (app/app.json "scheme"); sign-in returns there. */
@@ -12,6 +16,21 @@ function sixDigits(): string {
   crypto.getRandomValues(a);
   return String(a[0] % 1_000_000).padStart(6, '0');
 }
+
+/**
+ * The PC hands its sign-in to its paired phone (milestone 7, pclinks.ts): the companion asks Convex
+ * for a one-time code with its PC link and gives it to the phone over pairing; the phone signs in
+ * with it. Works once, for two minutes, only while the link lives.
+ */
+const PcHandoff = ConvexCredentials({
+  id: 'pc-handoff',
+  async authorize(params, ctx) {
+    const code = typeof params.code === 'string' ? params.code : '';
+    if (code.length < 20) return null;
+    const userId = (await ctx.runMutation(internal.pclinks.useHandoff, { codeHash: await sha256Hex(code) })) as Id<'users'> | null;
+    return userId ? { userId } : null;
+  },
+});
 
 const ResendOTP = Resend({
   id: 'resend-otp',
@@ -43,6 +62,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     Google,
     ResendOTP,
+    PcHandoff,
     // Dev only (SPIKE_ANONYMOUS=1 on the dev deployment): lets the spike's round trip run on the
     // emulator without a person's Google account or inbox. Never set on production.
     ...(process.env.SPIKE_ANONYMOUS === '1' ? [Anonymous] : []),
@@ -52,6 +72,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       if (APP_SCHEMES.some((s) => redirectTo.startsWith(s))) return redirectTo;
       const site = process.env.SITE_URL ?? '';
       if (site && redirectTo.startsWith(site)) return redirectTo;
+      // The desktop's browser sign-in page (pclinks.ts) returns to itself after Google.
+      const own = process.env.CONVEX_SITE_URL ?? '';
+      if (own && redirectTo.startsWith(`${own}/pc/link?`)) return redirectTo;
       if (redirectTo.startsWith('/')) return `${site}${redirectTo}`;
       throw new Error(`Invalid redirectTo ${redirectTo}`);
     },

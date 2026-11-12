@@ -10,6 +10,8 @@ import { networkInterfaces, hostname } from "node:os";
 import { join } from "node:path";
 import WebSocket from "ws";
 import type {
+  AccountAskResult,
+  AccountLinkInfo,
   AdminEvent,
   ChangeSettingsRequest,
   FileSuggestionResponse,
@@ -381,6 +383,19 @@ export class AdminClient extends EventEmitter {
     const result = await this.request<BackupState>("POST", "/api/admin/backup", body, 10 * 60_000);
     await this.refreshState();
     return result;
+  }
+
+  /** The PC link (docs/CLOUD.md section 3, cloud milestone 7): sign in in the browser, unlink, ask the phone. */
+  async account(what: "sign-in" | "cancel" | "unlink"): Promise<AccountLinkInfo> {
+    if (!this.adminRoutes) throw new Error("Linking needs a newer Kiwimake companion.");
+    const result = await this.request<AccountLinkInfo>("POST", `/api/admin/account/${what}`, {}, 30_000);
+    await this.refreshState();
+    return result;
+  }
+
+  async askPhoneToLink(): Promise<AccountAskResult> {
+    if (!this.adminRoutes) throw new Error("Linking needs a newer Kiwimake companion.");
+    return this.request<AccountAskResult>("POST", "/api/admin/account/ask-phone", {});
   }
 
   async backupRun(): Promise<BackupState> {

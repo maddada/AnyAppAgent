@@ -7,6 +7,7 @@ import { EXTRA_PACK, FREE_MONTHLY_MILLICREDITS, PLANS } from './config';
 import { randomToken, sealSecret, sha256Hex } from './lib/crypto';
 import { balanceOf, subscriptionOf } from './lib/credits';
 import { requireUser } from './lib/session';
+import { ALL_SCOPES, revokeTwins } from './pclinks';
 
 export const me = query({
   args: {},
@@ -32,7 +33,7 @@ export const me = query({
       pcOffSwitch: Boolean(user.pcOffSwitch),
       plan: sub ? { id: sub.plan, name: PLANS[sub.plan].name, interval: sub.interval, status: sub.status, renewsAt: sub.periodEnd, cancelAtPeriodEnd: sub.cancelAtPeriodEnd } : { id: 'free', name: 'Free' },
       credits: (await balanceOf(ctx, user._id)) / 1000,
-      pcs: links.filter((l) => !l.revokedAt).map((l) => ({ id: l._id, name: l.deviceName, linkedFrom: l.linkedFrom, lastSeenAt: l.lastSeenAt ?? null })),
+      pcs: links.filter((l) => !l.revokedAt).map((l) => ({ id: l._id, name: l.deviceName, linkedFrom: l.linkedFrom, fromName: l.linkedFromName ?? null, lastSeenAt: l.lastSeenAt ?? null })),
     };
   },
 });
@@ -48,21 +49,23 @@ export const setPcOffSwitch = mutation({
 
 /**
  * A PC link (section 3, "The PC link"), made by a signed-in phone or desktop for one PC. The token
- * is returned once and stored only as its hash. Milestone 7 adds the pairing hand-over around it.
+ * is returned once and stored only as its hash; the phone hands it to its paired PC (milestone 7).
  */
 export const createPcLink = mutation({
-  args: { deviceName: v.string(), linkedFrom: v.union(v.literal('phone'), v.literal('pc')) },
-  handler: async (ctx, { deviceName, linkedFrom }) => {
+  args: { deviceName: v.string(), linkedFrom: v.union(v.literal('phone'), v.literal('pc')), fromName: v.optional(v.string()) },
+  handler: async (ctx, { deviceName, linkedFrom, fromName }) => {
     const user = await requireUser(ctx);
     const token = `kpc_${randomToken()}`;
     const id = await ctx.db.insert('pcLinks', {
       userId: user._id,
       tokenHash: await sha256Hex(token),
       deviceName: deviceName.trim().slice(0, 60) || 'My PC',
-      scopes: ['share', 'web', 'move'],
+      scopes: ALL_SCOPES,
       linkedFrom,
+      ...(fromName?.trim() ? { linkedFromName: fromName.trim().slice(0, 60) } : {}),
       createdAt: Date.now(),
     });
+    await revokeTwins(ctx, user._id, deviceName.trim().slice(0, 60) || 'My PC', id);
     return { id, token };
   },
 });

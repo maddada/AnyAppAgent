@@ -1251,6 +1251,38 @@ through a helper is nearer 1.8 credits at the $0.20 basis; the daily medians job
 estimates as changes pile up. **Not run:** a real Stripe test payment (it needs the Stripe test
 key, section 11 item 8, and the webhook's signing secret).
 
+**Milestone 7, what ran (12 Nov 2026):** `cloud/convex/pclinks.ts`, the companion's
+`server/src/cloud-link.ts` and the desktop's Account page (a fifth item in the rail, between Setup
+and Settings). Both ways, through pairing: a signed-in phone makes a link for its paired PC
+(`accounts.createPcLink`, now with the phone's name) and hands it over (`POST /api/account/link`,
+the companion checks it with `/pc/hello` before keeping it); the desktop's "Ask my phone" sends
+`account.asked` to the connected phones, which show a notice with Link; or the desktop signs in in
+the browser with a **device code**: `/pc/link/start` gives an 8-letter code (shown as `ABCD-EFGH`
+on the desktop and on the page, so the person can check they match) and a poll secret only the
+companion holds; the page `/pc/link?l=` (served by Convex, Workbench look) signs in with Convex
+Auth's own HTTP API (Google, a code by email, or the dev test account) and approves; the
+companion's poll then gets the link once. A PC that signed in itself **hands its sign-in to its
+phone**: `/pc/handoff` gives a one-time code (two minutes) that the phone signs in with (a
+`pc-handoff` ConvexCredentials provider); a link the phone made never turns into a sign-in. Every
+PC route goes through `pcRoute(path, scope)` in `http.ts`, which checks the link and its scope in
+Convex and stamps `lastSeenAt`. The same PC linking again revokes its older link. Unlink: from the
+desktop (`/pc/unlink`), from the phone's account screen (through the PC, or `revokePcLink` for any
+listed PC); a link revoked elsewhere is forgotten at the companion's next check (on start and every
+half hour). The token lives only in the companion's `cloud-link.json`; no route, event or admin
+state carries it back. The desktop needs `ANYAPP_CLOUD_SITE` to sign in in the browser (without
+it only a phone can link it; the production address goes there when production exists).
+`shared/protocol.ts` additions (additive): `AccountLinkInfo`, `AdminState.account`, the
+`account.updated` and `account.asked` events, the `/api/account*` routes. Proven: 9 new Convex
+tests, 4 companion tests, and live (`C:/aa/e2e/cloud-build/m7/`): the dev desktop with my own
+companion signed in in the browser (the page approved with the dev test account, the desktop
+turned to "Signed in in the browser"), the hand-over against the live deployment
+(`cloud/scripts/m7-handoff.mjs`: a session for the PC's account, the same code refused twice), and
+on the emulator the phone saw the PC linked to another account, linked it to its own ("Linked
+from Android emulator" on the desktop), unlinked it, and answered the desktop's "Ask my phone".
+**Not run:** the hand-over through the phone's UI (it would sign the phone out of its dev test
+account, which cannot be signed into again) and the page's Google and email sign-in (they need a
+person's Google account or inbox).
+
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account
 sheet and one grid (+1.5), the PC link (+1, which circles and web apps then reuse), moving apps

@@ -653,6 +653,12 @@ function handleEvent(event: ServerEvent) {
     case "suggestions.updated":
       setSuggestions(event.appId, event.suggestions);
       break;
+    case "account.updated":
+      setState({ pcAccount: event.account });
+      break;
+    case "account.asked":
+      setState({ accountAsked: event.serverName });
+      break;
   }
 }
 
@@ -665,6 +671,8 @@ async function resync() {
     setApps(apps);
     // An older PC has no usage meter: care stays null and nothing shows.
     void client.care().then((care) => setState({ care }), () => {});
+    // An older PC has no account link: pcAccount stays null.
+    void client.pcAccount().then((pcAccount) => setState({ pcAccount }), () => {});
     refreshPackages();
     updateKeepAlive();
     resumeUnfinishedInstalls();

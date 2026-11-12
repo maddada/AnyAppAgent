@@ -27,6 +27,8 @@ export interface Config {
   planFirst: boolean;
   /** The cloud runner only (ANYAPP_CLOUD=1, docs/CLOUD.md): models per session, the agent as another Unix user. */
   cloud?: CloudSettings;
+  /** The Kiwimake cloud this PC signs in to in the browser (ANYAPP_CLOUD_SITE, https://<deployment>.convex.site); without it, only a phone can link the PC. */
+  cloudSite?: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -45,5 +47,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     coordinator: !["off", "0", "false", "no"].includes((env.ANYAPP_COORDINATOR ?? "on").toLowerCase()),
     planFirst: !["off", "0", "false", "no"].includes((env.ANYAPP_PLAN_FIRST ?? "on").toLowerCase()),
     ...(cloudSettingsFromEnv(env) ? { cloud: cloudSettingsFromEnv(env) } : {}),
+    ...(env.ANYAPP_CLOUD_SITE ? { cloudSite: env.ANYAPP_CLOUD_SITE } : {}),
   };
 }

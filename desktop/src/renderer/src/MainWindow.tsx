@@ -3,7 +3,8 @@
 // same chat as on the phone) or today's activity with the phone panels. New app works from here
 // too, with the same fields and words as the phone's New app sheet.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, CircleAlert, Cloud, Download, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, Wrench } from "lucide-react";
+import { ChevronDown, CircleAlert, Cloud, Download, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, UserRound, Wrench } from "lucide-react";
+import { AccountPage } from "./Account.tsx";
 import type { LucideIcon } from "lucide-react";
 import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
@@ -19,7 +20,7 @@ import { BackupGroup, HealthBadge, ReminderCard, UsageGroup } from "./Trust.tsx"
 import { BEHIND_LABEL, headsUp } from "../../../../shared/chat/index.ts";
 
 const api = window.anyapp;
-type Page = "apps" | "phones" | "setup" | "settings";
+type Page = "apps" | "phones" | "setup" | "account" | "settings";
 
 export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; openSetup: (step: StepId) => void; connectRequest: number }) {
   const [page, setPage] = useState<Page>("apps");
@@ -51,6 +52,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
     ["apps", LayoutGrid, "Apps"],
     ["phones", Smartphone, "Phones"],
     ["setup", ListChecks, "Setup"],
+    ["account", UserRound, "Account"],
     ["settings", Gear, "Settings"],
   ];
   return (
@@ -88,6 +90,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
           <div className="dm-scroll">
             {page === "phones" && <PhonesPage s={s} onConnect={() => setConnect(true)} />}
             {page === "setup" && <SetupPage s={s} openSetup={openSetup} />}
+            {page === "account" && <AccountPage s={s} />}
             {page === "settings" && <SettingsPage s={s} openSetup={openSetup} />}
           </div>
         )}

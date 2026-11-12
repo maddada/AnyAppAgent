@@ -10,7 +10,9 @@ import { callback } from './github';
 import { route as pageRoute, storePage } from './pages';
 import { sealTicket } from './signing';
 import { done as billingDone, webhook as stripeWebhook } from './stripe';
-import { hmacSha256B64, openSecret, sha256Hex, unb64 } from './lib/crypto';
+import { hmacSha256B64, openSecret, randomToken, sha256Hex, unb64 } from './lib/crypto';
+import { pcLinkPage } from './lib/pcLinkPage';
+import { cleanCode, hasScope, linkCode, REQUEST_MS, showCode, type PcAuth, type PcScope } from './pclinks';
 import { sealTo } from './lib/transport';
 
 const http = httpRouter();
@@ -155,6 +157,92 @@ http.route({
     const state = e.type === 'sandbox.deleted' ? 'deleted' : e.type === 'sandbox.suspended' ? 'paused' : e.type === 'sandbox.stopped' ? 'stopped' : null;
     if (boxId && state) await ctx.runMutation(internal.boxes.providerSays, { providerId: boxId, state });
     return json(200, { ok: true });
+  }),
+});
+
+// ---- The PC link (milestone 7, pclinks.ts). A PC signs in with its link (Bearer kpc_...). ----
+
+async function pcOf(ctx: ActionCtx, req: Request): Promise<PcAuth | null> {
+  const got = /^Bearer (kpc_.+)$/.exec(req.headers.get('Authorization') ?? '')?.[1];
+  if (!got) return null;
+  return ctx.runQuery(internal.pclinks.byHash, { hash: await sha256Hex(got) });
+}
+
+/** Every PC route names the scope it needs (null: any live link); Convex checks it here. */
+export function pcRoute(path: string, scope: PcScope | null, handler: (ctx: ActionCtx, req: Request, pc: PcAuth) => Promise<Response>) {
+  http.route({
+    path,
+    method: 'POST',
+    handler: httpAction(async (ctx, req) => {
+      const pc = await pcOf(ctx, req);
+      if (!pc) return json(401, { error: 'This PC is not linked to an account any more.' });
+      if (!hasScope(pc, scope)) return json(403, { error: `This PC's link may not ${scope}.` });
+      try {
+        await ctx.runMutation(internal.pclinks.seen, { linkId: pc.linkId });
+        return await handler(ctx, req, pc);
+      } catch (e) {
+        console.error(`${path}:`, (e as Error).message);
+        return json(500, { error: (e as Error).message.slice(0, 300) });
+      }
+    }),
+  });
+}
+
+// Who this PC acts for (the desktop's Account page), and a check that the link still lives.
+pcRoute('/pc/hello', null, async (_ctx, _req, pc) =>
+  json(200, { linkId: pc.linkId, scopes: pc.scopes, deviceName: pc.deviceName, linkedFrom: pc.linkedFrom, linkedFromName: pc.linkedFromName, account: pc.account }),
+);
+pcRoute('/pc/unlink', null, async (ctx, _req, pc) => {
+  await ctx.runMutation(internal.pclinks.revoke, { linkId: pc.linkId });
+  return json(200, { ok: true });
+});
+// The PC hands its sign-in to its paired phone: a one-time code the phone signs in with.
+pcRoute('/pc/handoff', null, async (ctx, _req, pc) => {
+  const code = randomToken(32);
+  const r = await ctx.runMutation(internal.pclinks.handoff, { linkId: pc.linkId, codeHash: await sha256Hex(code) });
+  return r.ok ? json(200, { code }) : json(409, { error: r.why });
+});
+
+// The desktop signs in through the browser: start (a code and the page's address), the page,
+// then the companion polls with its own secret until the page approved.
+http.route({
+  path: '/pc/link/start',
+  method: 'POST',
+  handler: httpAction(async (ctx, req) => {
+    const body = (await req.json().catch(() => ({}))) as { deviceName?: unknown };
+    const deviceName = typeof body.deviceName === 'string' ? body.deviceName : 'My PC';
+    const code = linkCode();
+    const poll = randomToken(32);
+    await ctx.runMutation(internal.pclinks.startRequest, { code, pollHash: await sha256Hex(poll), deviceName });
+    const site = process.env.CONVEX_SITE_URL ?? new URL(req.url).origin;
+    return json(200, { code, shown: showCode(code), poll, url: `${site}/pc/link?l=${code}`, expiresInMs: REQUEST_MS });
+  }),
+});
+http.route({
+  path: '/pc/link',
+  method: 'GET',
+  handler: httpAction(async (_ctx, req) => {
+    const code = cleanCode(new URL(req.url).searchParams.get('l') ?? '');
+    const html = pcLinkPage({
+      cloudUrl: process.env.CONVEX_CLOUD_URL ?? '',
+      code,
+      google: Boolean(process.env.AUTH_GOOGLE_ID),
+      email: Boolean(process.env.AUTH_RESEND_KEY),
+      testAccount: process.env.SPIKE_ANONYMOUS === '1',
+    });
+    return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } });
+  }),
+});
+http.route({
+  path: '/pc/link/poll',
+  method: 'POST',
+  handler: httpAction(async (ctx, req) => {
+    const body = (await req.json().catch(() => ({}))) as { code?: unknown; poll?: unknown };
+    if (typeof body.code !== 'string' || typeof body.poll !== 'string') return json(400, { error: 'code and poll are needed' });
+    const token = `kpc_${randomToken()}`;
+    const r = await ctx.runMutation(internal.pclinks.pollRequest, { code: body.code, pollHash: await sha256Hex(body.poll), tokenHash: await sha256Hex(token) });
+    if (r.state === 'linked') return json(200, { state: 'linked', token });
+    return json(r.state === 'gone' ? 410 : 200, { state: r.state });
   }),
 });
 

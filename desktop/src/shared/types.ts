@@ -186,6 +186,9 @@ export type KeysAction =
   | { ok: false; error: string };
 
 /** "Never lose your apps" (docs/TRUST.md): cancelled when the folder dialog was closed. */
+/** The Account page's actions (the PC link, cloud milestone 7). phones: how many connected phones were asked. */
+export type AccountAction = { ok: true; phones?: number } | { ok: false; error: string };
+
 export type BackupAction =
   | { cancelled: true }
   | { ok: true; state?: BackupState; restored?: BackupRestoreResult }
@@ -229,6 +232,13 @@ export interface AnyAppBridge {
   /** Turns backups on: asks for the folder, then the companion makes the recovery key from the password and backs up. */
   backupOn(password: string): Promise<BackupAction>;
   backupOff(): Promise<BackupAction>;
+  /** The PC link: starts the browser sign-in and opens its page. */
+  accountSignIn(): Promise<AccountAction>;
+  accountOpenPage(): Promise<void>;
+  accountCancel(): Promise<AccountAction>;
+  accountUnlink(): Promise<AccountAction>;
+  /** Asks the connected, signed-in phones to link this PC (they show a notice). */
+  accountAskPhone(): Promise<AccountAction>;
   backupRun(): Promise<BackupAction>;
   /** On a new PC: asks for the backup folder, then restores everything in it. */
   backupRestore(password: string): Promise<BackupAction>;

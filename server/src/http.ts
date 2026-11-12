@@ -5,6 +5,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { hostname } from "node:os";
 import { WebSocketServer, type WebSocket } from "ws";
 import type {
+  AccountAskResult,
+  AccountHandoff,
+  AccountLinkRequest,
   AddTodoRequest,
   ChangeSettingsRequest,
   CloneRequest,
@@ -33,6 +36,7 @@ import type {
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
 import type { SigningKeys } from "./signing-keys.ts";
+import type { CloudLink } from "./cloud-link.ts";
 import { ADMIN_DEVICE_ID, cleanDeviceName, type Auth } from "./auth.ts";
 import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
@@ -147,6 +151,7 @@ export function startHttpServer(deps: {
   easyConnect: EasyConnect;
   signing?: SigningKeys;
   hostApkPath?: string;
+  account?: CloudLink;
 }): {
   server: Server;
   broadcast(event: ServerEvent): void;
@@ -219,6 +224,7 @@ export function startHttpServer(deps: {
       devices,
       ...(deps.signing?.state() ? { signing: deps.signing.state() } : {}),
       backup: apps.backups.state(),
+      ...(deps.account ? { account: deps.account.info() } : {}),
     };
   }
 
@@ -275,6 +281,22 @@ export function startHttpServer(deps: {
       deps.signing?.refreshSoon();
       adminChanged();
       return sendJson(res, 200, result);
+    }
+    // The PC link (docs/CLOUD.md section 3): sign in in the browser, unlink, ask the phone.
+    if (method === "POST" && path.startsWith("/api/admin/account/")) {
+      const account = deps.account;
+      if (!account) throw new HttpError(409, "This companion has no account link.");
+      const what = path.slice("/api/admin/account/".length);
+      if (what === "sign-in") return sendJson(res, 200, await account.startSignIn());
+      if (what === "cancel") return sendJson(res, 200, account.cancel());
+      if (what === "unlink") return sendJson(res, 200, await account.unlink());
+      if (what === "ask-phone") {
+        const data = JSON.stringify({ type: "account.asked", serverName: serverName() } satisfies ServerEvent);
+        let phones = 0;
+        for (const ws of phoneSockets.keys()) if (ws.readyState === ws.OPEN) (ws.send(data), phones++);
+        return sendJson(res, 200, { phones } satisfies AccountAskResult);
+      }
+      return sendError(res, 404, "Not found.");
     }
     const device = /^\/api\/admin\/devices\/([^/]+)$/.exec(path);
     if (method === "DELETE" && device) {
@@ -342,6 +364,19 @@ export function startHttpServer(deps: {
     if (path.startsWith("/api/admin/")) return adminRoute(req, res, path, method);
     if (!path.startsWith("/api/")) return sendError(res, 404, "Not found.");
     if (!auth.check(bearer(req))) return sendError(res, 401, "This phone is not paired with this PC. Pair it again.");
+
+    // The PC link, through pairing (docs/CLOUD.md section 3): the phone hands this PC a link, or
+    // takes this PC's sign-in, or unlinks it.
+    if (path === "/api/account" || path.startsWith("/api/account/")) {
+      const account = deps.account;
+      if (!account) return sendError(res, 404, "This PC cannot link to an account. Update Kiwimake on your PC.");
+      if (path === "/api/account" && method === "GET") return sendJson(res, 200, account.info());
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      if (path === "/api/account/link") return sendJson(res, 200, await account.link(await readBody<Partial<AccountLinkRequest>>(req, 16 * 1024)));
+      if (path === "/api/account/handoff") return sendJson(res, 200, (await account.handoff()) satisfies AccountHandoff);
+      if (path === "/api/account/unlink") return sendJson(res, 200, await account.unlink());
+      return sendError(res, 404, "Not found.");
+    }
 
     // The usage meter, the health reminder and the backup, for the phone (docs/TRUST.md).
     if (path === "/api/care") {

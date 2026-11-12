@@ -312,12 +312,37 @@ export default defineSchema({
     deviceName: v.string(),
     scopes: v.array(v.union(v.literal('share'), v.literal('web'), v.literal('move'))),
     linkedFrom: v.union(v.literal('phone'), v.literal('pc')),
+    /** The phone that linked it ("Linked from Pixel 8"), when linkedFrom is 'phone'. */
+    linkedFromName: v.optional(v.string()),
     createdAt: v.number(),
     lastSeenAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
   })
     .index('by_hash', ['tokenHash'])
     .index('by_user', ['userId']),
+
+  // Milestone 7: a desktop signing in through the browser (a device code). The companion starts
+  // it and polls with its own secret; the page in the browser approves it once signed in.
+  pcLinkRequests: defineTable({
+    code: v.string(),
+    pollHash: v.string(),
+    deviceName: v.string(),
+    expiresAt: v.number(),
+    userId: v.optional(v.id('users')),
+    approvedAt: v.optional(v.number()),
+    consumedAt: v.optional(v.number()),
+  })
+    .index('by_code', ['code'])
+    .index('by_expiry', ['expiresAt']),
+
+  // Milestone 7: the PC hands its sign-in to its paired phone (a one-time code, two minutes).
+  pcHandoffs: defineTable({
+    codeHash: v.string(),
+    userId: v.id('users'),
+    pcLinkId: v.id('pcLinks'),
+    expiresAt: v.number(),
+    usedAt: v.optional(v.number()),
+  }).index('by_hash', ['codeHash']),
 
   moves: defineTable({
     appId: v.id('apps'),

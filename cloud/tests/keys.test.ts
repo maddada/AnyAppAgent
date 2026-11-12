@@ -74,12 +74,12 @@ describe('keys and tickets', () => {
     const { t, as, appId, thread, post } = await setup();
     const { publicRaw } = await (await post('/runner/transport-key')).json();
     expect(publicRaw).toBe(transport.publicRaw);
-    const inner = JSON.stringify({ p12: btoa('PKCS12'), storePassword: 'pw', keyAlias: 'app' });
+    const inner = JSON.stringify({ p12: btoa('PKCS12'), storePassword: 'store-pass-plain', keyAlias: 'app' });
     const box = await sealTo(publicRaw, enc.encode(inner), `appkey-upload:${thread._id}`);
     expect(await (await post('/runner/key', { box, certSha256: CERT })).json()).toMatchObject({ stored: true });
     const row = (await t.run((ctx) => ctx.db.query('keys').first()))!;
     expect(row).toMatchObject({ kekVersion: 1, certSha256: CERT });
-    expect(JSON.stringify(row)).not.toContain('pw');
+    expect(JSON.stringify(row)).not.toContain('store-pass-plain');
     // A box sealed for another thread does not open here.
     const wrong = await sealTo(publicRaw, enc.encode(inner), 'appkey-upload:other');
     expect((await post('/runner/key', { box: wrong, certSha256: CERT })).status).toBe(500);
@@ -91,7 +91,7 @@ describe('keys and tickets', () => {
     const once = await newTransportKey();
     const res = await (await post('/runner/sign-ticket', { build: 1, runnerKey: once.publicRaw })).json();
     const got = JSON.parse(dec.decode(await openWith(once.key, res.box, `ticket:${thread._id}:1`)));
-    expect(got).toMatchObject({ storePassword: 'pw', keyAlias: 'app' });
+    expect(got).toMatchObject({ storePassword: 'store-pass-plain', keyAlias: 'app' });
     expect((await post('/runner/sign-ticket', { build: 1, runnerKey: once.publicRaw })).status).toBe(500);
 
     // The signing log, for the owner.

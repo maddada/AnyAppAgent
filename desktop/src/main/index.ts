@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
-import type { BackupAction, Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
+import type { AccountAction, BackupAction, Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
 import { PHONE_RELEASE_URL } from "../shared/types.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
@@ -674,6 +674,41 @@ function ipc(): void {
     try {
       if (!admin) throw new Error("Kiwimake is still starting.");
       return { ok: true, state: await admin.backupSetup({ enabled: false }) };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  // The PC link (docs/CLOUD.md section 3): the Account page.
+  ipcMain.handle("account:sign-in", async (): Promise<AccountAction> => {
+    try {
+      if (!admin) throw new Error("Kiwimake is still starting.");
+      const info = await admin.account("sign-in");
+      // The dev screenshots open the page themselves (signin-url.txt), never the person's browser.
+      if (info.signIn?.url && /^https:\/\//.test(info.signIn.url) && !env.ANYAPP_DESKTOP_SHOTS) await shell.openExternal(info.signIn.url);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("account:open", async () => {
+    const url = admin?.state?.account?.signIn?.url;
+    if (url && /^https:\/\//.test(url)) await shell.openExternal(url);
+  });
+  for (const what of ["cancel", "unlink"] as const) {
+    ipcMain.handle(`account:${what}`, async (): Promise<AccountAction> => {
+      try {
+        if (!admin) throw new Error("Kiwimake is still starting.");
+        await admin.account(what);
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: (error as Error).message };
+      }
+    });
+  }
+  ipcMain.handle("account:ask-phone", async (): Promise<AccountAction> => {
+    try {
+      if (!admin) throw new Error("Kiwimake is still starting.");
+      return { ok: true, phones: (await admin.askPhoneToLink()).phones };
     } catch (error) {
       return { ok: false, error: (error as Error).message };
     }

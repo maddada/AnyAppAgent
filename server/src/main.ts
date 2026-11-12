@@ -5,6 +5,7 @@ import type { ServerEvent } from "../../shared/protocol.ts";
 import { AppManager } from "./apps.ts";
 import { installAppsCli } from "./apps-cli.ts";
 import { Auth } from "./auth.ts";
+import { CloudLink } from "./cloud-link.ts";
 import { loadBuilder } from "./builder.ts";
 import { loadConfig } from "./config.ts";
 import { EasyConnect } from "./easy-connect/controller.ts";
@@ -50,7 +51,11 @@ export async function main(): Promise<void> {
   apps.recover();
   const signing = new SigningKeys(builder, () => new Map(apps.list().map((app) => [app.packageName, app.name])), log);
 
+  // The PC link (docs/CLOUD.md section 3): this PC acting for its owner's Kiwimake account.
+  const account = new CloudLink({ stateDir: config.stateDir, ...(config.cloudSite ? { site: config.cloudSite } : {}), deviceName: () => serverName(), log });
+
   const http = startHttpServer({
+    account,
     host: config.host,
     port: config.port,
     version: config.version,
@@ -67,6 +72,10 @@ export async function main(): Promise<void> {
     http.broadcast(event);
   };
   signing.onChange = () => http.adminChanged();
+  account.onChange = (info) => {
+    http.broadcast({ type: "account.updated", account: info });
+    http.adminChanged();
+  };
   // A backup (automatic or not) holds every key: the desktop's backup and key rows change with it.
   const backupChanged = apps.backups.onChange;
   apps.backups.onChange = () => {
@@ -85,6 +94,7 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
   easyConnect.init();
+  account.start();
   apps.startWork();
   if (builder.kind === "real") warmBuilder(config.appsDir, log);
 
@@ -124,6 +134,7 @@ export async function main(): Promise<void> {
     stopping = true;
     log("stopping…");
     easyConnect.stop();
+    account.stop();
     http.close();
     await apps.shutdown();
     auth.flush();

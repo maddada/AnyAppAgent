@@ -4,7 +4,7 @@ import { appAction as sharedAppAction, Drafts, mergeHelpers, mergeItems, replace
 import type { Attachment } from "@/chat/attachments";
 import { Client } from "./api";
 import { CloudClient, isCloudApp, isCloudId, type AppClient } from "./cloud";
-import type { App, CareState, ChatItem, Suggestion, TodoItem, WorkerInfo } from "./protocol";
+import type { AccountLinkInfo, App, CareState, ChatItem, Suggestion, TodoItem, WorkerInfo } from "./protocol";
 import { defaultPrefs, type Pairing, type Prefs } from "./storage";
 
 export type Connection = "offline" | "connecting" | "online";
@@ -19,7 +19,7 @@ export interface Account {
   pcOffSwitch: boolean;
   plan: { id: "free" | "starter" | "pro" | "max" | "ownKey"; name: string; interval?: "month" | "year"; status?: string; renewsAt?: number; cancelAtPeriodEnd?: boolean };
   credits: number;
-  pcs: { id: string; name: string; linkedFrom: string; lastSeenAt: number | null }[];
+  pcs: { id: string; name: string; linkedFrom: string; fromName?: string | null; lastSeenAt: number | null }[];
 }
 
 /** Signed in to the account (Convex Auth): "off" when this build has no cloud. */
@@ -68,6 +68,10 @@ export interface State {
   account: Account | null;
   cloudClient: CloudClient | null;
   cloudAppsLoaded: boolean;
+  /** The paired PC's link to a Kiwimake account (null: unknown, or an older PC). */
+  pcAccount: AccountLinkInfo | null;
+  /** The desktop asked this phone to link its PC (account.asked): the PC's name until answered. */
+  accountAsked: string | null;
 }
 
 export const useStore = create<State>(() => ({
@@ -96,6 +100,8 @@ export const useStore = create<State>(() => ({
   account: null,
   cloudClient: null,
   cloudAppsLoaded: false,
+  pcAccount: null,
+  accountAsked: null,
 }));
 
 export const getState = useStore.getState;

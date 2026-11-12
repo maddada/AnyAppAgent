@@ -48,4 +48,7 @@ export type {
   CloudPlace,
   CreditEstimate,
   Balance,
+  AccountLinkInfo,
+  AccountLinkRequest,
+  AccountHandoff,
 } from "@shared/protocol";

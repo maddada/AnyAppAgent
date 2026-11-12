@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { X } from "lucide-react-native";
 import { CLOUD_DEV, cloudMessage } from "@/lib/cloud";
+import { handoffCode } from "@/lib/pcLink";
 import { useStore } from "@/lib/store";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
@@ -32,6 +33,10 @@ export default function SignIn() {
   const params = useLocalSearchParams<{ code?: string; then?: string; reason?: string }>();
   const signedIn = useStore((s) => s.cloudAuth === "signedIn");
   const account = useStore((s) => s.account);
+  // A paired PC that signed in itself hands its sign-in over (docs/CLOUD.md, "Signed in once").
+  const pcAccount = useStore((s) => (s.connection === "online" ? s.pcAccount : null));
+  const serverName = useStore((s) => s.serverName);
+  const fromPc = pcAccount?.state === "linked" && pcAccount.canHandOff ? pcAccount : null;
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
@@ -82,6 +87,24 @@ export default function SignIn() {
         <T variant="lede" color="textSecondary">
           {reason ?? "One account for your PC and the cloud."}
         </T>
+        {fromPc ? (
+          <View style={{ gap: space.md }} testID="sign-in-from-pc">
+            <T>
+              {serverName ?? "Your PC"} is signed in as {fromPc.account?.email ?? (fromPc.account?.test ? "a test account" : "your account")}. Use the same account here, with no sign-in.
+            </T>
+            <View style={{ alignItems: "flex-end" }}>
+              <Button
+                label="Use my PC's account"
+                busy={busy === "pc"}
+                testID="sign-in-from-pc-go"
+                onPress={() => run("pc", async () => signIn("pc-handoff", { code: await handoffCode() }))}
+              />
+            </View>
+            <T variant="label" color="textSecondary" style={{ marginTop: space.md }}>
+              Or sign in another way
+            </T>
+          </View>
+        ) : null}
         <Button
           label="Continue with Google"
           busy={busy === "google"}
