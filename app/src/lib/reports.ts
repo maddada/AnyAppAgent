@@ -3,7 +3,7 @@
 // crashes until the PC is reachable; this sends them to the PC, and answers the PC's diary.request.
 import type { CrashReport, DiaryAnswer, DiaryEntry, ServerEvent } from "./protocol";
 import { AnyAppNative } from "../../modules/anyapp-native";
-import { getState, useStore, type InstallProgress } from "./store";
+import { clientFor, getState, useStore, type InstallProgress } from "./store";
 
 /** Crashes taken from the native queue that could not be sent yet (sent on the next connect). */
 let unsent: { packageName: string; report: CrashReport }[] = [];
@@ -92,7 +92,7 @@ export function waitForInstall(appId: string, limitMs = DIARY_INSTALL_WAIT_MS): 
 
 /** The PC wants an app's diary (its agent called read_diary): ask the app, then answer the PC. */
 export async function answerDiaryRequest(event: Extract<ServerEvent, { type: "diary.request" }>): Promise<void> {
-  const client = getState().client;
+  const client = clientFor(event.appId);
   if (!client) return;
   const answer = (body: { entries?: DiaryEntry[]; problem?: DiaryAnswer["problem"] }) =>
     client.diaryAnswer(event.appId, { requestId: event.requestId, ...body }).catch(() => {});

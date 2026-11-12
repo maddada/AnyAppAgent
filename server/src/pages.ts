@@ -349,6 +349,35 @@ export class Pages {
     return { page, notes };
   }
 
+  /**
+   * The cloud: the page as the phone gets it (the kit added, its state left for Convex to fill in:
+   * `ghostex.__state(null)`), to upload when it is published. Null when it is gone.
+   */
+  servedHtml(appId: string, pageId: string): { html: string; page: PageInfo } | null {
+    const record = this.read(appId, pageId);
+    if (!record || !existsSync(this.htmlPath(appId, pageId))) return null;
+    return { html: withKit(readFileSync(this.htmlPath(appId, pageId), "utf8"), null), page: this.info(record) };
+  }
+
+  /** The cloud: answers given on the page as Convex served it, applied as if posted here. */
+  answerFromCloud(appId: string, pageId: string, answers: unknown): { ok: boolean; error?: string } {
+    const record = this.read(appId, pageId);
+    if (!record) return { ok: false, error: "No such page." };
+    if (record.answeredAt) return { ok: false, error: "These answers were already sent." };
+    record.answers = answers;
+    record.answeredAt = nowIso();
+    if (answers && typeof answers === "object" && (answers as { seen?: unknown }).seen === true) record.seen = true;
+    delete record.draft;
+    delete record.draftEditedAt;
+    this.write(record);
+    this.host.showCard(record.appId, record.itemId, this.info(record));
+    let text = pageAnswersMessage(record.id, record.title, answers);
+    if (record.from) text += `\n\n${helperPageNote(record.from)}`;
+    this.host.deliver(record.appId, text);
+    this.host.log(`page ${record.id} "${record.title}" answered (cloud)`);
+    return { ok: true };
+  }
+
   /** A signed ticket that opens the page for a day. */
   open(appId: string, pageId: string): PageOpenResponse {
     if (!this.read(appId, pageId)) throw new PageError(404, "That page is not on this PC any more.");

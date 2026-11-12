@@ -19,6 +19,9 @@ The plan is `docs/CLOUD.md`. This folder holds the cloud's own code: the Convex 
 | `convex/signing.ts`, `convex/lib/crypto.ts` | App keys sealed (envelope: a data key per key, wrapped by `KEYS_KEK`), one-time signing tickets, the signing log. |
 | `convex/github.ts` | GitHub (milestone 3): the connect link and `/github/callback`, the user token sealed and refreshed, the app repo `anyapp-cloud-<slug>`, one-repo tokens for a box (`/runner/github-token`), disconnect; dev helpers that never print a token. |
 | `scripts/proof-account.mjs`, `scripts/m3-proof.mjs` | A dev account connected to GitHub with the spike's stored token; the milestone 3 proof (repo, push, restore from GitHub, disconnect). |
+| `convex/pages.ts` | Pages in the cloud (milestone 4): the runner's upload, the phone's ticket, `/page/<id>/<ticket>` with drafts and answers (answers go to the box through the inbox). |
+| `convex/estimates.ts`, `convex/todos.ts` | Estimates in credits (this app's past changes, else section 7's defaults), and the person's own to-do list per cloud app. |
+| `scripts/proof-account.mjs` + `github:devConnectLink` | A dev account and a GitHub connect link for it (opened in a browser that is signed in to GitHub). |
 | `runner/convex-link.mjs` | The runner's routes, the 250 ms event batches, take with acknowledge. |
 | `runner/runner.mjs` | The box's runner (milestone 2): reads the runner token from stdin, writes the agent's proxy placeholder, sets the companion's cloud config and runs `server/src/cloud-runner.ts`. |
 | `box/provision-v1.sh`, `box/agent.sh` | The image `anyapp-box-v1` on top of v0: the `kiwi` group, `/data/apps`, the agent-owned shared caches, the agent's wrapper (`sudo -n -u agent -H /opt/kiwi/agent.sh ...`), the companion's dependencies. |
@@ -64,9 +67,8 @@ loses its answer, so the inbox offers work with a lease and the runner acknowled
 | `spike/instabox-secret.mjs` | Saves a value from the secrets file as an Instabox proxy Secret, scoped to named hosts, through the signed-in CLI and stdin. |
 | `spike/send.mjs` | A command-line stand-in for the phone: signs in without an account, sends a prompt, prints the chat. |
 
-The phone side of the spike is `app/src/app/cloud-spike.tsx` (opened with
-`adb shell am start -d anyappagent://cloud-spike <package>`, only in a build made with
-`EXPO_PUBLIC_CONVEX_URL`).
+The phone side of the spike was `app/src/app/cloud-spike.tsx`; milestone 4 replaced it with the real
+cloud mode (`app/src/lib/cloud.ts`, built with `EXPO_PUBLIC_CONVEX_URL`).
 
 ## How to run it again
 

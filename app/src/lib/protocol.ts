@@ -45,4 +45,7 @@ export type {
   CloneRequest,
   OwnerInfo,
   AppOrigin,
+  CloudPlace,
+  CreditEstimate,
+  Balance,
 } from "@shared/protocol";

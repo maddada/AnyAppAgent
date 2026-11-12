@@ -369,7 +369,13 @@ export default defineSchema({
     pageId: v.string(),
     info: v.any(),
     htmlFileId: v.optional(v.id('_storage')),
-  }).index('by_thread_page', ['threadId', 'pageId']),
+    answers: v.optional(v.any()),
+    answeredAt: v.optional(v.string()),
+    draft: v.optional(v.any()),
+    draftEditedAt: v.optional(v.number()),
+  })
+    .index('by_thread_page', ['threadId', 'pageId'])
+    .index('by_page', ['pageId']),
 
   // The spike's GitHub user token by login (github.ts); milestone 3 moves it to `secrets`.
   githubTokens: defineTable({

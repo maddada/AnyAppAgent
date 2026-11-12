@@ -7,11 +7,15 @@ import type { Id } from './_generated/dataModel';
 import { httpAction, type ActionCtx } from './_generated/server';
 import { auth } from './auth';
 import { callback } from './github';
+import { route as pageRoute, storePage } from './pages';
 import { hmacSha256B64, sha256Hex, unb64 } from './lib/crypto';
 
 const http = httpRouter();
 auth.addHttpRoutes(http);
 http.route({ path: '/github/callback', method: 'GET', handler: callback });
+// Pages the phone opens (signed ticket in the path, no phone token).
+http.route({ pathPrefix: '/page/', method: 'GET', handler: pageRoute });
+http.route({ pathPrefix: '/page/', method: 'POST', handler: pageRoute });
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -96,6 +100,12 @@ runnerRoute('/runner/github-token', async (ctx, _req, r) => {
 
 // The main chat as Convex has it: a box that starts with no state brings it back (restore).
 runnerRoute('/runner/chat', async (ctx, _req, r) => json(200, { items: await ctx.runQuery(internal.runner.chatOf, { threadId: r.threadId }) }));
+
+runnerRoute('/runner/page', async (ctx, req, r) => {
+  const b = await req.json();
+  await storePage(ctx, r.threadId, { pageId: String(b.pageId), info: b.info, html: String(b.html ?? '') });
+  return json(200, { ok: true });
+});
 
 runnerRoute('/runner/upload-url', async (ctx) => json(200, { url: await ctx.runMutation(internal.runner.uploadUrl, {}) }));
 

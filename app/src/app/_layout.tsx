@@ -8,6 +8,20 @@ import { boot } from "@/lib/session";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/ui/theme";
 import { InstallPermissionSheet } from "@/ui/InstallPermissionSheet";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { authStorage, convex } from "@/lib/cloud";
+import { CloudBridge } from "@/lib/cloudSync";
+
+/** With a cloud in this build, the whole app sits inside Convex Auth (sign-in, the account, cloud apps). */
+function WithCloud({ children }: { children: React.ReactNode }) {
+  if (!convex) return <>{children}</>;
+  return (
+    <ConvexAuthProvider client={convex} storage={authStorage}>
+      <CloudBridge />
+      {children}
+    </ConvexAuthProvider>
+  );
+}
 
 let booted = false;
 
@@ -27,6 +41,7 @@ export default function RootLayout() {
   }, [t.bg]);
 
   return (
+    <WithCloud>
     <SafeAreaProvider>
       <StatusBar style={t.dark ? "light" : "dark"} />
       <View style={{ flex: 1, backgroundColor: t.bg }}>
@@ -45,10 +60,16 @@ export default function RootLayout() {
             <Stack.Screen name="suggestions/[id]" />
             <Stack.Screen name="settings" />
             <Stack.Screen name="pair" options={{ animation: "none" }} />
+            <Stack.Screen name="welcome" options={{ animation: "fade" }} />
+            <Stack.Screen name="sign-in" options={{ animation: "slide_from_bottom" }} />
+            <Stack.Screen name="account" />
+            <Stack.Screen name="github" />
+            <Stack.Screen name="plan" />
           </Stack>
         ) : null}
         <InstallPermissionSheet />
       </View>
     </SafeAreaProvider>
+    </WithCloud>
   );
 }

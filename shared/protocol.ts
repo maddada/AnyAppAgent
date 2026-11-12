@@ -35,6 +35,11 @@ export interface BuildInfo {
   // The build's native fingerprint (the app's string resource anyapp_runtime). React Native only.
   runtime?: string;
   ota?: OtaInfo;
+  // Added for the cloud (docs/CLOUD.md, "Builds reach the phone without a PC"): where a cloud
+  // build's files are, one per ABI, and its quick update. Absent on a PC's builds (the phone asks
+  // the PC with GET /apk and GET /ota as before).
+  fileUrls?: { abi: string; url: string; sizeBytes: number; sha256: string }[];
+  otaUrl?: string;
 }
 
 // "What changed" (docs/VERSIONS.md): up to three short plain lines, never code words.
@@ -98,8 +103,40 @@ export interface App {
   change?: AppChangeSettings;
   fromOthers?: number; // suggestions not opened yet (see "Change this app"); absent when none
   madeFrom?: AppOrigin; // set on an app made with "Make my own version" from someone's shared app
+  // Added for the cloud (docs/CLOUD.md section 3): set on apps that come from the person's Kiwimake
+  // account. "cloud": made in the cloud; "pc": a PC app the account knows (moved, or kept ready for
+  // changes while the PC is off). Absent on apps a paired PC lists.
+  cloud?: CloudPlace;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CloudPlace {
+  place: "cloud" | "pc";
+  repo?: string; // owner/anyapp-cloud-<slug> on the person's GitHub
+  iconUrl?: string; // the app's icon, when it has one
+}
+
+// ---------- Credits (the cloud, docs/CLOUD.md section 2). The person only ever sees credits:
+// never tokens, a token price or what anything costs Kiwimake.
+
+// What a change will likely use: "About 1 credit" under the message box, "About 3 to 4 credits" on
+// a plan card. Millicredits (1000 = one credit). On the Own key plan the AI is on the person's own
+// key: `ownKeyCents` is what it will likely cost them there, in US cents, and credits are 0.
+export interface CreditEstimate {
+  millicredits: number; // the middle of the estimate
+  low: number;
+  high: number;
+  ownKeyCents?: number;
+  basis: "app" | "everyone" | "default"; // this app's past changes, everyone's, or the defaults
+}
+
+// The credits a person has and the plan they are on.
+export interface Balance {
+  millicredits: number;
+  plan: "free" | "starter" | "pro" | "max" | "ownKey";
+  interval: "month" | "year";
+  renewsAt?: string;
 }
 
 // ---------- Sharing an app with other people (docs/DISTRIBUTION.md, "GitHub")

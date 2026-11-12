@@ -12,7 +12,9 @@ import { installApp, launchApp } from "@/lib/installer";
 import type { App, ChatItem } from "@/lib/protocol";
 import { useDictation } from "@/lib/dictation";
 import { askForNotificationsOnce, loadChat } from "@/lib/session";
-import { appAction, drafts, useStore } from "@/lib/store";
+import { appAction, drafts, useStore, placeOf, useClientFor, useOnlineFor } from "@/lib/store";
+import { isCloudId } from "@/lib/cloud";
+import { BoxNote, EstimateLine } from "@/ui/CloudBits";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Sheet, useKeyboardHeight } from "@/ui/Sheet";
@@ -291,8 +293,8 @@ function TodoButton({ app }: { app: App }) {
 
 function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App | undefined; bottomInset: number; onSent: () => void }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
-  const online = useStore((s) => s.connection === "online");
+  const client = useClientFor(appId);
+  const online = useOnlineFor(appId);
   // The draft (text and pictures) is kept per app while the user moves between apps.
   const [text, setTextState] = useState(() => drafts.get(appId));
   const setText = (v: string) => {
@@ -403,6 +405,8 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
           <StateLine kind="problem" label={error} role="caption" lines={0} />
         </View>
       ) : null}
+      {app && placeOf(app) === "pc" && !online ? <PcOffLine /> : null}
+      {isCloudId(appId) ? <BoxNote appId={appId} /> : null}
       <DictationNote dictation={dictation} style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }} />
       {tray ? (
         <View testID="attach-tray" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, paddingBottom: space.sm }}>
@@ -515,6 +519,16 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
           </View>
         </View>
       </View>
+      {isCloudId(appId) ? <EstimateLine appId={appId} /> : null}
+    </View>
+  );
+}
+
+/** A PC app whose PC is off (docs/CLOUD.md, "My PC is off"): the message waits for it. */
+function PcOffLine() {
+  return (
+    <View testID="pc-off-line" style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }}>
+      <StateLine kind="idle" label="Your PC is off. Your message goes when it is back on." role="caption" lines={2} />
     </View>
   );
 }

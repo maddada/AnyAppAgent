@@ -9,7 +9,7 @@ import { HELPER_CHAT_FOOTER, helperChatRows, helperView, type Row } from "@share
 import { ChatRow } from "@/chat/ChatRows";
 import type { ChatItem, WorkerInfo } from "@/lib/protocol";
 import { loadHelperChat } from "@/lib/session";
-import { useStore } from "@/lib/store";
+import { useStore, useClientFor } from "@/lib/store";
 import { Button, IconButton } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { StateLine } from "@/ui/StateLine";
@@ -82,7 +82,7 @@ export default function HelperChat() {
 
 function Header({ appId, worker }: { appId: string; worker: WorkerInfo | undefined }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(appId);
   const view = worker ? helperView(worker) : null;
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<string | null>(null);

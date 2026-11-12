@@ -412,3 +412,14 @@ export const devRepoHead = internalAction({
     return { repo: app.repo, private: repo.json?.private ?? null, head: head.json?.sha ?? null, message: head.json?.commit?.message ?? null };
   },
 });
+
+/** Dev: a connect link for an account (the authorize form, since the App is installed). */
+export const devConnectLink = internalMutation({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => {
+    if (process.env.KIWI_ALLOW_WIPE !== '1') throw new Error('dev only');
+    const state = randomToken(24);
+    await ctx.db.insert('githubStates', { state, userId, createdAt: Date.now() });
+    return `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(process.env.GITHUB_APP_CLIENT_ID ?? '')}&state=${encodeURIComponent(state)}`;
+  },
+});

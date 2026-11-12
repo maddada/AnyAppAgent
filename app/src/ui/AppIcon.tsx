@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { View } from "react-native";
 import { Image } from "expo-image";
 import type { App } from "@/lib/protocol";
-import { useStore } from "@/lib/store";
+import { useStore, useClientFor } from "@/lib/store";
 import { T } from "./Text";
 import { border, radius, size as sizes, typeStyle, useTheme } from "./theme";
 
@@ -60,7 +60,7 @@ function useIcon(key: string): IconState {
 /** The app's own launcher icon from the PC (GET /icon). */
 export function AppIcon({ app, size }: { app: App; size: number }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(app.id);
   const key = `${app.id}-${app.iconVersion}`;
   const state = useIcon(key);
   const r = (size * radius.appIcon) / sizes.appIcon;
@@ -71,7 +71,7 @@ export function AppIcon({ app, size }: { app: App; size: number }) {
           {(app.name.trim()[0] ?? "?").toUpperCase()}
         </T>
       </View>
-      {client ? (
+      {client && client.iconUrl(app.id) ? (
         <Image
           // The URL changes per retry so the image view really asks again; the cache key does not.
           source={{ uri: `${client.iconUrl(app.id)}?v=${app.iconVersion}&try=${state.attempt}`, headers: client.authHeaders(), cacheKey: key }}

@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindow
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, Download, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
+import { ChevronDown, CircleUser, Download, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, tileState } from "@/lib/describe";
 import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/chat/index";
@@ -12,9 +12,11 @@ import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
 import { useDictation } from "@/lib/dictation";
 import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
+import { cloudAvailable } from "@/lib/cloud";
 import { takeShare } from "@/lib/sharedIn";
 import { SendAppPanel } from "@/ui/SendApp";
-import { appAction, getState, removeApp, sortedApps, useStore } from "@/lib/store";
+import { appAction, getState, placeOf, removeApp, sortedApps, useClientFor, useStore } from "@/lib/store";
+import { AppCredits, credits, PlaceMark } from "@/ui/CloudBits";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
@@ -37,6 +39,7 @@ type Tile = { kind: "new" } | { kind: "app"; app: App };
 export default function Home() {
   const pairing = useStore((s) => s.pairing);
   const authLost = useStore((s) => s.authLost);
+  const cloudAuth = useStore((s) => s.cloudAuth);
   const params = useLocalSearchParams<{ install?: string; update?: string; crash?: string }>();
   const apps = useStore((s) => s.apps);
 
@@ -70,8 +73,11 @@ export default function Home() {
     void takeShare();
   }, []);
 
-  if (!pairing) return <Redirect href="/connect" />;
-  if (authLost) return <AuthLost />;
+  // First run (docs/CLOUD.md, "The phone app"): on a PC, in the cloud, or sign in. A phone with
+  // only the PC sees today's screens; a build without a cloud goes straight to pairing.
+  if (!pairing && cloudAuth === "loading") return null;
+  if (!pairing && cloudAuth !== "signedIn") return <Redirect href={cloudAvailable ? "/welcome" : "/connect"} />;
+  if (pairing && authLost && cloudAuth !== "signedIn") return <AuthLost />;
   return <AppGrid />;
 }
 
@@ -160,6 +166,8 @@ function AppGrid() {
 function Header() {
   const t = useTheme();
   const connection = useStore((s) => s.connection);
+  const paired = useStore((s) => !!s.pairing);
+  const cloudOn = useStore((s) => s.cloudAuth === "signedIn");
   const loaded = useStore((s) => s.appsLoaded);
   // Don't flash "can't reach" for a quick reconnect.
   const [slow, setSlow] = useState(false);
@@ -179,13 +187,18 @@ function Header() {
         <T variant="heading" style={{ flex: 1 }}>
           Kiwimake
         </T>
+        {cloudAvailable ? (
+          <IconButton testID="open-account" icon={CircleUser} label="Kiwimake account" iconSize={icon.size.md} color={t.textSecondary} onPress={() => router.push("/account")} />
+        ) : null}
         <IconButton testID="open-settings" icon={Settings} label="Settings" iconSize={icon.size.md} color={t.textSecondary} onPress={() => router.push("/settings")} />
       </View>
       <T variant="display" style={{ marginTop: space.xl }}>
         Your apps
       </T>
       <Pressable testID="connection-state" onPress={reconnectNow} style={{ marginTop: space.sm, minHeight: size.touch / 2, justifyContent: "center" }}>
-        {connection === "online" ? (
+        {!paired ? (
+          cloudOn ? <StateLine kind="ready" label="Making apps in the cloud" quietText /> : null
+        ) : connection === "online" ? (
           <StateLine kind="ready" label="Connected to your PC" quietText />
         ) : !slow || connection === "connecting" ? (
           <StateLine kind="working" label="Connecting to your PC" quietText />
@@ -250,6 +263,9 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
   const line = tileState(app, pkg, useStore((s) => s.installs[app.id]));
   const base = pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
   const label = app.health?.behind ? `${base}. ${BEHIND_LABEL}` : base;
+  // Where it is made shows only when the person has both places (docs/CLOUD.md, "One grid").
+  const bothPlaces = useStore((s) => !!s.pairing && s.cloudAuth === "signedIn");
+  const pcOnline = useStore((s) => s.connection === "online");
   return (
     <PressScale
       testID={`app-tile-${app.slug}`}
@@ -289,6 +305,7 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
         {app.name}
       </T>
       <View style={{ flex: 1, minHeight: space.xs }} />
+      {bothPlaces ? <PlaceMark place={placeOf(app)} off={placeOf(app) === "pc" && !pcOnline} /> : null}
       <TileStateLine app={app} />
     </PressScale>
   );
@@ -330,7 +347,7 @@ function NewTile({ width, onPress }: { width: number; onPress: () => void }) {
 // ---------- tap an app: Install / Open / Change it
 
 function AppSheet({ selection, onClose }: { selection: { id: string; manage: boolean } | null; onClose: () => void }) {
-  const client = useStore((s) => s.client);
+  const client = useClientFor(selection?.id);
   const app = useStore((s) => (selection ? s.apps[selection.id] : undefined));
   const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
@@ -392,6 +409,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                 {shown.name}
               </T>
               {state ? <StateLine kind={state.kind} label={state.label} /> : null}
+              {placeOf(shown) === "cloud" ? <AppCredits appId={shown.id} /> : null}
             </View>
           </View>
           {sending && !confirmRemove ? (
@@ -399,7 +417,9 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
           ) : confirmRemove ? (
             <View style={{ gap: space.sm }}>
               <T variant="callout" color="textSecondary" style={{ marginBottom: space.sm }}>
-                {`Remove ${shown.name} from this list? Your PC keeps its files${pkg ? ", and the app stays on your phone" : ""}.`}
+                {placeOf(shown) === "cloud"
+                  ? `Remove ${shown.name}? Its code stays on your GitHub${pkg ? ", and the app stays on your phone" : ""}.`
+                  : `Remove ${shown.name} from this list? Your PC keeps its files${pkg ? ", and the app stays on your phone" : ""}.`}
               </T>
               <Button
                 testID="confirm-remove"
@@ -495,7 +515,18 @@ export function InstallFailure({ app, message, conflict }: { app: App; message?:
 
 function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const pcClient = useStore((s) => s.client);
+  const cloudClient = useStore((s) => s.cloudClient);
+  const paired = useStore((s) => !!s.pairing);
+  const pcOnline = useStore((s) => s.connection === "online");
+  const account = useStore((s) => s.account);
+  // "Make it on: My PC | Cloud" (docs/CLOUD.md, "One grid"): only when both places exist; the PC
+  // when it is on, else the cloud.
+  const both = paired && !!cloudClient;
+  const [chosenPlace, setChosenPlace] = useState<"pc" | "cloud" | null>(null);
+  const place: "pc" | "cloud" = !paired ? "cloud" : !cloudClient ? "pc" : (chosenPlace ?? (pcOnline ? "pc" : "cloud"));
+  const client = place === "cloud" ? cloudClient : pcClient;
+  const needsGithub = place === "cloud" && !account?.cloud.github?.connected;
   const [name, setName] = useState("");
   const care = useStore((s) => s.care);
   const [prompt, setPrompt] = useState("");
@@ -521,7 +552,12 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
     setError(null);
     try {
       // The default is left out of the request, so an older PC companion still accepts it.
-      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim(), ...(preset !== "react-native" ? { preset } : {}), ...(askMore ? { askMore: true } : {}) });
+      if (needsGithub) {
+        onClose();
+        router.push("/github");
+        return;
+      }
+      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim(), ...(preset !== "react-native" && place === "pc" ? { preset } : {}), ...(askMore ? { askMore: true } : {}) });
       useStore.setState((s) => ({ apps: { ...s.apps, [app.id]: app } }));
       setName("");
       setPrompt("");
@@ -557,25 +593,70 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         trailing={<MicButton dictation={dictation} testID="new-app-mic" />}
       />
       <DictationNote dictation={dictation} style={{ marginTop: space.sm }} />
+      {both ? <MakeItOn place={place} onChange={setChosenPlace} pcOnline={pcOnline} /> : null}
       <AskMore value={askMore} onChange={setAskMore} />
-      <Advanced open={advanced} onToggle={() => setAdvanced(!advanced)} preset={preset} onPreset={setPreset} />
+      {place === "pc" ? <Advanced open={advanced} onToggle={() => setAdvanced(!advanced)} preset={preset} onPreset={setPreset} /> : null}
+      {place === "cloud" ? (
+        <T testID="new-app-cloud-note" variant="caption" color="textSecondary" style={{ marginTop: space.lg }}>
+          {needsGithub
+            ? "Made in the cloud: connect GitHub first, where its code is kept."
+            : account?.plan.id === "ownKey"
+              ? "Made in the cloud, on your own Claude key."
+              : (account?.credits ?? 0) > 0
+                ? `Made in the cloud. You have ${credits(Math.round((account?.credits ?? 0) * 1000))}.`
+                : "Made in the cloud. Every month starts with 3 free credits, enough for a first app."}
+        </T>
+      ) : null}
       {error ? (
         <T variant="caption" color="problem" style={{ marginTop: space.sm }}>
           {error}
         </T>
       ) : null}
-      {ready ? (
+      {ready && place === "pc" ? (
         <T testID="new-app-heads-up" variant="caption" color="textSecondary" style={{ marginTop: space.lg }}>
           {bigJobHeadsUp({ text: prompt, newApp: true, usage: care?.usage })?.body}
         </T>
       ) : null}
-      <Button testID="new-app-submit" label="Make it" style={{ marginTop: space.md }} disabled={!ready} busy={busy} onPress={submit} />
+      <Button testID="new-app-submit" label={needsGithub ? "Connect GitHub first" : "Make it"} style={{ marginTop: space.md }} disabled={!ready && !needsGithub} busy={busy} onPress={submit} />
       {!ready ? (
         <T variant="caption" color="textSecondary" style={{ marginTop: space.sm, textAlign: "center" }}>
           Give it a name and say what it should do.
         </T>
       ) : null}
     </Sheet>
+  );
+}
+
+/** Where a new app is made, when the person has both a PC and the cloud. */
+function MakeItOn({ place, onChange, pcOnline }: { place: "pc" | "cloud"; onChange: (p: "pc" | "cloud") => void; pcOnline: boolean }) {
+  const t = useTheme();
+  return (
+    <View style={{ marginTop: space.lg, gap: space.sm }}>
+      <T variant="label">Make it on</T>
+      <View style={{ flexDirection: "row", gap: space.sm }}>
+        {(["pc", "cloud"] as const).map((p) => (
+          <Pressable
+            key={p}
+            testID={`new-app-on-${p}`}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: place === p }}
+            onPress={() => onChange(p)}
+            style={{
+              flex: 1,
+              minHeight: size.touch,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: radius.button,
+              borderWidth: border.width,
+              borderColor: place === p ? t.accent : t.border,
+              backgroundColor: place === p ? t.selectedBg : t.surface,
+            }}
+          >
+            <T variant="buttonSmall">{p === "pc" ? (pcOnline ? "My PC" : "My PC (off)") : "Cloud"}</T>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 

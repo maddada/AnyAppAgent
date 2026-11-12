@@ -274,6 +274,7 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
   let localId: string | null = existsSync(mapFile) ? (JSON.parse(readFileSync(mapFile, "utf8")) as { localId: string }).localId : null;
 
   let busy = false;
+  const sentPages = new Set<string>();
   const uploads: Promise<void>[] = [];
   const apps = new AppManager({
     store,
@@ -290,6 +291,23 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
         }
       }
       if (event.type === "apk.ready") uploads.push(deliver(event.app).catch((e: Error) => log("upload failed:", e.message)));
+      // A page the agent published: its HTML goes to Convex, which serves it to the phone.
+      if (event.type === "chat.item" && event.item.kind === "page" && event.item.page && !sentPages.has(event.item.page.id) && localId) {
+        const page = event.item.page;
+        sentPages.add(page.id);
+        const served = apps.pages.servedHtml(localId, page.id);
+        if (served) {
+          uploads.push(
+            link
+              .post("/runner/page", { pageId: page.id, info: served.page, html: served.html })
+              .then(() => log(`page ${page.id} "${page.title}" sent to Convex`))
+              .catch((e: Error) => {
+                sentPages.delete(page.id);
+                log("page upload failed:", e.message);
+              }),
+          );
+        }
+      }
     },
   });
 
@@ -312,6 +330,15 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
         files.push({ abi: "universal", fileId: await link.uploadFile(bytes, "application/vnd.android.package-archive"), sizeBytes: bytes.length, sha256: f.sha256 ?? "" });
       }
     }
+    // The app's own icon, for the phone's grid (it changes rarely: sent with each build, small).
+    let iconFileId: string | undefined;
+    try {
+      const icon = apps.icon(localId);
+      const png = "png" in icon ? icon.png : readFileSync(icon.path);
+      iconFileId = await link.uploadFile(png, "image/png");
+    } catch (e) {
+      log("icon upload failed:", (e as Error).message);
+    }
     const ota = apps.otaFile(localId);
     const otaFileId = ota ? await link.uploadFile(readFileSync(ota.path), "application/zip") : undefined;
     const record = apps.get(localId);
@@ -322,6 +349,7 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
       delivery: build.delivery === "quick" ? "quick" : "apk",
       files,
       ...(otaFileId ? { otaFileId } : {}),
+      ...(iconFileId ? { iconFileId } : {}),
       ...(build.runtime ? { runtime: build.runtime } : {}),
       info: build,
       ...(commit ? { commit } : {}),
@@ -429,6 +457,12 @@ export async function runCloudRunner({ link, hello, log, stopped }: RunnerOption
       case "rebuild":
         if (localId) apps.rebuild(localId);
         return;
+      case "page-answers": {
+        if (!localId) return;
+        const r = apps.pages.answerFromCloud(localId, String(item.payload.pageId), item.payload.answers);
+        if (!r.ok) log(`page answers refused: ${r.error}`);
+        return;
+      }
       default:
         log(`inbox ${item.kind}: not handled yet`);
     }

@@ -40,7 +40,9 @@ import type { LucideIcon } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { installApp, launchApp, phoneAbis } from "@/lib/installer";
 import type { App, ChatImage, ChatItem, PageInfo, PlanEntry, WorkerInfo } from "@/lib/protocol";
-import { useStore } from "@/lib/store";
+import { useStore, useClientFor, useOnlineFor } from "@/lib/store";
+import { isCloudId } from "@/lib/cloud";
+import { PlanEstimate } from "@/ui/CloudBits";
 import { Button } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
@@ -103,7 +105,7 @@ function Glyph({ icon: Icon, color }: { icon: LucideIcon; color: string }) {
 
 function UserMessage({ item }: { item: ChatItem }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(item.appId);
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(false);
   const [resent, setResent] = useState(false);
@@ -169,7 +171,7 @@ function UserMessage({ item }: { item: ChatItem }) {
 /** The pictures sent with a message, above its bubble; a tap shows one full screen. */
 function Pictures({ appId, images }: { appId: string; images: ChatImage[] }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(appId);
   const [shown, setShown] = useState<ChatImage | null>(null);
   const screen = useWindowDimensions();
   if (!client) return null;
@@ -401,7 +403,7 @@ function PlanBox({ item }: { item: ChatItem }) {
 
 function PermissionCard({ item }: { item: ChatItem }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(item.appId);
   const [sending, setSending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const p = item.permission;
@@ -480,7 +482,7 @@ function Badge({ icon: Icon, fill, color }: { icon: LucideIcon; fill: string; co
 
 function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(app?.id ?? item.appId);
   const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
   const [retrying, setRetrying] = useState(false);
@@ -605,8 +607,8 @@ export function WhatChanged({ lines }: { lines: ChangeLine[] }) {
 /** "Tea Timer crashed. Fix it?" (docs/VERSIONS.md): one tap sends the crash to the app's agent. */
 function CrashCard({ item, app }: { item: ChatItem; app: App | undefined }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
-  const online = useStore((s) => s.connection === "online");
+  const client = useClientFor(app?.id ?? item.appId);
+  const online = useOnlineFor(app?.id ?? item.appId);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!item.crash) return null;
@@ -723,7 +725,7 @@ function ErrorRow({ item }: { item: ChatItem }) {
 /** No new version came out of the last turn: say so, and offer to build again. */
 function RebuildRow({ app }: { app: App | undefined }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(app?.id);
   const [sent, setSent] = useState(false);
   // Status turns "idle" a moment before a build or apk.ready arrives: only say "no new version"
   // once things have been quiet for a few seconds.
@@ -904,6 +906,8 @@ export function PageCard({ page }: { page: PageInfo }) {
               {view.from}
             </T>
           ) : null}
+          {/* A plan in the cloud says what building it will likely use (docs/CLOUD.md section 2). */}
+          {isCloudId(page.appId) && waiting && /plan/i.test(view.title) ? <PlanEstimate appId={page.appId} /> : null}
         </View>
       </View>
       <Button testID={`page-open-${page.id}`} label={view.action} variant={waiting ? "primary" : "quiet"} small onPress={open} />

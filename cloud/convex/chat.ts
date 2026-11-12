@@ -11,7 +11,13 @@ import { onCloudChange } from './lib/credits';
 import { ownApp, requireUser, threadOf } from './lib/session';
 
 function withAppId(item: ChatItem, appId: string): ChatItem {
-  return { ...item, appId, ...(item.worker ? { worker: { ...item.worker, appId } } : {}) };
+  // The box numbers its app its own way: every id the phone uses to reach the app is Convex's.
+  return {
+    ...item,
+    appId,
+    ...(item.worker ? { worker: { ...item.worker, appId } } : {}),
+    ...(item.page ? { page: { ...item.page, appId } } : {}),
+  };
 }
 
 /** The main chat (no workerId) or one helper's chat, ordered by seq. */

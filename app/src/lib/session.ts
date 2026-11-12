@@ -7,7 +7,10 @@ import { toBaseUrl } from "./address";
 import { decodeEasyConnectCode } from "./easyConnectCode";
 import { dialEasyConnect, RouteError, routeBaseUrl, usesEasyConnect } from "./route";
 import type { ChatItem, ServerEvent } from "./protocol";
+import { isCloudId } from "./cloud";
+import { watchCloudChat, watchCloudHelperChat } from "./cloudSync";
 import {
+  dropPlace,
   getState,
   removeApp,
   replaceChat,
@@ -141,7 +144,7 @@ export async function pairWith(address: string, code: string, onStep?: (step: st
     const pairing: Pairing = { baseUrl, token: res.token, serverName: res.serverName };
     await savePairing(pairing);
     disconnectSocket();
-    setState({ apps: {}, appsLoaded: false, chats: {}, chatLoaded: {}, installs: {} });
+    forgetPcApps();
     applyPairing(pairing);
   } catch (e) {
     if (e instanceof ApiError && !e.unreachable) {
@@ -182,7 +185,7 @@ export async function pairWithEasyConnect(text: string, onStep?: (step: string) 
     const pairing: Pairing = { baseUrl: "", via: "easy", easy: { address: code.address, port: code.port }, token: res.token, serverName: res.serverName };
     await savePairing(pairing);
     disconnectSocket();
-    setState({ apps: {}, appsLoaded: false, chats: {}, chatLoaded: {}, installs: {} });
+    forgetPcApps();
     applyPairing(pairing, new Client(base, res.token));
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
@@ -192,6 +195,15 @@ export async function pairWithEasyConnect(text: string, onStep?: (step: string) 
     if (e instanceof ApiError && !e.unreachable) throw new PairError(e.message);
     throw new PairError(`Reached ${code.name}, but Kiwimake there did not answer. Keep it open on your PC and try again.`);
   }
+}
+
+/** A new pairing: the old PC's apps and chats go; cloud apps (the account's) stay in the grid. */
+function forgetPcApps() {
+  dropPlace("pc");
+  setState((s) => {
+    const keep = <T,>(rec: Record<string, T>) => Object.fromEntries(Object.entries(rec).filter(([id]) => isCloudId(id)));
+    return { appsLoaded: false, chats: keep(s.chats), chatLoaded: keep(s.chatLoaded), installs: keep(s.installs) };
+  });
 }
 
 export async function unpair() {
@@ -220,17 +232,21 @@ export async function unpair() {
   if (usesEasyConnect(getState().pairing)) await AnyAppNative?.easyConnectStop().catch(() => undefined);
   await savePairing(null);
   AnyAppNative?.stopKeepAlive();
-  setState({
-    pairing: null,
-    client: null,
-    serverName: null,
-    connection: "offline",
-    apps: {},
-    appsLoaded: false,
-    chats: {},
-    chatLoaded: {},
-    installs: {},
-    authLost: false,
+  // Only the PC's apps go: cloud apps (the account's) stay in the grid.
+  dropPlace("pc");
+  setState((s) => {
+    const keep = <T,>(rec: Record<string, T>) => Object.fromEntries(Object.entries(rec).filter(([id]) => isCloudId(id)));
+    return {
+      pairing: null,
+      client: null,
+      serverName: null,
+      connection: "offline",
+      appsLoaded: false,
+      chats: keep(s.chats),
+      chatLoaded: keep(s.chatLoaded),
+      installs: keep(s.installs),
+      authLost: false,
+    };
   });
 }
 
@@ -668,6 +684,8 @@ async function resync() {
  * come over the socket, and after every reconnect the full history is loaded again.
  */
 export async function loadChat(appId: string): Promise<void> {
+  // A cloud app's chat is live from Convex: watching it loads it.
+  if (isCloudId(appId)) return watchCloudChat(appId);
   const client = getState().client;
   if (!client) return;
   let items: ChatItem[];
@@ -685,6 +703,7 @@ export async function loadChat(appId: string): Promise<void> {
 
 /** A helper's own chat (read only): its history, then the socket keeps it current. */
 export async function loadHelperChat(appId: string, workerId: string): Promise<void> {
+  if (isCloudId(appId)) return watchCloudHelperChat(appId, workerId);
   const client = getState().client;
   if (!client) return;
   let items: ChatItem[];

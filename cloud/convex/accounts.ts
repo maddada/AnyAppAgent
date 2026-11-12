@@ -3,8 +3,8 @@
 // GitHub, a plan or a PC.
 import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
-import { PLANS } from './config';
-import { randomToken, sha256Hex } from './lib/crypto';
+import { EXTRA_PACK, FREE_MONTHLY_MILLICREDITS, PLANS } from './config';
+import { randomToken, seal, sha256Hex } from './lib/crypto';
 import { balanceOf, subscriptionOf } from './lib/credits';
 import { requireUser } from './lib/session';
 
@@ -74,5 +74,60 @@ export const revokePcLink = mutation({
     const link = await ctx.db.get(id);
     if (!link || link.userId !== user._id) throw new Error('That PC is not linked.');
     await ctx.db.patch(id, { revokedAt: Date.now() });
+  },
+});
+
+/** The plans and the extra credit pack, for "Your plan" (prices in cents, credits a month). */
+export const plans = query({
+  args: {},
+  handler: async () => ({
+    plans: (['starter', 'pro', 'max', 'ownKey'] as const).map((id) => ({
+      id,
+      name: PLANS[id].name,
+      monthCents: PLANS[id].cents.month,
+      yearCents: PLANS[id].cents.year,
+      credits: PLANS[id].monthlyMillicredits / 1000,
+    })),
+    extra: { cents: EXTRA_PACK.cents, credits: EXTRA_PACK.millicredits / 1000, months: 12 },
+    free: { credits: FREE_MONTHLY_MILLICREDITS / 1000 },
+  }),
+});
+
+/** The person's own Anthropic key (the Own key plan), sealed; only its last 4 characters show. */
+export const setOwnKey = mutation({
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
+    const user = await requireUser(ctx);
+    const k = key.trim();
+    if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(k)) throw new Error('That does not look like an Anthropic API key. It starts with sk-ant-.');
+    const box = await seal(k, `anthropic:${user._id}`);
+    const old = await ctx.db.query('secrets').withIndex('by_user_kind', (q) => q.eq('userId', user._id).eq('kind', 'anthropic')).first();
+    const row = { userId: user._id, kind: 'anthropic' as const, iv: box.iv, ciphertext: box.ciphertext, last4: k.slice(-4) };
+    if (old) await ctx.db.replace(old._id, row);
+    else await ctx.db.insert('secrets', row);
+    return { last4: row.last4 };
+  },
+});
+
+export const removeOwnKey = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    const old = await ctx.db.query('secrets').withIndex('by_user_kind', (q) => q.eq('userId', user._id).eq('kind', 'anthropic')).first();
+    if (old) await ctx.db.delete(old._id);
+  },
+});
+
+export const ownKey = query({
+  args: {},
+  handler: async (ctx) => {
+    let user;
+    try {
+      user = await requireUser(ctx);
+    } catch {
+      return null;
+    }
+    const row = await ctx.db.query('secrets').withIndex('by_user_kind', (q) => q.eq('userId', user._id).eq('kind', 'anthropic')).first();
+    return row ? { last4: row.last4 ?? '' } : null;
   },
 });

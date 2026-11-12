@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppState, PermissionsAndroid, Platform, Pressable, ScrollView, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Bell, ChevronLeft, ChevronRight, Download, Globe, Laptop, Palette, Wifi } from "lucide-react-native";
+import { Bell, ChevronLeft, ChevronRight, Download, Globe, Laptop, Palette, Wifi, CircleUser } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import Constants from "expo-constants";
 import { AnyAppNative } from "anyapp-native";
@@ -12,6 +12,7 @@ import { displayAddress } from "@/lib/address";
 import { usesEasyConnect } from "@/lib/route";
 import { unpair, updatePrefs } from "@/lib/session";
 import { useStore } from "@/lib/store";
+import { cloudAvailable } from "@/lib/cloud";
 import type { ThemePref } from "@/lib/storage";
 import { Button, IconButton } from "@/ui/Button";
 import { Sheet, useKeyboardHeight } from "@/ui/Sheet";
@@ -23,6 +24,8 @@ export default function Settings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const pairing = useStore((s) => s.pairing);
+  const cloudOn = useStore((s) => s.cloudAuth === "signedIn");
+  const account = useStore((s) => s.account);
   const serverName = useStore((s) => s.serverName);
   const connection = useStore((s) => s.connection);
   const theme = useStore((s) => s.prefs.theme);
@@ -37,8 +40,9 @@ export default function Settings() {
     return () => sub.remove();
   }, [check]);
 
-  if (!pairing) return <Redirect href="/connect" />;
-  const anywhere = usesEasyConnect(pairing);
+  // A phone that makes apps only in the cloud has Settings too (no PC rows).
+  if (!pairing && !cloudOn) return <Redirect href="/" />;
+  const anywhere = pairing ? usesEasyConnect(pairing) : false;
   const nextTheme: Record<ThemePref, ThemePref> = { system: "light", light: "dark", dark: "system" };
 
   return (
@@ -51,6 +55,19 @@ export default function Settings() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: size.screenGutter, paddingTop: space.md, gap: space["2xl"], paddingBottom: Math.max(insets.bottom, keyboard) + space["2xl"] }}
       >
+        {cloudAvailable ? (
+          <Group title="Kiwimake account">
+            <Row
+              testID="settings-account"
+              icon={CircleUser}
+              label={cloudOn ? (account?.email ?? account?.name ?? "Your account") : "Sign in"}
+              sub={cloudOn ? "Places, credits and plan" : "Optional: for the cloud, family circles and web apps"}
+              onPress={() => router.push(cloudOn ? "/account" : "/sign-in")}
+            />
+          </Group>
+        ) : null}
+
+        {pairing ? (
         <Group title="Your PC">
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: size.rowHeight, paddingHorizontal: space.lg, paddingVertical: space.md }}>
             <RowIcon icon={Laptop} />
@@ -77,10 +94,11 @@ export default function Settings() {
             }
           />
         </Group>
+        ) : null}
 
-        <AiSettingsGroup Group={Group} Row={Row} Divider={Divider} />
+        {pairing ? <AiSettingsGroup Group={Group} Row={Row} Divider={Divider} /> : null}
 
-        <CareGroup />
+        {pairing ? <CareGroup /> : null}
 
         <Group title="Permissions">
           <Row
@@ -126,7 +144,7 @@ export default function Settings() {
           />
         </Group>
 
-        <Button testID="disconnect" label="Disconnect from your PC" variant="quiet" onPress={() => setConfirm(true)} />
+        {pairing ? <Button testID="disconnect" label="Disconnect from your PC" variant="quiet" onPress={() => setConfirm(true)} /> : null}
 
         <T variant="caption" color="textTertiary" style={{ textAlign: "center" }}>
           Kiwimake {Constants.expoConfig?.version ?? ""}

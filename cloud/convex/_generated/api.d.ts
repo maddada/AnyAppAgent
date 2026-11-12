@@ -16,6 +16,7 @@ import type * as boxes from "../boxes.js";
 import type * as chat from "../chat.js";
 import type * as config from "../config.js";
 import type * as crons from "../crons.js";
+import type * as estimates from "../estimates.js";
 import type * as github from "../github.js";
 import type * as http from "../http.js";
 import type * as lib_credits from "../lib/credits.js";
@@ -23,8 +24,10 @@ import type * as lib_crypto from "../lib/crypto.js";
 import type * as lib_instabox from "../lib/instabox.js";
 import type * as lib_provider from "../lib/provider.js";
 import type * as lib_session from "../lib/session.js";
+import type * as pages from "../pages.js";
 import type * as runner from "../runner.js";
 import type * as signing from "../signing.js";
+import type * as todos from "../todos.js";
 import type * as webhooks from "../webhooks.js";
 
 import type {
@@ -42,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   chat: typeof chat;
   config: typeof config;
   crons: typeof crons;
+  estimates: typeof estimates;
   github: typeof github;
   http: typeof http;
   "lib/credits": typeof lib_credits;
@@ -49,8 +53,10 @@ declare const fullApi: ApiFromModules<{
   "lib/instabox": typeof lib_instabox;
   "lib/provider": typeof lib_provider;
   "lib/session": typeof lib_session;
+  pages: typeof pages;
   runner: typeof runner;
   signing: typeof signing;
+  todos: typeof todos;
   webhooks: typeof webhooks;
 }>;
 

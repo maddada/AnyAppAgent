@@ -12,7 +12,7 @@ import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTyp
 import { X } from "lucide-react-native";
 import { pageCard, pageUrl, staysInPage } from "@shared/chat/index";
 import { ApiError } from "@/lib/api";
-import { useStore } from "@/lib/store";
+import { useStore, useClientFor } from "@/lib/store";
 import { Button, IconButton } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { StateLine } from "@/ui/StateLine";
@@ -28,7 +28,7 @@ export default function PageScreen() {
   const pageId = String(params.pageId);
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(appId);
   const page = useStore((s) => s.chats[appId]?.find((i) => i.kind === "page" && i.page?.id === pageId)?.page);
   const [address, setAddress] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);

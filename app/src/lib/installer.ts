@@ -4,7 +4,7 @@ import { AnyAppNative, type InstallResult } from "anyapp-native";
 import { theme } from "@shared/theme/tokens";
 import { apkFor } from "@shared/chat/index";
 import type { App, BuildInfo } from "./protocol";
-import { getState, setInstall, setState, type InstallProgress } from "./store";
+import { clientFor, getState, setInstall, setState, type InstallProgress } from "./store";
 import { loadPrefs, savePrefs, type Prefs } from "./storage";
 import { keptAlive, updateKeepAlive } from "./keepalive";
 
@@ -125,8 +125,8 @@ export function canSendQuickUpdate(app: App, build: BuildInfo): boolean {
  * time). False when it could not: then the APK goes the usual way.
  */
 async function sendQuickUpdate(app: App, build: BuildInfo): Promise<boolean> {
-  const client = getState().client;
-  if (!client || !build.ota || !canSendQuickUpdate(app, build)) return false;
+  const client = clientFor(app.id);
+  if (!client || !build.ota || !canSendQuickUpdate(app, build) || !client.otaUrl(app.id)) return false;
   const t0 = Date.now();
   const dir = new Directory(Paths.cache, "ota");
   const file = new File(dir, `${app.slug || app.id}-${build.number}-ota.zip`);
@@ -335,7 +335,7 @@ function dropOtherDownloads(app: App, keep: string) {
 async function installOne(appId: string, options: InstallOptions = {}) {
   const app = getState().apps[appId];
   const build = app?.latestApk;
-  if (!getState().client || !app || !build || !AnyAppNative) {
+  if (!clientFor(appId) || !app || !build || !AnyAppNative) {
     setInstall(appId, null);
     return;
   }
@@ -443,7 +443,7 @@ async function download(appId: string, buildNumber: number, file: File, want: { 
       file.delete();
       continue;
     }
-    const client = getState().client;
+    const client = clientFor(appId);
     if (!client) throw new Error("not connected to the PC");
 
     let written = have;

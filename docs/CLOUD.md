@@ -1176,6 +1176,31 @@ build 2 was pushed on top; after "Disconnect GitHub" a message was refused with 
 **Not run:** the browser end of connecting (the person signs in to GitHub and taps Authorize): the
 proofs used the user token the spike stored. AI used: about $1.3.
 
+**Milestone 4, what ran (12 Nov 2026):** the phone's cloud mode. `app/src/lib/cloud.ts` is a
+second client with the PC client's calls (same names, same `shared/protocol.ts` types), and each
+call goes to the place that holds the app (Convex ids are 32 lowercase letters and digits, a PC's
+are UUIDs, so they never collide); `app/src/lib/cloudSync.tsx` keeps the account, the cloud apps
+and each open cloud chat live from Convex; the store keeps each place's apps apart, so pairing,
+unpairing or signing out touch only their own place. New screens: first run with three ways in,
+sign in (Google, a code by email; `?reason=` gives circles, web apps, moving and PC-off their own
+line), the account sheet with both places and "Add", Connect GitHub (browser and back through
+`anyappagent://github`), "Your plan" with the plans, extra credit and the Own key plan and its key
+(buying waits for milestone 6: its buttons say "Coming soon"). In the existing screens: the
+estimate under a cloud chat's message box, the estimate on a plan card, a cloud app's credits in
+its sheet, "Make it on: My PC | Cloud" when both places exist, place marks on tiles, "PC, off" and
+a PC-off line in a PC app's chat (its "Do it in the cloud" button is milestone 9), and a line while
+a cloud app's machine wakes. **Pages in the cloud** (not in the plan, needed for plan first): the
+runner uploads each page with its kit, Convex serves it under a signed ticket
+(`/page/<id>/<ticket>`, `cloud/convex/pages.ts`) and keeps drafts, and answers go to the box
+through the inbox. A cloud build's file URLs ride on its `BuildInfo` (`fileUrls`, `otaUrl`), so the
+phone's installer is unchanged but for where it downloads. Proven on emulator-5560 with
+`com.anyappagent.cloudbuild` (`C:/aa/e2e/cloud-build/m4/`): first run, sign-in (the dev account),
+GitHub connected through the browser (the App was already authorized, so GitHub went straight
+back), "Water Sips" made from the phone, its plan page opened and answered on the phone, the first
+version installed from Convex, "make the big button green" from the phone arriving as a quick
+update with the app's Reload, and the grid with a paired PC and the cloud. Calls the cloud does not
+have yet (versions and undo, crash reports, sharing) answer "not in the cloud yet".
+
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account
 sheet and one grid (+1.5), the PC link (+1, which circles and web apps then reuse), moving apps

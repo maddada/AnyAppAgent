@@ -1,7 +1,7 @@
 // The phone's side of cloud apps: the grid, making an app, removing one. Every row comes back in
 // shared/protocol.ts's App shape, with Convex's id as the app id.
 import { v } from 'convex/values';
-import type { App } from '../../shared/protocol';
+import type { App, BuildInfo } from '../../shared/protocol';
 import { internal } from './_generated/api';
 import type { Doc, Id } from './_generated/dataModel';
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
@@ -29,8 +29,30 @@ export function slugify(name: string): string {
 
 const iso = (t: number) => new Date(t).toISOString();
 
+/** The build's files for the phone: one URL per ABI and the quick update (only to the app's owner). */
+async function withFiles(ctx: QueryCtx, appId: Id<'apps'>, info: BuildInfo | undefined): Promise<BuildInfo | undefined> {
+  if (!info) return info;
+  const row = await ctx.db.query('builds').withIndex('by_app_number', (q) => q.eq('appId', appId).eq('number', info.number)).first();
+  if (!row) return info;
+  const fileUrls = [];
+  for (const f of row.files) {
+    const url = await ctx.storage.getUrl(f.fileId);
+    if (url) fileUrls.push({ abi: f.abi, url, sizeBytes: f.sizeBytes, sha256: f.sha256 });
+  }
+  const otaUrl = row.otaFileId ? ((await ctx.storage.getUrl(row.otaFileId)) ?? undefined) : undefined;
+  return { ...info, ...(fileUrls.length ? { fileUrls } : {}), ...(otaUrl ? { otaUrl } : {}) };
+}
+
 export async function toApp(ctx: QueryCtx, a: Doc<'apps'>): Promise<App & { cloud: { place: 'cloud' | 'pc'; repo?: string; iconUrl?: string } }> {
   const iconUrl = a.iconFileId ? (await ctx.storage.getUrl(a.iconFileId)) ?? undefined : undefined;
+  // The phone installs only a build whose files are uploaded: the app row moves a few seconds
+  // before its build row (the files are still on their way), so until then it keeps the last one.
+  let latestApk = await withFiles(ctx, a._id, a.latestApk as BuildInfo | undefined);
+  if (latestApk && !latestApk.fileUrls) {
+    const prev = await ctx.db.query('builds').withIndex('by_app_number', (q) => q.eq('appId', a._id)).order('desc').first();
+    latestApk = prev ? await withFiles(ctx, a._id, prev.info as BuildInfo) : undefined;
+  }
+  const latestBuild = a.latestBuild && latestApk && (a.latestBuild as BuildInfo).number === latestApk.number ? latestApk : (a.latestBuild as BuildInfo | undefined);
   return {
     id: a._id,
     name: a.name,
@@ -40,8 +62,8 @@ export async function toApp(ctx: QueryCtx, a: Doc<'apps'>): Promise<App & { clou
     status: a.status,
     ...(a.error ? { error: a.error } : {}),
     iconVersion: a.iconVersion,
-    ...(a.latestBuild ? { latestBuild: a.latestBuild } : {}),
-    ...(a.latestApk ? { latestApk: a.latestApk } : {}),
+    ...(latestBuild ? { latestBuild } : {}),
+    ...(latestApk ? { latestApk } : {}),
     ...(a.repo ? { repoUrl: `https://github.com/${a.repo}` } : {}),
     ...(a.lastMessagePreview ? { lastMessagePreview: a.lastMessagePreview } : {}),
     ...(a.replying !== undefined ? { replying: a.replying } : {}),

@@ -3,10 +3,27 @@ import type { PackageInfo } from "anyapp-native";
 import { appAction as sharedAppAction, Drafts, mergeHelpers, mergeItems, replaceHistory } from "@shared/chat/index";
 import type { Attachment } from "@/chat/attachments";
 import { Client } from "./api";
+import { CloudClient, isCloudApp, isCloudId, type AppClient } from "./cloud";
 import type { App, CareState, ChatItem, Suggestion, TodoItem, WorkerInfo } from "./protocol";
 import { defaultPrefs, type Pairing, type Prefs } from "./storage";
 
 export type Connection = "offline" | "connecting" | "online";
+
+/** The Kiwimake account (Convex accounts:me), when signed in. */
+export interface Account {
+  id: string;
+  name: string | null;
+  email: string | null;
+  anonymous: boolean;
+  cloud: { added: boolean; since: number | null; github: { login: string; connected: boolean } | null };
+  pcOffSwitch: boolean;
+  plan: { id: "free" | "starter" | "pro" | "max" | "ownKey"; name: string; interval?: "month" | "year"; status?: string; renewsAt?: number; cancelAtPeriodEnd?: boolean };
+  credits: number;
+  pcs: { id: string; name: string; linkedFrom: string; lastSeenAt: number | null }[];
+}
+
+/** Signed in to the account (Convex Auth): "off" when this build has no cloud. */
+export type CloudAuth = "off" | "loading" | "signedOut" | "signedIn";
 
 export interface InstallProgress {
   buildNumber: number;
@@ -46,6 +63,11 @@ export interface State {
   needInstallPermission: string | null; // appId waiting for "install unknown apps"
   /** The usage meter, the monthly health reminder and the backup (docs/TRUST.md); null on older PCs. */
   care: CareState | null;
+  /** The cloud (docs/CLOUD.md): sign-in state, the account, the client for cloud apps. */
+  cloudAuth: CloudAuth;
+  account: Account | null;
+  cloudClient: CloudClient | null;
+  cloudAppsLoaded: boolean;
 }
 
 export const useStore = create<State>(() => ({
@@ -70,6 +92,10 @@ export const useStore = create<State>(() => ({
   packages: {},
   installs: {},
   needInstallPermission: null,
+  cloudAuth: "off",
+  account: null,
+  cloudClient: null,
+  cloudAppsLoaded: false,
 }));
 
 export const getState = useStore.getState;
@@ -77,10 +103,50 @@ export const setState = useStore.setState;
 
 // ---------- apps
 
-export function setApps(list: App[]) {
-  const apps: Record<string, App> = {};
-  for (const app of list) apps[app.id] = app;
-  setState({ apps, appsLoaded: true });
+/** Where an app is made: "cloud" apps come from the account, the others from the paired PC. */
+export function placeOf(app: Pick<App, "id" | "cloud">): "cloud" | "pc" {
+  return isCloudApp(app) ? "cloud" : "pc";
+}
+
+/**
+ * One place's whole list (the PC's after a resync, the cloud's from its live query): the other
+ * place's apps stay as they are (one grid, docs/CLOUD.md "One grid").
+ */
+export function setApps(list: App[], place: "pc" | "cloud" = "pc") {
+  setState((s) => {
+    const apps: Record<string, App> = {};
+    for (const app of Object.values(s.apps)) if (placeOf(app) !== place) apps[app.id] = app;
+    for (const app of list) apps[app.id] = app;
+    return place === "pc" ? { apps, appsLoaded: true } : { apps, cloudAppsLoaded: true };
+  });
+}
+
+/** Forgets one place's apps (unpairing the PC, signing out of the cloud). */
+export function dropPlace(place: "pc" | "cloud") {
+  setState((s) => {
+    const apps: Record<string, App> = {};
+    for (const app of Object.values(s.apps)) if (placeOf(app) !== place) apps[app.id] = app;
+    return { apps };
+  });
+}
+
+/** The client for one app: the cloud's for a cloud app, the PC's otherwise. */
+export function clientFor(appId: string): AppClient | null {
+  const s = getState();
+  return isCloudId(appId) ? s.cloudClient : s.client;
+}
+
+/** Can this app's place take a message now: the PC connected, or the account signed in. */
+export function useOnlineFor(appId: string | undefined): boolean {
+  return useStore((s) => (appId && isCloudId(appId) ? s.cloudAuth === "signedIn" : s.connection === "online"));
+}
+
+/** The same, as a hook (it follows sign-in and pairing). */
+export function useClientFor(appId: string | undefined): AppClient | null {
+  const pc = useStore((s) => s.client);
+  const cloud = useStore((s) => s.cloudClient);
+  if (!appId) return pc;
+  return isCloudId(appId) ? cloud : pc;
 }
 
 export function upsertApp(app: App) {

@@ -192,16 +192,21 @@ export const recordBuild = internalMutation({
     delivery: v.union(v.literal('apk'), v.literal('quick')),
     files: v.array(v.object({ abi: v.string(), fileId: v.id('_storage'), sizeBytes: v.number(), sha256: v.string() })),
     otaFileId: v.optional(v.id('_storage')),
+    iconFileId: v.optional(v.id('_storage')),
     runtime: v.optional(v.string()),
     info: v.any(),
     commit: v.optional(v.string()),
     pushed: v.boolean(),
     seconds: v.optional(v.number()),
   },
-  handler: async (ctx, { threadId, ...b }) => {
+  handler: async (ctx, { threadId, iconFileId, ...b }) => {
     const t = (await ctx.db.get(threadId))!;
     const app = (await ctx.db.get(t.appId))!;
     await ctx.db.insert('builds', { appId: app._id, ...b });
+    if (iconFileId) {
+      if (app.iconFileId) await ctx.storage.delete(app.iconFileId).catch(() => {});
+      await ctx.db.patch(app._id, { iconFileId, iconVersion: app.iconVersion + 1 });
+    }
     await ctx.db.patch(app._id, {
       buildHigh: Math.max(app.buildHigh, b.number),
       latestApk: b.info,
