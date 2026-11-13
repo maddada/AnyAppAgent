@@ -70,6 +70,9 @@ jobs:
           }
       - name: Install build dependencies and check the desktop and companion
         run: |
+          # Real Git merge tests need an identity on a fresh runner.
+          git config --global user.name 'Kiwimake CI'
+          git config --global user.email 'ci@kiwimake.invalid'
           npm ci --prefix server --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm ci --prefix desktop --no-audit --no-fund
