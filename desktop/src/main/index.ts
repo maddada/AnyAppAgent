@@ -82,39 +82,50 @@ const icons: Record<string, string> = {};
 const iconVersions: Record<string, number> = {};
 /** The Kiwimake phone app (APK) the companion serves for the install QR: the setting first, then the usual places. */
 function phoneApk(): string | undefined {
-  return firstExisting([settings.phoneApkPath || undefined, env.ANYAPP_HOST_APK || undefined, phoneCachePath(paths.stateDir)]);
+  return firstExisting([...phoneApkOverrides(), phoneCachePath(paths.stateDir)]);
+}
+/** A chosen APK, then (from a source checkout only) app/dist. The installer bundles none: ensurePhone downloads the pinned one. */
+function phoneApkOverrides(): (string | undefined)[] {
+  return [settings.phoneApkPath || undefined, env.ANYAPP_HOST_APK || undefined, ...(app.isPackaged ? [] : paths.phoneApkCandidates)];
 }
 let easyConnectAutoTried = false;
 
+/** The selected engine's CLI on this PC (Claude or Codex), found the way Ghostex finds it (shared/engines.mts). */
 const claudeCli = () => findEngine(settings.engine, env);
 let engineBusy = false;
+/** Engines checked for an update since the last daily reset, whether the update worked or not. */
 const updatedEngines = new Set<string>();
+/**
+ * Install the selected engine with its official installer, or update the copy that runs through the
+ * tool that installed it (Ghostex's agent_cli catalog approach). Updates run only while no app works.
+ */
 async function maintainEngine(install: boolean): Promise<void> {
   if (engineBusy || claudeSignIn.running) return;
   const engine = settings.engine;
   const cli = claudeCli();
   if (!install && !cli) return;
-  // Isolated tests never mutate the user's tools. Product installs update only while idle.
-  if (env.ANYAPP_ENGINE_UPDATES === "off") return;
-  if (admin?.apps.some((a) => a.status === "working" || a.status === "building")) return;
+  // Isolated tests never update the user's own CLIs. Installing a missing one is still allowed.
+  if (!install && env.ANYAPP_ENGINE_UPDATES === "off") return;
+  if (!install && admin?.apps.some((a) => a.status === "working" || a.status === "building")) return;
   engineBusy = true;
+  updatedEngines.add(engine);
   checks.claude = { ...checks.claude, state: "working", maintenance: `${install ? "Installing" : "Updating"} ${engineName(engine)}…` };
   broadcast();
   let note: string;
   try {
     if (install) {
       await installEngine(engine, paths.toolsDir, run, env);
-      if (!findEngine(engine, env)) throw new Error("The installer finished but the engine could not be found. Try again.");
+      if (!findEngine(engine, env)) throw new Error(`The installer finished but ${engineName(engine)} could not be found. Try again.`);
       note = `${engineName(engine)} is installed.`;
+      // The companion passes the CLI's path to each session: start it again with the new one.
+      void companion.restart();
     } else note = await updateEngine(engine, cli!, run, env);
-    updatedEngines.add(engine);
   } catch (error) { note = (error as Error).message; }
   engineBusy = false;
   await checkClaude();
   checks.claude.maintenance = note;
   broadcast();
 }
-
 
 // ---------------------------------------------------------------- companion
 
@@ -606,7 +617,7 @@ function ipc(): void {
     // The companion serves the phone app without a token at /download/anyappagent.apk
     // (ANYAPP_HOST_APK); the QR encodes that link on this PC's best LAN address.
     let apk: string;
-    try { apk = firstExisting([settings.phoneApkPath || undefined, env.ANYAPP_HOST_APK || undefined]) ?? await ensurePhone(paths.stateDir); }
+    try { apk = firstExisting(phoneApkOverrides()) ?? await ensurePhone(paths.stateDir); }
     catch { return { available: false, error: "Could not download the phone app. Check your internet connection and try again." }; }
     try {
       const res = await fetch(`http://127.0.0.1:${port}/download/anyappagent.apk`, { method: "HEAD", signal: AbortSignal.timeout(3_000) });

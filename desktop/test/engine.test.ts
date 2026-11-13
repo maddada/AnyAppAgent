@@ -17,6 +17,13 @@ describe("engine discovery and setup choice", () => {
     expect(candidates.some((p) => p.includes("session-bin"))).toBe(false);
     expect(candidates).toContain(join("C:/local", "Programs", "OpenAI", "Codex", "bin", "codex.exe"));
   });
+  it("on Windows counts Claude only as an executable the SDK can spawn, npm's native binary included", () => {
+    const candidates = engineCandidates("claude", { Path: "C:/npm", USERPROFILE: "C:/person" }, "win32");
+    expect(candidates.every((p) => p.endsWith("claude.exe"))).toBe(true);
+    expect(candidates).toContain(join("C:/npm", "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe"));
+    expect(candidates).toContain(join("C:/person", ".local", "bin", "claude.exe"));
+    expect(engineCandidates("codex", { Path: "C:/npm" }, "win32")).toContain(join("C:/npm", "codex.cmd"));
+  });
   it("uses Unix HOME and searches a GUI app's missing PATH locations", () => {
     expect(engineCandidates("claude", { HOME: "/home/a", USERPROFILE: "/wrong" }, "linux")).toContain(join("/home/a", ".local", "bin", "claude"));
     expect(engineCandidates("codex", {}, "darwin")).toContain(join("/opt/homebrew/bin", "codex"));

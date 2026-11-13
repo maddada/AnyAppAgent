@@ -193,7 +193,7 @@ const stepOf = (id: StepId) => `Step ${ORDER.indexOf(id) + 1} of ${RAIL.length}`
 function Welcome() {
   const loop: [LucideIcon, string, string][] = [
     [Smartphone, "You describe it", "On your phone or on this PC, in your own words."],
-    [Monitor, "This PC makes it", "Your AI writes the app and this PC builds it."],
+    [Monitor, "This PC makes it", "Claude or Codex writes the app and this PC builds it."],
     [Download, "It appears on your phone", "Ready to open. Ask for changes any time."],
   ];
   return (

@@ -355,3 +355,36 @@ The product is **Kiwimake** (domain kiwimake.ai, being bought). The things peopl
   backup folder name `AnyAppAgent backup`, and the phone APK release assets `AnyAppAgent.apk` and
   `AnyAppAgent-universal.apk` (installed desktop apps download `latest/download/AnyAppAgent.apk`).
 - The separate domain for people's web apps (`docs/WEB-APPS.md`) is still to be picked.
+
+## Two engines and a smaller installer (added 2026-11-13)
+
+The user: "use the claude cli that's on the machine. use the recommended way on each OS to install
+it. also we need [codex] support, we use sol 6.1 high always if codex is selected basically. dont
+show model selector, just the user can pick either in setup."
+
+- **The PC picks one engine: Claude or Codex.** Setup's second step ("Choose your AI") and Settings
+  have the choice; there is no model selector anywhere. The choice is `engine` in the desktop's
+  settings and reaches the companion as `ANYAPP_ENGINE`. Changing it waits until no app is working,
+  restarts the companion and keeps every app, file and chat. Each app keeps one session id per
+  engine (`engineSessions` in its record), so switching back resumes the old session.
+- **Claude** is the `claude` CLI installed on the PC, passed to the ACP adapter as
+  `CLAUDE_CODE_EXECUTABLE`. The installer no longer carries a Claude binary. On Windows only an
+  `.exe` counts (the SDK spawns it directly, which a `.cmd` shim cannot do).
+- **Codex** is the `codex` CLI, run as `codex app-server` over stdio, one private process per app
+  session (no shared daemon). It always uses model `gpt-6.1-sol` at `high` reasoning effort, with
+  the app's MCP tools passed per thread (`server/src/acp/codex-session.ts`).
+- **Install and update the way Ghostex does** (its `packages/shared/agent-cli-catalog.json` and
+  `server/src/agent_cli`): find the CLI on PATH and in the official install folders, skipping a
+  host's session wrappers; when missing, run the official installer (`claude.ai/install.ps1` or
+  `.sh`, `chatgpt.com/codex/install.ps1` or `.sh`); update the copy that runs through the tool that
+  owns it (`claude update`, `codex update`, npm, Homebrew, winget or mise), once a day while no app
+  is working, plus "Check for updates" in Settings. An install Kiwimake does not recognise is left
+  alone. Sign-in runs `claude auth login --claudeai` or `codex login`.
+- **Usage**: plan limits are shown for the selected engine only, named after it ("Your Codex plan
+  needs a rest"). The cloud keeps Claude and its own rules.
+- **Smaller installer** (choices from `C:\aa\ideas\size\index.html`): no bundled phone APK (the
+  desktop downloads the pinned arm64 `AnyAppAgent.apk` of its own version on first use and checks
+  its SHA-256, `desktop/phone-release.json`), only en-US, en-GB and Arabic Electron locales, the
+  companion's runtime packages staged with `npm ci --omit=dev`, without source maps, declaration
+  files, tests, examples or theme previews. On the phone: resource shrinking, and the Go bridge
+  built with `-trimpath -ldflags=-s -w`.

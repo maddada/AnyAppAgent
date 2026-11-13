@@ -65,6 +65,16 @@ describe("usage meter", () => {
     meter.notePlan({ kind: "seven_day", status: "allowed", usedPercent: 12, resetsAt: "2026-11-15T00:00:00Z", seenAt: "2026-11-11T09:00:00Z" });
     expect(meter.state().plan.map((p) => p.kind)).toEqual(["seven_day"]);
   });
+
+  it("shows only the selected engine's plan limits and names the engine", () => {
+    const now = new Date("2026-11-11T12:00:00Z");
+    const meter = new UsageMeter(temp(), () => now);
+    meter.notePlan({ kind: "five_hour", status: "allowed", usedPercent: 40, seenAt: "2026-11-11T11:00:00Z" });
+    meter.notePlan({ engine: "codex", kind: "codex_primary", status: "allowed", usedPercent: 10, seenAt: "2026-11-11T11:00:00Z" });
+    expect(meter.state()).toMatchObject({ engine: "claude", plan: [{ kind: "five_hour" }] });
+    meter.engine = "codex";
+    expect(meter.state()).toMatchObject({ engine: "codex", plan: [{ kind: "codex_primary" }] });
+  });
 });
 
 function writeFiles(root: string, files: Record<string, string>): void {

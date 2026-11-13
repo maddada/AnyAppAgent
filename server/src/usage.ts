@@ -83,6 +83,8 @@ export class UsageMeter {
   private timer: NodeJS.Timeout | undefined;
   /** The plan (or the month total) changed: clients get a new CareState. */
   onChange: () => void = () => {};
+  /** The PC's engine (the companion restarts when it changes). Its plan limits are the ones shown. */
+  engine: "claude" | "codex" = "claude";
   private readonly now: () => Date;
 
   constructor(stateDir: string, now: () => Date = () => new Date()) {
@@ -138,12 +140,14 @@ export class UsageMeter {
     const key = monthKey(this.now());
     const cutoff = this.now().getTime() - PLAN_STALE_MS;
     const plan = this.data.plan.filter((p) => {
+      // Only the selected engine's plan: Claude's limits say nothing about a Codex account.
+      if ((p.engine ?? "claude") !== this.engine) return false;
       const seen = Date.parse(p.seenAt);
       // A limit that has reset since Claude reported it no longer holds.
       if (p.resetsAt && Date.parse(p.resetsAt) < this.now().getTime()) return false;
       return Number.isFinite(seen) && seen >= cutoff;
     });
-    return { plan, month: this.data.month.key === key ? this.data.month.usage : { ...ZERO_USAGE }, monthKey: key };
+    return { engine: this.engine, plan, month: this.data.month.key === key ? this.data.month.usage : { ...ZERO_USAGE }, monthKey: key };
   }
 
   /** An app restored from a backup brings what it used on the old PC (once). */

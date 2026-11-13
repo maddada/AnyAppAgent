@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Gauge, TriangleAlert } from "lucide-react-native";
-import { BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, PLAN_UNKNOWN, planLines, reminderText, usageLine } from "@shared/chat/index";
+import { aiName, BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, planUnknown, planLines, reminderText, usageLine } from "@shared/chat/index";
 import type { App, CareState, ChatItem } from "@/lib/protocol";
 import { useStore } from "@/lib/store";
 import { Button } from "./Button";
@@ -249,7 +249,7 @@ export function CareSettings({ care }: { care: CareState | null }) {
         ))
       ) : (
         <T variant="label" color="textSecondary">
-          {PLAN_UNKNOWN}
+          {planUnknown(care.usage)}
         </T>
       )}
       <T variant="callout">{`This month: ${formatTokens(newTokens(care.usage.month))} tokens`}</T>

@@ -131,9 +131,16 @@ cd ..\desktop; npm ci; npm run typecheck; npm test
 `build-apk.mjs --release` reads the key and password (above), loads
 `app/scripts/release.init.gradle` (release signing, one APK per ABI plus a universal one,
 compressed native libraries, R8 as Expo configures it), and writes `app/dist/AnyAppAgent.apk`
-(arm64-v8a) and `app/dist/AnyAppAgent-universal.apk`. The desktop installer bundles the universal
-one (`desktop/package.json`, `extraResources`), which the companion serves to phones on the same
-Wi-Fi for the download QR.
+(arm64-v8a) and `app/dist/AnyAppAgent-universal.apk`. The desktop installer bundles no APK:
+`desktop/dev/release-windows.ps1` first runs `desktop/dev/pin-phone.mjs`, which writes the
+version, size and SHA-256 of `app/dist/AnyAppAgent.apk` into `desktop/phone-release.json`. The
+installed desktop downloads `releases/download/v<version>/AnyAppAgent.apk` the first time it
+offers the phone download, checks it against that pin and keeps it in its state folder; the
+companion serves that file for the download QR. So the release must publish the exact APK that was
+pinned, which the workflow guarantees by building from the draft's assets.
+
+Rebuild the Easy Connect bridge before a phone release so it gets the strip flags
+(`node server/easy-connect/build-android-bridge.mjs`, then `npm run apk` stages it).
 
 Check the signature before publishing:
 

@@ -14,7 +14,10 @@ export function engineCandidates(engine: Engine, env: NodeJS.ProcessEnv = proces
   if (override) return [override]; // A broken explicit override must not silently run another copy.
   const win = platform === "win32";
   const home = (win ? env.USERPROFILE : env.HOME) ?? env.HOME;
-  const names = win ? [`${engine}.exe`, `${engine}.cmd`, `${engine}.bat`] : [engine];
+  // The Claude Agent SDK spawns CLAUDE_CODE_EXECUTABLE directly, and Windows cannot spawn a .cmd
+  // shim that way, so Claude counts only as an .exe (an npm install's native binary included).
+  // Codex runs through cross-spawn, which handles npm's .cmd shims.
+  const names = !win ? [engine] : engine === "claude" ? ["claude.exe", join("node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe")] : ["codex.exe", "codex.cmd"];
   const path = Object.entries(env).find(([key]) => key.toLowerCase() === "path")?.[1] ?? "";
   const dirs = path.split(win ? ";" : ":").filter(Boolean).map((p) => p.replace(/^"|"$/g, ""));
   // Session wrappers from another host are not the installed CLI.

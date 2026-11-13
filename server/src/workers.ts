@@ -1,4 +1,3 @@
-import { createSession, selectedEngine, resumeFor, rememberSession, type AgentSession } from "./acp/session.ts";
 // Workers: the Claude Code sessions an app's coordinator (its main chat) starts for real work. Each
 // worker has its own ACP session in the app's folder, its own chat, and one row in the main chat.
 // Workers that change the app take turns (one "change slot" per app, shared with Try again
@@ -6,6 +5,7 @@ import { createSession, selectedEngine, resumeFor, rememberSession, type AgentSe
 // companion builds the app (build errors go back to that worker), then the worker's report goes to
 // the coordinator as a message. Everything is saved under <state>/workers/ so a restart resumes.
 // See docs/APP-COORDINATOR.md.
+import { createSession, selectedEngine, resumeFor, rememberSession, type AgentSession } from "./acp/session.ts";
 import { randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { ChatItem, PlanLimit, ServerEvent, TokenUsage, WorkerInfo, WorkerState } from "../../shared/protocol.ts";

@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { CloudUpload, FolderOpen, Gauge, RotateCcw, TriangleAlert } from "lucide-react";
 import type { App, AppUsage, CareState, ChatItem, UsageState } from "../../../../shared/protocol.ts";
-import { BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, PLAN_UNKNOWN, planLines, reminderText, usageLine, usageRows } from "../../../../shared/chat/index.ts";
+import { aiName, BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, planUnknown, planLines, reminderText, usageLine, usageRows } from "../../../../shared/chat/index.ts";
 import type { Snapshot } from "../../shared/types.ts";
 import { Icon, Spinner } from "./ui.tsx";
 
@@ -166,8 +166,8 @@ export function UsageGroup({ s }: { s: Snapshot }) {
   const month = newTokens(care.usage.month);
   return (
     <section className="settings-group" data-testid="usage-group">
-      <h2 className="heading">AI plan use</h2>
-      <p className="callout secondary">What your apps' agents used, as your AI reports it. Each change shows its own use under your message in the chat.</p>
+      <h2 className="heading">{aiName(care.usage)} plan use</h2>
+      <p className="callout secondary">What your apps' agents used, as {aiName(care.usage)} reports it. Each change shows its own use under your message in the chat.</p>
       <div className="list">
         {lines.length > 0 ? (
           lines.map((l) => (
@@ -185,7 +185,7 @@ export function UsageGroup({ s }: { s: Snapshot }) {
         ) : (
           <div className="srow">
             <div className="srow-main">
-              <span className="sub">{PLAN_UNKNOWN}</span>
+              <span className="sub">{planUnknown(care.usage)}</span>
             </div>
           </div>
         )}
@@ -194,7 +194,7 @@ export function UsageGroup({ s }: { s: Snapshot }) {
             <span className="body">
               {monthName(care.usage.monthKey)}: {formatTokens(month)} tokens
             </span>
-            <span className="sub">All your apps together this month. Re-reading the chat from the AI's memory is not counted here: it counts for much less.</span>
+            <span className="sub">All your apps together this month. Re-reading earlier parts of the chat is not counted here: it counts for much less.</span>
           </div>
         </div>
         {rows.map((r) => (

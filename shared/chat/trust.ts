@@ -26,10 +26,15 @@ export function usageLine(u: TokenUsage | undefined): string | null {
   return `Used ${formatTokens(n)} tokens`;
 }
 
-/** The longer form: "plus 1.1M read again from the AI's memory of this chat, which counts for much less". */
+/** The engine the PC uses, by name: "Claude" unless the companion says Codex (UsageState.engine). */
+export function aiName(usage?: { engine?: string }): "Claude" | "Codex" {
+  return usage?.engine === "codex" ? "Codex" : "Claude";
+}
+
+/** The longer form: "plus 1.1M read again from earlier in the chat, which counts for much less". */
 export function cacheLine(u: TokenUsage | undefined): string | null {
   if (!u || u.cacheReadTokens <= 0) return null;
-  return `Plus ${formatTokens(u.cacheReadTokens)} read again from the AI's memory of the chat, which counts for much less.`;
+  return `Plus ${formatTokens(u.cacheReadTokens)} read again from earlier in the chat, which counts for much less.`;
 }
 
 const LIMIT_NAMES: Record<string, string> = {
@@ -82,7 +87,10 @@ export function planLine(limit: PlanLimit, now: Date = new Date()): PlanLine {
   return { text: `${Name}: ${engine} says there is room${resets ? `, resets at ${resets}` : ""}.`, kind: "ok" };
 }
 
-export const PLAN_UNKNOWN = "The AI has not shared your plan's limits yet, so this shows what your apps used, not a percentage of your plan.";
+export function planUnknown(usage?: { engine?: string }): string {
+  return `${aiName(usage)} has not shared your plan's limits yet, so this shows what your apps used, not a percentage of your plan.`;
+}
+export const PLAN_UNKNOWN = planUnknown();
 
 export function planLines(usage: UsageState | undefined, now: Date = new Date()): PlanLine[] {
   return (usage?.plan ?? []).map((p) => planLine(p, now));
@@ -142,17 +150,18 @@ export function headsUp(args: { text: string; newApp?: boolean; keepHealthy?: bo
   const big = args.newApp === true || args.keepHealthy === true || args.text.trim().length >= BIG_TEXT_CHARS || BIG_WORDS.test(args.text);
   if (!big && !out) return null;
   const parts: string[] = [];
-  if (args.newApp) parts.push("Making a new app is the biggest job there is: it uses more of your AI plan than any change.");
-  else if (args.keepHealthy) parts.push("Bringing an app up to date touches much of it, so it uses more of your AI plan than a small change.");
-  else if (big) parts.push("This looks like a big change, so it may use a good part of your AI plan.");
+  const ai = aiName(args.usage);
+  if (args.newApp) parts.push(`Making a new app is the biggest job there is: it uses more of your ${ai} plan than any change.`);
+  else if (args.keepHealthy) parts.push(`Bringing an app up to date touches much of it, so it uses more of your ${ai} plan than a small change.`);
+  else if (big) parts.push(`This looks like a big change, so it may use a good part of your ${ai} plan.`);
   const u = args.appUsage;
   if (u && u.changes >= 2) parts.push(`Changes to this app have used about ${formatTokens(Math.round(newTokens(u.total) / u.changes))} tokens each so far.`);
   if (out) parts.push(out.text);
   else if (near) parts.push(`${near.text}.`.replace(/\.\.$/, "."));
   else if (lines.length > 0) parts.push(`${lines[0].text}.`.replace(/\.\.$/, "."));
-  else parts.push("The AI has not shared how much of your plan is left.");
+  else parts.push(`${ai} has not shared how much of your plan is left.`);
   return {
-    title: out ? "Your AI plan needs a rest" : "A big job",
+    title: out ? `Your ${ai} plan needs a rest` : "A big job",
     body: parts.join(" "),
     send: args.newApp ? "Make it" : args.keepHealthy ? "Update it" : "Send anyway",
   };

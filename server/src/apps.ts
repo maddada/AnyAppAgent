@@ -1,7 +1,7 @@
-import { createSession, selectedEngine, resumeFor, rememberSession, type AgentSession } from "./acp/session.ts";
-import { engineName, type Engine } from "../../shared/engines.mts";
 // The app manager: creating apps, one Claude Code session per app, a build after every turn,
 // Git/GitHub, and the chat timeline. Every change goes out as a ServerEvent.
+import { createSession, selectedEngine, resumeFor, rememberSession, type AgentSession } from "./acp/session.ts";
+import { engineName, type Engine } from "../../shared/engines.mts";
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -264,6 +264,7 @@ export class AppManager {
       },
     });
     this.usage = new UsageMeter(this.store.stateDir);
+    this.usage.engine = selectedEngine(this.config);
     this.usage.onChange = () => this.careChanged();
     this.templates = new Templates(deps.repoDir ?? REPO_DIR);
     this.reminders = new HealthReminders(this.store.stateDir);

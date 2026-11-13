@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AppUsage, UsageState } from "../../protocol.ts";
-import { cacheLine, formatTokens, headsUp, PLAN_UNKNOWN, planLine, reminderText, usageLine, usageRows, resetLabel } from "../index.ts";
+import { aiName, cacheLine, formatTokens, headsUp, PLAN_UNKNOWN, planLine, planUnknown, reminderText, usageLine, usageRows, resetLabel } from "../index.ts";
 
 const now = new Date(2026, 10, 11, 10, 0);
 const u = (input: number, cacheRead = 0) => ({ inputTokens: input, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: cacheRead });
@@ -14,7 +14,7 @@ test("token counts read short", () => {
   assert.equal(formatTokens(52_400), "52k");
   assert.equal(formatTokens(1_160_000), "1.2M");
   assert.equal(usageLine(u(52_400, 1_100_000)), "Used 52k tokens");
-  assert.equal(cacheLine(u(52_400, 1_100_000)), "Plus 1.1M read again from Claude's memory of the chat, which counts for much less.");
+  assert.equal(cacheLine(u(52_400, 1_100_000)), "Plus 1.1M read again from earlier in the chat, which counts for much less.");
   assert.equal(usageLine(undefined), null);
   assert.equal(usageLine(u(0)), null);
 });
@@ -55,7 +55,7 @@ test("a heads-up before a big job, quiet for a small one", () => {
   assert.match(headsUp({ text: "x".repeat(500), usage: near, now })!.body, /5-hour limit: 90% used\.$/);
   // A used-up limit warns even for a small change.
   const out: UsageState = { ...usage, plan: [{ kind: "five_hour", status: "rejected", seenAt: "" }] };
-  assert.equal(headsUp({ text: "tiny", usage: out, now })!.title, "Your AI plan needs a rest");
+  assert.equal(headsUp({ text: "tiny", usage: out, now })!.title, "Your Claude plan needs a rest");
   for (const h of [app, redo]) assert.doesNotMatch(h.body + h.title, /—/);
 });
 
@@ -63,4 +63,18 @@ test("the monthly reminder", () => {
   assert.equal(reminderText({ due: false, behind: 2, lastAt: null, nextAt: null }), null);
   assert.match(reminderText({ due: true, behind: 2, lastAt: null, nextAt: null })!.body, /^2 apps are behind/);
   assert.match(reminderText({ due: true, behind: 1, lastAt: null, nextAt: null })!.body, /^One app is behind/);
+});
+
+test("the PC's engine is named: Claude by default, Codex when the companion says so", () => {
+  assert.equal(aiName(undefined), "Claude");
+  assert.equal(aiName({ engine: "codex" }), "Codex");
+  assert.match(PLAN_UNKNOWN, /^Claude has not shared/);
+  assert.match(planUnknown({ engine: "codex" }), /^Codex has not shared/);
+  const codexOut: UsageState = { engine: "codex", plan: [{ engine: "codex", kind: "codex_primary", status: "rejected", resetsAt: "2026-11-11T16:30:00", seenAt: "" }], month: u(0), monthKey: "2026-11" };
+  const h = headsUp({ text: "tiny", usage: codexOut, now })!;
+  assert.equal(h.title, "Your Codex plan needs a rest");
+  assert.match(h.body, /Codex session limit/);
+  assert.match(headsUp({ text: "", newApp: true, usage: { ...codexOut, plan: [] }, now })!.body, /your Codex plan/);
+  assert.match(planLine({ engine: "codex", kind: "codex_secondary", status: "allowed_warning", seenAt: "" }, now).text, /^Codex says you are close to your Codex weekly limit/);
+  for (const x of [h.title, h.body]) assert.doesNotMatch(x, /\u2014/);
 });

@@ -214,7 +214,8 @@ export class CodexSession {
 
   private permission(message: Obj): void {
     const p = obj(message.params);
-    const approval = /\/requestApproval$/.test(message.method);
+    // Only these two take { decision }. Others (permissions profiles, user input) are declined as unsupported.
+    const approval = /^item\/(commandExecution|fileChange)\/requestApproval$/.test(message.method);
     if (!approval) { this.send({ id: message.id, error: { code: -32601, message: "Unsupported request. Ask the person in chat instead." } }); return; }
     const answer = (decision: string) => this.send({ id: message.id, result: { decision } });
     // Respect requests the engine actually makes, even if approvalPolicy was never.

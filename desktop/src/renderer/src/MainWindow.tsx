@@ -1,4 +1,3 @@
-import { EngineChoice } from "./Onboarding.tsx";
 // The main window after onboarding: sidebar (Apps, Phones, Setup, Settings). The Apps page is
 // split: the list of apps on the left, and on the right either the open app's chat (Chat.tsx, the
 // same chat as on the phone) or today's activity with the phone panels. New app works from here
@@ -12,7 +11,7 @@ import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
 import { ChatView } from "./Chat.tsx";
 import { HexCard } from "./Hex.tsx";
-import type { StepId } from "./Onboarding.tsx";
+import { EngineChoice, type StepId } from "./Onboarding.tsx";
 import { PairingDialog } from "./Pairing.tsx";
 import { ShareButton, ShareDialog } from "./Share.tsx";
 import { FromOthersButton, FromOthersDialog } from "./FromOthers.tsx";
@@ -587,7 +586,7 @@ function setupRows(s: Snapshot): SetupRow[] {
       sub: c.claude.state === "done" ? `Signed in${c.claude.plan ? `, ${s.settings.engine === "codex" ? "Codex" : "Claude"} ${c.claude.plan}` : ""}` : c.claude.state === "checking" ? "Checking" : "Not signed in",
       needsYou: c.claude.state === "needed" || c.claude.state === "problem",
       blocks: true,
-      problemText: "Your AI is not signed in, so no app can be made right now.",
+      problemText: `${s.settings.engine === "codex" ? "Codex" : "Claude"} is not signed in, so no app can be made right now.`,
       step: "claude",
       button: "Sign in",
     },
@@ -805,7 +804,7 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
         <p>{s.checks.claude.summary}</p>
         {s.checks.claude.maintenance && <p className="label secondary">{s.checks.claude.maintenance}</p>}
         <div className="notice-actions">
-          <button className="btn btn-quiet" onClick={() => openSetup("claude")}>Set up AI</button>
+          <button className="btn btn-quiet" onClick={() => openSetup("claude")}>Set up {s.settings.engine === "codex" ? "Codex" : "Claude"}</button>
           <button className="btn btn-quiet" disabled={s.checks.claude.state === "working" || s.apps.some((a) => a.status === "working" || a.status === "building")} onClick={() => api.engineUpdate()}>Check for updates</button>
         </div>
       </div>

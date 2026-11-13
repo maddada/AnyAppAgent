@@ -709,6 +709,8 @@ export interface PlanLimit {
   seenAt: string; // when Claude last reported it
 }
 export interface UsageState {
+  /** Added: the PC's engine, so clients name it ("Claude" or "Codex"). Absent on older companions means Claude. */
+  engine?: "claude" | "codex";
   plan: PlanLimit[]; // empty when Claude has not reported a limit
   month: TokenUsage; // every app together, this month
   monthKey: string;
