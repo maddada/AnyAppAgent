@@ -173,3 +173,14 @@ gh release edit v<version> --repo maddada/AnyAppAgent --draft=false --latest
 7. Check that every `releases/latest/download/<name>` link returns the new file (size and SHA-256).
    A failed or interrupted Windows job must never expose a release with just the APKs. Rerun the
    workflow against the same draft; it replaces only the two Windows installer assets.
+
+## Manual installer test builds
+
+`windows-installer.yml` is retained for artifact-only test builds. It also uses this repository's
+`desktop/dev/certum-simplysign-login.ps1` on a GitHub-hosted Windows runner and the signing hook in
+`desktop/dev/sign-certum.cjs`. Its optional unsigned test mode does not publish releases. Use
+`release-windows.yml` for releases: it requires signing, checks the tag and both APKs, uploads both
+installer names, verifies the uploaded bytes, and keeps the release a draft.
+
+Certum accepts each one-time code once. Avoid starting a signing job while a Ghostex or codex-swap
+job is logging in to the same SimplySign account.
