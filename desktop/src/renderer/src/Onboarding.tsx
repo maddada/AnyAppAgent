@@ -226,12 +226,13 @@ function Welcome() {
   );
 }
 
-export function EngineChoice({ s }: { s: Snapshot }) {
+/** Claude or Codex: no model choice (Codex always runs gpt-6.1-sol at high effort). In setup and in Settings. */
+export function EngineChoice({ s, inSetup }: { s: Snapshot; inSetup?: boolean }) {
   const busy = s.checks.claude.signingIn || s.checks.claude.state === "working" || s.apps.some((a) => a.status === "working" || a.status === "building");
   const [error, setError] = useState("");
   return <div className="card" style={{ padding: "var(--aa-space-lg)", marginBottom: "var(--aa-space-xl)" }}>
-    <strong>Choose the AI that makes your apps</strong>
-    <p className="label secondary">Use your Claude or ChatGPT account. You can change this later in Settings, when your apps are idle.</p>
+    <strong>{inSetup ? "Claude or Codex?" : "The AI that makes your apps"}</strong>
+    <p className="label secondary">Claude uses a paid Claude plan. Codex uses your ChatGPT plan. {inSetup ? "You can change this later in Settings, when your apps are idle." : "Change it when your apps are idle."}</p>
     {error && <p className="problem-text">{error}</p>}
     <div className="notice-actions" role="group" aria-label="AI engine">
       {(["claude", "codex"] as const).map((engine) => <button key={engine} className={`btn ${s.settings.engine === engine ? "btn-primary" : "btn-quiet"}`} aria-pressed={s.settings.engine === engine} disabled={busy} onClick={() => { setError(""); void api.setSetting("engine", engine).catch(() => setError("Could not change the engine. Wait for your app to finish and try again.")); }}>{engine === "claude" ? "Claude" : "Codex"}</button>)}
@@ -257,7 +258,7 @@ function ClaudeStep({ s }: { s: Snapshot }) {
   return (
     <>
       <Head eyebrow={stepOf("claude")} title="Choose the AI that writes your apps" lede="Kiwimake uses the AI installed on this PC. If it is missing, setup installs the official app for you." />
-      <EngineChoice s={s} />
+      <EngineChoice s={s} inSetup />
       <How items={[
         [`Sign in to ${name}`, codex ? "Use your ChatGPT account in the browser." : "Use a paid Claude plan, such as Pro or Max."],
         ["Already installed?", "Kiwimake uses your existing sign-in and keeps the tool updated."],
