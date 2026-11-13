@@ -53,7 +53,9 @@ jobs:
             $version = (Get-Content "$part/package.json" -Raw | ConvertFrom-Json).version
             if ("v$version" -ne $env:RELEASE_TAG) { throw "Version mismatch in $part." }
           }
-          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" | ConvertFrom-Json
+          $releaseInfo = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json databaseId,isDraft | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $releaseInfo.isDraft) { throw 'The release must exist and remain a draft.' }
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/$($releaseInfo.databaseId)" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or -not $release.draft) { throw 'The release must exist and remain a draft.' }
           New-Item -ItemType Directory -Force app/dist | Out-Null
           foreach ($name in @('AnyAppAgent.apk', 'AnyAppAgent-universal.apk')) {

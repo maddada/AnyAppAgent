@@ -156,10 +156,11 @@ apksigner verify --print-certs app\dist\AnyAppAgent.apk   # SHA-256 digest must 
 gh release create v<version> --repo maddada/AnyAppAgent --verify-tag --draft `
   --title "Kiwimake <version>" --notes-file notes.md `
   app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk
-gh workflow run release-windows.yml --repo maddada/AnyAppAgent --ref v<version> -f tag=v<version>
+gh workflow run release-windows.yml --repo maddada/AnyAppAgent --ref main -f tag=v<version>
 ```
 
-5. Wait for the workflow to succeed. Its `windows-signing-evidence` artifact contains the signed
+5. The workflow definition runs from main so CI fixes do not require moving a release tag; its
+   checkout always builds the supplied tag. Wait for it to succeed. Its `windows-signing-evidence` artifact contains the signed
    `Kiwimake.exe` and `signatures.json`. Download both installer names from the draft and run
    `signtool verify /pa /v` on them. Check the exact signer above, the certificate thumbprint, a valid
    timestamp, and identical hashes for the two installer names. Check the APKs against the locally
