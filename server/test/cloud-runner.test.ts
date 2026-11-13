@@ -49,6 +49,20 @@ describe("the playbook in the cloud", () => {
     expect(text).not.toContain(String.fromCharCode(0x2014));
   });
 
+  test("Reload only for a quick update; a new install is installed; never Claude Code", () => {
+    const text = coordinatorPlaybook(app, { cloud: true });
+    expect(text).toContain('Never say "tap Reload" for a new install');
+    expect(text).toMatch(/then install it on your\s+phone/);
+    expect(text).toContain("never promise either one");
+    // "Claude Code" only in the rule that forbids it.
+    expect(text.split("Claude Code").length - 1).toBe(1);
+    expect(text).toMatch(/Never call yourself\s+or the helpers "Claude Code"/);
+    const helper = cloudWords(workerPlaybook(app, { title: "Make the button green", changesApp: true }));
+    expect(helper).not.toContain("Claude Code");
+    expect(helper).not.toMatch(/same popup appears, and Reload/);
+    expect(helper).toContain("Say \"tap Reload\" only for a quick update, never for a new install");
+  });
+
   test("a PC's playbook is unchanged", () => {
     const text = coordinatorPlaybook(app);
     expect(text).not.toContain("Levels (the cloud)");

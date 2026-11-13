@@ -18,6 +18,9 @@ export interface BuildInfo {
   sha256?: string; // set when succeeded
   signerSha256?: string; // certificate SHA-256 of the key that signed it (docs/DISTRIBUTION.md); absent from older PCs
   error?: string; // short, human readable, set when failed
+  // Added (cloud, after milestone 10): this build was made in the cloud while the PC was off; the PC
+  // took over its number when it pulled the change back, so it has no APK of it. Never "saving".
+  madeInCloud?: boolean;
   // Added for smaller downloads: the same build as one APK per phone processor type (ABI), each
   // much smaller than the full APK (sizeBytes/sha256 above), which holds every ABI. Set when
   // succeeded and the PC built them; absent from older PCs and from apps without native code.
@@ -110,6 +113,9 @@ export interface App {
   // changes while the PC is off). Absent on apps a paired PC lists.
   cloud?: CloudPlace;
   move?: AppMove; // added (cloud milestone 8): moving to the cloud, or moved (then this PC's copy is read-only)
+  // Added (cloud, after milestone 10): a change made in the cloud while this PC was off is still
+  // running there; the PC brings it back when it ends. Absent otherwise and from older PCs.
+  changingInCloud?: boolean;
   createdAt: string;
   updatedAt: string;
 }

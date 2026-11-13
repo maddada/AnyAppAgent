@@ -35,6 +35,7 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
   if (set === "pages") return pagesSet(win, js, shot, log).catch((e) => log(`[shots] pages set failed: ${(e as Error).message}`));
   if (set === "history") return historySet(js, shot, log).catch((e) => log(`[shots] history set failed: ${(e as Error).message}`));
   if (set === "change") return changeSet(js, shot, log).catch((e) => log(`[shots] change set failed: ${(e as Error).message}`));
+  if (set === "cloud") return cloudSet(js, shot, log).catch((e) => log(`[shots] cloud set failed: ${(e as Error).message}`));
   if (set === "account") return accountSet(dir, js, shot, log).catch((e) => log(`[shots] account set failed: ${(e as Error).message}`));
   if (set === "real") {
     // Against the real companion: a phone pairs (an outside script plays the phone), then an app is
@@ -281,6 +282,31 @@ async function pagesSet(win: BrowserWindow, js: (code: string) => Promise<unknow
     await js(`window.__main.newApp(false)`);
     await wait(300);
   }
+}
+
+/**
+ * The "cloud" set: an app whose change runs in the cloud while the PC was off, then is back. The
+ * header says "Changing in the cloud" with a spinner, then the spinner stops. Against the fake
+ * companion with FAKE_CLOUD=1 (it brings the change back after FAKE_CLOUD_MS).
+ */
+async function cloudSet(js: (code: string) => Promise<unknown>, shot: (name: string) => Promise<void>, log: (l: string) => void): Promise<void> {
+  await js(`window.anyapp.setSetting("onboardingDone", true); window.__app.setup(null)`);
+  await wait(600);
+  const appId = (await js(`window.anyapp.getSnapshot().then((s) => s.apps.find((a) => a.name === "Tally Counter")?.id ?? null)`)) as string | null;
+  if (!appId) return log("[shots] no app named Tally Counter");
+  await js(`window.__main.openApp(${JSON.stringify(appId)})`);
+  await wait(800);
+  const header = () => js(`(() => { const s = document.querySelector(".chat-head .state"); return { text: s?.textContent ?? null, spinners: document.querySelectorAll(".spin").length }; })()`) as Promise<{ text: string | null; spinners: number }>;
+  log(`[shots] cloud while running: ${JSON.stringify(await header())}`);
+  await shot("cloud-1-changing-in-the-cloud");
+  for (let i = 0; i < 60; i++) {
+    const h = await header();
+    if (h.text && !/Changing in the cloud/.test(h.text)) break;
+    await wait(500);
+  }
+  await js(`(() => { const el = document.querySelector('[data-testid="chat-scroll"]'); if (el) el.scrollTop = el.scrollHeight; })()`);
+  log(`[shots] cloud after it is back: ${JSON.stringify(await header())}`);
+  await shot("cloud-2-back-no-spinner");
 }
 
 /**

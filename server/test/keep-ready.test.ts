@@ -14,6 +14,7 @@ import type { CloudLink } from "../src/cloud-link.ts";
 import type { MoveKeys } from "../src/cloud-move.ts";
 import { oneTimeKey, openWith, type Sealed } from "../src/cloud-transport.ts";
 import type { Config } from "../src/config.ts";
+import { describeApp } from "../../shared/chat/state.ts";
 import { KeepReady } from "../src/keep-ready.ts";
 import { Store } from "../src/store.ts";
 
@@ -82,7 +83,7 @@ async function setup() {
     exportOne: async (id) => ({ id, info: { keyAlias: "app", storePassword: "store-pass-plain", certSha256: "c".repeat(64), kind: "own" }, files: { store: Buffer.from("PKCS12").toString("base64") } }),
     importOne: async () => ({ added: [], same: [], conflicts: [] }),
   };
-  const ready = new KeepReady({ apps, link: link as unknown as CloudLink, keys, log: () => {}, remote: () => bare });
+  const ready = new KeepReady({ apps, link: link as unknown as CloudLink, keys, log: () => {}, remote: () => bare, soonMs: 60 * 60_000 });
   apps.beforeChange = (a) => ready.guard(a);
   return { apps, app, dir, bare, cloud, ready, link };
 }
@@ -130,8 +131,15 @@ describe("keeping apps ready in the cloud", () => {
     // While the cloud still works on it, the PC waits and takes no change of its own.
     await ready.pullBackAll();
     expect(() => apps.sendMessage(app.id, "Make it blue")).toThrow(/coming back to this PC first/);
+    // The PC's state line says the change runs in the cloud (not "Saving version"), with a spinner.
+    expect(apps.get(app.id).changingInCloud).toBe(true);
+    expect(describeApp(apps.get(app.id))).toEqual({ kind: "working", label: "Changing in the cloud" });
     cloud.busy = false;
     await ready.pullBackAll();
+    // Back: done, no spinner left (the PC has no APK of the cloud's version 5 to "save").
+    expect(apps.get(app.id).changingInCloud).toBeUndefined();
+    expect(apps.get(app.id).latestBuild?.madeInCloud).toBe(true);
+    expect(describeApp(apps.get(app.id))).toEqual({ kind: "ready", label: "Version 5 made in the cloud" });
     expect(git(dir, "log", "-1", "--format=%s")).toBe("Add a green tea preset");
     expect(cloud.done).toBe(git(dir, "rev-parse", "HEAD"));
     const items = apps.messages(app.id, 0);

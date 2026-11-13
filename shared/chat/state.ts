@@ -71,6 +71,8 @@ export function appAction(app: App, installedVersion: number | null | undefined)
 export const WAITING_FOR_ANSWER = "Waiting for your answer";
 /** The same on a half-width phone tile, which keeps to one short line. */
 export const WAITING_FOR_ANSWER_SHORT = "Your answer";
+/** The state line while a change made in the cloud (the PC was off) still runs there. */
+export const CHANGING_IN_CLOUD = "Changing in the cloud";
 
 export function describeApp(app: App, device?: OnDevice, now = Date.now()): StateText {
   const install = device?.install;
@@ -84,6 +86,8 @@ export function describeApp(app: App, device?: OnDevice, now = Date.now()): Stat
         return { kind: "problem", label: "Didn't install" };
     }
   }
+  // A change made in the cloud while the PC was off still runs there (the PC waits for it).
+  if (app.changingInCloud && app.status !== "error") return { kind: "working", label: CHANGING_IN_CLOUD };
   switch (app.status) {
     case "creating":
       return { kind: "working", label: "Setting up" };
@@ -96,7 +100,7 @@ export function describeApp(app: App, device?: OnDevice, now = Date.now()): Stat
     }
     case "building":
       // After the build itself the companion still commits and pushes before it announces the APK.
-      return app.latestBuild?.status === "succeeded"
+      return app.latestBuild?.status === "succeeded" && !app.latestBuild.madeInCloud
         ? { kind: "working", label: `Saving version ${app.latestBuild.number}` }
         : { kind: "working", label: app.latestBuild ? `Building version ${app.latestBuild.number}` : "Building" };
     case "error":
@@ -105,7 +109,9 @@ export function describeApp(app: App, device?: OnDevice, now = Date.now()): Stat
   const apk = app.latestApk;
   const built = app.latestBuild;
   // A finished build that is not announced yet is still on its way, never "ready" or "waiting".
-  if (built?.status === "succeeded" && built.number > (apk?.number ?? 0)) return { kind: "working", label: `Saving version ${built.number}` };
+  // A version made in the cloud while the PC was off is done: the PC has no APK of it to save.
+  const fromCloud = built?.status === "succeeded" && built.madeInCloud && built.number > (apk?.number ?? 0) ? built : null;
+  if (built?.status === "succeeded" && !fromCloud && built.number > (apk?.number ?? 0)) return { kind: "working", label: `Saving version ${built.number}` };
   // A plan or question page waits for the person (an update or install to tap still comes first).
   const waiting: StateText | null = app.waitingForAnswer ? { kind: "ready", label: WAITING_FOR_ANSWER } : null;
   if (!apk) return waiting ?? { kind: "idle", label: "Waiting for the first version" };
@@ -117,6 +123,10 @@ export function describeApp(app: App, device?: OnDevice, now = Date.now()): Stat
     return waiting ?? { kind: "idle", label: `Version ${device.installedVersion} is on this phone` };
   }
   if (waiting) return waiting;
+  if (fromCloud) {
+    const recent = fromCloud.finishedAt && now - Date.parse(fromCloud.finishedAt) < 60 * 60_000;
+    return recent ? { kind: "ready", label: `Version ${fromCloud.number} made in the cloud` } : { kind: "idle", label: "Up to date" };
+  }
   const fresh = apk.finishedAt && now - Date.parse(apk.finishedAt) < 60 * 60_000;
   return fresh ? { kind: "ready", label: `Version ${apk.number} ready` } : { kind: "idle", label: "Up to date" };
 }

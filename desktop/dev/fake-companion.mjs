@@ -201,6 +201,30 @@ if (process.env.FAKE_HISTORY === "1") {
   seqs.set(app.id, seq);
 }
 
+// A change made in the cloud while the PC was off (docs/CLOUD.md section 3): "Tally Counter" at
+// version 3 here while the cloud makes version 4; after FAKE_CLOUD_MS it is back (chat rows marked
+// "Made in the cloud", the PC takes over number 4, which it has no APK of).
+if (process.env.FAKE_CLOUD === "1") {
+  const app = makeApp("Tally Counter", "idle");
+  const v3 = { number: 3, status: "succeeded", startedAt: now(), finishedAt: now(), sizeBytes: 30_000_000 };
+  Object.assign(app, { latestBuild: v3, latestApk: v3, changingInCloud: true, lastMessagePreview: "Done. The count is kept when you close the app." });
+  const list = chats.get(app.id);
+  let seq = 0;
+  const push = (item) => list.push({ id: randomUUID(), appId: app.id, seq: ++seq, createdAt: now(), updatedAt: now(), ...item });
+  push({ kind: "user", text: "Keep the count when I close the app." });
+  push({ kind: "assistant", text: "Done. The count is kept when you close the app." });
+  push({ kind: "build", build: v3, text: "Ready to install" });
+  seqs.set(app.id, seq);
+  setTimeout(() => {
+    upsert(app.id, { id: randomUUID(), kind: "user", text: 'Add "Counted while my PC was off" under the number.', madeInCloud: true });
+    upsert(app.id, { id: randomUUID(), kind: "assistant", text: 'The line "Counted while my PC was off" now sits under the big number. This one is a new install: it arrives in a few minutes, then install it on your phone.', madeInCloud: true });
+    const { changingInCloud: _, ...rest } = app;
+    apps.set(app.id, rest);
+    const v4 = { number: 4, status: "succeeded", startedAt: now(), finishedAt: now(), madeInCloud: true };
+    updateApp(rest, { latestBuild: v4 });
+  }, Number(process.env.FAKE_CLOUD_MS ?? 15_000));
+}
+
 async function simulateTurn(app, prompt) {
   upsert(app.id, { id: randomUUID(), kind: "user", text: prompt });
   updateApp(app, { status: "working", lastMessagePreview: prompt.slice(0, 80) });

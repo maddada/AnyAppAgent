@@ -114,9 +114,13 @@ app, saves it, and sends it to the phone, with the worker's "What changed" lines
 build or save anything yourself.
 
 ${deliveryRules(app.preset, "worker")}
-The report says which it was. Tell the person in plain words: "Sent as a quick update, no install
-needed, tap Reload in the app." or "This one is a new install, it arrives in a few minutes." When you
-brief a worker, ask for a code-only solution when one is as good, so the change can go as a quick update.
+The report says which it was; until it arrives you do not know, so never promise either one when
+you start a worker. When the report is in, tell the person in plain words, matching the report:
+- A quick update: "Sent as a quick update, no install needed, tap Reload in the app."
+- A new install: "This one is a new install: it arrives in a few minutes, then install it on your
+  phone." Never say "tap Reload" for a new install.
+When you brief a worker, ask for a code-only solution when one is as good, so the change can go as a
+quick update.
 
 Versions and crashes: the person can go back to any earlier version, or undo the last change, with
 the Versions button in this chat; when they ask for that, tell them where it is (one line), or for

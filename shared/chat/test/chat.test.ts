@@ -227,6 +227,23 @@ test("describeApp on the PC and on the phone", () => {
   assert.equal(appAction(app(), null), "notReady");
 });
 
+test("describeApp: a change made in the cloud while the PC was off, then done (no endless Saving)", () => {
+  const now = Date.parse(T0) + 60_000;
+  const v3 = { number: 3, status: "succeeded" as const, startedAt: T0, finishedAt: T0 };
+  const v4 = { number: 4, status: "succeeded" as const, startedAt: T0, finishedAt: T0, madeInCloud: true };
+  // While it runs in the cloud: says so (working), not "Saving version".
+  assert.deepEqual(describeApp(app({ latestApk: v3, latestBuild: v3, changingInCloud: true }), undefined, now), { kind: "working", label: "Changing in the cloud" });
+  // Pulled back: the PC took over number 4 but has no APK of it; done, no spinner.
+  const back = app({ latestApk: v3, latestBuild: v4 });
+  assert.deepEqual(describeApp(back, undefined, now), { kind: "ready", label: "Version 4 made in the cloud" });
+  assert.deepEqual(describeApp(back, undefined, now + 2 * 3600_000), { kind: "idle", label: "Up to date" });
+  assert.notEqual(describeApp({ ...back, status: "building" }, undefined, now).label, "Saving version 4");
+  // A PC build that is not announced yet still says "Saving".
+  assert.deepEqual(describeApp(app({ latestApk: v3, latestBuild: { ...v4, madeInCloud: undefined } }), undefined, now), { kind: "working", label: "Saving version 4" });
+  // The phone with version 4 from the cloud on it.
+  assert.deepEqual(describeApp(back, { installedVersion: 4 }), { kind: "idle", label: "Version 4 is on this phone" });
+});
+
 // ---------- composer
 
 test("composerState: send, queue, stop", () => {
