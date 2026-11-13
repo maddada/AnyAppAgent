@@ -3,15 +3,14 @@
 // Kiwimake account. A phone can have both later; this only picks the first.
 import { Pressable, ScrollView, View } from "react-native";
 import { Redirect, router } from "expo-router";
-import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronRight, Cloud, Monitor } from "lucide-react-native";
 import { useStore } from "@/lib/store";
 import { Button } from "@/ui/Button";
 import { T } from "@/ui/Text";
+import { BrandLockup } from "@/ui/Brand";
 import { border, icon, radius, size, space, useTheme } from "@/ui/theme";
 
-const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
 
 function Way({ icon: Icon, title, line, onPress, testID }: { icon: typeof Cloud; title: string; line: string; onPress: () => void; testID: string }) {
   const t = useTheme();
@@ -51,7 +50,7 @@ export default function Welcome() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top }}>
       <ScrollView contentContainerStyle={{ paddingTop: space["5xl"], paddingHorizontal: size.screenGutter, paddingBottom: insets.bottom + space["2xl"] }}>
-        <Image source={MARK} style={{ width: size.appIcon, height: size.appIcon, borderRadius: radius.appIcon }} />
+        <BrandLockup height={48} />
         <T variant="display" style={{ marginTop: space["2xl"] }}>
           Where should your apps be made?
         </T>

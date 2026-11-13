@@ -1,7 +1,7 @@
 {
   "name": "anyappagent-desktop",
   "productName": "Kiwimake",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Kiwimake for Windows: runs the companion, onboarding, connect a phone.",
   "main": "out/main/index.js",
@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "fake-companion": "node dev/fake-companion.mjs",
-    "dist": "electron-vite build && electron-builder --win nsis"
+    "dist": "pwsh -NoProfile -File dev/release-windows.ps1"
   },
   "dependencies": {
     "qrcode": "1.5.4",
@@ -99,6 +99,10 @@
       }
     ],
     "win": {
+      "signtoolOptions": {
+        "signingHashAlgorithms": ["sha256"],
+        "rfc3161TimeStampServer": "http://time.certum.pl"
+      },
       "target": [
         {
           "target": "nsis",

@@ -23,12 +23,12 @@ const out = (...p) => {
 const browser = await puppeteer.launch({ executablePath: chrome, headless: true });
 const page = await browser.newPage();
 
-async function shot(file, px, layers, shape = "none") {
+async function shot(file, px, layers, shape = "none", height = px) {
   const radius = shape === "circle" ? "50%" : "0";
   const imgs = layers.map((src) => `<img src="${src}" style="position:absolute;inset:0;width:100%;height:100%">`).join("");
-  await page.setViewport({ width: px, height: px, deviceScaleFactor: 1 });
+  await page.setViewport({ width: px, height, deviceScaleFactor: 1 });
   await page.setContent(
-    `<html><body style="margin:0;background:transparent"><div id="c" style="position:relative;width:${px}px;height:${px}px;border-radius:${radius};overflow:hidden">${imgs}</div></body></html>`,
+    `<html><body style="margin:0;background:transparent"><div id="c" style="position:relative;width:${px}px;height:${height}px;border-radius:${radius};overflow:hidden">${imgs}</div></body></html>`,
   );
   await page.evaluate(() => Promise.all([...document.images].map((i) => i.decode())));
   const el = await page.$("#c");
@@ -42,9 +42,10 @@ const mono = mark("android/adaptive-monochrome.svg");
 const full = mark("mark.svg");
 const small = mark("mark-small.svg");
 const stat = mark("android/ic-stat.svg");
+const launcher = mark("android/launcher.svg");
 
 // Android, Expo app config (1024 px sources; Expo makes the densities).
-await shot(out("android/expo/icon.png"), 1024, [full]);
+await shot(out("android/expo/icon.png"), 1024, [launcher]);
 await shot(out("android/expo/adaptive-foreground.png"), 1024, [fg]);
 await shot(out("android/expo/adaptive-background.png"), 1024, [bg]);
 await shot(out("android/expo/adaptive-monochrome.png"), 1024, [mono]);
@@ -56,8 +57,9 @@ for (const [d, f] of Object.entries(densities)) {
   await shot(out(`android/res/mipmap-${d}/ic_launcher_foreground.png`), 108 * f, [fg]);
   await shot(out(`android/res/mipmap-${d}/ic_launcher_background.png`), 108 * f, [bg]);
   await shot(out(`android/res/mipmap-${d}/ic_launcher_monochrome.png`), 108 * f, [mono]);
-  await shot(out(`android/res/mipmap-${d}/ic_launcher.png`), 48 * f, [full]);
-  await shot(out(`android/res/mipmap-${d}/ic_launcher_round.png`), 48 * f, [bg, fg], "circle");
+  await shot(out(`android/res/mipmap-${d}/ic_launcher.png`), 48 * f, [launcher]);
+  // A legacy round icon has no adaptive 108-to-72 crop. Use the same 75% mark.
+  await shot(out(`android/res/mipmap-${d}/ic_launcher_round.png`), 48 * f, [launcher], "circle");
   await shot(out(`android/res/drawable-${d}/ic_stat_anyappagent.png`), 24 * f, [stat]);
 }
 const adaptiveXml = `<?xml version="1.0" encoding="utf-8"?>
@@ -75,13 +77,21 @@ const pngs = {};
 for (const px of [16, 20, 24, 32, 40, 48, 64, 96, 128, 256, 512]) {
   pngs[px] = await shot(out(`windows/icon-${px}.png`), px, [px <= 24 ? small : full]);
 }
-for (const px of [16, 20, 24, 32, 40, 48]) fs.copyFileSync(pngs[px], out(`windows/tray-${px}.png`));
 const trayScale = { "": 16, "@1.25x": 20, "@1.5x": 24, "@2x": 32, "@2.5x": 40, "@3x": 48 };
-for (const [suffix, px] of Object.entries(trayScale)) fs.copyFileSync(pngs[px], out(`windows/tray${suffix}.png`));
+for (const [suffix, px] of Object.entries(trayScale)) {
+  // Tray icons remain optically simple at every display scale.
+  await shot(out(`windows/tray${suffix}.png`), px, [small]);
+  await shot(out(`windows/tray-${px}.png`), px, [small]);
+}
+// Transparent in-app assets, separate from the cream launcher plate.
+await shot(out("native/mark.png"), 512, [full]);
+await shot(out("native/mark-small.png"), 512, [small]);
+await shot(out("native/lockup.png"), 1653, [mark("lockup.svg")], "none", 424);
+await shot(out("native/lockup-dark.png"), 1653, [mark("lockup-dark.svg")], "none", 424);
 await browser.close();
 
-function ico(sizes) {
-  const images = sizes.map((s) => fs.readFileSync(pngs[s]));
+function ico(sizes, sources = pngs) {
+  const images = sizes.map((s) => fs.readFileSync(sources[s]));
   const header = Buffer.alloc(6 + 16 * sizes.length);
   header.writeUInt16LE(0, 0);
   header.writeUInt16LE(1, 2);
@@ -100,5 +110,6 @@ function ico(sizes) {
   return Buffer.concat([header, ...images]);
 }
 fs.writeFileSync(out("windows/anyappagent.ico"), ico([16, 20, 24, 32, 40, 48, 64, 256]));
-fs.writeFileSync(out("windows/tray.ico"), ico([16, 20, 24, 32, 40, 48]));
+const traySizes = [16, 20, 24, 32, 40, 48];
+fs.writeFileSync(out("windows/tray.ico"), ico(traySizes, Object.fromEntries(traySizes.map((s) => [s, out(`windows/tray-${s}.png`)]))));
 console.log("assets written under", path.join(root, "mark"));

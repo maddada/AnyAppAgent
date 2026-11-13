@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, CircleUser, Download, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
@@ -24,12 +23,12 @@ import { DictationNote, MicButton } from "@/ui/MicButton";
 import { Sheet } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
+import { BrandLockup } from "@/ui/Brand";
 import { HealthBadge, HealthCard, ReminderBanner } from "@/ui/Trust";
 import { LinkAskBanner } from "@/ui/LinkAsk";
 import { MoveButton, moveLine } from "@/ui/Move";
 import { border, elevation, icon, look, radius, size, space, useTheme } from "@/ui/theme";
 
-const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
 /** COMPONENTS.md 3 and 4: the New app plus is 28, the sheet head icon 56 (no icon-size token for either). */
 const NEW_TILE_PLUS = 28;
 const SHEET_ICON = 56;
@@ -182,14 +181,10 @@ function Header() {
       setSlow(false);
     };
   }, [connection, loaded]);
-  const markSize = icon.size.md;
   return (
     <View style={{ paddingTop: space.md, paddingBottom: space.xl }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, marginRight: -space.md }}>
-        <Image source={MARK} style={{ width: markSize, height: markSize, borderRadius: (markSize * radius.appIcon) / size.appIcon }} />
-        <T variant="heading" style={{ flex: 1 }}>
-          Kiwimake
-        </T>
+        <View style={{ flex: 1 }}><BrandLockup /></View>
         {cloudAvailable ? (
           <IconButton testID="open-account" icon={CircleUser} label="Kiwimake account" iconSize={icon.size.md} color={t.textSecondary} onPress={() => router.push("/account")} />
         ) : null}

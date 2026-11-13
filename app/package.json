@@ -1,6 +1,6 @@
 {
   "name": "anyappagent",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "main": "expo-router/entry",
   "dependencies": {
     "@convex-dev/auth": "0.0.98",
