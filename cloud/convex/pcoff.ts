@@ -163,6 +163,12 @@ async function startChange(ctx: MutationCtx, user: Doc<'users'>, packageName: st
 // ---------- pulling back (the PC, when it is on again)
 
 /** The kept-ready apps of this PC with changes made in the cloud to pull back. */
+/** Whether "Use the cloud when my PC is off" is on (for the PC's regular check). */
+export const switchOf = internalQuery({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => Boolean((await ctx.db.get(userId))?.pcOffSwitch),
+});
+
 export const toPullBack = internalQuery({
   args: { userId: v.id('users'), linkId: v.id('pcLinks') },
   handler: async (ctx, { userId }) => {

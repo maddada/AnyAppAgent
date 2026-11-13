@@ -87,8 +87,11 @@ export class KeepReady {
 
   /** At start and every check: every app (cheap when nothing changed). */
   async keepAll(): Promise<void> {
-    await this.pullBackAll();
-    if (!this.switchOn) return;
+    await this.pullBackAll(true);
+    if (this.switchOn) await this.keepEach();
+  }
+
+  private async keepEach(): Promise<void> {
     for (const app of this.deps.apps.list()) {
       if (!this.switchOn) return;
       if (this.canKeep(app)) await this.keep(app.id);
@@ -103,12 +106,23 @@ export class KeepReady {
   }
 
   /** Brings back every change the cloud made while this PC was off. */
-  async pullBackAll(): Promise<void> {
+  async pullBackAll(fromKeepAll = false): Promise<void> {
     const { apps, link, log } = this.deps;
     if (!link.linked()) return;
     let list: PullItem[];
     try {
-      list = (await link.call<{ apps: PullItem[] }>("/pc/pull-back/list")).apps;
+      const r = await link.call<{ apps: PullItem[]; switchOn?: boolean }>("/pc/pull-back/list");
+      list = r.apps;
+      // The switch turned on since this PC last asked (on the phone or elsewhere): keep every app
+      // ready now, not only after its next version.
+      if (typeof r.switchOn === "boolean") {
+        const was = this.switchOn;
+        this.switchOn = r.switchOn;
+        if (r.switchOn && !was && !fromKeepAll) {
+          log("the cloud may now make changes while this PC is off: keeping the apps ready");
+          void this.keepEach();
+        }
+      }
     } catch (e) {
       return log("pull back:", (e as Error).message);
     }

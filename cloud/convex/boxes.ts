@@ -219,7 +219,8 @@ export const wake = internalAction({
       else if (b.state === 'stopped') await p.start(b.id);
       await p.waitFor(b.id, ['running'], 4 * 60_000);
       await ctx.runMutation(internal.boxes.patchBox, { boxId: s.box._id, patch: { pausedAt: undefined } });
-      await ctx.runMutation(internal.boxes.patchThread, { threadId, patch: { boxState: 'running' } });
+      // A resumed runner carries on without a new hello, so the "Waking up" note goes here.
+      await ctx.runMutation(internal.boxes.patchThread, { threadId, patch: { boxState: 'running', boxNote: undefined } });
     } catch (e) {
       console.error('box wake failed:', (e as Error).message);
       await ctx.runMutation(internal.boxes.startFailed, { threadId, ...friendly(e), back: 'paused' });

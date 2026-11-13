@@ -92,3 +92,38 @@ export const changesOfApp = internalQuery({
   handler: async (ctx, { appId }) =>
     (await ctx.db.query('changes').withIndex('by_app_at', (q) => q.eq('appId', appId)).collect()).map((c) => ({ state: c.state, startedAt: c.startedAt, actual: c.actual, estimate: c.estimate?.millicredits ?? 0 })),
 });
+
+/** The newest accounts (scripts only): ids, when made, and whether they have an email (never the email). */
+export const newestUsers = internalQuery({
+  args: {},
+  handler: async (ctx) => (await ctx.db.query('users').order('desc').take(3)).map((u) => ({ id: u._id, at: u._creationTime, hasEmail: Boolean(u.email), github: Boolean(u.githubLogin) })),
+});
+
+/** An account's apps (scripts only): ids, names, places and their threads. */
+export const appsOfUser = internalQuery({
+  args: { userId: v.id('users') },
+  handler: async (ctx, { userId }) => {
+    const apps = await ctx.db.query('apps').withIndex('by_user', (q) => q.eq('userId', userId)).collect();
+    return Promise.all(
+      apps.map(async (a) => ({ id: a._id, name: a.name, place: a.place, buildHigh: a.buildHigh, thread: (await ctx.db.query('threads').withIndex('by_app', (q) => q.eq('appId', a._id)).first())?._id ?? null })),
+    );
+  },
+});
+
+/** What the cloud has cost so far (scripts only): AI and machine time in dollars, all accounts or one, optionally since a time. */
+export const costSoFar = internalQuery({
+  args: { userId: v.optional(v.id('users')), since: v.optional(v.number()) },
+  handler: async (ctx, { userId, since }) => {
+    const rows = userId ? await ctx.db.query('usage').withIndex('by_user_at', (q) => q.eq('userId', userId)).collect() : await ctx.db.query('usage').collect();
+    const out = { aiDollars: 0, machineDollars: 0, machineSeconds: 0, credits: 0, rows: 0 };
+    for (const r of rows) {
+      if (since && r.at < since) continue;
+      if (r.kind === 'inference') out.aiDollars += r.costMicros / 1e6;
+      else out.machineDollars += r.costMicros / 1e6;
+      out.machineSeconds += r.seconds ?? 0;
+      out.credits += r.millicredits / 1000;
+      out.rows++;
+    }
+    return { ...out, aiDollars: Math.round(out.aiDollars * 1000) / 1000, machineDollars: Math.round(out.machineDollars * 1000) / 1000, credits: Math.round(out.credits * 10) / 10 };
+  },
+});

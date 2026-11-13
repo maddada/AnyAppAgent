@@ -731,7 +731,9 @@ else. Each is enforced in Convex unless it says otherwise.
   Rebuild (which runs a helper) is a change like any other.
 - **5 machines per person** (`BOX.maxPerUser`): a sixth app's box waits ("Your other apps are using
   all 5 machines") and starts when one pauses. Boxes pause after 5 idle minutes and are deleted
-  after an hour (a snapshot stays), so a person rarely holds more than one or two.
+  after an hour (a snapshot stays), so a person rarely holds more than one or two. On Instabox's
+  Free plan the whole account has one machine and a paused box still holds it, so there a second
+  app waits ("All our machines are busy") until the first app's box is deleted (milestone 10).
 - **Credits first.** A change starts only with its estimate's high end in credits; past the
   balance plus half a credit the runner is told to stop (milestone 6). The first app stops
   charging at 3 credits; the Own key plan's 30 machine hours a month, then half a credit an hour.
@@ -1396,19 +1398,57 @@ the switch flipped from the phone (the emulator was down: the change was asked f
 `pcoff.devChange`, the switch set with `admin.devSetPcOffSwitch`), and the merge prompt path (both
 sides changing the same lines; covered by the code, not by a test).
 
-**Milestone 10, so far (12 Nov 2026):** the spike's anonymous sign-in is off on the dev deployment
-(`node scripts/dev.mjs anonymous-off`; a sign-in with it is refused, and the browser page no longer
-offers the test account; accounts already signed in with it keep their sessions). Limits: one
-change at a time per app, the cloud's Rebuild metered, 30 browser sign-in starts a minute, and the
-notes above ("Limits, egress and abuse"). Already shown by milestones 8 and 9 and not run again: a
-box that no longer exists, the app restored from GitHub with its chat (three fresh boxes did it), a
-phone with a PC paired and the cloud added in one grid (`m8/phone/03-grid-after-move.png`), a PC
-app moved to the cloud and back with one key, a change made while the PC was off and pulled back.
-**Blocked:** the Ajman prayer alarm in cloud mode on a Starter plan in Stripe test mode, and the two
-live Stripe test payments (no `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` in `cloud-dev.env`
-yet), and everything that needs the phone (the shared emulator stopped at 16:57 and does not start
-from this session): installing the moved app's versions over each other with its data, the phone's
-"Do it in the cloud" card, a second prompt arriving as a quick update.
+**Milestone 10, what ran (12 and 13 Nov 2026):** the spike's anonymous sign-in is off on the dev
+deployment (`node scripts/dev.mjs anonymous-off`; a sign-in with it is refused, and the browser page
+no longer offers the test account; accounts already signed in with it keep their sessions).
+Limits: one change at a time per app, the cloud's Rebuild metered, 30 browser sign-in starts a
+minute, and the notes above ("Limits, egress and abuse"). Stripe test mode is set up
+(`cloud/scripts/stripe-setup.mjs` makes the webhook endpoint and hands both secrets to Convex
+without printing them; it refuses any key but `sk_test_`). Proven live on the shared emulator with
+the person's own account, signed in with an email code (`C:/aa/e2e/cloud-build/m10/phone/`):
+- **Payments** (01 to 05): the Starter plan and an extra credit pack bought through Stripe
+  Checkout with the test card 4242 4242 4242 4242; the webhooks granted both (50 credits).
+- **The Ajman prayer alarm in cloud mode** (06 to 15): "Make it on" set to the cloud in Make a kiwi, the
+  estimate under the message box, the plan page with its estimate, then Build it; version 1
+  installed (next prayer, today's times, an alarm a week ahead per prayer). Its code is on GitHub,
+  `maddada/anyapp-cloud-ajmanprayers` (`m10/github-ajmanprayers-commits.txt`). Fajr's alarm was
+  turned off in the app, then **the box was deleted** (Instabox listed no machines); the second
+  prompt ("15 minutes before instead of 10") ran in a fresh box restored from GitHub and arrived
+  as version 2, installed over version 1 with Fajr still off; a third prompt (the bottom line)
+  arrived as **a quick update** (version 3). A box restored from GitHub has no quick-update base,
+  so the first build after a restore is a full APK and the next ones are quick again. Costs: the
+  plan $0.37 (1.9 credits, estimate 3), the build $1.37 (7.0 credits, estimate 4.3), the second
+  prompt $0.36 (1.9, estimate 1.8), the quick one $0.15 (0.9, estimate 1.9).
+- **One grid** (12, 26): the paired PC's apps and the cloud's Ajman side by side, each marked with
+  its place, also while the PC is off ("PC, off").
+- **A PC app moved to the cloud and back, installing over itself each time with its data**
+  (16 to 24, 30, 32): Tally Counter, made from the template on my proof companion
+  (`com.anyapp.cbtally`, version 1 built on the PC), moved to the cloud from the phone's sheet in 6
+  s; a change in the cloud (plan, then Build it: a counter kept on the phone) built version 2,
+  which installed over version 1; the count set to 7; moved back to the PC (15 chat rows) and built
+  version 3 there, installed over version 2 with the count still 7. Every version kept the first
+  install time (13:58), so Android updated the app in place each time.
+- **The change while the PC is off, from the phone** (25 to 32): "Use the cloud when my PC is off"
+  switched on from the phone's account screen; within the companion's next check the app was kept
+  ready (see below); with the companion stopped, Tally's chat showed the **"Do it in the cloud"
+  card** with "About 1.8 credits" and "Wait for my PC"; the change ran in the cloud as version 4
+  (installed over version 3, count kept; $0.31, 1.7 credits). The companion started again and
+  pulled it back within seconds (fast-forward, 7 chat rows marked "Made in the cloud"), and built
+  version 5 by itself as a quick build (8 s), which the phone installed. Versions 1 to 5 of Tally
+  alternate PC, cloud, PC, cloud, PC on one package and one key.
+
+Found and fixed: a switch turned on after the PC's last build did nothing until the app's next
+version or a companion restart; now `/pc/pull-back/list` carries the switch (additive) and the
+companion keeps every app ready when it sees it turn on (a new companion test; live: switched on
+at 14:52:31, kept ready at 14:57:05). A box woken from a pause kept saying "Waking up your app's
+machine" while idle (its runner does not say hello again); the note now clears when the box runs.
+Found, not fixed: **Instabox's Free plan holds one machine, and a paused box still holds it**, so a
+second app's change waited ("All our machines are busy") until the first app's box was retired;
+the 5 machines per person apply only on a paid Instabox plan. While a cloud change was in flight
+the PC app's chat header showed "Saving version..." with a spinner. The AI said "tap Reload" for
+versions that arrive as a full install. **AI and machine cost of the cloud so far: $4.74** ($4.72
+of AI, $0.02 of machine time, 23.7 credits) over all milestones, $3.58 of it in milestone 10
+(`admin:costSoFar`).
 
 Where the 10.5 days of local and cloud come from (decisions of 12 Nov 2026, fourth round): the
 account without GitHub or a plan, `pcLinks` and `apps.place` (+0.5), the phone's first run, account
