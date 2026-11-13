@@ -164,7 +164,7 @@ jobs:
           Write-Host "Checked $($files.Count) files: every one is Valid, $ours signed by $thumbprint and timestamped"
       - uses: actions/upload-artifact@v4
         with:
-          name: Kiwimake-Setup${{ inputs.sign && '' || '-unsigned' }}
+          name: Kiwimake-Setup${{ !inputs.sign && '-unsigned' || '' }}
           path: desktop/dist/Kiwimake-Setup-*.exe
           if-no-files-found: error
           retention-days: 14
