@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Gauge, TriangleAlert } from "lucide-react-native";
-import { aiName, BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, planUnknown, planLines, reminderText, usageLine } from "@shared/chat/index";
+import { BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, planUnknown, planLines, reminderText, usageLine } from "@shared/chat/index";
 import type { App, CareState, ChatItem } from "@/lib/protocol";
 import { useStore } from "@/lib/store";
 import { Button } from "./Button";
