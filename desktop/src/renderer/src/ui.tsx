@@ -75,6 +75,9 @@ export function timeAgo(iso?: string): string {
 
 /** An app's state in the four words the theme allows: the shared wording (shared/chat/state.ts), as on the phone. */
 export function appState(app: App): { state: UiState; text: string } {
+  if (app.status === "error" && app.error?.startsWith("Claude usage limit reached.")) {
+    return { state: "problem", text: "Claude usage limit reached" };
+  }
   const st = describeApp(app);
   return { state: st.kind, text: st.label };
 }

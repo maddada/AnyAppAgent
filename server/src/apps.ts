@@ -159,6 +159,16 @@ function firstLine(text: string, max = 300): string {
   return shorten(line, max);
 }
 
+/** Keep the provider's reason, especially a limit's reset time, when a prompt fails. */
+export function agentFailure(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const message = firstLine(raw.replace(/^Internal error:\s*/i, "").replace(/:\s*\{"errorKind"\s*:\s*"[^"]+"\}\s*$/, ""), 200);
+  if (/"errorKind"\s*:\s*"rate_limit"/i.test(raw) || /you(?:'|’)ve hit your .*limit/i.test(message)) {
+    return `Claude usage limit reached. ${message.replace(/[.!?]$/, "")}. Try again after the limit resets.`;
+  }
+  return `The agent stopped unexpectedly: ${message}`;
+}
+
 export class AppManager {
   private readonly store: Store;
   private readonly builder: Builder;
@@ -1613,12 +1623,15 @@ ${overviewNudge()}` : note;
     const session = await this.ensureSession(record);
     rt.translator.startTurn();
     let stopReason = "error";
+    let failure: string | undefined;
     try {
       rt.turnActive = true;
       stopReason = await session.prompt(text, images);
     } catch (error) {
       this.log(`[${record.app.slug}] prompt failed:`, (error as Error).message);
-      this.errorItem(record, `The agent stopped unexpectedly: ${firstLine((error as Error).message, 200)}`);
+      // The queue reports this once and stores it on App.error. Do not replace the cause with
+      // a second generic error after finishing the turn.
+      failure = agentFailure(error);
     } finally {
       rt.turnActive = false;
       for (const draft of rt.translator.finishTurn(stopReason)) this.emitItem(record, draft);
@@ -1627,7 +1640,7 @@ ${overviewNudge()}` : note;
     if (rt.translator.lastTurnText.trim() !== "") record.app.lastMessagePreview = shorten(rt.translator.lastTurnText, 140);
     this.checkIcon(record);
     this.touch(record);
-    if (stopReason === "error") throw new Error("The agent stopped unexpectedly.");
+    if (stopReason === "error") throw new Error(failure ?? "The agent stopped unexpectedly.");
     return stopReason;
   }
 

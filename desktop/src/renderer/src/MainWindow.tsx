@@ -246,7 +246,7 @@ function AppsPage({
                   <div className="arow-main">
                     <div className="arow-top">
                       <span className="body arow-name">{a.name}</span>
-                      <span className="arow-meta">{[v ? `v${v.number}` : "", timeAgo(a.updatedAt)].filter(Boolean).join(", ")}</span>
+                      <span className="arow-meta">{[v ? `v${v.number}` : "", a.updatedAt ? `Active ${timeAgo(a.updatedAt)}` : ""].filter(Boolean).join(", ")}</span>
                     </div>
                     <StateLine state={st.state} text={st.text} />
                     {a.health?.behind && st.state !== "working" && <span className="caption attention-text">{BEHIND_LABEL}</span>}
