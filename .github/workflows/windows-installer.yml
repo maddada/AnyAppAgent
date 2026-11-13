@@ -1,0 +1,186 @@
+name: Windows installer
+
+# Builds Kiwimake-Setup.exe on a GitHub Windows runner and Authenticode-signs it with the Certum
+# "Open Source Code Signing in the Cloud" certificate that also signs Ghostex and codex-swap
+# (docs/RELEASING.md, "Windows code signing"). Manual only, and it never publishes: the installer
+# is a workflow artifact, uploaded to the release by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      apk_release:
+        description: Release tag (a draft is fine) whose AnyAppAgent-universal.apk the installer bundles; empty takes the latest published release
+        required: false
+        default: ""
+        type: string
+      sign:
+        description: Sign with the Certum certificate (needs the CERTUM_SIMPLYSIGN_* secrets); off builds an unsigned test installer
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # The installer bundles the phone APK, which only the release PC can build (it holds the phone
+  # release key), so it comes from a release. Draft releases need a token that can write, so this
+  # small job fetches it and the build job, which runs npm packages, keeps a read-only token.
+  phone-apk:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download AnyAppAgent-universal.apk
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          APK_RELEASE: ${{ inputs.apk_release }}
+        run: |
+          set -euo pipefail
+          mkdir -p apk
+          if [ -n "$APK_RELEASE" ]; then
+            gh release download "$APK_RELEASE" -p AnyAppAgent-universal.apk -D apk
+          else
+            gh release download -p AnyAppAgent-universal.apk -D apk
+          fi
+          ls -l apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phone-apk
+          path: apk/AnyAppAgent-universal.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: phone-apk
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      CERTUM_CERT_SHA1: ${{ vars.CERTUM_CERT_SHA1 || 'E81BEDC91DEA38C8BB2DA3651E161ADA280B6734' }}
+      # Ghostex commit whose tooling/release-gpui/certum-simplysign-login.ps1 logs in, pinned so a
+      # change there never reaches this job unreviewed.
+      GHOSTEX_SIGNING_COMMIT: bdb3a8e3e971c1812306033c08e4ec5848be3b20
+    steps:
+      - name: Require the Certum secrets
+        if: ${{ inputs.sign }}
+        shell: bash
+        env:
+          CERTUM_SIMPLYSIGN_EMAIL: ${{ secrets.CERTUM_SIMPLYSIGN_EMAIL }}
+          CERTUM_SIMPLYSIGN_TOTP: ${{ secrets.CERTUM_SIMPLYSIGN_TOTP }}
+        run: |
+          if [[ -z "$CERTUM_SIMPLYSIGN_EMAIL" || -z "$CERTUM_SIMPLYSIGN_TOTP" ]]; then
+            echo "::error title=Windows signing is not configured::Set the CERTUM_SIMPLYSIGN_EMAIL and CERTUM_SIMPLYSIGN_TOTP secrets on this repository (docs/RELEASING.md), or run with sign off for an unsigned test build."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: phone-apk
+          path: app/dist
+      - name: Install the desktop app's and the companion's packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($part in 'desktop', 'server') {
+            Push-Location $part
+            npm ci
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed in $part" }
+            Pop-Location
+          }
+      - uses: actions/checkout@v4
+        if: ${{ inputs.sign }}
+        with:
+          repository: maddada/Ghostex
+          ref: ${{ env.GHOSTEX_SIGNING_COMMIT }}
+          path: ghostex-signing
+          fetch-depth: 1
+          sparse-checkout: tooling/release-gpui/certum-simplysign-login.ps1
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      # Certum keeps the private key in its SimplySign cloud; SimplySign Desktop mounts it as a
+      # virtual smart card after a login with the account e-mail and a one-time code computed from
+      # the activation seed. The script masks both and never prints them.
+      - name: Install SimplySign Desktop
+        if: ${{ inputs.sign }}
+        shell: pwsh
+        run: ghostex-signing/tooling/release-gpui/certum-simplysign-login.ps1 -Install
+      - name: Log in to SimplySign
+        if: ${{ inputs.sign }}
+        shell: pwsh
+        env:
+          CERTUM_SIMPLYSIGN_EMAIL: ${{ secrets.CERTUM_SIMPLYSIGN_EMAIL }}
+          CERTUM_SIMPLYSIGN_TOTP: ${{ secrets.CERTUM_SIMPLYSIGN_TOTP }}
+          GHOSTEX_CERTUM_CERT_SHA1: ${{ env.CERTUM_CERT_SHA1 }}
+        run: ghostex-signing/tooling/release-gpui/certum-simplysign-login.ps1 -Login
+      - name: Build the installer
+        shell: pwsh
+        working-directory: desktop
+        env:
+          SIGN: ${{ inputs.sign }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          npx electron-vite build
+          if ($LASTEXITCODE -ne 0) { throw 'electron-vite build failed' }
+          if ($env:SIGN -eq 'true') {
+            npx electron-builder --win nsis --config dev/electron-builder.signed.cjs
+          } else {
+            npx electron-builder --win nsis
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'electron-builder failed' }
+      # Every PE file electron-builder signs must come out Valid; ours must carry the certificate's
+      # thumbprint and a timestamp. Files the companion's npm packages bring along are third-party
+      # and listed, not signed.
+      - name: Check the signatures
+        if: ${{ inputs.sign }}
+        shell: pwsh
+        working-directory: desktop/dist
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $thumbprint = $env:CERTUM_CERT_SHA1.ToUpperInvariant()
+          $installer = @(Get-ChildItem -Filter 'Kiwimake-Setup-*.exe')
+          if ($installer.Count -ne 1) { throw "Expected one installer, found $($installer.Count)" }
+          $files = @($installer) + @(Get-ChildItem win-unpacked -File | Where-Object Extension -in '.exe', '.dll')
+          $ours = 0
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            if ($signature.Status -ne 'Valid') { throw "$($file.Name) is not validly signed ($($signature.Status))" }
+            if ($signature.SignerCertificate.Thumbprint -eq $thumbprint) {
+              if (-not $signature.TimeStamperCertificate) { throw "$($file.Name) has no timestamp" }
+              $ours++
+            } else {
+              Write-Host "$($file.Name): signed by its vendor ($($signature.SignerCertificate.Subject))"
+            }
+          }
+          if ((Get-AuthenticodeSignature -LiteralPath (Join-Path win-unpacked 'Kiwimake.exe')).SignerCertificate.Thumbprint -ne $thumbprint) { throw 'Kiwimake.exe is not signed with the Certum certificate' }
+          $thirdParty = @(Get-ChildItem win-unpacked/resources -Recurse -File | Where-Object Extension -in '.exe', '.dll', '.node' | Where-Object { (Get-AuthenticodeSignature -LiteralPath $_.FullName).Status -ne 'Valid' })
+          foreach ($file in $thirdParty) { Write-Host "Not signed (third-party, from npm): $($file.FullName.Substring($PWD.Path.Length + 1))" }
+          Write-Host "Checked $($files.Count) files: every one is Valid, $ours signed by $thumbprint and timestamped"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kiwimake-Setup${{ inputs.sign && '' || '-unsigned' }}
+          path: desktop/dist/Kiwimake-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 14
+      # Window titles and screenshots taken before anything was typed; never a code or the seed.
+      - name: Upload the SimplySign login diagnostics
+        if: ${{ failure() && inputs.sign }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: certum-diagnostics
+          path: ${{ runner.temp }}/certum-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Log out of SimplySign
+        if: ${{ always() && inputs.sign }}
+        shell: pwsh
+        run: |
+          if (Test-Path ghostex-signing/tooling/release-gpui/certum-simplysign-login.ps1) {
+            ghostex-signing/tooling/release-gpui/certum-simplysign-login.ps1 -Logout
+          }

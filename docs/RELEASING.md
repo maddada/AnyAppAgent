@@ -100,3 +100,36 @@ gh release create v<version> --repo maddada/AnyAppAgent --title "Kiwimake <versi
 ```
 
 4. Check that each `releases/latest/download/<name>` link returns the new file (size and sha256).
+
+## Windows code signing
+
+`Kiwimake-Setup.exe` is Authenticode-signed with the Certum "Open Source Code Signing in the Cloud"
+certificate that also signs Ghostex and codex-swap (`CN=Open Source Developer Mohamad Yahia Youssef`,
+serial `0436c352e3cb5e9769206a31b40ce463`, SHA-1 `E81BEDC91DEA38C8BB2DA3651E161ADA280B6734`, valid
+until 2027-11-09). Its private key stays in Certum's SimplySign cloud, so the signed installer is
+built on GitHub, not on the release PC: the **Windows installer** workflow
+(`.github/workflows/windows-installer.yml`, manual only, never publishes) builds it on a Windows
+runner, logs in to SimplySign Desktop with Ghostex's `certum-simplysign-login.ps1` (pinned to a commit
+in `GHOSTEX_SIGNING_COMMIT`), and signs through `desktop/dev/electron-builder.signed.cjs` and
+`desktop/dev/sign-certum.cjs`: `Kiwimake.exe`, Electron's DLLs, the uninstaller and the installer,
+SHA-256 with a `time.certum.pl` timestamp. Files a vendor already signed keep their signature. Any
+file that does not come out Valid, from that certificate and timestamped fails the run. The
+companion's npm packages may carry third-party binaries; the run lists them and leaves them unsigned.
+A local `npm run dist` stays unsigned.
+
+It needs the repository secrets `CERTUM_SIMPLYSIGN_EMAIL` and `CERTUM_SIMPLYSIGN_TOTP` (same values as
+on `maddada/Ghostex`; the TOTP value is the `otpauth://` URI from the SimplySign activation QR code,
+and anyone with it and the e-mail can sign as the certificate's owner). Certum accepts each one-time
+code once, so do not run it while a Ghostex or codex-swap release is logging in to SimplySign.
+
+For a release, the installer bundles the phone APK from a release, so:
+
+1. Create the release as a draft with the two APKs:
+   `gh release create v<version> --repo maddada/AnyAppAgent --draft --title "Kiwimake <version>" --notes-file notes.md app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk`
+2. Run the workflow on the release commit with that tag:
+   `gh workflow run windows-installer.yml --repo maddada/AnyAppAgent --ref main -f apk_release=v<version>`
+3. Download its `Kiwimake-Setup` artifact, check it on Windows (`Get-AuthenticodeSignature` shows
+   `Valid` and the thumbprint above), upload it to the draft as `Kiwimake-Setup.exe`, and publish.
+
+Without `apk_release` the run bundles the latest published APK, which is fine for a test. With `sign`
+off it builds an unsigned test installer (`Kiwimake-Setup-unsigned` artifact).
