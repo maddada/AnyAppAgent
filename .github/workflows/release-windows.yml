@@ -1,0 +1,133 @@
+name: Sign Windows release with Certum
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing draft release tag with both signed APKs
+        required: true
+        default: v0.3.1
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-windows-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      KIWIMAKE_CERTUM_CERT_SHA1: ${{ vars.CERTUM_CERT_SHA1 || 'E81BEDC91DEA38C8BB2DA3651E161ADA280B6734' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            server/package-lock.json
+      - name: Require draft release and signing credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CERTUM_SIMPLYSIGN_EMAIL: ${{ secrets.CERTUM_SIMPLYSIGN_EMAIL }}
+          CERTUM_SIMPLYSIGN_TOTP: ${{ secrets.CERTUM_SIMPLYSIGN_TOTP }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RELEASE_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw 'Expected a stable version tag.' }
+          if (-not $env:CERTUM_SIMPLYSIGN_EMAIL -or -not $env:CERTUM_SIMPLYSIGN_TOTP) {
+            throw 'Set CERTUM_SIMPLYSIGN_EMAIL and CERTUM_SIMPLYSIGN_TOTP in repository Actions secrets.'
+          }
+          foreach ($part in @('desktop', 'server', 'app')) {
+            $version = (Get-Content "$part/package.json" -Raw | ConvertFrom-Json).version
+            if ("v$version" -ne $env:RELEASE_TAG) { throw "Version mismatch in $part." }
+          }
+          $release = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:RELEASE_TAG" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $release.draft) { throw 'The release must exist and remain a draft.' }
+          New-Item -ItemType Directory -Force app/dist | Out-Null
+          foreach ($name in @('AnyAppAgent.apk', 'AnyAppAgent-universal.apk')) {
+            $asset = @($release.assets | Where-Object name -eq $name)
+            if ($asset.Count -ne 1 -or $asset[0].digest -notmatch '^sha256:[a-fA-F0-9]{64}$') {
+              throw "Missing APK or SHA-256 digest: $name"
+            }
+            gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern $name --dir app/dist
+            if ($LASTEXITCODE -ne 0) { throw "APK download failed: $name" }
+            $hash = (Get-FileHash "app/dist/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ("sha256:$hash" -ne $asset[0].digest) { throw "APK digest mismatch: $name" }
+          }
+      - name: Install build dependencies and check the desktop and companion
+        run: |
+          npm ci --prefix server --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix desktop --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run typecheck --prefix server
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm test --prefix server
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run typecheck --prefix desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm test --prefix desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check the SimplySign TOTP implementation
+        run: desktop/dev/certum-simplysign-login.ps1 -SelfTest
+      - name: Install SimplySign on the disposable runner
+        run: desktop/dev/certum-simplysign-login.ps1 -Install
+      - name: Log in to SimplySign
+        env:
+          CERTUM_SIMPLYSIGN_EMAIL: ${{ secrets.CERTUM_SIMPLYSIGN_EMAIL }}
+          CERTUM_SIMPLYSIGN_TOTP: ${{ secrets.CERTUM_SIMPLYSIGN_TOTP }}
+        run: desktop/dev/certum-simplysign-login.ps1 -Login
+      - name: Build, sign and verify the desktop app and installers
+        run: npm run dist --prefix desktop
+      - name: Upload both installer names to the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $release = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $release.isDraft) { throw 'Refusing to change a public release.' }
+          gh release upload $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --clobber desktop/dist/Kiwimake-Setup.exe desktop/dist/AnyAppAgent-Setup.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify the uploaded installers again
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $downloadDir = Join-Path $env:RUNNER_TEMP 'verify-release'
+          New-Item -ItemType Directory -Force $downloadDir | Out-Null
+          foreach ($name in @('Kiwimake-Setup.exe', 'AnyAppAgent-Setup.exe')) {
+            gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern $name --dir $downloadDir
+            if ($LASTEXITCODE -ne 0) { throw "Installer download failed: $name" }
+            $file = Join-Path $downloadDir $name
+            & $env:SIGNTOOL_PATH verify /pa /v $file
+            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed: $name" }
+            $signature = Get-AuthenticodeSignature -LiteralPath $file
+            if ($signature.Status -ne 'Valid' -or
+                $signature.SignerCertificate.Thumbprint -ne $env:KIWIMAKE_CERTUM_CERT_SHA1 -or
+                $signature.SignerCertificate.GetNameInfo('SimpleName', $false) -ne 'Open Source Developer Mohamad Yahia Youssef' -or
+                -not $signature.TimeStamperCertificate) { throw "Unexpected signer or missing timestamp: $name" }
+            if ((Get-FileHash $file).Hash -ne (Get-FileHash "desktop/dist/$name").Hash) { throw "Uploaded bytes differ: $name" }
+          }
+          'Both uploaded installers passed Certum signature, timestamp and SHA-256 verification. The release is still a draft.' >> $env:GITHUB_STEP_SUMMARY
+      - name: Keep signing evidence and the signed app executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-signing-evidence
+          path: |
+            desktop/dist/signatures.json
+            desktop/dist/win-unpacked/Kiwimake.exe
+          if-no-files-found: error
+          retention-days: 14
+      - name: Log out of SimplySign
+        if: ${{ always() }}
+        run: desktop/dev/certum-simplysign-login.ps1 -Logout

@@ -73,15 +73,37 @@ SimplySign certificate as [Ghostex](https://github.com/maddada/Ghostex/blob/main
 - SHA-1 thumbprint: `E81BEDC91DEA38C8BB2DA3651E161ADA280B6734` (public certificate metadata).
 - SHA-256 file digest and RFC 3161 timestamp at `http://time.certum.pl`.
 
-The release operator installs SimplySign Desktop and signs in themselves using their phone code.
-Keep it signed in while packaging. The certificate and its private-key handle must appear in
-`Cert:\CurrentUser\My`. The private key stays in Certum's cloud. Agents must not enter a phone
-code or PIN, install signing software, or copy Ghostex's automated login workflow. Ghostex CI uses
-repository secrets `CERTUM_SIMPLYSIGN_EMAIL` and `CERTUM_SIMPLYSIGN_TOTP`; they are not exported
-or copied into this repository. If the local certificate is unavailable, stop before publishing.
+Windows releases are signed in **GitHub Actions**, not on the user's PC. The workflow
+`.github/workflows/release-windows.yml` runs on a disposable `windows-2025` runner. It checks out
+an existing release tag, requires that its release is still a draft, downloads both APKs and checks
+their GitHub SHA-256 digests, installs the companion and desktop dependencies, and runs their checks.
+Then it installs the pinned SimplySign Desktop MSI on the runner, verifies the MSI's hash and Asseco
+signature, logs in, builds and signs the desktop app, and uploads both installer names to the draft.
+It downloads the uploaded installers and verifies their signatures and hashes again. It never makes
+the release public.
+
+The login implementation is copied and adapted from Ghostex's
+`tooling/release-gpui/certum-simplysign-login.ps1`, called by its Windows workflow through
+`release-amend-existing.yml`'s `sign_windows` input. It uses the same RFC 6238 code generation and
+SimplySign window interaction. This repository contains its own copy and never imports from Ghostex.
+Install, login and logout refuse to run outside GitHub-hosted Windows runners. No signing software
+needs to be installed on the user's PC. No screenshots or credential files are uploaded.
+
+Required repository Actions secrets:
+
+- `CERTUM_SIMPLYSIGN_EMAIL`: the SimplySign account email.
+- `CERTUM_SIMPLYSIGN_TOTP`: the current activation `otpauth://` URI or base32 seed, not a temporary code.
+
+The release operator can set these in GitHub Settings, Secrets and variables, Actions. When stored in
+1Password, transfer them from `op read` into `gh secret set <name> --repo maddada/AnyAppAgent` through
+stdin only. Never print values, put them in command arguments, write them to the repository, or try to
+read GitHub secrets back. If either value is unavailable, stop before publishing. The private signing
+key stays in Certum's cloud. The login step receives the credentials through its environment; later
+build steps do not. A failed login or signature check leaves the release as a draft.
 
 The script finds the Windows SDK's **x64** signtool (or uses `SIGNTOOL_PATH`). After certificate
-renewal, set `KIWIMAKE_CERTUM_CERT_SHA1` to the replacement certificate's public thumbprint.
+renewal, set the repository variable `CERTUM_CERT_SHA1` to the replacement certificate's public
+thumbprint. The workflow passes it as `KIWIMAKE_CERTUM_CERT_SHA1`.
 Electron-builder signs `Kiwimake.exe` before it goes into the installer, and signs the NSIS
 uninstaller and final installer. It requires signing, rather than silently producing an unsigned
 release. The script checks `signtool verify /pa /v`, the expected signer and a timestamp, then
@@ -103,7 +125,7 @@ toolchain from `docs/ENVIRONMENT.md`:
 cd app;     npm ci; npm run typecheck; npm run lint
 node scripts/build-apk.mjs --clean --release   # prints both APKs with size and sha256
 cd ..\desktop; npm ci; npm run typecheck; npm test
-npm run dist                                   # requires SimplySign; signs and verifies both installer names
+# Windows packaging and signing run in release-windows.yml after the APKs are on the draft.
 ```
 
 `build-apk.mjs --release` reads the key and password (above), loads
@@ -125,12 +147,29 @@ apksigner verify --print-certs app\dist\AnyAppAgent.apk   # SHA-256 digest must 
    companion of your own (own port and state folder), and let it receive an app.
 2. Run the installed desktop app (or `desktop\dist\win-unpacked\Kiwimake.exe` from the build)
    against a test state folder and check it starts and its companion answers.
-3. Tag the commit (`git tag -a v<version>`), push main and the tag, then:
+3. Before any push, scan every unpushed commit, including removed lines and intermediate versions,
+   for API keys, private keys, credential files and passwords. Print file and line only for matches.
+   If an actual secret is found, stop and push nothing. Commit the version and release automation.
+4. Tag the commit (`git tag -a v<version>`), push main and the tag, then create a **draft** with the APKs:
 
 ```powershell
-gh release create v<version> --repo maddada/AnyAppAgent --title "Kiwimake <version>" --notes-file notes.md `
-  app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk `
-  desktop\dist\Kiwimake-Setup.exe desktop\dist\AnyAppAgent-Setup.exe
+gh release create v<version> --repo maddada/AnyAppAgent --verify-tag --draft `
+  --title "Kiwimake <version>" --notes-file notes.md `
+  app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk
+gh workflow run release-windows.yml --repo maddada/AnyAppAgent --ref v<version> -f tag=v<version>
 ```
 
-4. Check that each `releases/latest/download/<name>` link returns the new file (size and sha256).
+5. Wait for the workflow to succeed. Its `windows-signing-evidence` artifact contains the signed
+   `Kiwimake.exe` and `signatures.json`. Download both installer names from the draft and run
+   `signtool verify /pa /v` on them. Check the exact signer above, the certificate thumbprint, a valid
+   timestamp, and identical hashes for the two installer names. Check the APKs against the locally
+   verified signed outputs. Do not run the installer or change the user's running app.
+6. Only when all four verified files are present, publish the draft:
+
+```powershell
+gh release edit v<version> --repo maddada/AnyAppAgent --draft=false --latest
+```
+
+7. Check that every `releases/latest/download/<name>` link returns the new file (size and SHA-256).
+   A failed or interrupted Windows job must never expose a release with just the APKs. Rerun the
+   workflow against the same draft; it replaces only the two Windows installer assets.

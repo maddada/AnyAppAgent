@@ -1,5 +1,6 @@
 # Certum signing follows Ghostex's certum-sign.ps1: a mounted SimplySign
-# certificate, SHA-256 and an RFC 3161 timestamp. Never logs in or handles codes.
+# certificate, SHA-256 and an RFC 3161 timestamp. GitHub Actions mounts the
+# certificate with certum-simplysign-login.ps1 before this script runs.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -11,7 +12,7 @@ $thumbprint = if ($env:KIWIMAKE_CERTUM_CERT_SHA1) {
 if ($thumbprint -notmatch '^[0-9A-F]{40}$') { throw 'Invalid Certum certificate thumbprint.' }
 $certificate = Get-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -ErrorAction SilentlyContinue
 if (-not $certificate -or -not $certificate.HasPrivateKey) {
-    throw 'Certum signing is unavailable. Install SimplySign Desktop and sign in yourself with the phone code, then run npm run dist again. Nothing will be published.'
+    throw 'Certum signing is unavailable. Run the Sign Windows release with Certum workflow against a draft release. It signs on a GitHub-hosted runner; local SimplySign installation is not required.'
 }
 if ($certificate.NotAfter -le (Get-Date) -or $certificate.NotBefore -gt (Get-Date)) {
     throw 'The Certum certificate is outside its validity period.'
@@ -33,15 +34,26 @@ if ($env:ELECTRON_BUILDER_OFFLINE -eq 'true') {
     throw 'Release signing requires online timestamping. Unset ELECTRON_BUILDER_OFFLINE.'
 }
 
+$evidence = [System.Collections.Generic.List[object]]::new()
 function Assert-Signed([string]$File) {
     & $signtool verify /pa /v $File
     if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed: $File" }
     $signature = Get-AuthenticodeSignature -LiteralPath $File
     if ($signature.Status -ne 'Valid' -or
         $signature.SignerCertificate.Thumbprint -ne $thumbprint -or
+        $signature.SignerCertificate.GetNameInfo('SimpleName', $false) -ne 'Open Source Developer Mohamad Yahia Youssef' -or
         -not $signature.TimeStamperCertificate) {
         throw "Expected a valid, timestamped Certum signature: $File"
     }
+    $evidence.Add([pscustomobject]@{
+        File = $File
+        Bytes = (Get-Item -LiteralPath $File).Length
+        SHA256 = (Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLowerInvariant()
+        Signer = $signature.SignerCertificate.Subject
+        Thumbprint = $signature.SignerCertificate.Thumbprint
+        TimestampIssuer = $signature.TimeStamperCertificate.Subject
+        Status = $signature.Status.ToString()
+    })
 }
 
 Push-Location (Join-Path $PSScriptRoot '..')
@@ -63,6 +75,7 @@ try {
         Copy-Item -LiteralPath $installer -Destination $copy -Force
         Assert-Signed $copy
     }
+    $evidence | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath 'dist/signatures.json'
     Write-Host "Release installer signed by $($certificate.Subject)."
 } finally {
     Pop-Location
