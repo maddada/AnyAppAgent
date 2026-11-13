@@ -168,6 +168,10 @@ export function agentFailure(error: unknown, engine: Engine = "claude"): string 
   if (/"errorKind"\s*:\s*"rate_limit"/i.test(raw) || /you(?:'|’)ve hit your .*limit|usage limit|rate.?limit|quota exceeded|usage_limit_reached/i.test(message)) {
     return `${engineName(engine)} usage limit reached. ${message.replace(/[.!?]$/, "")}. Try again after the limit resets.`;
   }
+  // Codex workspaces and API accounts run out of credits rather than hitting a timed limit.
+  if (/out of credits|insufficient[_ ](?:quota|credits)|credit balance is too low/i.test(message)) {
+    return `${engineName(engine)} has no credits left. ${message.replace(/[.!?]$/, "")}. Add credits to your account, then try again.`;
+  }
   return `The agent stopped unexpectedly: ${message}`;
 }
 

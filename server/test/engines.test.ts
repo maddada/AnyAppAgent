@@ -20,6 +20,9 @@ describe("both engines", () => {
     expect(agentFailure(Error("Usage limit reached. Try again at 16:30."), "codex")).toContain("Codex usage limit reached.");
     expect(agentFailure(Error("Usage limit reached. Try again at 16:30."), "codex")).toContain("16:30");
     expect(agentFailure(Error("You've hit your limit. Resets tomorrow."))).toContain("Claude usage limit reached.");
+    // What a Codex workspace without credits answered on this PC (2026-11-13).
+    expect(agentFailure(Error("Your workspace is out of credits. Ask your workspace owner to refill in order to continue."), "codex"))
+      .toBe("Codex has no credits left. Your workspace is out of credits. Ask your workspace owner to refill in order to continue. Add credits to your account, then try again.");
   });
   it("runs, resumes, streams, counts usage, reports limits and cancels via app-server", async () => {
     const updates: any[] = []; const usage: any[] = []; const limits: any[] = [];
