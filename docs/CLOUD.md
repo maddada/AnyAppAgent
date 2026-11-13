@@ -1497,7 +1497,12 @@ Found, not fixed: **Instabox's Free plan holds one machine, and a paused box sti
 second app's change waited ("All our machines are busy") until the first app's box was retired;
 the 5 machines per person apply only on a paid Instabox plan. While a cloud change was in flight
 the PC app's chat header showed "Saving version..." with a spinner. The AI said "tap Reload" for
-versions that arrive as a full install. **AI and machine cost of the cloud so far: $4.74** ($4.72
+versions that arrive as a full install. Both fixed after the run: the PC's state line says
+"Changing in the cloud" while the change runs there (`App.changingInCloud`, additive; the companion
+looks again every 30 s while one runs) and "Version N made in the cloud" with no spinner once it is
+back (the build number it takes over is `BuildInfo.madeInCloud`, additive, never "saving"); the
+agent says "tap Reload" only for a quick update and "install it on your phone" for a new install,
+and never promises either before the build (`C:/aa/e2e/cloud-build/m10/fixes/`). **AI and machine cost of the cloud so far: $4.74** ($4.72
 of AI, $0.02 of machine time, 23.7 credits) over all milestones, $3.58 of it in milestone 10
 (`admin:costSoFar`).
 

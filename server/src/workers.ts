@@ -614,7 +614,7 @@ export class WorkerManager {
           w.info.buildNumber = outcome.number;
           const combined = w.conflictsResolved ? ` It was combined with a change that landed first (${w.conflictsResolved} time${w.conflictsResolved > 1 ? "s" : ""}).` : "";
           delete w.conflictsResolved;
-          const how = outcome.delivery === "quick" ? " as a quick update (no install needed: the app shows a Reload button)" : " as a new version to install";
+          const how = outcome.delivery === "quick" ? " as a quick update (no install needed: the person taps Reload in the app)" : " as a new install (the person installs it on the phone when it arrives; not a quick update, so no Reload)";
           return { state: "done", build: `Its change was added to the app and the new version (build ${outcome.number}) was built and sent to the person's phone${how}.${combined}` };
         }
         const undone = await undoLanding(record.dir, land.before);

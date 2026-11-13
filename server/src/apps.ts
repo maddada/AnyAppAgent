@@ -745,8 +745,19 @@ export class AppManager {
     const record = this.record(id);
     if ((record.app.latestBuild?.number ?? 0) >= high) return;
     const now = nowIso();
-    record.app.latestBuild = { number: high, status: "succeeded", startedAt: now, finishedAt: now };
+    record.app.latestBuild = { number: high, status: "succeeded", startedAt: now, finishedAt: now, madeInCloud: true };
     record.app.updatedAt = now;
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
+  }
+
+  /** A change made in the cloud while this PC was off still runs there (keep-ready.ts), or not. */
+  setChangingInCloud(id: string, on: boolean): void {
+    const record = this.store.find(id);
+    if (!record || Boolean(record.app.changingInCloud) === on) return;
+    if (on) record.app.changingInCloud = true;
+    else delete record.app.changingInCloud;
+    record.app.updatedAt = nowIso();
     this.store.save();
     this.broadcast({ type: "app.updated", app: record.app });
   }

@@ -20,14 +20,26 @@ type Ready = { off: true } | { off: false; inCloud: true; appId: string } | { of
 type PullItem = { appId: string; pcAppId: string | null; packageName: string; repo: string | null; buildHigh: number; busy: boolean };
 
 export class KeepReady {
-  private readonly deps: { apps: AppManager; link: CloudLink; keys: MoveKeys | null; log: Log; remote?: (repo: string) => string };
+  private readonly deps: { apps: AppManager; link: CloudLink; keys: MoveKeys | null; log: Log; remote?: (repo: string) => string; soonMs?: number };
   private readonly queue = new Map<string, Promise<void>>();
   private switchOn = true;
   /** Packages with a change made in the cloud still to come back (from the last list). */
   private readonly pending = new Set<string>();
 
-  constructor(deps: { apps: AppManager; link: CloudLink; keys: MoveKeys | null; log: Log; remote?: (repo: string) => string }) {
+  constructor(deps: { apps: AppManager; link: CloudLink; keys: MoveKeys | null; log: Log; remote?: (repo: string) => string; soonMs?: number }) {
     this.deps = deps;
+  }
+
+  private soon: ReturnType<typeof setTimeout> | null = null;
+
+  /** One more pull-back check in a short while (while a change runs in the cloud). */
+  private checkSoon(): void {
+    if (this.soon) return;
+    this.soon = setTimeout(() => {
+      this.soon = null;
+      void this.pullBackAll();
+    }, this.deps.soonMs ?? 30_000);
+    this.soon.unref?.();
   }
 
   private remote(repo: string): string {
@@ -108,7 +120,10 @@ export class KeepReady {
   /** Brings back every change the cloud made while this PC was off. */
   async pullBackAll(fromKeepAll = false): Promise<void> {
     const { apps, link, log } = this.deps;
-    if (!link.linked()) return;
+    if (!link.linked()) {
+      for (const app of apps.list()) apps.setChangingInCloud(app.id, false);
+      return;
+    }
     let list: PullItem[];
     try {
       const r = await link.call<{ apps: PullItem[]; switchOn?: boolean }>("/pc/pull-back/list");
@@ -128,6 +143,15 @@ export class KeepReady {
     }
     this.pending.clear();
     for (const item of list) this.pending.add(item.packageName);
+    // The state line says so while a change still runs in the cloud, and stops once it is back.
+    const running = new Set<string>();
+    for (const item of list) {
+      const app = apps.list().find((a) => a.id === item.pcAppId) ?? apps.list().find((a) => a.packageName === item.packageName && !a.move);
+      if (app && item.busy) running.add(app.id);
+    }
+    for (const app of apps.list()) apps.setChangingInCloud(app.id, running.has(app.id));
+    // Look again soon while one runs, so it comes back (and the line clears) within a minute of its end.
+    if (running.size > 0) this.checkSoon();
     for (const item of list) {
       if (item.busy || !item.repo) continue;
       const app = apps.list().find((a) => a.id === item.pcAppId) ?? apps.list().find((a) => a.packageName === item.packageName && !a.move);
