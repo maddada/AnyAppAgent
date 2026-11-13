@@ -86,7 +86,7 @@ The app currently loads Inter (`@expo-google-fonts/inter`); Inter goes away.
 "android": {
   "adaptiveIcon": {
     "foregroundImage": "../shared/theme/mark/android/expo/adaptive-foreground.png",
-    "backgroundColor": "#1D6A4A",
+    "backgroundColor": "#FFF5DB",
     "monochromeImage": "../shared/theme/mark/android/expo/adaptive-monochrome.png"
   }
 }
@@ -125,7 +125,7 @@ first paint: `color.light.bg` / `color.dark.bg`.
 **Icons for the window, installer and tray.** `mark/windows/anyappagent.ico` (16 to 256) for
 `BrowserWindow({ icon })` and the installer. Tray: `new Tray(path/to/mark/windows/tray.png)`, with
 `tray@1.25x.png` to `tray@3x.png` beside it so Electron picks the right one per display scale (or
-`tray.ico`). The 16 and 24 px versions are drawn on the pixel grid (`mark/mark-small.svg`).
+`tray.ico`). The 16 and 24 px versions use the approved simplified eye (`mark/mark-small.svg`).
 
 ## Names an app needs to know
 
@@ -208,3 +208,14 @@ type case (`type.*.transform`) and the `look` switches (`thinkingFontStyle`, `ti
 `tileElevation`, ...). `tools/pages/directions.css` holds the full value sets of Almanac and Signal
 as CSS. Two of their signatures would need one more switch each if ever chosen: Almanac's ruled grid
 (hairlines between tiles instead of cards) and Signal's highlighted "ready" label.
+
+## Approved Bright Eye branding
+
+The approved masters live in `assets/brand/` at the repository root. `mark.svg` is the
+transparent full mark; `mark-small.svg` is the simpler 16 and 24 px version. The outlined
+lettering and lockups come from the same approved sheet. Run `python tools/sync-brand.py`
+(or the existing `make-wordmark.py` entry point), then `node tools/render-assets.mjs` with
+its Puppeteer and Chrome arguments. The renderer creates Windows PNGs, multi-size ICOs,
+Android densities and native UI PNGs. Android uses the approved cream plate, with the
+foreground at 75% of the central adaptive mask. Phone UI assets are transparent lockups,
+not launcher plates. Do not redraw the placeholder grid or re-typeset the approved name.

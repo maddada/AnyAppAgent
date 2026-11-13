@@ -16,7 +16,7 @@
       "versionCode": 300,
       "adaptiveIcon": {
         "foregroundImage": "../shared/theme/mark/android/expo/adaptive-foreground.png",
-        "backgroundColor": "#1D6A4A",
+        "backgroundColor": "#FFF5DB",
         "monochromeImage": "../shared/theme/mark/android/expo/adaptive-monochrome.png"
       },
       "permissions": [

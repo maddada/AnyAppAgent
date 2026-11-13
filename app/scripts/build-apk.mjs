@@ -14,7 +14,7 @@
 // docs/ENVIRONMENT.md (D:\tools\android\jdk, D:\tools\android\sdk).
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -54,6 +54,15 @@ run(process.execPath, [join(root, "scripts", "stage-bridge.mjs")], root);
 
 if (clean || !existsSync(join(root, "android", "gradlew"))) {
   run("npx", ["expo", "prebuild", "--platform", "android", "--no-install", ...(clean ? ["--clean"] : [])], root);
+}
+
+// Expo prebuild restores its smaller defaults. Keep clean builds within the documented
+// toolchain settings (docs/ENVIRONMENT.md), including enough metaspace for the native modules.
+const propertiesFile = join(root, "android", "gradle.properties");
+const properties = readFileSync(propertiesFile, "utf8");
+const documentedHeap = "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g";
+if (/^org\.gradle\.jvmargs=-Xmx2048m -XX:MaxMetaspaceSize=512m\s*$/m.test(properties)) {
+  writeFileSync(propertiesFile, properties.replace(/^org\.gradle\.jvmargs=.*$/m, documentedHeap));
 }
 
 const gradlew = join(root, "android", isWin ? "gradlew.bat" : "gradlew");

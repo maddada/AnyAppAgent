@@ -85,6 +85,14 @@ body { overflow-wrap: anywhere; }
 /* ---------- mark and wordmark */
 .wordmark { display: inline-flex; align-items: center; gap: var(--aa-space-md); font-family: var(--aa-font-display); font-weight: var(--aa-wordmark-weight); letter-spacing: var(--aa-wordmark-tracking); font-size: var(--aa-type-name-size); color: var(--aa-text); }
 .mark { width: calc(var(--aa-size-app-icon-small) - var(--aa-space-sm)); height: calc(var(--aa-size-app-icon-small) - var(--aa-space-sm)); /* 28, as in the mockup (no token) */ display: block; flex: none; }
+.wordmark-name { display: block; width: 116px; height: 28px; }
+.wordmark-dark { display: none; }
+[data-aa-theme="dark"] .wordmark-light { display: none; }
+[data-aa-theme="dark"] .wordmark-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-aa-theme="light"]) .wordmark-light { display: none; }
+  :root:not([data-aa-theme="light"]) .wordmark-dark { display: block; }
+}
 
 /* ---------- 8. progress and state line */
 .progress { height: var(--aa-size-progress-height); border-radius: var(--aa-radius-progress); background: var(--aa-surface-sunken); overflow: hidden; position: relative; }

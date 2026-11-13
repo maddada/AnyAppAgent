@@ -1,8 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <g fill="#FFFFFF">
-    <rect x="3" y="3" width="8" height="8" rx="2"/>
-    <rect x="13" y="3" width="8" height="8" rx="2"/>
-    <rect x="3" y="13" width="8" height="8" rx="2"/>
-  </g>
-  <rect x="14" y="14" width="6" height="6" rx="1.4" fill="none" stroke="#FFFFFF" stroke-width="2" transform="rotate(-14 17 17)"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><title>Kiwimake</title><defs><mask id="holes"><rect width="128" height="128" fill="white"/><circle cx="80" cy="57" r="10" fill="black"/></mask></defs><g fill="#FFFFFF" mask="url(#holes)"><path d="M16 75C16 49 32 24 57 23C82 22 99 43 102 68C105 94 87 111 61 112C35 113 16 100 16 75Z"/><rect x="35" y="103" width="12" height="12" rx="6"/><rect x="70" y="103" width="12" height="12" rx="6"/><path d="M98 60Q111 62 123 66Q128 68 123 70Q111 74 98 76Z"/></g></svg>

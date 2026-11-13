@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, TextInput, View } from "react-native";
 import { Redirect, useLocalSearchParams } from "expo-router";
-import { Image } from "expo-image";
 import * as Clipboard from "expo-clipboard";
 import * as Device from "expo-device";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -16,9 +15,9 @@ import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
+import { BrandLockup } from "@/ui/Brand";
 import { icon, radius, size, space, typeStyle, useTheme } from "@/ui/theme";
 
-const MARK = require("../../../shared/theme/mark/android/expo/icon.png");
 /** The scanner's aiming square (no token: it frames the camera, not the UI). */
 const SCAN_FRAME = 240;
 
@@ -111,7 +110,7 @@ export default function Connect() {
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ paddingTop: space["5xl"], paddingHorizontal: size.screenGutter, paddingBottom: (keyboard > 0 ? 0 : insets.bottom) + space["2xl"] }}
     >
-      <Image source={MARK} style={{ width: size.appIcon, height: size.appIcon, borderRadius: radius.appIcon }} />
+      <BrandLockup height={48} />
       <T variant="display" style={{ marginTop: space["2xl"] }}>
         Connect your PC
       </T>
