@@ -605,15 +605,16 @@ After your turn the PC looks at what changed and picks how the new version reach
 - **New install (a few minutes):** anything native changed: `app.json` (name, permissions,
   plugins), `package.json` or the lockfile (a new library), anything in `assets/` (the icon,
   pictures, sounds, fonts), native files in `modules/` (Kotlin, manifests, `app.plugin.js`). The PC
-  runs the full build; the same card appears and Reload installs the new APK and opens the app again.
+  runs the full build; the phone downloads the new version and the person installs it. "Tap Reload"
+  is only for a quick update, never for a new install.
 - A quick update that crashes when it starts is rolled back on the phone by itself (to the last
   version that worked) and Kiwimake is told.
 
 So: prefer a solution in code when it is as good (an icon from `@expo/vector-icons` instead of a
 new picture, a library already installed instead of a new one), and say in your last sentence which
-it will be: "Sent as a quick update, no install needed." or "This one needs a new install, it takes
-a few minutes." The quick update code lives in `modules/updates` (`Ota.kt`, `ReadyPopup.kt`, the
-loader in `AnyappUpdatesPackage.kt`): never edit or remove it, never add another updater, and never
+it will be: "Sent as a quick update, no install needed, tap Reload in the app." or "This one is a new
+install: it takes a few minutes, then install it on your phone." The quick update code lives in
+`modules/updates` (`Ota.kt`, `ReadyPopup.kt`, the loader in `AnyappUpdatesPackage.kt`): never edit or remove it, never add another updater, and never
 turn on `expo-updates`.
 
 ## The app icon
