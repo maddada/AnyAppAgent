@@ -1,6 +1,6 @@
 # Releasing Kiwimake
 
-A release is a GitHub release on `maddada/AnyAppAgent` with three files. The desktop app's
+A release is a GitHub release on `maddada/AnyAppAgent` with four files. The desktop app's
 download QR and the README link to `https://github.com/maddada/AnyAppAgent/releases/latest/download/<name>`,
 so the phone APKs keep their old names for good (desktop apps already installed download
 `AnyAppAgent.apk`, even after the rename to Kiwimake). The installer is `Kiwimake-Setup.exe` from
@@ -11,6 +11,7 @@ so the phone APKs keep their old names for good (desktop apps already installed 
 | `AnyAppAgent.apk` | The phone app, arm64-v8a only (nearly every phone). |
 | `AnyAppAgent-universal.apk` | The phone app, arm64-v8a and x86_64 (emulator, x86 tablets). |
 | `Kiwimake-Setup.exe` | The Windows installer (electron-builder names it `Kiwimake-Setup-<version>.exe`; upload it renamed). |
+| `AnyAppAgent-Setup.exe` | An identical copy of the signed Windows installer, for older links. |
 
 ## The phone app's release key
 
@@ -59,6 +60,38 @@ the user's PC (`builder/lib/keystore.mjs`, `docs/DISTRIBUTION.md`).
 - Phone: `app/app.json` `expo.version` and `expo.android.versionCode`, and `app/package.json`
   `version`. `versionCode` is `major * 10000 + minor * 100 + patch` (0.2.0 is 200) and must grow
   with every release, or phones refuse the update.
+- Companion: `server/package.json` and both version fields at the root of `server/package-lock.json`.
+- Keep the phone and desktop package-lock root package versions in sync too.
+
+## Windows signing (required from 0.3.1)
+
+`npm run dist` in `desktop/` runs `dev/release-windows.ps1`. It requires the same Certum
+SimplySign certificate as [Ghostex](https://github.com/maddada/Ghostex/blob/main/docs/code-signing.md):
+
+- Subject: `Open Source Developer Mohamad Yahia Youssef`.
+- Issuer: `Certum Code Signing 2021 CA`.
+- SHA-1 thumbprint: `E81BEDC91DEA38C8BB2DA3651E161ADA280B6734` (public certificate metadata).
+- SHA-256 file digest and RFC 3161 timestamp at `http://time.certum.pl`.
+
+The release operator installs SimplySign Desktop and signs in themselves using their phone code.
+Keep it signed in while packaging. The certificate and its private-key handle must appear in
+`Cert:\CurrentUser\My`. The private key stays in Certum's cloud. Agents must not enter a phone
+code or PIN, install signing software, or copy Ghostex's automated login workflow. Ghostex CI uses
+repository secrets `CERTUM_SIMPLYSIGN_EMAIL` and `CERTUM_SIMPLYSIGN_TOTP`; they are not exported
+or copied into this repository. If the local certificate is unavailable, stop before publishing.
+
+The script finds the Windows SDK's **x64** signtool (or uses `SIGNTOOL_PATH`). After certificate
+renewal, set `KIWIMAKE_CERTUM_CERT_SHA1` to the replacement certificate's public thumbprint.
+Electron-builder signs `Kiwimake.exe` before it goes into the installer, and signs the NSIS
+uninstaller and final installer. It requires signing, rather than silently producing an unsigned
+release. The script checks `signtool verify /pa /v`, the expected signer and a timestamp, then
+creates and checks `desktop/dist/Kiwimake-Setup.exe` and `desktop/dist/AnyAppAgent-Setup.exe`.
+Never sign only the outer installer: that would leave the installed app unsigned.
+
+Do not run the installer or quit the user's running desktop app during a release. The user updates
+the PC themselves. Keep any smoke test's settings, state, tools, apps and port separate from the
+user's live instance. The PC has no self-updater; run the downloaded installer to update it.
+Update the phone by opening `AnyAppAgent.apk`, or scanning the desktop's phone-download QR.
 
 ## Build
 
@@ -70,7 +103,7 @@ toolchain from `docs/ENVIRONMENT.md`:
 cd app;     npm ci; npm run typecheck; npm run lint
 node scripts/build-apk.mjs --clean --release   # prints both APKs with size and sha256
 cd ..\desktop; npm ci; npm run typecheck; npm test
-npm run dist                                   # dist\Kiwimake-Setup-<version>.exe
+npm run dist                                   # requires SimplySign; signs and verifies both installer names
 ```
 
 `build-apk.mjs --release` reads the key and password (above), loads
@@ -96,7 +129,8 @@ apksigner verify --print-certs app\dist\AnyAppAgent.apk   # SHA-256 digest must 
 
 ```powershell
 gh release create v<version> --repo maddada/AnyAppAgent --title "Kiwimake <version>" --notes-file notes.md `
-  app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk "Kiwimake-Setup.exe"
+  app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk `
+  desktop\dist\Kiwimake-Setup.exe desktop\dist\AnyAppAgent-Setup.exe
 ```
 
 4. Check that each `releases/latest/download/<name>` link returns the new file (size and sha256).
