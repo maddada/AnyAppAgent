@@ -1,3 +1,5 @@
+import { createSession, selectedEngine, resumeFor, rememberSession, type AgentSession } from "./acp/session.ts";
+import { engineName, type Engine } from "../../shared/engines.mts";
 // The app manager: creating apps, one Claude Code session per app, a build after every turn,
 // Git/GitHub, and the chat timeline. Every change goes out as a ServerEvent.
 import { randomUUID } from "node:crypto";
@@ -10,7 +12,7 @@ import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../s
 import { answersPreview, parsePageAnswers } from "../../shared/chat/pages.ts";
 import { isPageToolCall, Pages } from "./pages.ts";
 import type { PromptImage } from "./acp/claude-session.ts";
-import { ClaudeSession, claudeLaunchSpec, pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
+import { pickAllowOption, type PermissionAsk } from "./acp/claude-session.ts";
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { AcpAgentRequestResponder } from "./acp/agent-connection.ts";
 import type { Builder, BuildResult } from "./builder.ts";
@@ -72,8 +74,8 @@ interface PendingPermission {
 
 interface Runtime {
   translator: ChatTranslator;
-  session?: ClaudeSession;
-  starting?: Promise<ClaudeSession>;
+  session?: AgentSession;
+  starting?: Promise<AgentSession>;
   queue: Job[];
   running: boolean;
   /** While the app is being created: jobs wait until the first prompt is in front of them. */
@@ -160,11 +162,11 @@ function firstLine(text: string, max = 300): string {
 }
 
 /** Keep the provider's reason, especially a limit's reset time, when a prompt fails. */
-export function agentFailure(error: unknown): string {
+export function agentFailure(error: unknown, engine: Engine = "claude"): string {
   const raw = error instanceof Error ? error.message : String(error);
   const message = firstLine(raw.replace(/^Internal error:\s*/i, "").replace(/:\s*\{"errorKind"\s*:\s*"[^"]+"\}\s*$/, ""), 200);
-  if (/"errorKind"\s*:\s*"rate_limit"/i.test(raw) || /you(?:'|’)ve hit your .*limit/i.test(message)) {
-    return `Claude usage limit reached. ${message.replace(/[.!?]$/, "")}. Try again after the limit resets.`;
+  if (/"errorKind"\s*:\s*"rate_limit"/i.test(raw) || /you(?:'|’)ve hit your .*limit|usage limit|rate.?limit|quota exceeded|usage_limit_reached/i.test(message)) {
+    return `${engineName(engine)} usage limit reached. ${message.replace(/[.!?]$/, "")}. Try again after the limit resets.`;
   }
   return `The agent stopped unexpectedly: ${message}`;
 }
@@ -1528,7 +1530,7 @@ export class AppManager {
 ${overviewNudge()}` : note;
   }
 
-    private async ensureSession(record: AppRecord): Promise<ClaudeSession> {
+    private async ensureSession(record: AppRecord): Promise<AgentSession> {
     const rt = this.runtime(record.app.id);
     if (rt.session?.alive) return rt.session;
     if (rt.starting) return rt.starting;
@@ -1543,14 +1545,13 @@ ${overviewNudge()}` : note;
           mcpServers: [workerToolsMcpServer(this.config.port, record.app.id, this.workers.toolsToken), this.pages.mcpServer(this.config.port, record.app.id), this.history.mcpServer(this.config.port, record.app.id)],
         }
       : undefined;
-    const session = new ClaudeSession({
+    const session = createSession(this.config, {
       cwd: record.dir,
       env: appsCliEnv(this.store.stateDir, record.app.id),
-      ...(record.sessionId ? { resumeSessionId: record.sessionId } : {}),
+      resumeSessionId: resumeFor(record, selectedEngine(this.config)),
       instructions: appPlaybook(appInfo),
       mcpServers: [this.pages.mcpServer(this.config.port, record.app.id), this.history.mcpServer(this.config.port, record.app.id)],
       ...coordinated,
-      launch: claudeLaunchSpec(this.config.acpLaunch, this.config.cloud?.agentPrefix),
       askPermissions: this.config.askPermissions,
       // The cloud: the app's chat is the orchestrator (Opus 5.5 high), the agent another Unix user.
       ...(this.config.cloud ? { model: this.config.cloud.orchestrator, tag: { role: "orchestrator" }, clientFs: false } : {}),
@@ -1572,7 +1573,7 @@ ${overviewNudge()}` : note;
       onPlanLimit: (limit: PlanLimit) => this.usage.notePlan(limit),
       onPermission: (ask) => this.handlePermission(record, ask),
       onExit: (info) => {
-        this.log(`[${slug}] Claude Code exited (code ${info.code ?? "none"})`);
+        this.log(`[${slug}] ${engineName(selectedEngine(this.config))} exited (code ${info.code ?? "none"})`);
         if (rt.session === session) rt.session = undefined;
       },
       log: (message) => this.log(`[${slug}] ${message}`),
@@ -1581,15 +1582,16 @@ ${overviewNudge()}` : note;
       () => {
         rt.session = session;
         rt.starting = undefined;
-        record.sessionId = session.sessionId;
+        rememberSession(record, selectedEngine(this.config), session.sessionId);
+        record.app.engine = selectedEngine(this.config);
         if (coordinated) ready.coordinatorPlaybook = COORDINATOR_PLAYBOOK_VERSION;
         this.store.save();
-        this.log(`[${slug}] Claude Code session ${session.sessionId} ${session.resumed ? "resumed" : "started"} (mode ${session.modeId ?? "?"})`);
+        this.log(`[${slug}] ${engineName(selectedEngine(this.config))} session ${session.sessionId} ${session.resumed ? "resumed" : "started"} (mode ${session.modeId ?? "?"})`);
         return session;
       },
       (error: unknown) => {
         rt.starting = undefined;
-        throw new Error(`Claude Code could not start: ${(error as Error).message}`);
+        throw new Error(`${engineName(selectedEngine(this.config))} could not start: ${(error as Error).message}`);
       },
     );
     return rt.starting;
@@ -1631,7 +1633,7 @@ ${overviewNudge()}` : note;
       this.log(`[${record.app.slug}] prompt failed:`, (error as Error).message);
       // The queue reports this once and stores it on App.error. Do not replace the cause with
       // a second generic error after finishing the turn.
-      failure = agentFailure(error);
+      failure = agentFailure(error, selectedEngine(this.config));
     } finally {
       rt.turnActive = false;
       for (const draft of rt.translator.finishTurn(stopReason)) this.emitItem(record, draft);

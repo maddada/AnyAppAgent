@@ -1,8 +1,6 @@
-// Is Claude Code signed in on this PC? We ask the same Claude CLI the companion's ACP adapter
-// (@agentclientprotocol/claude-agent-acp) runs: the native claude.exe shipped inside
-// @anthropic-ai/claude-agent-sdk-<platform>-<arch>, or CLAUDE_CODE_EXECUTABLE when set. The adapter
-// itself probes `claude auth status --json` (see its dist/auth-status.js), so we do exactly that.
-import { join } from "node:path";
+// Probe the installed Claude CLI used by the companion through CLAUDE_CODE_EXECUTABLE.
+// auth status --json is also how the ACP adapter checks its sign-in.
+import { engineCandidates } from "../../../../shared/engines.mts";
 import type { ClaudeCheck } from "../../shared/types.ts";
 import type { Runner } from "../exec.ts";
 
@@ -17,19 +15,7 @@ export interface ClaudeStatusJson {
 
 /** Candidate paths of the Claude CLI binary, most specific first. */
 export function claudeCliCandidates(serverDir: string, env: NodeJS.ProcessEnv, platform = process.platform, arch = process.arch): string[] {
-  const exe = platform === "win32" ? "claude.exe" : "claude";
-  const pkg = `claude-agent-sdk-${platform}-${arch}`;
-  const nm = join(serverDir, "node_modules");
-  const list = [
-    env.CLAUDE_CODE_EXECUTABLE,
-    join(nm, "@anthropic-ai", pkg, exe),
-    join(nm, "@agentclientprotocol", "claude-agent-acp", "node_modules", "@anthropic-ai", pkg, exe),
-    join(nm, "@anthropic-ai", "claude-agent-sdk", "node_modules", "@anthropic-ai", pkg, exe),
-  ];
-  // A Claude Code the user installed themselves also counts (it shares the same sign-in).
-  const home = env.USERPROFILE ?? env.HOME;
-  if (home) list.push(join(home, ".local", "bin", exe));
-  return list.filter((p): p is string => !!p);
+  return engineCandidates("claude", env, platform);
 }
 
 export function planLabel(status: ClaudeStatusJson): string | undefined {
@@ -74,7 +60,7 @@ export function interpretClaudeStatus(stdout: string): ClaudeCheck {
 
 export async function detectClaude(cli: string | undefined, runner: Runner, env: NodeJS.ProcessEnv = process.env): Promise<ClaudeCheck> {
   if (!cli) {
-    return { state: "problem", summary: "The Claude part of Kiwimake is missing. Reinstalling Kiwimake fixes this.", error: "claude CLI not found" };
+    return { state: "needed", installed: false, summary: "Install Claude to start making apps." };
   }
   const result = await runner(cli, ["auth", "status", "--json"], { env, timeoutMs: 15_000 });
   // `auth status` exits 1 when signed out but still prints the JSON.

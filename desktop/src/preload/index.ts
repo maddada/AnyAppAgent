@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { AnyAppBridge, ChatItem, Snapshot, TodoItem, WorkerInfo } from "../shared/types.ts";
 
 const bridge: AnyAppBridge = {
+  engineInstall: () => ipcRenderer.invoke("engine:install"),
+  engineUpdate: () => ipcRenderer.invoke("engine:update"),
   getSnapshot: () => ipcRenderer.invoke("snapshot"),
   onSnapshot: (listener) => {
     const fn = (_e: unknown, s: Snapshot) => listener(s);

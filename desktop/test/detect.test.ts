@@ -71,15 +71,13 @@ describe("Claude detection", () => {
     expect(c.state).toBe("needed");
   });
 
-  it("missing CLI is a problem", async () => {
-    expect((await detectClaude(undefined, fakeRunner({}))).state).toBe("problem");
+  it("missing CLI offers installation", async () => {
+    expect(await detectClaude(undefined, fakeRunner({}))).toMatchObject({ state: "needed", installed: false });
   });
 
-  it("looks first at CLAUDE_CODE_EXECUTABLE, then the SDK binary the ACP adapter uses", () => {
-    const list = claudeCliCandidates("C:\\x\\server", { CLAUDE_CODE_EXECUTABLE: "C:\\custom\\claude.exe", USERPROFILE: "C:\\Users\\u" }, "win32", "x64");
-    expect(list[0]).toBe("C:\\custom\\claude.exe");
-    expect(list[1]).toBe(join("C:\\x\\server", "node_modules", "@anthropic-ai", "claude-agent-sdk-win32-x64", "claude.exe"));
-    expect(list.at(-1)).toBe(join("C:\\Users\\u", ".local", "bin", "claude.exe"));
+  it("honours an explicit CLI override without bundled fallbacks", () => {
+    const list = claudeCliCandidates("C:/x/server", { CLAUDE_CODE_EXECUTABLE: "C:/custom/claude.exe", USERPROFILE: "C:/Users/u" }, "win32", "x64");
+    expect(list).toEqual(["C:/custom/claude.exe"]);
   });
 
   it("finds the sign-in link inside an OSC 8 hyperlink", () => {

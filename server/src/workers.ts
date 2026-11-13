@@ -1,3 +1,4 @@
+import { createSession, selectedEngine, resumeFor, rememberSession, type AgentSession } from "./acp/session.ts";
 // Workers: the Claude Code sessions an app's coordinator (its main chat) starts for real work. Each
 // worker has its own ACP session in the app's folder, its own chat, and one row in the main chat.
 // Workers that change the app take turns (one "change slot" per app, shared with Try again
@@ -8,7 +9,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { ChatItem, PlanLimit, ServerEvent, TokenUsage, WorkerInfo, WorkerState } from "../../shared/protocol.ts";
-import { ClaudeSession, claudeLaunchSpec, pickAllowOption } from "./acp/claude-session.ts";
+import { pickAllowOption } from "./acp/claude-session.ts";
 import { levelChoice, type HelperLevel } from "./cloud-settings.ts";
 import { ChatTranslator, type ChatDraft } from "./acp/translate.ts";
 import type { Config } from "./config.ts";
@@ -71,6 +72,8 @@ interface WorkerRecord {
   brief: string;
   rowId: string; // its row in the main chat
   sessionId?: string;
+  sessionEngine?: "claude" | "codex";
+  engineSessions?: Partial<Record<"claude" | "codex", string>>;
   inbox: string[]; // prompts for its next turn
   forceBuild?: boolean; // build after its first turn even when no file changed (Try again)
   buildAgain?: boolean; // the PC restarted while it was building: land and build again, no turn first
@@ -93,7 +96,7 @@ End with one plain sentence on how you combined the two changes.`;
 
 interface WorkerRuntime {
   translator: ChatTranslator;
-  session?: ClaudeSession;
+  session?: AgentSession;
   running: boolean;
   stopRequested: boolean;
   latestTimer?: NodeJS.Timeout;
@@ -396,15 +399,15 @@ export class WorkerManager {
     return w.info.changesApp ? helperCopyDir(this.host.config.appsDir, record.app.slug, w.info.id) : record.dir;
   }
 
-  private async ensureSession(record: AppRecord, w: WorkerRecord, rt: WorkerRuntime): Promise<ClaudeSession> {
+  private async ensureSession(record: AppRecord, w: WorkerRecord, rt: WorkerRuntime): Promise<AgentSession> {
     if (rt.session?.alive) return rt.session;
     const appId = record.app.id;
     const slug = record.app.slug;
     const cwd = this.workDir(record, w);
-    const session = new ClaudeSession({
+    const session = createSession(this.host.config, {
       cwd,
       env: appsCliEnv(this.host.stateDir, appId),
-      ...(w.sessionId ? { resumeSessionId: w.sessionId } : {}),
+      resumeSessionId: resumeFor(w, selectedEngine(this.host.config)),
       instructions: ((text) => (this.host.config.cloud ? cloudWords(text) : text))(
         workerPlaybook({ name: record.app.name, packageName: record.app.packageName, dir: cwd, preset: record.app.preset }, w.info),
       ),
@@ -412,7 +415,6 @@ export class WorkerManager {
         ...(this.host.pageTools ? [this.host.pageTools(appId, { workerId: w.info.id, title: w.info.title })] : []),
         ...(this.host.appTools ? [this.host.appTools(appId, w.info.id)] : []),
       ],
-      launch: claudeLaunchSpec(this.host.config.acpLaunch, this.host.config.cloud?.agentPrefix),
       // The cloud: the helper's level picks its model and effort (docs/CLOUD.md, "Models").
       ...(this.host.config.cloud
         ? { model: levelChoice(this.host.config.cloud, w.info.level), tag: { role: "helper", workerId: w.info.id, level: w.info.level ?? "focused" }, clientFs: false }
@@ -443,13 +445,13 @@ export class WorkerManager {
       },
       onExit: (info) => {
         if (rt.session === session) rt.session = undefined;
-        if (rt.running) this.host.log(`[${slug}] worker ${w.info.id}: Claude Code exited (code ${info.code ?? "none"})`);
+        if (rt.running) this.host.log(`[${slug}] worker ${w.info.id}: Agent exited (code ${info.code ?? "none"})`);
       },
       log: (message) => this.host.log(`[${slug}] worker ${w.info.id}: ${message}`),
     });
     await session.start();
     rt.session = session;
-    w.sessionId = session.sessionId;
+    rememberSession(w, selectedEngine(this.host.config), session.sessionId);
     this.save(appId);
     return session;
   }

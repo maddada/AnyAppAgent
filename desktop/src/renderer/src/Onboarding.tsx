@@ -14,7 +14,7 @@ const api = window.anyapp;
 export type StepId = "welcome" | "claude" | "tools" | "github" | "phone-get" | "phone-pair" | "dictation" | "done";
 const RAIL: { id: StepId; label: string; optional?: boolean }[] = [
   { id: "welcome", label: "Welcome" },
-  { id: "claude", label: "Claude, the AI" },
+  { id: "claude", label: "Choose your AI" },
   { id: "tools", label: "Tools for building apps" },
   { id: "github", label: "A safe copy of your apps", optional: true },
   { id: "phone-get", label: "The app on your phone" },
@@ -193,7 +193,7 @@ const stepOf = (id: StepId) => `Step ${ORDER.indexOf(id) + 1} of ${RAIL.length}`
 function Welcome() {
   const loop: [LucideIcon, string, string][] = [
     [Smartphone, "You describe it", "On your phone or on this PC, in your own words."],
-    [Monitor, "This PC makes it", "Claude writes the app and this PC builds it."],
+    [Monitor, "This PC makes it", "Your AI writes the app and this PC builds it."],
     [Download, "It appears on your phone", "Ready to open. Ask for changes any time."],
   ];
   return (
@@ -226,42 +226,52 @@ function Welcome() {
   );
 }
 
+export function EngineChoice({ s }: { s: Snapshot }) {
+  const busy = s.checks.claude.signingIn || s.checks.claude.state === "working" || s.apps.some((a) => a.status === "working" || a.status === "building");
+  const [error, setError] = useState("");
+  return <div className="card" style={{ padding: "var(--aa-space-lg)", marginBottom: "var(--aa-space-xl)" }}>
+    <strong>Choose the AI that makes your apps</strong>
+    <p className="label secondary">Use your Claude or ChatGPT account. You can change this later in Settings, when your apps are idle.</p>
+    {error && <p className="problem-text">{error}</p>}
+    <div className="notice-actions" role="group" aria-label="AI engine">
+      {(["claude", "codex"] as const).map((engine) => <button key={engine} className={`btn ${s.settings.engine === engine ? "btn-primary" : "btn-quiet"}`} aria-pressed={s.settings.engine === engine} disabled={busy} onClick={() => { setError(""); void api.setSetting("engine", engine).catch(() => setError("Could not change the engine. Wait for your app to finish and try again.")); }}>{engine === "claude" ? "Claude" : "Codex"}</button>)}
+    </div>
+  </div>;
+}
+
 function ClaudeStep({ s }: { s: Snapshot }) {
+  const name = s.settings.engine === "codex" ? "Codex" : "Claude";
+  const codex = s.settings.engine === "codex";
   const c = s.checks.claude;
   const [code, setCode] = useState("");
   const [showCode, setShowCode] = useState(false);
-  const state: CardState = c.state === "done" ? "ready" : c.signingIn || c.state === "checking" ? "working" : c.state === "problem" ? "problem" : "todo";
+  const state: CardState = c.state === "done" ? "ready" : c.signingIn || c.state === "checking" || c.state === "working" ? "working" : c.state === "problem" ? "problem" : "todo";
   const status =
     c.state === "done"
-      ? `${c.summary}${c.plan ? `, Claude ${c.plan}` : ""}`
+      ? `${c.summary}${c.plan ? `, ${name} ${c.plan}` : ""}`
       : c.signingIn
         ? "Finish signing in on the page that opened in your browser. This moves on by itself."
         : c.state === "checking"
           ? "Checking…"
-          : (c.error ?? c.summary);
+          : (c.maintenance ?? c.error ?? c.summary);
   return (
     <>
-      <Head
-        eyebrow={stepOf("claude")}
-        title="Claude writes your apps"
-        lede="Claude is an AI from Anthropic. Kiwimake asks it to write each app for you. It needs a paid Claude plan (Pro or Max), signed in once on this PC."
-      />
-      <How
-        items={[
-          ["Sign in with your Claude account", "A page opens in your browser. Nothing to type here."],
-          ["You need Claude Pro or Max", "The free plan cannot write apps for you."],
-          ["It stays signed in", "You only do this once on this PC."],
-        ]}
-      />
+      <Head eyebrow={stepOf("claude")} title="Choose the AI that writes your apps" lede="Kiwimake uses the AI installed on this PC. If it is missing, setup installs the official app for you." />
+      <EngineChoice s={s} />
+      <How items={[
+        [`Sign in to ${name}`, codex ? "Use your ChatGPT account in the browser." : "Use a paid Claude plan, such as Pro or Max."],
+        ["Already installed?", "Kiwimake uses your existing sign-in and keeps the tool updated."],
+        ["Your apps stay here", "Changing the AI keeps your apps, files and chat history."],
+      ]} />
       <CheckCard
         state={state}
         icon={KeyRound}
-        title="Claude"
+        title={name}
         status={status}
         action={
-          c.state !== "done" && !c.signingIn && c.state !== "checking" ? (
-            <button className="btn btn-primary" onClick={() => api.claudeSignIn()}>
-              Sign in to Claude <Icon of={ExternalLink} size="sm" />
+          c.state !== "done" && !c.signingIn && c.state !== "checking" && c.state !== "working" ? (
+            <button className="btn btn-primary" onClick={() => c.installed === false ? api.engineInstall() : api.claudeSignIn()}>
+              {c.installed === false ? `Install ${name}` : `Sign in to ${name}`} <Icon of={ExternalLink} size="sm" />
             </button>
           ) : c.signingIn ? (
             <button className="btn btn-quiet btn-sm" onClick={() => api.claudeCancel()}>
@@ -278,12 +288,10 @@ function ClaudeStep({ s }: { s: Snapshot }) {
                 Open the sign-in page again
               </button>
             )}
-            <button className="btn btn-text label" onClick={() => setShowCode(!showCode)}>
-              The page shows a code?
-            </button>
+            {!codex && <button className="btn btn-text label" onClick={() => setShowCode(!showCode)}>The page shows a code?</button>}
           </div>
         )}
-        {c.signingIn && showCode && (
+        {c.signingIn && !codex && showCode && (
           <form
             className="row"
             onSubmit={(e) => {
@@ -298,7 +306,7 @@ function ClaudeStep({ s }: { s: Snapshot }) {
             </button>
           </form>
         )}
-        {c.state !== "done" && !c.signingIn && (
+        {!codex && c.state !== "done" && !c.signingIn && (
           <button className="btn btn-text label" onClick={() => api.openExternal("https://claude.com/pricing")}>
             No Claude plan yet? See the plans
           </button>

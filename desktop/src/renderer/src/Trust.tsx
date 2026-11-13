@@ -166,8 +166,8 @@ export function UsageGroup({ s }: { s: Snapshot }) {
   const month = newTokens(care.usage.month);
   return (
     <section className="settings-group" data-testid="usage-group">
-      <h2 className="heading">Claude plan use</h2>
-      <p className="callout secondary">What your apps' agents used, as Claude reports it. Each change shows its own use under your message in the chat.</p>
+      <h2 className="heading">AI plan use</h2>
+      <p className="callout secondary">What your apps' agents used, as your AI reports it. Each change shows its own use under your message in the chat.</p>
       <div className="list">
         {lines.length > 0 ? (
           lines.map((l) => (
@@ -194,7 +194,7 @@ export function UsageGroup({ s }: { s: Snapshot }) {
             <span className="body">
               {monthName(care.usage.monthKey)}: {formatTokens(month)} tokens
             </span>
-            <span className="sub">All your apps together this month. Re-reading the chat from Claude's memory is not counted here: it counts for much less.</span>
+            <span className="sub">All your apps together this month. Re-reading the chat from the AI's memory is not counted here: it counts for much less.</span>
           </div>
         </div>
         {rows.map((r) => (

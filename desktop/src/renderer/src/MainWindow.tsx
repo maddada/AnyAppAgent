@@ -1,3 +1,4 @@
+import { EngineChoice } from "./Onboarding.tsx";
 // The main window after onboarding: sidebar (Apps, Phones, Setup, Settings). The Apps page is
 // split: the list of apps on the left, and on the right either the open app's chat (Chat.tsx, the
 // same chat as on the phone) or today's activity with the phone panels. New app works from here
@@ -581,12 +582,12 @@ function setupRows(s: Snapshot): SetupRow[] {
     {
       key: "claude",
       icon: KeyRound,
-      title: "Claude, the AI",
+      title: s.settings.engine === "codex" ? "Codex, the AI" : "Claude, the AI",
       state: lineFor(c.claude.state),
-      sub: c.claude.state === "done" ? `Signed in${c.claude.plan ? `, Claude ${c.claude.plan}` : ""}` : c.claude.state === "checking" ? "Checking" : "Not signed in",
+      sub: c.claude.state === "done" ? `Signed in${c.claude.plan ? `, ${s.settings.engine === "codex" ? "Codex" : "Claude"} ${c.claude.plan}` : ""}` : c.claude.state === "checking" ? "Checking" : "Not signed in",
       needsYou: c.claude.state === "needed" || c.claude.state === "problem",
       blocks: true,
-      problemText: "Claude is not signed in, so no app can be made right now.",
+      problemText: "Your AI is not signed in, so no app can be made right now.",
       step: "claude",
       button: "Sign in",
     },
@@ -799,6 +800,15 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
       <header className="dm-head">
         <h1 className="title">Settings</h1>
       </header>
+      <EngineChoice s={s} />
+      <div className="card" style={{ padding: "var(--aa-space-lg)", marginBottom: "var(--aa-space-xl)" }}>
+        <p>{s.checks.claude.summary}</p>
+        {s.checks.claude.maintenance && <p className="label secondary">{s.checks.claude.maintenance}</p>}
+        <div className="notice-actions">
+          <button className="btn btn-quiet" onClick={() => openSetup("claude")}>Set up AI</button>
+          <button className="btn btn-quiet" disabled={s.checks.claude.state === "working" || s.apps.some((a) => a.status === "working" || a.status === "building")} onClick={() => api.engineUpdate()}>Check for updates</button>
+        </div>
+      </div>
       <section className="list">
         <div className="srow">
           <div className="srow-main">

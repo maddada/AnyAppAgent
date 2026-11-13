@@ -29,7 +29,7 @@ export function resolvePaths(options: { packaged: boolean; resourcesPath: string
     home,
     stateDir,
     appsDir: resolve(env.ANYAPP_APPS_DIR ?? (process.platform === "win32" ? "C:\\aa\\apps" : join(homedir(), "aa", "apps"))),
-    toolsDir: resolve(env.ANYAPP_TOOLS_DIR ?? join(home, "tools")),
+    toolsDir: resolve(env.ANYAPP_TOOLS_DIR ?? join(stateDir, "tools")),
     phoneApkCandidates: [
       join(options.resourcesPath, "phone", "AnyAppAgent.apk"),
       join(repoRoot, "app", "dist", "AnyAppAgent.apk"),

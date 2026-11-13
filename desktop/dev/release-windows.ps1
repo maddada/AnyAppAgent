@@ -58,6 +58,8 @@ function Assert-Signed([string]$File) {
 
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
+    & node dev/pin-phone.mjs
+    if ($LASTEXITCODE -ne 0) { throw "Phone release pin failed." }
     & npm.cmd run build
     if ($LASTEXITCODE -ne 0) { throw 'Desktop compilation failed.' }
     # electron-builder signs Kiwimake.exe before packaging, plus the NSIS

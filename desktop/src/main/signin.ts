@@ -26,18 +26,18 @@ export class ClaudeSignIn extends EventEmitter {
   running = false;
   error: string | undefined;
 
-  start(cli: string): void {
+  start(cli: string, engine: "claude" | "codex" = "claude", env: NodeJS.ProcessEnv = process.env): void {
     if (this.child) return;
     this.error = undefined;
     this.url = undefined;
     this.running = true;
     let output = "";
-    const child = spawnHidden(cli, ["auth", "login", "--claudeai"], { stdio: ["pipe", "pipe", "pipe"], env: process.env });
+    const child = spawnHidden(cli, engine === "codex" ? ["login"] : ["auth", "login", "--claudeai"], { stdio: ["pipe", "pipe", "pipe"], env });
     this.child = child;
     child.stdin?.on("error", () => {});
     const onData = (chunk: Buffer) => {
       output = (output + chunk.toString()).slice(-8000);
-      const url = extractLoginUrl(output);
+      const url = engine === "codex" ? output.match(/https:\/\/(?:auth\.openai\.com|chatgpt\.com)\/[^\s\u0007\u001b]+/)?.[0] : extractLoginUrl(output);
       if (url && url !== this.url) {
         this.url = url;
         this.emit("change");
@@ -51,8 +51,7 @@ export class ClaudeSignIn extends EventEmitter {
     });
     child.on("exit", (code) => {
       if (code !== 0 && code !== null && !this.error) {
-        const last = output.replace(/\u001b\][^\u0007]*\u0007|\u001b\[[0-9;]*m/g, "").trim().split(/\r?\n/).filter(Boolean).pop();
-        this.error = last && !/^https?:/.test(last) ? last : "The sign-in did not finish.";
+        this.error = "The sign-in did not finish. Please try again.";
       }
       this.finish();
     });

@@ -1,12 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { isEngine } from "../../../shared/engines.mts";
 import type { Settings } from "../shared/types.ts";
 
-export const DEFAULT_SETTINGS: Settings = { onboardingDone: false, githubSkipped: false, startWithWindows: false, closeHintShown: false, phoneApkPath: "", hexModel: "", hexSkipped: false };
+export const DEFAULT_SETTINGS: Settings = { engine: "claude", onboardingDone: false, githubSkipped: false, startWithWindows: false, closeHintShown: false, phoneApkPath: "", hexModel: "", hexSkipped: false };
 
 export function loadSettings(file: string): Settings {
   try {
-    if (existsSync(file)) return { ...DEFAULT_SETTINGS, ...(JSON.parse(readFileSync(file, "utf8")) as Partial<Settings>) };
+    if (existsSync(file)) {
+      const saved = JSON.parse(readFileSync(file, "utf8")) as Partial<Settings>;
+      return { ...DEFAULT_SETTINGS, ...saved, engine: isEngine(saved.engine) ? saved.engine : "claude" };
+    }
   } catch {
     // a damaged file starts fresh
   }

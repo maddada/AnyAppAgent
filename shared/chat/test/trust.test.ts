@@ -55,7 +55,7 @@ test("a heads-up before a big job, quiet for a small one", () => {
   assert.match(headsUp({ text: "x".repeat(500), usage: near, now })!.body, /5-hour limit: 90% used\.$/);
   // A used-up limit warns even for a small change.
   const out: UsageState = { ...usage, plan: [{ kind: "five_hour", status: "rejected", seenAt: "" }] };
-  assert.equal(headsUp({ text: "tiny", usage: out, now })!.title, "Your Claude plan needs a rest");
+  assert.equal(headsUp({ text: "tiny", usage: out, now })!.title, "Your AI plan needs a rest");
   for (const h of [app, redo]) assert.doesNotMatch(h.body + h.title, /—/);
 });
 

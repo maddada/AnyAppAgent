@@ -10,6 +10,7 @@ export const REPO_DIR = resolve(SERVER_DIR, "..");
 const pkg = JSON.parse(readFileSync(join(SERVER_DIR, "package.json"), "utf8")) as { version: string };
 
 export interface Config {
+  engine?: "claude" | "codex";
   version: string;
   host: string;
   port: number;
@@ -34,6 +35,7 @@ export interface Config {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const builder = env.ANYAPP_BUILDER === "real" || env.ANYAPP_BUILDER === "fake" ? env.ANYAPP_BUILDER : "auto";
   return {
+    engine: env.ANYAPP_ENGINE === "codex" ? "codex" : "claude",
     version: pkg.version,
     host: env.ANYAPP_HOST ?? "0.0.0.0",
     port: Number(env.ANYAPP_PORT ?? 8787),

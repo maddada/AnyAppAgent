@@ -8,13 +8,15 @@ import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
 import type { AccountAction, BackupAction, Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
-import { PHONE_RELEASE_URL } from "../shared/types.ts";
+import { ensurePhone, phoneCachePath, pinnedPhoneUrl, universalPhoneUrl } from "./install/phone.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
 import { AdminClient, lanAddresses } from "./admin-client.ts";
 import { openPageWindow, pageAnswered } from "./page-window.ts";
 import { Companion } from "./companion.ts";
-import { claudeCliCandidates, detectClaude } from "./detect/claude.ts";
+import { findEngine, engineName, isEngine } from "../../../shared/engines.mts";
+import { detectEngine } from "./detect/engine.ts";
+import { installEngine, updateEngine } from "./install/engine.ts";
 import { detectGitHub, ghCandidates, type GhLocation } from "./detect/github.ts";
 import { detectTools } from "./detect/tools.ts";
 import { detectDeps } from "./detect/deps.ts";
@@ -33,7 +35,7 @@ const env = process.env;
 // Otherwise the settings folder keeps its old name (%APPDATA%\AnyAppAgent) after the rename to
 // Kiwimake: Electron names it after productName, and the settings and the single-instance lock
 // (one copy running at a time, `--quit`) live there.
-app.setPath("userData", env.ANYAPP_DESKTOP_USERDATA || join(app.getPath("appData"), "AnyAppAgent"));
+app.setPath("userData", env.ANYAPP_DESKTOP_USERDATA || (env.ANYAPP_STATE_DIR ? join(env.ANYAPP_STATE_DIR, "desktop") : join(app.getPath("appData"), "AnyAppAgent")));
 if (env.ANYAPP_DESKTOP_THEME === "dark" || env.ANYAPP_DESKTOP_THEME === "light") nativeTheme.themeSource = env.ANYAPP_DESKTOP_THEME;
 
 const paths = resolvePaths({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath(), env });
@@ -80,11 +82,39 @@ const icons: Record<string, string> = {};
 const iconVersions: Record<string, number> = {};
 /** The Kiwimake phone app (APK) the companion serves for the install QR: the setting first, then the usual places. */
 function phoneApk(): string | undefined {
-  return firstExisting([settings.phoneApkPath || undefined, env.ANYAPP_HOST_APK || undefined, ...paths.phoneApkCandidates]);
+  return firstExisting([settings.phoneApkPath || undefined, env.ANYAPP_HOST_APK || undefined, phoneCachePath(paths.stateDir)]);
 }
 let easyConnectAutoTried = false;
 
-const claudeCli = () => firstExisting(claudeCliCandidates(paths.serverDir, env));
+const claudeCli = () => findEngine(settings.engine, env);
+let engineBusy = false;
+const updatedEngines = new Set<string>();
+async function maintainEngine(install: boolean): Promise<void> {
+  if (engineBusy || claudeSignIn.running) return;
+  const engine = settings.engine;
+  const cli = claudeCli();
+  if (!install && !cli) return;
+  // Isolated tests never mutate the user's tools. Product installs update only while idle.
+  if (env.ANYAPP_ENGINE_UPDATES === "off") return;
+  if (admin?.apps.some((a) => a.status === "working" || a.status === "building")) return;
+  engineBusy = true;
+  checks.claude = { ...checks.claude, state: "working", maintenance: `${install ? "Installing" : "Updating"} ${engineName(engine)}…` };
+  broadcast();
+  let note: string;
+  try {
+    if (install) {
+      await installEngine(engine, paths.toolsDir, run, env);
+      if (!findEngine(engine, env)) throw new Error("The installer finished but the engine could not be found. Try again.");
+      note = `${engineName(engine)} is installed.`;
+    } else note = await updateEngine(engine, cli!, run, env);
+    updatedEngines.add(engine);
+  } catch (error) { note = (error as Error).message; }
+  engineBusy = false;
+  await checkClaude();
+  checks.claude.maintenance = note;
+  broadcast();
+}
+
 
 // ---------------------------------------------------------------- companion
 
@@ -98,11 +128,14 @@ const companion = new Companion({
   env: () => {
     const t = checks.tools.env;
     return {
+      ANYAPP_ENGINE: settings.engine,
+      CLAUDE_CODE_EXECUTABLE: findEngine("claude", env),
+      CODEX_EXECUTABLE: findEngine("codex", env),
       ...(t?.JAVA_HOME ? { JAVA_HOME: t.JAVA_HOME } : {}),
       ...(t?.ANDROID_HOME ? { ANDROID_HOME: t.ANDROID_HOME, ANDROID_SDK_ROOT: t.ANDROID_HOME } : {}),
       ...(t?.gitBash ? { CLAUDE_CODE_GIT_BASH_PATH: t.gitBash } : {}),
       // The companion serves the phone app at /download/anyappagent.apk for the install QR.
-      ...(phoneApk() ? { ANYAPP_HOST_APK: phoneApk() } : {}),
+      ANYAPP_HOST_APK: phoneApk() ?? phoneCachePath(paths.stateDir),
       // The builder also reads these first (builder/lib/env.mjs).
       ...(t?.JAVA_HOME ? { ANYAPP_JAVA_HOME: t.JAVA_HOME } : {}),
       ...(t?.ANDROID_HOME ? { ANYAPP_ANDROID_HOME: t.ANDROID_HOME } : {}),
@@ -189,8 +222,10 @@ function updatePhoneCheck(): void {
 }
 
 async function checkClaude(): Promise<void> {
-  if (claudeSignIn.running) return;
-  const result = await detectClaude(claudeCli(), run);
+  if (claudeSignIn.running || engineBusy) return;
+  const selected = settings.engine;
+  const result = await detectEngine(selected, claudeCli(), run, env);
+  if (selected !== settings.engine) return;
   const forced = simulate.get("claude");
   checks.claude =
     forced === "needed"
@@ -321,7 +356,7 @@ claudeSignIn.on("done", () => void checkClaude());
 setInterval(async () => {
   if (!claudeSignIn.running) return;
   const cli = claudeCli();
-  const result = await detectClaude(cli, run);
+  const result = await detectEngine(settings.engine, cli, run, env);
   if (result.state === "done") {
     claudeSignIn.cancel();
     checks.claude = result;
@@ -441,6 +476,10 @@ function broadcast(): void {
 }
 
 function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void {
+  if (key === "engine") {
+    if (!isEngine(value) || engineBusy || claudeSignIn.running) return;
+    if (admin?.apps.some((a) => a.status === "working" || a.status === "building")) throw new Error("Wait for the current app to finish before changing engines.");
+  }
   settings = { ...settings, [key]: value };
   saveSettings(settingsFile, settings);
   if (key === "startWithWindows") {
@@ -449,6 +488,11 @@ function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void 
   }
   if (key === "githubSkipped") void checkGitHub();
   if (key === "hexModel") void checkHex();
+  if (key === "engine") {
+    checks.claude = { state: "checking", summary: "Checking…" };
+    void checkClaude();
+    void companion.restart();
+  }
   // The companion reads ANYAPP_HOST_APK at start.
   if (key === "phoneApkPath") void companion.restart();
   broadcast();
@@ -540,9 +584,11 @@ function updateTray(): void {
 function ipc(): void {
   ipcMain.handle("snapshot", () => snapshot());
   ipcMain.handle("recheck", () => recheckAll());
+  ipcMain.handle("engine:install", () => maintainEngine(true));
+  ipcMain.handle("engine:update", () => maintainEngine(false));
   ipcMain.handle("claude:signin", () => {
     const cli = claudeCli();
-    if (cli) claudeSignIn.start(cli);
+    if (cli) claudeSignIn.start(cli, settings.engine, env);
   });
   ipcMain.handle("claude:cancel", () => claudeSignIn.cancel());
   ipcMain.handle("claude:code", (_e, code: string) => claudeSignIn.submitCode(String(code)));
@@ -559,8 +605,9 @@ function ipc(): void {
   ipcMain.handle("phone:download", async (): Promise<PhoneDownload> => {
     // The companion serves the phone app without a token at /download/anyappagent.apk
     // (ANYAPP_HOST_APK); the QR encodes that link on this PC's best LAN address.
-    const apk = phoneApk();
-    if (!apk) return { available: false };
+    let apk: string;
+    try { apk = firstExisting([settings.phoneApkPath || undefined, env.ANYAPP_HOST_APK || undefined]) ?? await ensurePhone(paths.stateDir); }
+    catch { return { available: false, error: "Could not download the phone app. Check your internet connection and try again." }; }
     try {
       const res = await fetch(`http://127.0.0.1:${port}/download/anyappagent.apk`, { method: "HEAD", signal: AbortSignal.timeout(3_000) });
       if (!res.ok) return { available: false };
@@ -572,7 +619,7 @@ function ipc(): void {
     return { available: true, url, qrSvg: await qrSvg(url), sizeBytes: statSync(apk).size };
   });
   // The phone app from this project's public GitHub release: works on any network, phone camera only.
-  ipcMain.handle("phone:release", async (): Promise<PhoneRelease> => ({ url: PHONE_RELEASE_URL, qrSvg: await qrSvg(PHONE_RELEASE_URL) }));
+  ipcMain.handle("phone:release", async (): Promise<PhoneRelease> => ({ url: pinnedPhoneUrl, universalUrl: universalPhoneUrl, qrSvg: await qrSvg(pinnedPhoneUrl) }));
   // The phone step turns Easy Connect on once (it is off by default and its first start takes a few minutes).
   ipcMain.handle("pairing:easy-auto", async () => {
     if (easyConnectAutoTried || !admin?.adminRoutes || admin.state?.easyConnect.state !== "off") return;
@@ -913,3 +960,9 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
     });
   });
 }
+
+const engineUpdateTimer = setInterval(() => {
+  if (checks.claude.state === "done" && !updatedEngines.has(settings.engine)) void maintainEngine(false);
+}, 60_000);
+engineUpdateTimer.unref();
+setInterval(() => updatedEngines.clear(), 24 * 60 * 60_000).unref();

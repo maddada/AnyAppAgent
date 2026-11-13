@@ -20,6 +20,8 @@ gradle.allprojects { p ->
       cfg.keyPassword = p.findProperty('anyappReleaseKeyPassword')?.toString()
       cfg.storeType = 'PKCS12'
       android.buildTypes.getByName('release').signingConfig = cfg
+      android.buildTypes.getByName('release').minifyEnabled = true
+      android.buildTypes.getByName('release').shrinkResources = true
       def abis = (p.findProperty('anyappReleaseAbis')?.toString() ?: 'arm64-v8a,x86_64').split(',').collect { it.trim() }.findAll { it }
       android.splits.abi.enable = true
       android.splits.abi.reset()

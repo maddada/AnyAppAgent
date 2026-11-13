@@ -26,7 +26,7 @@ const JAVA_PACKAGE = "dev.anyappagent";
 const ABIS = ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"];
 const EXE = process.platform === "win32" ? ".exe" : "";
 
-const tools = join(homedir(), ".anyappagent", "tools");
+const tools = process.env.ANYAPP_TOOLS_DIR ?? join(process.env.ANYAPP_STATE_DIR ?? join(homedir(), ".anyappagent"), "tools");
 const paths = { toolsDir: tools, dataDir: join(tools, "unused") };
 const androidHome = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
 if (!androidHome || !existsSync(join(androidHome, "ndk"))) throw new Error("Set ANDROID_HOME to an Android SDK that has an NDK (ndk/<version>).");
@@ -54,7 +54,7 @@ const out = join(tools, "tailcatbridge");
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 const aar = join(out, "tailcatbridge.aar");
-run(join(gobin, `gomobile${EXE}`), ["bind", "-target=android", "-androidapi", "24", "-javapkg", JAVA_PACKAGE, "-o", aar, "."], join(HERE, "tailcat-bridge"));
+run(join(gobin, `gomobile${EXE}`), ["bind", "-trimpath", "-ldflags=-s -w", "-target=android", "-androidapi", "24", "-javapkg", JAVA_PACKAGE, "-o", aar, "."], join(HERE, "tailcat-bridge"));
 
 const unpack = join(out, "unpack");
 mkdirSync(unpack, { recursive: true });

@@ -22,7 +22,7 @@ const PORT = Number(process.env.EC_CHECK_PORT ?? 8795);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ROOT = join(tmpdir(), `anyapp-ec-${Date.now().toString(36)}`);
 const ADMIN = randomBytes(32).toString("base64url");
-const TOOLS = join(homedir(), ".anyappagent", "tools");
+const TOOLS = process.env.ANYAPP_TOOLS_DIR ?? join(homedir(), ".anyappagent", "tools");
 const EXE = process.platform === "win32" ? ".exe" : "";
 mkdirSync(ROOT, { recursive: true });
 const t0 = Date.now();
@@ -52,7 +52,7 @@ const newest = Math.max(...["bridge.go", "interfaces.go", join("cmd", "ecclient"
 if (!existsSync(ecclient) || statSync(ecclient).mtimeMs < newest) {
   say("building the test client from the bridge (Ghostex tailcat-bridge) …");
   const go = await ensureGoToolchain(paths, (m) => say(`[go] ${m}`));
-  const built = spawnSync(go, ["build", "-o", ecclient, "./cmd/ecclient"], { cwd: bridgeDir, env: goEnv(paths), encoding: "utf8" });
+  const built = spawnSync(go, ["build", "-trimpath", "-ldflags=-s -w", "-o", ecclient, "./cmd/ecclient"], { cwd: bridgeDir, env: goEnv(paths), encoding: "utf8" });
   if (built.status !== 0) throw new Error(`building ecclient failed: ${built.stderr}`);
 }
 

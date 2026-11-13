@@ -8,6 +8,8 @@ export type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, Image
 export type CheckState = "checking" | "done" | "needed" | "working" | "skipped" | "problem";
 
 export interface ClaudeCheck {
+  installed?: boolean;
+  maintenance?: string;
   state: CheckState;
   /** Plain words for the user. */
   summary: string;
@@ -112,6 +114,7 @@ export interface CompanionStatus {
 }
 
 export interface Settings {
+  engine: "claude" | "codex";
   onboardingDone: boolean;
   githubSkipped: boolean;
   startWithWindows: boolean;
@@ -128,11 +131,13 @@ export interface Settings {
 export const PHONE_RELEASE_URL = "https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent.apk";
 
 export interface PhoneRelease {
+  universalUrl?: string;
   url: string;
   qrSvg: string;
 }
 
 export interface PhoneDownload {
+  error?: string;
   available: boolean;
   url?: string;
   qrSvg?: string;
@@ -196,6 +201,8 @@ export type BackupAction =
 
 /** What the preload bridge exposes as window.anyapp. */
 export interface AnyAppBridge {
+  engineInstall(): Promise<void>;
+  engineUpdate(): Promise<void>;
   getSnapshot(): Promise<Snapshot>;
   onSnapshot(listener: (snapshot: Snapshot) => void): () => void;
   onChatItem(listener: (item: ChatItem) => void): () => void;

@@ -52,11 +52,15 @@
         "from": "../server",
         "to": "companion/server",
         "filter": [
-          "**/*",
-          "!test/**",
-          "!scripts/e2e.mjs",
-          "!**/*.test.ts",
-          "!**/.vitest-cache/**"
+          "src/**",
+          "bin/**",
+          "easy-connect/**",
+          "package.json",
+          "package-lock.json",
+          "THIRD_PARTY_NOTICES.md",
+          "!**/node_modules/**",
+          "!**/build/**",
+          "!**/test/**"
         ]
       },
       {
@@ -64,7 +68,13 @@
         "to": "companion/shared",
         "filter": [
           "**/*",
-          "!**/.vitest-cache/**"
+          "!**/.vitest-cache/**",
+          "!theme/directions.html",
+          "!theme/system.html",
+          "!theme/renders/**",
+          "!**/node_modules/**",
+          "!**/test/**",
+          "!**/*.test.*"
         ]
       },
       {
@@ -87,20 +97,38 @@
         ]
       },
       {
-        "from": "../app/dist/AnyAppAgent-universal.apk",
-        "to": "phone/AnyAppAgent.apk"
-      },
-      {
         "from": "../shared/theme/mark/windows",
         "to": "mark",
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "../template-kotlin",
+        "to": "companion/template-kotlin",
+        "filter": [
+          "**/*",
+          "!**/node_modules/**",
+          "!**/build/**",
+          "!**/.gradle/**"
+        ]
+      },
+      {
+        "from": "../template-exact",
+        "to": "companion/template-exact",
+        "filter": [
+          "**/*",
+          "!**/node_modules/**",
+          "!**/build/**",
+          "!**/.gradle/**"
+        ]
       }
     ],
     "win": {
       "signtoolOptions": {
-        "signingHashAlgorithms": ["sha256"],
+        "signingHashAlgorithms": [
+          "sha256"
+        ],
         "rfc3161TimeStampServer": "http://time.certum.pl"
       },
       "target": [
@@ -123,6 +151,11 @@
       "installerIcon": "../shared/theme/mark/windows/anyappagent.ico",
       "uninstallerIcon": "../shared/theme/mark/windows/anyappagent.ico"
     },
-    "afterPack": "./dev/after-pack.cjs"
+    "afterPack": "./dev/after-pack.cjs",
+    "electronLanguages": [
+      "en-US",
+      "en-GB",
+      "ar"
+    ]
   }
 }

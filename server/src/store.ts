@@ -9,6 +9,8 @@ export interface AppRecord {
   app: App;
   dir: string;
   sessionId?: string;
+  sessionEngine?: "claude" | "codex";
+  engineSessions?: Partial<Record<"claude" | "codex", string>>;
   iconStamp?: string;
   deleted?: boolean;
 }

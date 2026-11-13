@@ -13,8 +13,8 @@ export const TEMPLATE_DIR = process.env.ANYAPP_TEMPLATE_DIR
   : path.resolve(BUILDER_DIR, '..', 'template');
 
 /** Server state and the signing key (never inside the repository). ANYAPP_HOME overrides it. */
-export const ANYAPP_HOME = process.env.ANYAPP_HOME
-  ? path.resolve(process.env.ANYAPP_HOME)
+export const ANYAPP_HOME = process.env.ANYAPP_HOME || process.env.ANYAPP_STATE_DIR
+  ? path.resolve(process.env.ANYAPP_HOME || process.env.ANYAPP_STATE_DIR)
   : path.join(os.homedir(), '.anyappagent');
 
 export const CACHE_DIR = path.join(ANYAPP_HOME, 'cache');
