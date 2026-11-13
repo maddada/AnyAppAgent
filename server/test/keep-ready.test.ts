@@ -66,7 +66,7 @@ async function setup() {
           cloud.key = dec.decode(await openWith(transport.key, body.box as Sealed, `appkey-ready:${"k".repeat(32)}`));
           return { stored: true };
         case "/pc/pull-back/list":
-          return { apps: cloud.pcOff ? [{ appId: "k".repeat(32), pcAppId: app.id, packageName: "com.anyapp.teatimer", repo: "octo/anyapp-cloud-teatimer", buildHigh: cloud.buildHigh, busy: cloud.busy }] : [] };
+          return { switchOn: cloud.switchOn, apps: cloud.pcOff ? [{ appId: "k".repeat(32), pcAppId: app.id, packageName: "com.anyapp.teatimer", repo: "octo/anyapp-cloud-teatimer", buildHigh: cloud.buildHigh, busy: cloud.busy }] : [] };
         case "/pc/pull-back/chat":
           return { items: [{ id: "u9", appId: "k", seq: 9, kind: "user", text: "Add a green tea preset", createdAt: "", updatedAt: "" }, { id: "a9", appId: "k", seq: 10, kind: "assistant", text: "Added a green tea preset.", createdAt: "", updatedAt: "" }] as ChatItem[] };
         case "/pc/pull-back/done":
@@ -101,6 +101,17 @@ describe("keeping apps ready in the cloud", () => {
     link.call.mockClear();
     await ready.keep(app.id);
     expect(link.call.mock.calls.map((c) => c[0])).toEqual(["/pc/ready"]);
+  });
+
+  test("the switch turned on after the last version: the next regular check keeps the apps ready", async () => {
+    const { bare, cloud, ready } = await setup();
+    cloud.switchOn = false;
+    await ready.keepAll();
+    expect(cloud.pushed).toBeNull();
+    cloud.switchOn = true;
+    await ready.pullBackAll();
+    await vi.waitFor(() => expect(cloud.key).not.toBeNull());
+    expect(git(bare, "rev-parse", "main")).toBe(cloud.pushed);
   });
 
   test("a change made in the cloud comes back: commits, chat rows marked, the build number; changes wait until then", async () => {

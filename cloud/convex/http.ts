@@ -443,7 +443,10 @@ pcRoute('/pc/ready/key', 'move', async (ctx, req, pc) => {
     return json(409, { error: sentence(e) });
   }
 });
-pcRoute('/pc/pull-back/list', 'move', async (ctx, _req, pc) => json(200, { apps: await ctx.runQuery(internal.pcoff.toPullBack, { userId: pc.userId, linkId: pc.linkId }) }));
+// The switch rides along, so a PC that saw it off starts keeping its apps ready within one check.
+pcRoute('/pc/pull-back/list', 'move', async (ctx, _req, pc) =>
+  json(200, { apps: await ctx.runQuery(internal.pcoff.toPullBack, { userId: pc.userId, linkId: pc.linkId }), switchOn: await ctx.runQuery(internal.pcoff.switchOf, { userId: pc.userId }) }),
+);
 pcRoute('/pc/pull-back/chat', 'move', async (ctx, req, pc) => {
   const app = await readyRow(ctx, pc, field(await bodyOf(req), 'appId'));
   return json(200, await ctx.runQuery(internal.pcoff.pullBackChat, { appId: app._id }));

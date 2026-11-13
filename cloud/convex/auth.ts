@@ -51,9 +51,10 @@ const ResendOTP = Resend({
       }),
     });
     if (!res.ok) {
-      // Never log the code; Resend's error says why (for example an address it may not send to).
-      const why = await res.text();
-      throw new Error(`Could not send the code (${res.status}): ${why.slice(0, 200)}`);
+      // Never log the code. Resend's answer (for example an address it may not send to yet) goes to
+      // the server log; the person gets a plain sentence.
+      console.error(`Resend refused the sign-in email (${res.status}): ${(await res.text()).slice(0, 300)}`);
+      throw new Error('We could not send a code to that address. Check it, or continue with Google.');
     }
   },
 });
