@@ -12,7 +12,8 @@ Status: **the agreed plan** (decisions of 12 Nov 2026, section 12). **Milestone 
 12 Nov 2026**: the box image, builds on a box, an agent turn with the key only in the Secrets proxy,
 Convex sign-in, the phone round trip, the repo made with the person's GitHub user token, and push
 and clone with a one-repo token through the proxy are proven (section 10, `cloud/README.md`). Facts were
-checked on the web on **12 Nov 2026**; each has its source link. Not legal advice: section 1 gives
+checked on the web on **12 Nov 2026**, with Instabox pricing and limits rechecked on **13 Nov 2026**
+and its support answer recorded below; each has its source link. Not legal advice: section 1 gives
 the texts and the one line that leaves any doubt.
 
 What the user decided (it overrides `C:\aa\ideas\cloud-changes.html` and the first draft of this
@@ -272,7 +273,9 @@ works, it is just billed to their Console balance.
 2. **Their own Anthropic key** (way B, Ultra and Max credit included) is offered next to it on the
    **Own key plan**, $6 a month: Anthropic bills them for the AI, we charge the plan.
 3. **No email to Anthropic and no agreement sought.** Ways A, C and F are out.
-4. **Instabox** was asked in writing about terms 2(b)(iii) (section 8); that email was sent.
+4. **Instabox terms question closed** (support answer recorded 13 Nov 2026): one machine per end
+   user's app, run by our agent, is allowed under their Terms, including clause 2(b)(iii).
+   More than one machine needs a paid plan; support recommends starting with Pro (section 8).
 
 ## 2. How people pay
 
@@ -567,7 +570,11 @@ own GitHub account (the `cloud` in the name keeps it apart from a PC app's `anya
   cloned it back in 0.8 s and built it in 208 s. So the proxy carries it: Convex mints the token
   and stores it as that box's Secret (an Instabox workspace key in Convex does that headless), and
   replaces its value before the hour runs out (the placeholder stays the same, running boxes get
-  the new value in about 10 s). Secrets are org-wide names, so each box gets its own
+  the new value in about 10 s). **Hourly token rotation confirmed by Instabox support** (answer
+  recorded 13 Nov 2026): a proxy Secret supports replacing the token every hour, with the same
+  placeholder and about 10 s propagation to running machines. Refresh before expiry to allow
+  that propagation. Reference: https://instabox.sh/docs/security/secrets.
+  Secrets are org-wide names, so each box gets its own
   (`GH_<boxId>`). **Built in milestone 3, without the proxy for now:** Secrets can only be set by a
   workspace's `workspace:admin` key, and the dev account is a personal org on the Free plan, so the
   runner asks Convex (`/runner/github-token`) for a fresh one-repo token at each push and clone and
@@ -953,9 +960,13 @@ Assumptions:
   month get no credits and cost nothing.
 - **The first app cap**: as many new accounts a month as there are paying people, each giving away
   about $0.26 once, so **$0.26 per paying person** a month.
-- Fixed fees without machine usage (counted per person above): Instabox Pro $20 (its $20 of
-  included usage covers up to about 100 people) or Builder $100 at 1000; Convex $0, about $3, about
-  $30; the key service, domain, email codes and GitHub App about $1.
+- Fixed fees: **Instabox Pro $20 a month** at every population below; Convex $0, about $3, about
+  $30; the key service, domain, email codes and GitHub App about $1. Pro includes $20 of monthly
+  usage credit. These conservative tables charge the full fixed fee plus gross machine usage
+  above, without subtracting that credit: the actual Instabox bill is $20 + max(0, eligible
+  usage after included allowances - $20). The credit offsets Instabox usage only, never AI.
+  Customer count alone does not require Builder: these scenarios assume at most 500 existing
+  machines, 100 running and 30 starts a minute. Reprice if peak demand needs a larger plan.
 
 | A month, everyone paying on Starter, typical use | Monthly ($12) |  |  | Yearly ($120, so $10 a month) |  |  |
 | ------- | --------- | ---------- | ----------- | --------- | ---------- | ----------- |
@@ -965,9 +976,9 @@ Assumptions:
 | AI and machines for paying people (16 credits, $3.26 each) | $33 | $326 | $3,260 | $33 | $326 | $3,260 |
 | Free credit (3 free accounts per payer, $0.60 each) | $18 | $180 | $1,800 | $18 | $180 | $1,800 |
 | The first app cap ($0.26 per payer) | $3 | $26 | $260 | $3 | $26 | $260 |
-| Instabox plan, Convex, the rest | $21 | $24 | $131 | $21 | $24 | $131 |
-| **What we keep** | about **$39** | about **$579** | about **$5,899** | about **$23** | about **$413** | about **$4,234** |
-| The same if every payer uses all 30 credits ($6.00 each) | about $12 | about $305 | about $3,159 | about minus $5 | about $139 | about $1,494 |
+| Instabox plan, Convex, the rest | $21 | $24 | $51 | $21 | $24 | $51 |
+| **What we keep** | about **$39** | about **$579** | about **$5,979** | about **$23** | about **$413** | about **$4,314** |
+| The same if every payer uses all 30 credits ($6.00 each) | about $12 | about $305 | about $3,239 | about minus $5 | about $139 | about $1,574 |
 
 Pro and Max keep more per person at full use (yearly Pro about $4.10, yearly Max about $10.50 a
 month after the free tier and the cap); yearly Starter at full use is the thinnest plan, about $1.63
@@ -979,18 +990,34 @@ a person. Yearly money arrives up front, so cash comes early, but it is earned m
 | Plans paid | $60 | $600 | $6,000 | $50 | $500 | $5,000 |
 | Card fees ($0.47 a month; yearly $0.17) | $5 | $47 | $470 | $2 | $17 | $170 |
 | Machines (about $0.10 each; $1.02 at full fair use) | $1 | $10 | $100 | $1 | $10 | $100 |
-| Instabox plan, Convex, the rest | $21 | $24 | $131 | $21 | $24 | $131 |
-| **What we keep** | about **$33** | about **$519** | about **$5,299** | about **$26** | about **$449** | about **$4,599** |
+| Instabox plan, Convex, the rest | $21 | $24 | $51 | $21 | $24 | $51 |
+| **What we keep** | about **$33** | about **$519** | about **$5,379** | about **$26** | about **$449** | about **$4,679** |
 
-**The development budget** (about $3,000 a month of profit): reached at about **520 paying people**
-on monthly Starter with typical use (about **950** if every one of them uses every credit), and at
-about **720** if all of them pay yearly (about 1,900 at full use). A real mix of plans lands between.
+**The development budget** (about $3,000 a month of profit): with $51 of fixed costs and Pro's
+capacity limits respected, reached at about **510 paying people** on monthly Starter with typical
+use (about **930** at full credit use), and about **700** yearly (about **1,880** at full use).
+A real mix of plans lands between.
 At 100 people the business keeps about $140 to $579 a month; $3,000 at 100 people would take about
 $37 a month from each.
 The free tier is the cost to watch: each active free account costs up to $0.60 a month, so about 13
 active free accounts per paying person on monthly Starter (10 on yearly Starter) eat the whole profit
 at typical use. If that
 happens, the allowance is lowered or tied to activity (one constant).
+
+**Pro fee coverage, rechecked 13 Nov 2026.** Under the assumptions above, monthly Starter leaves
+$12 - $0.65 - $3.26 - $1.80 - $0.26 = **$6.03 per payer** before fixed costs: **4 paying users**
+cover the $20 Pro fee. At full 30-credit use, $3.29 each needs **7**. Yearly Starter leaves
+$4.365 at typical use or $1.625 at full use, needing **5** or **13** respectively. These counts
+cover Pro alone, not all overhead. Own key needs **4 monthly or 5 yearly** payers at typical use,
+or **5 monthly or 6 yearly** at the full 30-hour allowance ($1.02 compute each), before other costs.
+
+**Pricing still holds:** the $0.20 credit cost basis, all customer plan prices and the per-change
+margins stay unchanged. Instabox's fixed subscription is paid from contribution, not added to each
+change's credit meter. Even yearly Max, the lowest credit price ($50 / 180 = about $0.278), remains
+above $0.20. This is the existing planning model, not a guarantee of net profit: free grants,
+first-app subsidies, refunds and overhead still have to be covered. **Changed numbers:** the
+1,000-payer scenarios now use Pro instead of an automatic Builder upgrade, reducing fixed costs
+from $131 to $51 and raising each result by $80; the development-budget counts follow that change.
 
 Instabox's paused disk is the one cost that grows fastest if boxes are not snapshotted;
 snapshotting after an hour keeps the average under 1 GiB per person.
@@ -1009,10 +1036,28 @@ nothing. Competitors' prices (12 Nov 2026): section 1, "What others do".
 
 ### Instabox (instabox.sh)
 
+**Support answer recorded and public pricing rechecked 13 Nov 2026.** The terms and rotation
+confirmations below are from the support reply supplied by the coordinator. Pricing sources:
+https://instabox.sh/pricing (public page), https://instabox.sh/docs/pricing.md (its documented
+Markdown pricing reference), https://instabox.sh/docs/limits.md. No account changes were made.
+
+| Plan | Monthly fee and included usage credit | Machines: total / running | Largest machine | Disk: per machine / included across account | Egress per month | Starts per minute | Support |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Pro | $20 + usage; $20 credit | 500 / 100 | 8 vCPU / 16 GiB | 200 GiB / 200 GiB | 1 TiB | 30 | Email; no SLA |
+| Team | $500 + usage; $500 credit | Unlimited / 500 | 32 vCPU / 64 GiB | 1 TiB / 5 TiB | 50 TiB | 100 | Priority email and SLAs |
+
+Both have unlimited snapshots and members, no stored-data cap, configurable idle pause (5 to 30
+minutes or off), and unlimited runtime by default. Usage credits reset monthly. Above included
+allowances, disk is $0.00011/GiB-hour (about $0.08/GiB-month) and egress $0.02/GiB; compute remains
+$0.004/vCPU-hour plus $0.00225/GiB-hour, billed per second while running. Snapshots and ingress
+are free. Shared API limits still apply, including 32 concurrent exec-family requests and 20
+active API keys. Team adds capacity and SLA support; it is not required just to serve end users.
+
 - **What**: one Linux machine per AI agent, a Firecracker microVM, Debian 13 amd64 with systemd,
   sudo, apt and Docker. Run by InsForge AI, Inc. (Delaware). First blog post 2 Sep 2026; paid plans
   since 20 Oct 2026; access by waitlist, "Pro users skip the waitlist entirely". SOC 2 Type II
-  reported. **No status page found**; SLAs only on Team and above; the terms say no warranty "that a
+  reported. **Status page confirmed by support: https://instabox.instatus.com**; SLAs only on
+  Team and Enterprise; the terms say no warranty "that a
   Sandbox or its data will not be lost" (one reason the code lives on GitHub and the provider sits
   behind an interface). Sources: https://instabox.sh/docs/limits.md, https://instabox.sh/blog.md,
   https://instabox.sh/blog/workos.md, https://instabox.sh/terms.
@@ -1047,14 +1092,20 @@ nothing. Competitors' prices (12 Nov 2026): section 1, "What others do".
   `github.com` and `api.github.com`). Saving a Secret needs an org owner signed in, or a
   workspace's `workspace:admin` API key: "a personal org's API key cannot carry workspace:admin"
   (the spike's key was refused with `missing_scope`; the signed-in CLI saved it). Proven with the
-  agent in the spike (section 2, "The Own key plan"); the GitHub token through it is still to
-  prove. The proxy intercepts all outbound HTTPS (its CA is in the box's trust stores), with or
+  agent and GitHub push/clone in the spike (sections 2 and 3). **Hourly replacement confirmed by
+  support:** the placeholder stays the same and the updated token reaches running machines in
+  about 10 seconds (https://instabox.sh/docs/security/secrets). This confirms provider support,
+  not a new live rotation test; the dev runner fallback in section 3 remains as documented.
+  The proxy intercepts all outbound HTTPS (its CA is in the box's trust stores), with or
   without Secrets.
 - **Terms** (https://instabox.sh/terms, 9 Nov 2026): 2(b)(iii) the customer may not "rent, lease,
   lend, sell, sublicense, or otherwise make the Services available to any third party except as
   expressly permitted", while 4(c) speaks of the customer's "relationship with the end users of
-  those services". Our agent working for a person's app in a box is closer to 4(c), but the person's
-  prompts do run commands there. Asked in writing (`C:\aa\ideas\cloud-emails.md`).
+  those services". **Closed by Instabox support's reply:** the described use, one machine per
+  end user's app run by our agent, is fine under their Terms. More than one machine needs a paid
+  plan; they suggest Pro. The earlier request is in `C:\aa\ideas\cloud-emails.md`; no further
+  terms answer is pending for this use. Pro has no SLA, so availability and recovery remain
+  operational risks despite this terms confirmation.
 
 ### GitHub Apps
 
@@ -1426,14 +1477,16 @@ field per value (or into the file the coordinator names), and tell the coordinat
 **Never paste a key, secret or private key in a chat.** Steps marked **Spike** are needed before
 milestone 0 starts; **Later** can wait.
 
-1. **Instabox's answer** (done: the email in `C:\aa\ideas\cloud-emails.md` was sent to
-   support@instabox.sh). Forward the answer to the coordinator when it comes. No email to Anthropic.
+1. **Instabox's answer: received, closed** (recorded 13 Nov 2026). Support permits the described
+   use under clause 2(b)(iii), confirms hourly proxy Secret rotation, and recommends Pro for
+   multiple machines (section 8). No further answer is pending. No email to Anthropic.
 2. **Convex** (Spike, Free plan). Sign up at https://dashboard.convex.dev. Create a project named
    `anyappagent-cloud`, region **US East**. Hand over: the deployment URL (`https://<name>.convex.cloud`)
    and a **development deploy key** (project Settings, Deploy keys).
 3. **Instabox** (Spike). Sign up at https://dashboard.instabox.sh. The Free plan (one 4 vCPU / 8 GiB
-   machine) is enough for the spike if the invite arrives; if the waitlist blocks you, **Pro, $20 a
-   month** (skips the waitlist, includes $20 of usage). Create an API key at
+   machine) remains the development plan because the cloud build runs one change at a time.
+   **Launch step: Upgrade Instabox to Pro before more than one user's machine can run at once.**
+   Pro is $20 a month with $20 of usage credit (section 8). Create an API key at
    https://dashboard.instabox.sh/dashboard/api-keys with `machines:read`, `machines:write`,
    `machines:delete` and `images:*`. Hand over: the API key (`ibk_...`) and which plan you are on.
 4. **Anthropic API key** (Spike, about $5 of credit). At https://platform.claude.com make a key with a
@@ -1483,8 +1536,9 @@ milestone 0 starts; **Later** can wait.
 14. **Resend domain** (Later: with item 10). Verify the real domain in Resend so email codes reach
     everyone, not only you.
 
-Costs for the spike: nothing, or $20 for Instabox Pro if the waitlist blocks, plus about $5 of
-Anthropic credit (none with Max or Ultra credit).
+Costs for development: Instabox stays on Free, plus about $5 of Anthropic credit (none with Max
+or Ultra credit). Pro is a launch prerequisite for multiple users' machines running at once,
+not a development upgrade.
 
 ## 12. Decisions (12 Nov 2026)
 
