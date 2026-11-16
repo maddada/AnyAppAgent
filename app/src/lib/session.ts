@@ -12,7 +12,6 @@ import { watchCloudChat, watchCloudHelperChat } from "./cloudSync";
 import {
   dropPlace,
   getState,
-  removeApp,
   replaceChat,
   setApps,
   setState,
@@ -28,6 +27,7 @@ import {
 import { loadPairing, loadPrefs, savePairing, savePrefs, type Pairing, type Prefs } from "./storage";
 import { autoInstallIfNew, installerHooks, onApkReady, onAppReport, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
 import { updateKeepAlive } from "./keepalive";
+import { loadTrash, onAppDeleted } from "./manage";
 
 // ---------- startup, pairing
 
@@ -625,8 +625,11 @@ function handleEvent(event: ServerEvent) {
       updateKeepAlive();
       break;
     case "app.deleted":
-      removeApp(event.appId);
+      onAppDeleted(event.appId, event.uninstall);
       updateKeepAlive();
+      break;
+    case "trash.updated":
+      if (getState().trash) void loadTrash();
       break;
     case "chat.item":
       upsertChatItems(event.item.appId, [event.item]);

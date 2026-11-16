@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppState, PermissionsAndroid, Platform, Pressable, ScrollView, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,6 +7,9 @@ import type { LucideIcon } from "lucide-react-native";
 import Constants from "expo-constants";
 import { AnyAppNative } from "anyapp-native";
 import { AiSettingsGroup } from "@/ui/AiSettings";
+import { AppIcon } from "@/ui/AppIcon";
+import { emptyTrash, loadTrash, restoreApp, setHidden } from "@/lib/manage";
+import type { App } from "@/lib/protocol";
 import { CareSettings } from "@/ui/Trust";
 import { displayAddress } from "@/lib/address";
 import { usesEasyConnect } from "@/lib/route";
@@ -144,6 +147,10 @@ export default function Settings() {
           />
         </Group>
 
+        {pairing ? <HiddenAppsGroup /> : null}
+
+        {pairing ? <RecentlyDeletedGroup /> : null}
+
         {pairing ? <Button testID="disconnect" label="Disconnect from your PC" variant="quiet" onPress={() => setConfirm(true)} /> : null}
 
         <T variant="caption" color="textTertiary" style={{ textAlign: "center" }}>
@@ -192,6 +199,141 @@ function CareGroup() {
       </View>
     </Group>
   );
+}
+
+/** Pin, hide and delete: apps hidden from the grid, with Unhide. */
+function HiddenAppsGroup() {
+  const apps = useStore((s) => s.apps);
+  const online = useStore((s) => s.connection === "online");
+  const hidden = useMemo(() => Object.values(apps).filter((a) => a.hidden).sort((a, b) => a.name.localeCompare(b.name)), [apps]);
+  const [busy, setBusy] = useState<string | null>(null);
+  return (
+    <Group title="Hidden apps">
+      <View testID="hidden-apps" style={{ padding: space.lg, gap: space.xs }}>
+        <T variant="caption" color="textSecondary">
+          {hidden.length > 0 ? "Hidden apps are not in your app list. They still work on this phone." : "No hidden apps. Hide one from its options."}
+        </T>
+      </View>
+      {hidden.map((app) => (
+        <AppRow key={app.id} app={app} sub={app.latestApk ? `Version ${app.latestApk.number}` : "No version yet"}>
+          <Button
+            testID={`unhide-${app.slug}`}
+            label="Unhide"
+            variant="quiet"
+            small
+            busy={busy === app.id}
+            disabled={!online}
+            onPress={async () => {
+              setBusy(app.id);
+              await setHidden(app, false).catch(() => undefined);
+              setBusy(null);
+            }}
+          />
+        </AppRow>
+      ))}
+    </Group>
+  );
+}
+
+/** Pin, hide and delete: Recently deleted, kept until the person empties it. Nothing on an older PC. */
+function RecentlyDeletedGroup() {
+  const trash = useStore((s) => s.trash);
+  const online = useStore((s) => s.connection === "online");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  useEffect(() => {
+    if (online) void loadTrash();
+  }, [online]);
+  if (!trash) return null;
+  return (
+    <Group title="Recently deleted">
+      <View testID="recently-deleted" style={{ padding: space.lg }}>
+        <T variant="caption" color="textSecondary">
+          {trash.length > 0
+            ? "Apps you delete wait here until you empty it. Restore one and it comes back with its chat and versions."
+            : "Nothing here. Apps you delete wait here until you empty it."}
+        </T>
+      </View>
+      {trash.map((app) => (
+        <AppRow key={app.id} app={app} sub={deletedWhen(app.deletedAt)}>
+          <Button
+            testID={`restore-${app.slug}`}
+            label="Restore"
+            variant="quiet"
+            small
+            busy={busy === app.id}
+            disabled={!online}
+            onPress={async () => {
+              setBusy(app.id);
+              await restoreApp(app.id).catch(() => undefined);
+              setBusy(null);
+            }}
+          />
+        </AppRow>
+      ))}
+      {trash.length > 0 ? (
+        <>
+          <Divider />
+          <View style={{ padding: space.lg, gap: space.md }}>
+            <T variant="caption" color={confirm ? "text" : "textSecondary"}>
+              {confirm ? "Empty Recently deleted? This can't be undone." : "Empty deletes them for good from this PC. Their code stays on GitHub."}
+            </T>
+            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: space.sm }}>
+              {confirm ? <Button testID="empty-cancel" label="Cancel" variant="quiet" small onPress={() => setConfirm(false)} /> : null}
+              <Button
+                testID={confirm ? "empty-confirm" : "empty-trash"}
+                label="Empty"
+                variant="problem"
+                small
+                busy={busy === "empty"}
+                disabled={!online}
+                onPress={async () => {
+                  if (!confirm) return setConfirm(true);
+                  setBusy("empty");
+                  await emptyTrash().catch(() => undefined);
+                  setBusy(null);
+                  setConfirm(false);
+                }}
+              />
+            </View>
+          </View>
+        </>
+      ) : null}
+    </Group>
+  );
+}
+
+/** An app in a Settings list: its icon and name with a line under it, the button below on the right. */
+function AppRow({ app, sub, children }: { app: App; sub: string; children: React.ReactNode }) {
+  return (
+    <>
+      <Divider />
+      <View style={{ paddingHorizontal: space.lg, paddingVertical: space.md, gap: space.sm }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+          <AppIcon app={app} size={size.appIconSmall} />
+          <View style={{ flex: 1, gap: space.hair }}>
+            <T variant="body" numberOfLines={1}>
+              {app.name}
+            </T>
+            <T variant="caption" color="textTertiary">
+              {sub}
+            </T>
+          </View>
+        </View>
+        {/* Design rule (AGENTS.md): the words keep the full width; the button sits below them, on the right. */}
+        <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>{children}</View>
+      </View>
+    </>
+  );
+}
+
+function deletedWhen(iso: string | undefined): string {
+  if (!iso) return "Deleted";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return "Deleted today";
+  if (days === 1) return "Deleted yesterday";
+  if (days < 30) return `Deleted ${days} days ago`;
+  return `Deleted on ${new Date(iso).toLocaleDateString()}`;
 }
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {

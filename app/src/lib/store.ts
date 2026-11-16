@@ -4,6 +4,7 @@ import { appAction as sharedAppAction, Drafts, mergeHelpers, mergeItems, replace
 import type { Attachment } from "@/chat/attachments";
 import { Client } from "./api";
 import { CloudClient, isCloudApp, isCloudId, type AppClient } from "./cloud";
+import { byLastChange, visibleApps } from "./pins";
 import type { AccountLinkInfo, App, CareState, ChatItem, Suggestion, TodoItem, WorkerInfo } from "./protocol";
 import { defaultPrefs, type Pairing, type Prefs } from "./storage";
 
@@ -72,6 +73,8 @@ export interface State {
   pcAccount: AccountLinkInfo | null;
   /** The desktop asked this phone to link its PC (account.asked): the PC's name until answered. */
   accountAsked: string | null;
+  /** Recently deleted on the PC (loaded when Settings opens); null until loaded or on an older PC. */
+  trash: App[] | null;
 }
 
 export const useStore = create<State>(() => ({
@@ -102,6 +105,7 @@ export const useStore = create<State>(() => ({
   cloudAppsLoaded: false,
   pcAccount: null,
   accountAsked: null,
+  trash: null,
 }));
 
 export const getState = useStore.getState;
@@ -170,13 +174,9 @@ export function removeApp(appId: string) {
 }
 
 /** Newest first, by last change. */
+/** The grid's apps, last changed first (pins aside: see homeSections in pins.ts). */
 export function sortedApps(apps: Record<string, App>): App[] {
-  // A PC copy that moved to the cloud is read-only there; the grid shows the cloud's app instead.
-  return Object.values(apps)
-    .filter((a) => !(a.move?.to === "cloud" && a.move.state === "done"))
-    // The cloud's row of a PC app (a change while the PC is off) opens from its chat, not the grid.
-    .filter((a) => !(isCloudId(a.id) && a.cloud?.place === "pc"))
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  return visibleApps(apps).sort(byLastChange);
 }
 
 // ---------- chat

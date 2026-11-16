@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindowDimensions } from "react-native";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Animated, PanResponder, Pressable, RefreshControl, ScrollView, Switch, TextInput, View, useWindowDimensions, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, CircleUser, Download, EllipsisVertical, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
@@ -14,7 +14,9 @@ import { askForNotificationsOnce, reconnectNow, unpair } from "@/lib/session";
 import { cloudAvailable } from "@/lib/cloud";
 import { takeShare } from "@/lib/sharedIn";
 import { SendAppPanel } from "@/ui/SendApp";
-import { appAction, getState, placeOf, removeApp, sortedApps, useClientFor, useStore } from "@/lib/store";
+import { appAction, getState, placeOf, useStore } from "@/lib/store";
+import { canPin, dropPin, homeSections, slotAt, type Rect } from "@/lib/pins";
+import { deleteApp, pinApp, setHidden, setPinned, unpinApp } from "@/lib/manage";
 import { AppCredits, AppSigning, credits, PlaceMark } from "@/ui/CloudBits";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
@@ -36,8 +38,6 @@ const SHEET_ICON = 56;
 const TILE_TEXT_MAX_SCALE = 1.6;
 /** The chat and options buttons on a tile: 48 dp, a bigger target than the 44 dp minimum. */
 const TILE_BUTTON = 48;
-
-type Tile = { kind: "new" } | { kind: "app"; app: App };
 
 export default function Home() {
   const pairing = useStore((s) => s.pairing);
@@ -94,6 +94,30 @@ export default function Home() {
   return <AppGrid />;
 }
 
+/** One app being dragged (Pin, hide and delete): where it came from and where it would land. */
+interface Drag {
+  app: App;
+  from: "pinned" | "rest";
+  grabX: number; // the finger's place inside the tile
+  grabY: number;
+  height: number;
+  target: { section: "pinned" | "rest"; index: number };
+}
+
+/** Held and not moved yet: a lift of the finger opens the options sheet; a move starts the drag. */
+interface Armed {
+  app: App;
+  from: "pinned" | "rest";
+  grabX: number;
+  grabY: number;
+  height: number;
+  moved: boolean;
+}
+
+/** How close to the top or bottom edge a dragged tile scrolls the grid, and how fast. */
+const EDGE = 72;
+const EDGE_SPEED = 14;
+
 function AppGrid() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -101,10 +125,120 @@ function AppGrid() {
   const apps = useStore((s) => s.apps);
   const [selected, setSelected] = useState<{ id: string; manage: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [drag, setDragState] = useState<Drag | null>(null);
+  const [armed, setArmedState] = useState(false);
+  const dragRef = useRef<Drag | null>(null);
+  const armedRef = useRef<Armed | null>(null);
+  const [pos] = useState(() => new Animated.ValueXY());
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const scrollY = useRef(0);
+  const rootRef = useRef<React.ComponentRef<typeof View>>(null);
+  const frame = useRef({ rootTop: 0, svTop: 0, svHeight: 0 });
+  // Content coordinates of the sections and of each slot (index order), from onLayout.
+  const layout = useRef({ pinnedY: 0, boundaryY: Number.POSITIVE_INFINITY, pinnedSlots: [] as Rect[] });
+  const finger = useRef({ x: 0, y: 0 });
+  // The PanResponder is made once: it reads the current Pinned section through this ref.
+  const pinnedRef = useRef<string[]>([]);
+  const edgeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // The user's apps first, newest first; the New app slot closes the grid (as in the renders).
-  const tiles: Tile[] = useMemo(() => [...sortedApps(apps).map((app) => ({ kind: "app" as const, app })), { kind: "new" }], [apps]);
+  const setDrag = (d: Drag | null) => {
+    dragRef.current = d;
+    setDragState(d);
+  };
+
+  const { pinned, rest } = useMemo(() => homeSections(apps), [apps]);
+  const pinnedNow = pinned.map((a) => a.id);
+  // While dragging, the dragged tile stays where it is (dimmed: the view under the finger must stay
+  // mounted, or Android drops the rest of the touch) and a dashed slot shows where it would land.
+  const fromIndex = drag && drag.from === "pinned" ? pinnedNow.indexOf(drag.app.id) : -1;
+  const at = drag && drag.target.section === "pinned" ? drag.target.index : -1;
+  const landing = at < 0 || (fromIndex >= 0 && (at === fromIndex || at === fromIndex + 1)) ? -1 : at;
+  const showPinned = pinned.length > 0 || !!drag;
+  useLayoutEffect(() => {
+    if (!showPinned) layout.current.boundaryY = Number.POSITIVE_INFINITY;
+    // The pinned slots are read as they were when the drag started, so the landing slot moving
+    // tiles around never changes the target under a still finger.
+    if (!dragRef.current) layout.current.pinnedSlots.length = Math.max(pinned.length, 1);
+    pinnedRef.current = pinnedNow;
+  });
   const tileWidth = (width - size.screenGutter * 2 - size.gridGap) / 2;
+
+  /** The target under the finger (window coordinates). */
+  const targetAt = (pageX: number, pageY: number): Drag["target"] => {
+    const contentY = pageY - frame.current.svTop + scrollY.current;
+    const L = layout.current;
+    if (contentY >= L.boundaryY) return { section: "rest", index: 0 };
+    const slots = L.pinnedSlots.filter(Boolean).map((r) => ({ ...r, x: r.x + size.screenGutter, y: r.y + L.pinnedY }));
+    const index = slotAt(slots, pageX, contentY);
+    return { section: "pinned", index: Math.max(0, index) };
+  };
+
+  const follow = (pageX: number, pageY: number) => {
+    finger.current = { x: pageX, y: pageY };
+    const d = dragRef.current;
+    if (!d) return;
+    pos.setValue({ x: pageX - d.grabX, y: pageY - d.grabY - frame.current.rootTop });
+    const target = targetAt(pageX, pageY);
+    if (target.section !== d.target.section || target.index !== d.target.index) setDrag({ ...d, target });
+  };
+
+  const stopEdge = () => {
+    if (edgeTimer.current) clearInterval(edgeTimer.current);
+    edgeTimer.current = null;
+  };
+  const edgeScroll = (pageY: number) => {
+    const { svTop, svHeight } = frame.current;
+    const dir = pageY < svTop + EDGE ? -1 : pageY > svTop + svHeight - EDGE ? 1 : 0;
+    if (dir === 0) return stopEdge();
+    if (edgeTimer.current) return;
+    edgeTimer.current = setInterval(() => {
+      const next = Math.max(0, scrollY.current + dir * EDGE_SPEED);
+      scrollRef.current?.scrollTo({ y: next, animated: false });
+      scrollY.current = next;
+      follow(finger.current.x, finger.current.y);
+      const y = finger.current.y;
+      if (!(y < svTop + EDGE || y > svTop + svHeight - EDGE)) stopEdge();
+    }, 16);
+  };
+
+  const finish = (commit: boolean) => {
+    stopEdge();
+    const d = dragRef.current;
+    armedRef.current = null;
+    setArmedState(false);
+    setDrag(null);
+    if (!commit || !d) return;
+    const now = pinnedRef.current;
+    const next = d.target.section === "pinned" ? dropPin(now, d.app.id, d.target.index) : d.from === "pinned" ? dropPin(now, d.app.id, null) : now;
+    if (next.join() === now.join()) return;
+    AnyAppNative?.haptic?.();
+    void setPinned(next).catch(() => undefined);
+  };
+
+  // Made once. Its handlers only read refs when a touch moves, never while rendering.
+  // eslint-disable-next-line react-hooks/refs
+  const [pan] = useState(() =>
+    PanResponder.create({
+      // After a long press, the first real move takes the touch from the tile and starts the drag.
+      onMoveShouldSetPanResponderCapture: (e) => {
+        const a = armedRef.current;
+        if (!a || dragRef.current) return !!dragRef.current;
+        const { pageX, pageY } = e.nativeEvent;
+        if (Math.hypot(pageX - finger.current.x, pageY - finger.current.y) < 6) return false;
+        a.moved = true;
+        setDrag({ app: a.app, from: a.from, grabX: a.grabX, grabY: a.grabY, height: a.height, target: { section: a.from, index: a.from === "pinned" ? Math.max(0, pinnedRef.current.indexOf(a.app.id)) : 0 } });
+        follow(pageX, pageY);
+        return true;
+      },
+      onPanResponderMove: (e) => {
+        follow(e.nativeEvent.pageX, e.nativeEvent.pageY);
+        edgeScroll(e.nativeEvent.pageY);
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: () => finish(true),
+      onPanResponderTerminate: () => finish(false),
+    }),
+  );
 
   /**
    * One tap: open the app when it is on this phone. Not on it yet but built: start the install
@@ -127,42 +261,146 @@ function AppGrid() {
     setSelected({ id: app.id, manage: false });
   };
 
+  /** Hold: pinnable apps can then be dragged; lifting the finger without moving opens the options. */
+  const hold = (app: App, from: "pinned" | "rest", e: GestureResponderEvent | undefined, height: number) => {
+    AnyAppNative?.haptic?.();
+    if (!e || !canPin(app) || !getState().client) {
+      setSelected({ id: app.id, manage: false });
+      return;
+    }
+    const { pageX, pageY, locationX, locationY } = e.nativeEvent;
+    finger.current = { x: pageX, y: pageY };
+    armedRef.current = { app, from, grabX: locationX, grabY: locationY, height, moved: false };
+    setArmedState(true); // the grid stops scrolling, so the move reaches the drag
+  };
+  const release = (app: App) => {
+    const a = armedRef.current;
+    if (!a || a.app.id !== app.id || a.moved) return;
+    armedRef.current = null;
+    setArmedState(false);
+    setSelected({ id: app.id, manage: false });
+  };
+
+  const tileHeights = useRef<Record<string, number>>({});
+  const renderTile = (app: App, from: "pinned" | "rest", index: number) => {
+    const onLayout = (e: LayoutChangeEvent) => {
+      const l = e.nativeEvent.layout;
+      tileHeights.current[app.id] = l.height;
+      if (from === "pinned" && !dragRef.current) layout.current.pinnedSlots[index] = { x: l.x, y: l.y, width: l.width, height: l.height };
+    };
+    return (
+      <View key={app.id} onLayout={onLayout} style={{ width: tileWidth, opacity: drag?.app.id === app.id ? 0.35 : 1 }}>
+        <AppTile
+          app={app}
+          width={tileWidth}
+          pinned={from === "pinned"}
+          onPress={() => tapApp(app)}
+          onLongPress={(e) => hold(app, from, e, tileHeights.current[app.id] ?? size.tileMinHeight)}
+          onPressOut={() => release(app)}
+          onOptions={() => setSelected({ id: app.id, manage: false })}
+          onChat={() => router.push(`/chat/${app.id}`)}
+        />
+      </View>
+    );
+  };
+
   return (
-    <View style={{ flex: 1, paddingTop: insets.top }}>
-      <FlatList
-        data={tiles}
-        keyExtractor={(item) => (item.kind === "new" ? "new" : item.app.id)}
-        numColumns={2}
-        columnWrapperStyle={{ gap: size.gridGap }}
-        contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: insets.bottom + space["2xl"] }}
+    <View
+      ref={rootRef}
+      style={{ flex: 1, paddingTop: insets.top }}
+      onLayout={() => rootRef.current?.measureInWindow((_x, y) => (frame.current.rootTop = y))}
+      {...pan.panHandlers}
+    >
+      <ScrollView
+        ref={scrollRef}
+        scrollEnabled={!armed && !drag}
+        onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
+        onLayout={(e) => {
+          frame.current.svHeight = e.nativeEvent.layout.height;
+          scrollRef.current?.measureInWindow?.((_x, y) => (frame.current.svTop = y));
+        }}
+        contentContainerStyle={{ paddingHorizontal: size.screenGutter, paddingBottom: insets.bottom + space["2xl"] }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={reconnectNow} colors={[t.text]} progressBackgroundColor={t.surface} />}
-        ListHeaderComponent={
-          <>
-            <Header />
-            <ReminderBanner />
-            <LinkAskBanner />
-          </>
-        }
-        renderItem={({ item }) =>
-          item.kind === "new" ? (
-            <NewTile width={tileWidth} onPress={() => setCreating(true)} />
-          ) : (
-            <AppTile
-              app={item.app}
-              width={tileWidth}
-              onPress={() => tapApp(item.app)}
-              onLongPress={() => {
-                AnyAppNative?.haptic?.();
-                setSelected({ id: item.app.id, manage: false });
-              }}
-              onOptions={() => setSelected({ id: item.app.id, manage: false })}
-              onChat={() => router.push(`/chat/${item.app.id}`)}
-            />
-          )
-        }
-      />
+      >
+        <Header />
+        <ReminderBanner />
+        <LinkAskBanner />
+        {showPinned ? <SectionLabel testID="pinned-label">Pinned</SectionLabel> : null}
+        {showPinned ? (
+          <View testID="pinned-section" onLayout={(e) => (layout.current.pinnedY = e.nativeEvent.layout.y)} style={{ flexDirection: "row", flexWrap: "wrap", gap: size.gridGap }}>
+            {pinned.length > 0 ? (
+              withLanding(
+                pinned.map((app, i) => renderTile(app, "pinned", i)),
+                landing,
+                <Slot key="landing" width={tileWidth} height={drag?.height ?? size.tileMinHeight} />,
+              )
+            ) : (
+              <Slot
+                width={tileWidth}
+                height={drag?.height ?? size.tileMinHeight}
+                label="Drop here to pin"
+                onLayout={(e) => {
+                  const l = e.nativeEvent.layout;
+                  layout.current.pinnedSlots[0] = { x: l.x, y: l.y, width: l.width, height: l.height };
+                }}
+              />
+            )}
+          </View>
+        ) : null}
+        {showPinned ? (
+          <SectionLabel testID="all-apps-label" onLayout={(e) => (layout.current.boundaryY = e.nativeEvent.layout.y)} top>
+            All apps
+          </SectionLabel>
+        ) : null}
+        <View testID="apps-section" style={{ flexDirection: "row", flexWrap: "wrap", gap: size.gridGap }}>
+          {rest.map((app, i) => renderTile(app, "rest", i))}
+          <NewTile width={tileWidth} onPress={() => setCreating(true)} />
+        </View>
+      </ScrollView>
+      {drag ? (
+        <Animated.View
+          pointerEvents="none"
+          style={{ position: "absolute", left: 0, top: 0, width: tileWidth, transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: 1.04 }], ...elevation(t.mode, 3), opacity: 0.97 }}
+        >
+          <AppTile app={drag.app} width={tileWidth} pinned={drag.target.section === "pinned"} onPress={() => {}} onLongPress={() => {}} onOptions={() => {}} onChat={() => {}} />
+        </Animated.View>
+      ) : null}
       <AppSheet selection={selected} onClose={() => setSelected(null)} />
       <NewAppSheet visible={creating} onClose={() => setCreating(false)} />
+    </View>
+  );
+}
+
+/** The tiles with the landing slot put in at its place (none when index is -1). */
+function withLanding(tiles: React.ReactNode[], index: number, slot: React.ReactNode): React.ReactNode[] {
+  if (index < 0) return tiles;
+  const at = Math.min(index, tiles.length);
+  return [...tiles.slice(0, at), slot, ...tiles.slice(at)];
+}
+
+/** "Pinned" and "All apps" over the two parts of the grid. */
+function SectionLabel({ children, top, testID, onLayout }: { children: string; top?: boolean; testID?: string; onLayout?: (e: LayoutChangeEvent) => void }) {
+  return (
+    <T testID={testID} variant="eyebrow" color="textTertiary" onLayout={onLayout} style={{ marginTop: top ? space["2xl"] : 0, marginBottom: space.md, paddingHorizontal: space.xs }}>
+      {children}
+    </T>
+  );
+}
+
+/** Where a dragged app would land (or the empty Pinned section): a dashed slot of a tile's size. */
+function Slot({ width, height, label, onLayout }: { width: number; height: number; label?: string; onLayout?: (e: LayoutChangeEvent) => void }) {
+  const t = useTheme();
+  return (
+    <View
+      onLayout={onLayout}
+      style={{ width, height, borderRadius: radius.tile, borderWidth: border.tileWidth, borderStyle: "dashed", borderColor: t.tileNewBorder, alignItems: "center", justifyContent: "center", padding: look.tilePadding }}
+    >
+      {label ? (
+        <T variant="label" color="textSecondary" style={{ textAlign: "center" }}>
+          {label}
+        </T>
+      ) : null}
     </View>
   );
 }
@@ -221,6 +459,7 @@ function TileStateLine({ app }: { app: App }) {
 function PressScale({
   onPress,
   onLongPress,
+  onPressOut,
   children,
   style,
   testID,
@@ -228,7 +467,9 @@ function PressScale({
   hint,
 }: {
   onPress: () => void;
-  onLongPress?: () => void;
+  /** No event: TalkBack's "Options" action. */
+  onLongPress?: (e?: GestureResponderEvent) => void;
+  onPressOut?: () => void;
   children: React.ReactNode;
   style: object;
   testID?: string;
@@ -249,7 +490,10 @@ function PressScale({
       onPress={onPress}
       onLongPress={onLongPress}
       onPressIn={() => setPressed(true)}
-      onPressOut={() => setPressed(false)}
+      onPressOut={() => {
+        setPressed(false);
+        onPressOut?.();
+      }}
       style={[style, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}
     >
       {children}
@@ -285,13 +529,16 @@ function AppTile({
   width,
   onPress,
   onLongPress,
+  onPressOut,
   onOptions,
   onChat,
 }: {
   app: App;
   width: number;
+  pinned?: boolean;
   onPress: () => void;
-  onLongPress: () => void;
+  onLongPress: (e?: GestureResponderEvent) => void;
+  onPressOut?: () => void;
   onOptions: () => void;
   onChat: () => void;
 }) {
@@ -307,9 +554,10 @@ function AppTile({
     <PressScale
       testID={`app-tile-${app.slug}`}
       label={label}
-      hint="Hold for options"
+      hint={canPin(app) ? "Hold for options, or hold and drag to pin" : "Hold for options"}
       onPress={onPress}
       onLongPress={onLongPress}
+      onPressOut={onPressOut}
       style={{
         width,
         minHeight: size.tileMinHeight,
@@ -326,7 +574,7 @@ function AppTile({
         <AppIcon app={app} size={size.appIcon} />
         {app.health?.behind ? (
           <View style={{ position: "absolute", top: -6, right: -6 }}>
-            <HealthBadge app={app} onPress={onLongPress} />
+            <HealthBadge app={app} onPress={onOptions} />
           </View>
         ) : null}
       </View>
@@ -389,13 +637,14 @@ function NewTile({ width, onPress }: { width: number; onPress: () => void }) {
 // ---------- tap an app: Install / Open / Change it
 
 function AppSheet({ selection, onClose }: { selection: { id: string; manage: boolean } | null; onClose: () => void }) {
-  const client = useClientFor(selection?.id);
   const app = useStore((s) => (selection ? s.apps[selection.id] : undefined));
   const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [sending, setSending] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const online = useStore((s) => s.connection === "online");
   // Keep showing the app while the sheet slides away; reset the mode for each new selection.
   const [lastApp, setLastApp] = useState<App | undefined>(app);
   if (app && app !== lastApp) setLastApp(app);
@@ -404,6 +653,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
     setLastSelection(selection);
     setConfirmRemove(!!selection?.manage);
     setSending(false);
+    setProblem(null);
   }
   const shown = app ?? lastApp;
 
@@ -464,33 +714,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
           {sending && !confirmRemove ? (
             <SendAppPanel app={shown} onDone={onClose} onCancel={() => setSending(false)} />
           ) : confirmRemove ? (
-            <View style={{ gap: space.sm }}>
-              <T variant="callout" color="textSecondary" style={{ marginBottom: space.sm }}>
-                {placeOf(shown) === "cloud"
-                  ? `Remove ${shown.name}? Its code stays on your GitHub${pkg ? ", and the app stays on your phone" : ""}.`
-                  : `Remove ${shown.name} from this list? Your PC keeps its files${pkg ? ", and the app stays on your phone" : ""}.`}
-              </T>
-              <Button
-                testID="confirm-remove"
-                label="Remove from list"
-                variant="problem"
-                busy={removing}
-                onPress={async () => {
-                  if (!client) return;
-                  setRemoving(true);
-                  try {
-                    await client.deleteApp(shown.id);
-                    removeApp(shown.id);
-                    onClose();
-                  } catch {
-                    // the connection line tells the user if the PC is gone
-                  } finally {
-                    setRemoving(false);
-                  }
-                }}
-              />
-              <Button label="Keep it" variant="quiet" onPress={() => (selection?.manage ? onClose() : setConfirmRemove(false))} />
-            </View>
+            <DeletePanel app={shown} installed={!!pkg} onDone={onClose} onCancel={() => (selection?.manage ? onClose() : setConfirmRemove(false))} />
           ) : (
             <View style={{ gap: space.sm }}>
               <HealthCard
@@ -540,19 +764,158 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                 </T>
               ) : null}
               <MoveButton app={shown} onMoved={onClose} />
-              <Button
-                testID="app-remove"
-                label="Remove from list"
-                variant="text"
-                small
-                style={{ alignSelf: "center", marginTop: space.md }}
-                onPress={() => setConfirmRemove(true)}
-              />
+              {problem ? (
+                <T variant="caption" color="problem" style={{ textAlign: "center" }}>
+                  {problem}
+                </T>
+              ) : null}
+              {/* Pin, hide and delete: pins and hiding live on the PC, so cloud apps only get Delete. */}
+              <View style={{ flexDirection: "row", justifyContent: "center", gap: space.xl, marginTop: space.md }}>
+                {canPin(shown) ? (
+                  <Button
+                    testID="app-pin"
+                    label={shown.pin !== undefined ? "Unpin" : "Pin to top"}
+                    variant="text"
+                    small
+                    disabled={!online || pinBusy}
+                    onPress={async () => {
+                      setPinBusy(true);
+                      setProblem(null);
+                      try {
+                        await (shown.pin !== undefined ? unpinApp(shown) : pinApp(shown));
+                        onClose();
+                      } catch {
+                        setProblem("Your PC couldn't pin it. Update Kiwimake on your PC and try again.");
+                      } finally {
+                        setPinBusy(false);
+                      }
+                    }}
+                  />
+                ) : null}
+                {canPin(shown) ? (
+                  <Button
+                    testID="app-hide"
+                    label="Hide"
+                    variant="text"
+                    small
+                    disabled={!online}
+                    onPress={async () => {
+                      setProblem(null);
+                      try {
+                        await setHidden(shown, true);
+                        onClose();
+                      } catch {
+                        setProblem("Your PC couldn't hide it. Update Kiwimake on your PC and try again.");
+                      }
+                    }}
+                  />
+                ) : null}
+                <Button testID="app-remove" label="Delete" variant="text" small onPress={() => setConfirmRemove(true)} />
+              </View>
             </View>
           )}
         </View>
       ) : null}
     </Sheet>
+  );
+}
+
+/**
+ * Delete (Pin, hide and delete): where it goes from. The app list always; this phone and the PC
+ * with GitHub by choice. The first two come back from Recently deleted; the third can't.
+ */
+function DeletePanel({ app, installed, onDone, onCancel }: { app: App; installed: boolean; onDone: () => void; onCancel: () => void }) {
+  const cloud = placeOf(app) === "cloud";
+  const [uninstall, setUninstall] = useState(false);
+  const [forGood, setForGood] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [finished, setFinished] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const result = await deleteApp(app, { uninstall: uninstall && installed, forGood: forGood && !cloud });
+      if (result?.problem) {
+        setProblem(result.problem);
+        setFinished(true);
+      } else onDone();
+    } catch (e) {
+      setProblem(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View testID="delete-panel">
+      <T variant="heading">{`Delete ${app.name}?`}</T>
+      <T variant="callout" color="textSecondary" style={{ marginTop: space.xs, marginBottom: space.md }}>
+        {cloud
+          ? "Choose where to delete it from. Its code stays on your GitHub."
+          : "Choose where to delete it from. The app list and this phone can be restored from Recently deleted in Settings. PC and GitHub can't be undone."}
+      </T>
+      <DeleteToggle testID="delete-list" label="App list" sub={cloud ? "It leaves your app list." : "It moves to Recently deleted in Settings."} value disabled />
+      <DeleteToggle
+        testID="delete-phone"
+        label="This phone"
+        sub={installed ? "Uninstalls it. Android asks you first." : "It's not on this phone."}
+        value={uninstall && installed}
+        disabled={!installed || finished}
+        onChange={setUninstall}
+      />
+      {cloud ? null : (
+        <DeleteToggle testID="delete-pc" label="PC and GitHub" sub="Deletes its chat, files and code for good." value={forGood} disabled={finished} onChange={setForGood} />
+      )}
+      {problem ? (
+        <T variant="callout" color="problem" style={{ marginTop: space.md }} testID="delete-problem">
+          {problem}
+        </T>
+      ) : null}
+      {/* Design rule (AGENTS.md): the words keep the full width; the buttons sit below them, on the right. */}
+      <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: space.sm, marginTop: space.xl }}>
+        {finished ? (
+          <Button testID="delete-close" label="Close" variant="quiet" small onPress={onDone} />
+        ) : (
+          <>
+            <Button testID="delete-cancel" label="Cancel" variant="quiet" small onPress={onCancel} />
+            <Button testID="confirm-remove" label={forGood && !cloud ? "Delete for good" : "Delete"} variant="problem" small busy={busy} onPress={run} />
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function DeleteToggle({ label, sub, value, disabled, onChange, testID }: { label: string; sub: string; value: boolean; disabled?: boolean; onChange?: (v: boolean) => void; testID: string }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value, disabled: !!disabled }}
+      accessibilityLabel={`${label}. ${sub}`}
+      disabled={disabled}
+      onPress={() => onChange?.(!value)}
+      style={{ flexDirection: "row", alignItems: "center", gap: space.md, minHeight: size.rowHeight, paddingVertical: space.sm, borderTopWidth: border.width, borderColor: t.border }}
+    >
+      <View style={{ flex: 1, gap: space.hair }}>
+        <T variant="label" color={disabled && !value ? "textTertiary" : "text"}>
+          {label}
+        </T>
+        <T variant="caption" color="textSecondary">
+          {sub}
+        </T>
+      </View>
+      <Switch
+        value={value}
+        disabled={disabled}
+        onValueChange={onChange}
+        trackColor={{ false: t.borderStrong, true: t.problem }}
+        thumbColor={t.surfaceOverlay}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      />
+    </Pressable>
   );
 }
 

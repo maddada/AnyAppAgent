@@ -26,6 +26,7 @@ import type {
   AccountLinkInfo,
   AccountLinkRequest,
   AccountHandoff,
+  DeleteAppResult,
 } from "./protocol";
 
 /** An error with a sentence that can be shown to the user as is. */
@@ -115,6 +116,16 @@ export class Client {
   /** POST /api/unpair: the PC forgets this phone (its token, and its Easy Connect key). 204. */
   unpair = (timeoutMs = 8000) => request<void>(this.baseUrl, "/api/unpair", { method: "POST", token: this.token, timeoutMs });
   deleteApp = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}`, "DELETE");
+  // Pin, hide and delete (shared/protocol.ts). An older PC answers the delete with 204 (undefined here).
+  deleteAppWith = (id: string, opts: { uninstall?: boolean; forGood?: boolean }) => {
+    const query = [opts.uninstall ? "uninstall=1" : "", opts.forGood ? "forGood=1" : ""].filter(Boolean).join("&");
+    return this.call<DeleteAppResult | undefined>(`/api/apps/${encodeURIComponent(id)}${query ? `?${query}` : ""}`, "DELETE");
+  };
+  setPins = (ids: string[]) => this.call<App[]>("/api/pins", "PUT", { ids });
+  hideApp = (id: string, hidden: boolean) => this.call<App>(`/api/apps/${encodeURIComponent(id)}/hide`, "POST", { hidden });
+  trash = () => this.call<App[]>("/api/trash");
+  restoreDeleted = (id: string) => this.call<App>(`/api/trash/${encodeURIComponent(id)}/restore`, "POST", {});
+  emptyTrash = () => this.call<void>("/api/trash", "DELETE");
   messages = (id: string, afterSeq?: number) =>
     this.call<ChatItem[]>(`/api/apps/${encodeURIComponent(id)}/messages${afterSeq != null ? `?afterSeq=${afterSeq}` : ""}`);
   // Pictures make a message bigger: give it longer than the usual 10 s on a slow connection.

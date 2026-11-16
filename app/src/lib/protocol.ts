@@ -51,4 +51,5 @@ export type {
   AccountLinkInfo,
   AccountLinkRequest,
   AccountHandoff,
+  DeleteAppResult,
 } from "@shared/protocol";
