@@ -19,7 +19,11 @@ exports.default = async function afterPack(context) {
   const stage = mkdtempSync(join(output, "prod-"));
   for (const file of ["package.json", "package-lock.json"]) cpSync(join(repo, "server", file), join(stage, file));
   // Native optional dependencies remain enabled. Only Claude's executable is removed below.
-  const ci = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["ci", "--omit=dev", "--no-audit", "--no-fund"], {
+  // macOS builds arm64 and x64 on one Mac: install the optional packages of the arch being packed.
+  const mac = context.electronPlatformName === "darwin";
+  const arch = { 0: "ia32", 1: "x64", 2: "armv7l", 3: "arm64", 4: "universal" }[context.arch];
+  const cross = mac && arch && arch !== "universal" ? [`--cpu=${arch}`, "--os=darwin"] : [];
+  const ci = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["ci", "--omit=dev", "--no-audit", "--no-fund", ...cross], {
     cwd: stage, stdio: "inherit", shell: process.platform === "win32", windowsHide: true,
   });
   if (ci.status !== 0) throw new Error("Companion production staging failed");
@@ -38,16 +42,18 @@ exports.default = async function afterPack(context) {
     }
   }
   prune(nm);
-  const dest = join(context.appOutDir, "resources", "companion", "server", "node_modules");
+  // Windows and Linux: <out>/resources; macOS: <out>/Kiwimake.app/Contents/Resources.
+  const resources = mac ? join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources") : join(context.appOutDir, "resources");
+  const dest = join(resources, "companion", "server", "node_modules");
   cpSync(nm, dest, { recursive: true, dereference: true });
-  const companion = join(context.appOutDir, "resources", "companion");
+  const companion = join(resources, "companion");
   const smoke = spawnSync(process.execPath, ["--input-type=module", "-e", [
     "./server/src/acp/session.ts", "./server/src/config.ts", "./builder/index.mjs",
   ].map((p) => `await import(${JSON.stringify(require("node:url").pathToFileURL(join(companion, p)).href)});`).join("\n")], {
     cwd: companion, env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" }, encoding: "utf8", windowsHide: true,
   });
   if (smoke.status !== 0) throw new Error(`Staged runtime import failed: ${smoke.stderr}`);
-  writeFileSync(join(context.appOutDir, "..", "runtime-cuts.json"), JSON.stringify(removed, null, 2));
+  writeFileSync(join(context.appOutDir, "..", mac ? `runtime-cuts-${arch}.json` : "runtime-cuts.json"), JSON.stringify(removed, null, 2));
   if (!resolve(stage).startsWith(output + sep)) throw new Error("Invalid staging path");
   rmSync(stage, { recursive: true, force: true });
 };

@@ -39,6 +39,43 @@ export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
 - Electron's binary: npm 11 can skip install scripts. If `desktop/node_modules/electron/dist` is
   missing, run `node node_modules/electron/install.js` in `desktop/`.
 
+# macOS (MacBook, Apple silicon), set up 2026-11-17
+
+| What | Where |
+| --- | --- |
+| Repo | `~/dev/Kiwimake` |
+| JDK | Found as installed: `/Library/Java/JavaVirtualMachines/*.jdk/Contents/Home` (newest first), Homebrew's `openjdk@21`/`openjdk`/`openjdk@17`, Android Studio's `jbr`. "Get the tools" downloads Microsoft OpenJDK 21 for macOS (aarch64 or x64) and keeps only its `Contents/Home` as `<tools>/jdk`. |
+| Android SDK | Found as installed: `~/Library/Android/sdk` (Android Studio), Homebrew's `android-commandlinetools`. Otherwise "Get the tools" downloads Google's `macosx` command-line tools into `<tools>/android-sdk`. |
+| Git | Apple's Command Line Developer Tools (`/usr/bin/git` counts only when `xcode-select -p` answers; otherwise setup opens Apple's installer). |
+| Companion state, apps | `~/.anyappagent`, `~/aa/apps/<slug>` (as on Linux) |
+| Settings folder | `~/Library/Application Support/AnyAppAgent` |
+
+- **Run it from the checkout**: `cd desktop && npm start`. Build the Mac app: `npm run dist:mac`
+  (both `dist/Kiwimake-mac-arm64.dmg` and `dist/Kiwimake-mac-x64.dmg`; `--arm64`, `--x64` or `--dir`
+  for one). See docs/RELEASING.md, "macOS".
+- **Started from Finder** an app gets only `/usr/bin:/bin:/usr/sbin:/sbin`. The desktop app asks the
+  user's login shell for its environment once at start (`desktop/src/main/shell-env.ts`, shared
+  with Linux; the user's shell, then zsh, bash, sh), then adds the usual folders that exist
+  (Homebrew, mise shims, `~/.local/bin`, npm and its `~/.npmrc` prefix, nvm, bun, pnpm), so it finds
+  `claude`, `codex`, `node`, `gh` and `git` exactly as Terminal does. `KIWIMAKE_SHELL_ENV=off` skips
+  the shell (the folders are still added); `ANYAPP_KEEP_PATH=1` leaves PATH exactly as inherited.
+- **Dictation**: Hex 3 is a Mac app (Apple silicon only). Kiwimake finds `Hex.app` (bundle id
+  `anomaly.hex`) in `/Applications` or `~/Applications`, reads its API file in
+  `~/Library/Application Support/hex`, and installs it from Hex's release feed after checking the
+  size, SHA-256 and Hex's own code-signing requirement.
+- **Emulator**: `scripts/start-emulator.sh` works on macOS too (arm64-v8a image on Apple silicon,
+  Perl's `setsid` instead of the missing `setsid` command). The test run used:
+
+  ```bash
+  JAVA_HOME=/opt/homebrew/opt/openjdk@17 ANDROID_HOME=~/Library/Android/sdk \
+  ANDROID_AVD_HOME=~/.local/share/agent-work/kiwimake/mac-build/avd \
+  ANYAPP_AVD_IMAGE="system-images;android-36;google_apis;arm64-v8a" scripts/start-emulator.sh
+  ```
+
+  The AVDs in `~/.android/avd` (`ghostex_*`, `gx_*`, `gpui_*`) belong to other projects: never use them.
+- macOS's bash is 3.2: `"$var…"` (a variable followed by a non-ASCII character) breaks under
+  `set -u`; write `"${var}…"`.
+
 # The Windows PC
 
 Everything below was installed and proven on 2026-11-10. Follow it literally there.

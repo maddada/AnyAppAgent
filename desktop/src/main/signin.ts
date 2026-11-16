@@ -117,8 +117,8 @@ export class GitHubSignIn extends EventEmitter {
       checksum: asset.digest,
       onProgress: (r, t) => this.set({ phase: "downloading", progress: t ? r / t : 0 }),
     });
-    await extractZip(zip, join(this.toolsDir, "gh"), { flatten: false });
-    const gh = join(this.toolsDir, "gh", "bin", "gh.exe");
+    await extractZip(zip, join(this.toolsDir, "gh"), { flatten: process.platform === "darwin" });
+    const gh = join(this.toolsDir, "gh", "bin", process.platform === "win32" ? "gh.exe" : "gh");
     if (!existsSync(gh)) throw new Error("The GitHub helper did not unpack.");
     return gh;
   }

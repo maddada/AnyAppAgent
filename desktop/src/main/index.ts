@@ -525,9 +525,11 @@ function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void 
 
 // ---------------------------------------------------------------- window and tray
 
-/** The shared Windows icons (shared/theme/mark/windows); packaged under resources/mark. */
+/** The shared icons (shared/theme/mark/windows, and mark/mac for the Mac's own); packaged under resources/mark. */
 function markFile(name: string): string {
-  return app.isPackaged ? join(process.resourcesPath, "mark", name) : join(paths.repoRoot, "shared", "theme", "mark", "windows", name);
+  if (app.isPackaged) return join(process.resourcesPath, "mark", name);
+  const mac = join(paths.repoRoot, "shared", "theme", "mark", "mac", name);
+  return existsSync(mac) ? mac : join(paths.repoRoot, "shared", "theme", "mark", "windows", name);
 }
 
 /** Windows reads the .ico; Linux (and macOS) need a PNG. */
@@ -541,6 +543,13 @@ function appIcon(name = process.platform === "win32" ? "anyappagent.ico" : "icon
  * an XDG autostart entry (~/.config/autostart/<name>.desktop) instead.
  */
 function setOpenAtLogin(open: boolean): void {
+  if (process.platform === "darwin") {
+    // A login item in System Settings, General, Login Items (SMAppService on macOS 13+). macOS
+    // passes no arguments to it; startedAtLogin() tells such a start apart instead of --hidden.
+    // Only when it changes: an app never registered cannot be unregistered ("Operation not permitted").
+    if (app.getLoginItemSettings().openAtLogin !== open) app.setLoginItemSettings({ openAtLogin: open });
+    return;
+  }
   if (process.platform !== "linux") {
     app.setLoginItemSettings({ openAtLogin: open, args: ["--hidden"] });
     return;
@@ -561,6 +570,23 @@ function setOpenAtLogin(open: boolean): void {
   } catch (error) {
     console.error(`[autostart] ${(error as Error).message}`);
   }
+}
+
+/** Started quietly: `--hidden` (Windows and Linux login items), or opened by macOS at login. */
+function startedAtLogin(): boolean {
+  if (process.argv.includes("--hidden")) return true;
+  if (process.platform !== "darwin") return false;
+  try {
+    return app.getLoginItemSettings().wasOpenedAtLogin === true;
+  } catch {
+    return false;
+  }
+}
+
+function macTrayIcon(): Electron.NativeImage {
+  const image = nativeImage.createFromPath(markFile("trayTemplate.png"));
+  image.setTemplateImage(true);
+  return image;
 }
 
 function createWindow(show: boolean): void {
@@ -584,14 +610,17 @@ function createWindow(show: boolean): void {
   });
   win.setMenuBarVisibility(false);
   win.once("ready-to-show", () => {
-    if (show) win?.show();
+    if (!show) return;
+    win?.show();
+    // macOS: an app started by the user comes to the front with its window.
+    if (process.platform === "darwin") app.focus({ steal: true });
   });
   win.on("close", (event) => {
     if (quitting) return;
     event.preventDefault();
     win?.hide();
     if (!settings.closeHintShown && Notification.isSupported()) {
-      new Notification({ title: "Kiwimake is still running", body: "Your PC keeps making apps for your phone. Find Kiwimake next to the clock.", icon: appIcon("icon-256.png") }).show();
+      new Notification({ title: "Kiwimake is still running", body: process.platform === "darwin" ? "Your Mac keeps making apps for your phone. Find Kiwimake in the menu bar." : "Your PC keeps making apps for your phone. Find Kiwimake next to the clock.", icon: appIcon("icon-256.png") }).show();
       setSetting("closeHintShown", true);
     }
   });
@@ -699,7 +728,7 @@ function ipc(): void {
       }
       return { ok: true };
     } catch (error) {
-      const where = process.platform === "linux" ? "your app launcher" : "the Start menu";
+      const where = process.platform === "linux" ? "your app launcher" : process.platform === "darwin" ? "Applications" : "the Start menu";
       return { ok: false, error: error instanceof HexFailure ? error.message : `Hex couldn't be opened. Open it from ${where}, or get it from ${HEX_SITE}` };
     }
   });
@@ -981,12 +1010,14 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
 
   app.whenReady().then(async () => {
     log(`[desktop] start ${app.getVersion()} mode=${mode} port=${port} electron=${process.versions.electron} node=${process.versions.node}`);
-    // Started from a desktop launcher, there is no shell PATH: ask the login shell while the window opens.
+    // Started from a desktop launcher, Finder, the Dock or at login, there is no shell PATH: ask the
+    // login shell while the window opens (shell-env.ts). Everything that looks for a tool waits for it.
     const shellEnv = adoptShellEnv(env).then((line) => log(`[desktop] shell environment: ${line}`), (error) => log(`[desktop] shell environment: ${(error as Error).message}`));
     ipc();
-    const hidden = process.argv.includes("--hidden");
+    const hidden = startedAtLogin();
     createWindow(!hidden);
-    tray = new Tray(markFile("tray.png"));
+    // The Mac's menu bar wants a black template image (macOS tints it for light and dark bars).
+    tray = new Tray(process.platform === "darwin" ? macTrayIcon() : markFile("tray.png"));
     tray.on("click", () => showWindow());
     updateTray();
     if (app.isPackaged) setOpenAtLogin(settings.startWithWindows);
@@ -1011,6 +1042,9 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
       void runScreenshots(win, env.ANYAPP_DESKTOP_SHOTS, log, mode === "fake" ? { pairFakePhone } : {}).then(() => app.quit());
     }
   });
+
+  // macOS: clicking the Dock icon (or opening the app again from Finder) shows the window.
+  app.on("activate", () => showWindow());
 
   app.on("window-all-closed", () => {
     // Stay in the tray.

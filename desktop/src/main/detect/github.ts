@@ -57,7 +57,9 @@ export function parseDeviceFlow(output: string): { code?: string; url?: string }
 }
 
 /** Name of the portable gh zip for this PC in a GitHub release (cli/cli). */
-export function ghAssetName(version: string, arch = process.arch): string {
+export function ghAssetName(version: string, arch = process.arch, platform = process.platform): string {
   const a = arch === "arm64" ? "arm64" : arch === "ia32" ? "386" : "amd64";
+  // macOS zips hold gh_<v>_macOS_<arch>/bin/gh.
+  if (platform === "darwin") return `gh_${version.replace(/^v/, "")}_macOS_${a}.zip`;
   return `gh_${version.replace(/^v/, "")}_windows_${a}.zip`;
 }

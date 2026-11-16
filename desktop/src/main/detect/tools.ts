@@ -65,9 +65,8 @@ export function missingSdkPackages(dir: string, fs: FsLike = realFs, required = 
   return missing;
 }
 
-/** Candidate JDK / SDK folders: ours first, then the environment, then the usual places. */
 /** Lists a folder's entries; empty when it does not exist. */
-function listDir(dir: string): string[] {
+function safeList(dir: string): string[] {
   try {
     return realFs.readdirSync(dir);
   } catch {
@@ -94,11 +93,13 @@ function newestFirst(names: string[]): string[] {
   return [...names].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
 }
 
+/** Candidate JDK / SDK folders: ours first, then the environment, then the usual places. */
 export function toolchainCandidates(
   toolsDir: string,
   env: NodeJS.ProcessEnv,
-  list: (dir: string) => string[] = listDir,
+  list: (dir: string) => string[] = safeList,
   real: (p: string) => string = (p) => realFs.realpathSync(p),
+  platform: NodeJS.Platform = process.platform,
 ): { jdk: { path: string; source: "tools" | "system" }[]; sdk: { path: string; source: "tools" | "system" }[] } {
   const jdk: { path: string; source: "tools" | "system" }[] = [{ path: join(toolsDir, "jdk"), source: "tools" }];
   const sdk: { path: string; source: "tools" | "system" }[] = [{ path: join(toolsDir, "android-sdk"), source: "tools" }];
@@ -110,7 +111,7 @@ export function toolchainCandidates(
   add(sdk, env.ANYAPP_ANDROID_HOME);
   add(sdk, env.ANDROID_HOME);
   add(sdk, env.ANDROID_SDK_ROOT);
-  if (process.platform === "win32") {
+  if (platform === "win32") {
     const pf = env.ProgramFiles ?? "C:\\Program Files";
     add(jdk, join(pf, "Android", "Android Studio", "jbr"));
     if (env.LOCALAPPDATA) add(sdk, join(env.LOCALAPPDATA, "Android", "Sdk"));
@@ -120,26 +121,63 @@ export function toolchainCandidates(
       add(sdk, `${drive}:\\tools\\android\\sdk`);
     }
   } else {
-    // A real java on PATH, distro JDKs (Arch, Fedora, Debian/Ubuntu), Android Studio's own, then
-    // the JDKs version managers install without setting JAVA_HOME (mise, asdf, SDKMAN, IntelliJ).
     const home = env.HOME ?? homedir();
+    // The JDK of a real java on PATH (the one the user's terminal runs; shims are skipped).
     add(jdk, javaOnPath(env, real));
-    for (const p of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java"]) add(jdk, p);
-    for (const name of newestFirst(list("/usr/lib/jvm"))) add(jdk, join("/usr/lib/jvm", name));
-    add(jdk, "/opt/android-studio/jbr");
-    add(jdk, join(home, ".local", "share", "android-studio", "jbr"));
+    if (platform === "darwin") {
+      for (const p of macJdks(home, list)) add(jdk, p);
+    } else {
+      // Distro JDKs (Arch, Fedora, Debian/Ubuntu), then Android Studio's own.
+      for (const p of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java"]) add(jdk, p);
+      for (const name of newestFirst(list("/usr/lib/jvm"))) add(jdk, join("/usr/lib/jvm", name));
+      add(jdk, "/opt/android-studio/jbr");
+      add(jdk, join(home, ".local", "share", "android-studio", "jbr"));
+    }
+    // JDKs that version managers install without setting JAVA_HOME (mise, asdf, SDKMAN, IntelliJ).
+    // A Mac JDK may keep its files in Contents/Home.
     const managed = [
       join(env.MISE_DATA_DIR || join(env.XDG_DATA_HOME || join(home, ".local", "share"), "mise"), "installs", "java"),
       join(env.ASDF_DATA_DIR || join(home, ".asdf"), "installs", "java"),
       join(env.SDKMAN_DIR || join(home, ".sdkman"), "candidates", "java"),
       join(home, ".jdks"),
     ];
-    for (const root of managed) for (const name of newestFirst(list(root))) add(jdk, join(root, name));
-    add(sdk, join(home, "Android", "Sdk"));
-    add(sdk, join(home, "Library", "Android", "sdk"));
-    add(sdk, "/opt/android-sdk");
+    for (const root of managed) {
+      for (const name of newestFirst(list(root))) {
+        add(jdk, join(root, name));
+        if (platform === "darwin") add(jdk, join(root, name, "Contents", "Home"));
+      }
+    }
+    if (platform === "darwin") {
+      // Android Studio's SDK, then Homebrew's android-commandlinetools cask.
+      add(sdk, join(home, "Library", "Android", "sdk"));
+      add(sdk, "/opt/homebrew/share/android-commandlinetools");
+      add(sdk, "/usr/local/share/android-commandlinetools");
+    } else {
+      add(sdk, join(home, "Android", "Sdk"));
+      add(sdk, "/opt/android-sdk");
+    }
   }
   return { jdk, sdk };
+}
+
+/**
+ * JDKs on a Mac, newest first: the system's (/Library/Java/JavaVirtualMachines, where installers
+ * and `brew install --cask` put them), Homebrew's openjdk formulas, then Android Studio's own.
+ */
+export function macJdks(home: string, list: (dir: string) => string[] = safeList): string[] {
+  const vm = (root: string) =>
+    list(root)
+      .filter((n) => n.endsWith(".jdk"))
+      .sort((a, b) => (Number(b.match(/\d+/)?.[0] ?? 0) - Number(a.match(/\d+/)?.[0] ?? 0)) || b.localeCompare(a))
+      .map((n) => join(root, n, "Contents", "Home"));
+  const brew = (prefix: string) => ["openjdk@21", "openjdk", "openjdk@17"].map((f) => join(prefix, "opt", f, "libexec", "openjdk.jdk", "Contents", "Home"));
+  return [
+    ...vm("/Library/Java/JavaVirtualMachines"),
+    ...vm(join(home, "Library", "Java", "JavaVirtualMachines")),
+    ...brew("/opt/homebrew"),
+    ...brew("/usr/local"),
+    "/Applications/Android Studio.app/Contents/jbr/Contents/Home",
+  ];
 }
 
 export function parseNodeVersion(output: string): number | undefined {
@@ -242,7 +280,14 @@ export async function detectTools({ toolsDir, env, runner, fs = realFs }: ToolsD
   const ownGit = join(toolsDir, "git", "cmd", win ? "git.exe" : "git");
   const programGit = win ? join(env.ProgramFiles ?? "C:\\Program Files", "Git", "cmd", "git.exe") : undefined;
   const gitPath = fs.existsSync(ownGit) ? ownGit : (onPath(env, [win ? "git.exe" : "git"], fs) ?? (programGit && fs.existsSync(programGit) ? programGit : undefined));
-  pieces.push({ id: "git", label: "Git", ok: !!gitPath, path: gitPath, source: gitPath ? (gitPath === ownGit ? "tools" : "system") : "none" });
+  // macOS: /usr/bin/git is only a stub until Apple's Command Line Developer Tools are installed
+  // (it then opens Apple's installer instead of running). It counts only when it answers.
+  let gitOk = !!gitPath;
+  if (gitPath && process.platform === "darwin" && gitPath === "/usr/bin/git") {
+    const r = await runner("/usr/bin/xcode-select", ["-p"], { env, timeoutMs: 10_000 });
+    gitOk = r.code === 0 && r.stdout.trim().length > 0;
+  }
+  pieces.push({ id: "git", label: "Git", ok: gitOk, path: gitOk ? gitPath : undefined, source: gitOk ? (gitPath === ownGit ? "tools" : "system") : "none" });
 
   const ok = pieces.every((p) => p.ok);
   const fromPc = pieces.every((p) => p.source === "system");

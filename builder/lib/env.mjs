@@ -26,10 +26,34 @@ export const ABIS = 'x86_64,arm64-v8a';
 // Where a toolchain usually is when JAVA_HOME / ANDROID_HOME are not set: the desktop app's own
 // tools folder first (what "Get the tools" installs), then this platform's usual places.
 const TOOLS_DIR = process.env.ANYAPP_TOOLS_DIR ? path.resolve(process.env.ANYAPP_TOOLS_DIR) : path.join(ANYAPP_HOME, 'tools');
+/** JDKs on a Mac, newest first: /Library/Java/JavaVirtualMachines, Homebrew's openjdk, Android Studio's. */
+function macJavaHomes() {
+  const vm = (root) => {
+    try {
+      return fs
+        .readdirSync(root)
+        .filter((n) => n.endsWith('.jdk'))
+        .sort((a, b) => Number(b.match(/\d+/)?.[0] ?? 0) - Number(a.match(/\d+/)?.[0] ?? 0))
+        .map((n) => path.join(root, n, 'Contents', 'Home'));
+    } catch {
+      return [];
+    }
+  };
+  const brew = (prefix) => ['openjdk@21', 'openjdk', 'openjdk@17'].map((f) => path.join(prefix, 'opt', f, 'libexec', 'openjdk.jdk', 'Contents', 'Home'));
+  return [
+    ...vm('/Library/Java/JavaVirtualMachines'),
+    ...vm(path.join(os.homedir(), 'Library', 'Java', 'JavaVirtualMachines')),
+    ...brew('/opt/homebrew'),
+    ...brew('/usr/local'),
+    '/Applications/Android Studio.app/Contents/jbr/Contents/Home',
+  ];
+}
 const DEFAULT_JAVA_HOMES =
   process.platform === 'win32'
     ? [path.join(TOOLS_DIR, 'jdk'), 'D:\\tools\\android\\jdk']
-    : [
+    : process.platform === 'darwin'
+      ? [path.join(TOOLS_DIR, 'jdk'), ...macJavaHomes()]
+      : [
         path.join(TOOLS_DIR, 'jdk'),
         '/usr/lib/jvm/java-21-openjdk',
         '/usr/lib/jvm/java-21-openjdk-amd64',
@@ -40,7 +64,9 @@ const DEFAULT_JAVA_HOMES =
 const DEFAULT_ANDROID_HOMES =
   process.platform === 'win32'
     ? [path.join(TOOLS_DIR, 'android-sdk'), 'D:\\tools\\android\\sdk']
-    : [path.join(TOOLS_DIR, 'android-sdk'), path.join(os.homedir(), 'Android', 'Sdk'), '/opt/android-sdk'];
+    : process.platform === 'darwin'
+      ? [path.join(TOOLS_DIR, 'android-sdk'), path.join(os.homedir(), 'Library', 'Android', 'sdk'), '/opt/homebrew/share/android-commandlinetools']
+      : [path.join(TOOLS_DIR, 'android-sdk'), path.join(os.homedir(), 'Android', 'Sdk'), '/opt/android-sdk'];
 
 function firstExisting(...dirs) {
   return dirs.find((d) => d && fs.existsSync(d));

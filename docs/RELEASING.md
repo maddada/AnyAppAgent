@@ -327,3 +327,62 @@ installer names, verifies the uploaded bytes, and keeps the release a draft.
 
 Certum accepts each one-time code once. Avoid starting a signing job while a Ghostex or codex-swap
 job is logging in to the same SimplySign account.
+
+## macOS (not released yet)
+
+`npm run dist:mac` in `desktop/` (on a Mac) runs `dev/build-mac.mjs`: `electron-vite build`, then
+electron-builder's `mac` target, which writes two disk images with stable names, ready for
+`releases/latest/download/<name>` links:
+
+| File | What |
+| --- | --- |
+| `Kiwimake-mac-arm64.dmg` | Apple silicon (M1 and later). |
+| `Kiwimake-mac-x64.dmg` | Intel Macs. |
+
+Two images, not one universal app: the companion's runtime packages are staged per architecture
+(`dev/after-pack.cjs` runs `npm ci --cpu=<arch> --os=darwin`), and a universal merge would need
+both sets to be identical. No `.zip` is made: electron-builder needs one only for its auto-updater,
+which Kiwimake does not use.
+
+### Signing: ad-hoc today
+
+No Apple Developer ID exists for Kiwimake yet, so the apps are **ad-hoc signed** (`"identity": "-"`)
+and **not notarized**. Hardened runtime is off: only notarization needs it, and the ad-hoc build
+was tested end to end without it. (A copy re-signed ad-hoc with hardened runtime and
+`dev/entitlements.mac.plist` also opened and painted its window, in a quick check with the fake
+companion.)
+
+What a person sees (checked on macOS 27.0.1, Apple silicon, with a DMG carrying the browser's
+quarantine flag): they open the DMG, drag Kiwimake to Applications and open it. macOS refuses:
+
+> **"Kiwimake.app" Not Opened**
+> Apple could not verify "Kiwimake.app" is free of malware that may harm your Mac or compromise your privacy.
+> [Move to Trash] [Done]
+
+There is no Open button, and since macOS 15 Control-click, Open no longer gets past it. To open it they click
+**Done**, then go to System Settings, Privacy & Security, scroll to Security, click **Open Anyway**
+next to "Kiwimake.app was blocked…", confirm with their password or Touch ID, and choose **Open
+Anyway** once more. (Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Kiwimake.app`.)
+(The dialog above was seen in the test; the Settings steps are macOS's standard way and were not
+clicked through, because answering security prompts is the person's own decision.) After that it
+opens normally, until a new version is downloaded. While the first "Not Opened" prompt is still on
+screen, macOS holds that copy: opening it again stops before it starts, and even a copy started
+another way from that folder never shows its window. Click Done first.
+
+### What Developer ID signing and notarization need
+
+1. An Apple Developer Program membership (99 USD a year) for the publisher, and a **Developer ID
+   Application** certificate made in it (Certificates, Identifiers & Profiles).
+2. The certificate and its key as a `.p12` for the build machine or CI: `CSC_LINK` (file or base64)
+   and `CSC_KEY_PASSWORD`. Remove `"identity": "-"` (electron-builder then picks the Developer ID).
+3. `"hardenedRuntime": true` with `"entitlements"` and `"entitlementsInherit"` set to
+   `dev/entitlements.mac.plist` (JIT and unsigned executable memory for V8, library validation off
+   for the companion's native modules run by Electron in Node mode, microphone for dictation).
+   Run the real companion once with that combination (Electron in Node mode, Gradle, adb).
+4. Notarization: `"notarize": true` and an App Store Connect API key (`APPLE_API_KEY`,
+   `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`) or an Apple ID with an app-specific password
+   (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). electron-builder submits the app
+   and staples the ticket; sign and notarize the `.dmg` too.
+5. Then the first open shows only macOS's usual "Kiwimake is an app downloaded from the Internet.
+   Are you sure you want to open it?" with an Open button.
+

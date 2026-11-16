@@ -12,7 +12,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync
 import { delimiter, join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import type { ToolPiece } from "../../shared/types.ts";
-import { killTree, spawnHidden } from "../exec.ts";
+import { killTree, run, spawnHidden } from "../exec.ts";
 import { EXTRA_SDK_PACKAGES, REQUIRED_SDK_PACKAGES, sdkPackageDir } from "../detect/tools.ts";
 import { download, extractZip, fetchJson, fetchText, formatBytes } from "./download.ts";
 
@@ -84,14 +84,25 @@ export function sdkHostOs(platform: NodeJS.Platform = process.platform): string 
   return platform === "win32" ? "windows" : platform === "darwin" ? "macosx" : "linux";
 }
 
-/** Picks this OS's command-line tools zip from Google's repository2-3.xml. */
-export function pickCmdlineTools(xml: string, hostOs: string = sdkHostOs()): { url: string; sha1: string } | undefined {
+/** Google's name for this computer's processor in repository2-3.xml. */
+export function sdkHostArch(arch: string = process.arch): string {
+  return arch === "arm64" ? "aarch64" : arch === "x64" ? "x64" : arch;
+}
+
+/**
+ * Picks this OS's command-line tools zip from Google's repository2-3.xml. Since cmdline-tools 22 the
+ * macOS archives are per processor (<host-arch>): the x64 one's `android` program, which sdkmanager
+ * runs, cannot start on Apple silicon without Rosetta. An archive without <host-arch> fits any.
+ */
+export function pickCmdlineTools(xml: string, hostOs: string = sdkHostOs(), hostArch: string = sdkHostArch()): { url: string; sha1: string } | undefined {
   const start = xml.indexOf('<remotePackage path="cmdline-tools;latest">');
   if (start < 0) return undefined;
   const block = xml.slice(start, xml.indexOf("</remotePackage>", start));
   const archives = block.split("<archive>").slice(1);
   for (const archive of archives) {
     if (!archive.includes(`<host-os>${hostOs}</host-os>`)) continue;
+    const arch = archive.match(/<host-arch>([^<]+)<\/host-arch>/)?.[1];
+    if (arch && arch !== hostArch) continue;
     const url = archive.match(/<url>([^<]+)<\/url>/)?.[1];
     const sha1 = archive.match(/<checksum type="sha1">([0-9a-f]+)<\/checksum>/)?.[1];
     if (url && sha1) return { url: `https://dl.google.com/android/repository/${url}`, sha1 };
@@ -184,7 +195,9 @@ export class ToolsInstaller {
     const zip = join(this.downloads, process.platform === "win32" ? "jdk.zip" : "jdk.tar.gz");
     await download({ url, dest: zip, signal: this.abort.signal, checksum: `sha256:${sum}`, onProgress: this.bytes((f, d) => report(f * 0.85, d)) });
     report(0.9, "Unpacking…");
-    await extractZip(zip, join(this.opts.toolsDir, "jdk"), { flatten: true });
+    // The macOS JDK is a bundle (jdk-21.jdk/Contents/Home/bin/java): keep only its Home, so the
+    // tools folder looks the same on every system (jdk/bin/java).
+    await extractZip(zip, join(this.opts.toolsDir, "jdk"), { flatten: true, ...(process.platform === "darwin" ? { inner: join("Contents", "Home") } : {}) });
   }
 
   private sdkDir(): string {
@@ -364,6 +377,12 @@ export class ToolsInstaller {
   }
 
   private async installGit(report: (f: number, d?: string) => void): Promise<void> {
+    if (process.platform === "darwin") {
+      // Git on a Mac comes with Apple's Command Line Developer Tools: this opens Apple's own
+      // installer window (free, no Apple account), the way Terminal offers it on first use.
+      await run("/usr/bin/xcode-select", ["--install"], { timeoutMs: 30_000 });
+      throw new Error("Apple's installer for Git opened in its own window. Choose Install there, wait until it says it is done, then press Check again.");
+    }
     if (process.platform !== "win32") {
       throw new Error("Git is missing. Install it with your system's package manager (for example `sudo pacman -S git` or `sudo apt install git`), then press Check again.");
     }

@@ -130,8 +130,10 @@ describe("GitHub detection", () => {
   });
 
   it("names the portable gh zip", () => {
-    expect(ghAssetName("v2.103.3", "x64")).toBe("gh_2.103.3_windows_amd64.zip");
-    expect(ghAssetName("2.103.3", "arm64")).toBe("gh_2.103.3_windows_arm64.zip");
+    expect(ghAssetName("v2.103.3", "x64", "win32")).toBe("gh_2.103.3_windows_amd64.zip");
+    expect(ghAssetName("2.103.3", "arm64", "win32")).toBe("gh_2.103.3_windows_arm64.zip");
+    expect(ghAssetName("v2.104.0", "arm64", "darwin")).toBe("gh_2.104.0_macOS_arm64.zip");
+    expect(ghAssetName("v2.104.0", "x64", "darwin")).toBe("gh_2.104.0_macOS_amd64.zip");
   });
 });
 
@@ -256,6 +258,25 @@ describe("JDK candidates on Linux", () => {
   });
 });
 
+describe("JDK candidates on a Mac", () => {
+  it("puts Homebrew's java on PATH first, then the system's JDKs, then mise's (with Contents/Home)", () => {
+    const dirs: Record<string, string[]> = {
+      "/Library/Java/JavaVirtualMachines": ["microsoft-21.jdk"],
+      "/Users/u/.local/share/mise/installs/java": ["temurin-21.0.2"],
+    };
+    const brewJava = "/opt/homebrew/Cellar/openjdk/23/libexec/openjdk.jdk/Contents/Home/bin/java";
+    const real = (p: string) => {
+      if (p === "/opt/homebrew/bin/java") return brewJava;
+      throw new Error("ENOENT");
+    };
+    const env = { HOME: "/Users/u", PATH: "/opt/homebrew/bin:/usr/bin" };
+    const jdk = toolchainCandidates("/t", env, (d) => dirs[d] ?? [], real, "darwin").jdk.map((c) => c.path);
+    expect(jdk.slice(1, 3)).toEqual(["/opt/homebrew/Cellar/openjdk/23/libexec/openjdk.jdk/Contents/Home", "/Library/Java/JavaVirtualMachines/microsoft-21.jdk/Contents/Home"]);
+    expect(jdk).toContain("/Users/u/.local/share/mise/installs/java/temurin-21.0.2/Contents/Home");
+    expect(jdk).not.toContain("/usr/lib/jvm/default");
+  });
+});
+
 describe("tools installer", () => {
   it("plans only what is missing", () => {
     const plan = planInstall([
@@ -284,6 +305,16 @@ describe("tools installer", () => {
     </archives></remotePackage>`;
     expect(pickCmdlineTools(xml, "windows")).toEqual({ url: "https://dl.google.com/android/repository/commandlinetools-win-16111833_latest.zip", sha1: "57d04f2d" });
     expect(pickCmdlineTools("<nothing/>")).toBeUndefined();
+  });
+
+  it("picks the Mac command-line tools for this Mac's processor", () => {
+    // cmdline-tools 23 on macOS (repository2-3.xml, 2026-11-17): one archive per processor.
+    const xml = `<remotePackage path="cmdline-tools;latest"><archives>
+      <archive><complete><size>1</size><checksum type="sha1">aaaa</checksum><url>commandlinetools-mac_x86_64-16111833_latest.zip</url></complete><host-os>macosx</host-os><host-arch>x64</host-arch></archive>
+      <archive><complete><size>1</size><checksum type="sha1">bbbb</checksum><url>commandlinetools-mac_arm64-16111833_latest.zip</url></complete><host-os>macosx</host-os><host-arch>aarch64</host-arch></archive>
+    </archives></remotePackage>`;
+    expect(pickCmdlineTools(xml, "macosx", "aarch64")?.url).toMatch(/mac_arm64/);
+    expect(pickCmdlineTools(xml, "macosx", "x64")?.url).toMatch(/mac_x86_64/);
   });
 
   it("reads sdkmanager percentages", () => {

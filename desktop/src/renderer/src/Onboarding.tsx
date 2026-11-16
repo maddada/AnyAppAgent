@@ -577,7 +577,9 @@ function DoneStep() {
         ]}
       />
       <p className="label secondary" style={{ marginTop: "var(--aa-space-2xl)", maxWidth: "var(--aa-size-reading-width)" }}>
-        Kiwimake keeps working next to the clock, even when this window is closed. Keep this PC on while it makes apps.
+        {/Macintosh/.test(navigator.userAgent)
+          ? "Kiwimake keeps working in the menu bar, even when this window is closed. Keep this Mac on while it makes apps."
+          : "Kiwimake keeps working next to the clock, even when this window is closed. Keep this PC on while it makes apps."}
       </p>
     </>
   );

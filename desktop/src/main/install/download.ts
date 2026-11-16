@@ -64,8 +64,11 @@ export async function download({ url, dest, signal, onProgress, checksum }: Down
   renameSync(part, dest);
 }
 
-/** Extracts a zip into dest. With `flatten`, a single top-level folder in the zip is removed. */
-export async function extractZip(zip: string, dest: string, options: { flatten?: boolean } = {}): Promise<void> {
+/**
+ * Extracts a zip into dest. With `flatten`, a single top-level folder in the zip is removed. With
+ * `inner`, only that folder inside it is kept (a macOS JDK's Contents/Home).
+ */
+export async function extractZip(zip: string, dest: string, options: { flatten?: boolean; inner?: string } = {}): Promise<void> {
   const staging = `${dest}.extract`;
   rmSync(staging, { recursive: true, force: true });
   mkdirSync(staging, { recursive: true });
@@ -83,6 +86,7 @@ export async function extractZip(zip: string, dest: string, options: { flatten?:
     const entries = readdirSync(staging);
     if (entries.length === 1 && statSync(join(staging, entries[0])).isDirectory()) root = join(staging, entries[0]);
   }
+  if (options.inner && existsSync(join(root, options.inner))) root = join(root, options.inner);
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dirname(dest), { recursive: true });
   renameSync(root, dest);
