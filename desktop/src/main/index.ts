@@ -3,7 +3,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nati
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
@@ -28,9 +28,13 @@ import { firstExisting, resolvePaths } from "./paths.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
 import { ClaudeSignIn, GitHubSignIn } from "./signin.ts";
 import { runScreenshots } from "./shots.ts";
+import { adoptUserPath } from "./user-path.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
+// A Mac app started from Finder, the Dock or at login has only /usr/bin:/bin:/usr/sbin:/sbin: take
+// the user's own PATH (Homebrew, mise, npm, ~/.local/bin) before anything looks for a tool.
+const userPath = process.platform === "darwin" && !env.ANYAPP_KEEP_PATH ? adoptUserPath(env) : undefined;
 
 // Tests and screenshots use their own settings folder (fresh onboarding) without touching the real one.
 // Otherwise the settings folder keeps its old name (%APPDATA%\AnyAppAgent) after the rename to
@@ -410,7 +414,7 @@ async function installTools(): Promise<void> {
     warm: {
       cli: join(paths.repoRoot, "builder", "cli.mjs"),
       probeDir: join(paths.appsDir, "warm-probe"),
-      env: { ...process.env, PATH: [...(checks.tools.env?.path ?? []), process.env.PATH ?? ""].join(";") },
+      env: { ...process.env, PATH: [...(checks.tools.env?.path ?? []), process.env.PATH ?? ""].join(delimiter) },
     },
     onProgress: (p) => {
       checks.tools = { ...checks.tools, state: "working", install: { running: true, progress: p.progress, label: p.label, detail: p.detail } };
@@ -524,9 +528,11 @@ function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void 
 
 // ---------------------------------------------------------------- window and tray
 
-/** The shared Windows icons (shared/theme/mark/windows); packaged under resources/mark. */
+/** The shared icons (shared/theme/mark/windows, and mark/mac for the Mac's own); packaged under resources/mark. */
 function markFile(name: string): string {
-  return app.isPackaged ? join(process.resourcesPath, "mark", name) : join(paths.repoRoot, "shared", "theme", "mark", "windows", name);
+  if (app.isPackaged) return join(process.resourcesPath, "mark", name);
+  const mac = join(paths.repoRoot, "shared", "theme", "mark", "mac", name);
+  return existsSync(mac) ? mac : join(paths.repoRoot, "shared", "theme", "mark", "windows", name);
 }
 
 /** Windows reads the .ico; Linux (and macOS) need a PNG. */
@@ -540,6 +546,13 @@ function appIcon(name = process.platform === "win32" ? "anyappagent.ico" : "icon
  * an XDG autostart entry (~/.config/autostart/<name>.desktop) instead.
  */
 function setOpenAtLogin(open: boolean): void {
+  if (process.platform === "darwin") {
+    // A login item in System Settings, General, Login Items (SMAppService on macOS 13+). macOS
+    // passes no arguments to it; startedAtLogin() tells such a start apart instead of --hidden.
+    // Only when it changes: an app never registered cannot be unregistered ("Operation not permitted").
+    if (app.getLoginItemSettings().openAtLogin !== open) app.setLoginItemSettings({ openAtLogin: open });
+    return;
+  }
   if (process.platform !== "linux") {
     app.setLoginItemSettings({ openAtLogin: open, args: ["--hidden"] });
     return;
@@ -560,6 +573,23 @@ function setOpenAtLogin(open: boolean): void {
   } catch (error) {
     console.error(`[autostart] ${(error as Error).message}`);
   }
+}
+
+/** Started quietly: `--hidden` (Windows and Linux login items), or opened by macOS at login. */
+function startedAtLogin(): boolean {
+  if (process.argv.includes("--hidden")) return true;
+  if (process.platform !== "darwin") return false;
+  try {
+    return app.getLoginItemSettings().wasOpenedAtLogin === true;
+  } catch {
+    return false;
+  }
+}
+
+function macTrayIcon(): Electron.NativeImage {
+  const image = nativeImage.createFromPath(markFile("trayTemplate.png"));
+  image.setTemplateImage(true);
+  return image;
 }
 
 function createWindow(show: boolean): void {
@@ -583,14 +613,17 @@ function createWindow(show: boolean): void {
   });
   win.setMenuBarVisibility(false);
   win.once("ready-to-show", () => {
-    if (show) win?.show();
+    if (!show) return;
+    win?.show();
+    // macOS: an app started by the user comes to the front with its window.
+    if (process.platform === "darwin") app.focus({ steal: true });
   });
   win.on("close", (event) => {
     if (quitting) return;
     event.preventDefault();
     win?.hide();
     if (!settings.closeHintShown && Notification.isSupported()) {
-      new Notification({ title: "Kiwimake is still running", body: "Your PC keeps making apps for your phone. Find Kiwimake next to the clock.", icon: appIcon("icon-256.png") }).show();
+      new Notification({ title: "Kiwimake is still running", body: process.platform === "darwin" ? "Your Mac keeps making apps for your phone. Find Kiwimake in the menu bar." : "Your PC keeps making apps for your phone. Find Kiwimake next to the clock.", icon: appIcon("icon-256.png") }).show();
       setSetting("closeHintShown", true);
     }
   });
@@ -698,7 +731,7 @@ function ipc(): void {
       }
       return { ok: true };
     } catch (error) {
-      const where = process.platform === "linux" ? "your app launcher" : "the Start menu";
+      const where = process.platform === "linux" ? "your app launcher" : process.platform === "darwin" ? "Applications" : "the Start menu";
       return { ok: false, error: error instanceof HexFailure ? error.message : `Hex couldn't be opened. Open it from ${where}, or get it from ${HEX_SITE}` };
     }
   });
@@ -980,10 +1013,12 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
 
   app.whenReady().then(async () => {
     log(`[desktop] start ${app.getVersion()} mode=${mode} port=${port} electron=${process.versions.electron} node=${process.versions.node}`);
+    if (userPath) log(`[desktop] PATH from the login shell: ${userPath.fromShell} folders, ${userPath.path.split(":").length} in all`);
     ipc();
-    const hidden = process.argv.includes("--hidden");
+    const hidden = startedAtLogin();
     createWindow(!hidden);
-    tray = new Tray(markFile("tray.png"));
+    // The Mac's menu bar wants a black template image (macOS tints it for light and dark bars).
+    tray = new Tray(process.platform === "darwin" ? macTrayIcon() : markFile("tray.png"));
     tray.on("click", () => showWindow());
     updateTray();
     if (app.isPackaged) setOpenAtLogin(settings.startWithWindows);
@@ -1007,6 +1042,9 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
       void runScreenshots(win, env.ANYAPP_DESKTOP_SHOTS, log, mode === "fake" ? { pairFakePhone } : {}).then(() => app.quit());
     }
   });
+
+  // macOS: clicking the Dock icon (or opening the app again from Finder) shows the window.
+  app.on("activate", () => showWindow());
 
   app.on("window-all-closed", () => {
     // Stay in the tray.
