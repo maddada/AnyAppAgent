@@ -239,8 +239,12 @@ ANYAPP_UPDATE_FEED=http://127.0.0.1:<feed port>/ ANYAPP_UPDATE_FIRST_CHECK_MS=30
 
 `ANYAPP_UPDATE_FEED` points any packaged copy at another feed; `ANYAPP_UPDATE_FIRST_CHECK_MS` makes
 the first look sooner. `desktop/dev/prove-update-linux.sh` does all of it and checks the result. On a
-Mac, the same works with two disk images from dry runs of the release workflow (macOS, below):
-install the older one in /Applications, serve the newer zip with a `latest-mac.yml`.
+Mac, the same works with two Developer ID disk images from dry runs of the release workflow (macOS,
+below, `dry_run_version`): install the older one in /Applications, serve the newer
+`Kiwimake-mac-<arch>.zip` with its `latest-mac.yml`. Squirrel.Mac starts the new copy through
+Launch Services, without the variables of the shell that started the old one: set them with
+`launchctl setenv` for the test (and `launchctl unsetenv` after), or the new copy uses the real
+state folder and port 8787.
 
 **Signing the feed** (not done, a possible next step): Sparkle signs Ghostex's appcast with an
 EdDSA key. electron-updater has no such check, so a changed feed on GitHub plus a changed Linux file
@@ -499,7 +503,9 @@ Required repository Actions secrets (the names Ghostex uses for the same values)
 
 Transfer them like the Certum secrets: `op read` into `gh secret set <name> --repo maddada/Kiwimake`
 through stdin only, never printed. For the certificate: `base64 -w0 <file.p12> | gh secret set
-APPLE_DEVELOPER_ID_P12_BASE64 --repo maddada/Kiwimake`. A new `.p12` can be exported from the Mac
+APPLE_DEVELOPER_ID_P12_BASE64 --repo maddada/Kiwimake` (on a Mac: `base64 -i <file.p12>`); for its
+password, `gh secret set APPLE_DEVELOPER_ID_P12_PASSWORD --repo maddada/Kiwimake` asks for it
+without showing it. A new `.p12` can be exported from the Mac
 that holds the certificate (Keychain Access, My Certificates, "Developer ID Application: Mohamad
 Youssef", Export, with a new password); set both P12 secrets from that export.
 
