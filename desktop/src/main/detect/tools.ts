@@ -2,6 +2,7 @@
 // (npm) and Git. Each is looked for in our own tools folder first, then where a PC usually has it.
 // A toolchain already on the PC is used as is and never modified.
 import * as realFs from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ToolPiece, ToolsCheck } from "../../shared/types.ts";
 import type { Runner } from "../exec.ts";
@@ -85,6 +86,13 @@ export function toolchainCandidates(toolsDir: string, env: NodeJS.ProcessEnv): {
       add(jdk, `${drive}:\\tools\\android\\jdk`);
       add(sdk, `${drive}:\\tools\\android\\sdk`);
     }
+  } else {
+    // Distro JDKs (Arch, Fedora, Debian/Ubuntu), Android Studio's own, then the usual SDK folders.
+    for (const p of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java", "/opt/android-studio/jbr"]) add(jdk, p);
+    const home = env.HOME ?? homedir();
+    add(sdk, join(home, "Android", "Sdk"));
+    add(sdk, join(home, "Library", "Android", "sdk"));
+    add(sdk, "/opt/android-sdk");
   }
   return { jdk, sdk };
 }
@@ -148,7 +156,7 @@ export async function detectTools({ toolsDir, env, runner, fs = realFs }: ToolsD
   for (const c of cands.sdk) {
     if (!fs.existsSync(c.path)) continue;
     const missing = missingSdkPackages(c.path, fs);
-    if (missing.length === 0 && (await oldNinjas(c.path, runner, fs as FsLike & { readdirSync?: (p: string) => string[] })).length > 0) {
+    if (win && missing.length === 0 && (await oldNinjas(c.path, runner, fs as FsLike & { readdirSync?: (p: string) => string[] })).length > 0) {
       // A complete SDK whose CMake has the old ninja: ours gets fixed, someone else's is not touched.
       if (c.source === "tools") {
         sdkPiece = { id: "sdk", label: "Android kit", ok: false, path: c.path, source: "tools", missing: ["ninja"] };
@@ -210,7 +218,7 @@ export function toolsEnv(pieces: ToolPiece[], toolsDir: string): ToolsCheck["env
   const path: string[] = [];
   if (jdk?.path) path.push(join(jdk.path, "bin"));
   if (sdk?.path) path.push(join(sdk.path, "platform-tools"));
-  if (node?.source === "tools") path.push(join(toolsDir, "node"));
+  if (node?.source === "tools") path.push(process.platform === "win32" ? join(toolsDir, "node") : join(toolsDir, "node", "bin"));
   let gitBash: string | undefined;
   if (git?.source === "tools") {
     path.push(join(toolsDir, "git", "cmd"), join(toolsDir, "git", "usr", "bin"));

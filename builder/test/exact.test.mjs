@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 
@@ -14,7 +15,7 @@ import { buildApk, createApp, getIconPath, presetOf } from '../index.mjs';
 import { EXACT_PIN, exactDirFor, extractExactError, findBun } from '../lib/exact.mjs';
 import { run } from '../lib/exec.mjs';
 
-const ROOT = process.env.ANYAPP_TEST_DIR ?? 'C:\\aa\\t';
+const ROOT = process.env.ANYAPP_TEST_DIR ?? (process.platform === 'win32' ? 'C:\\aa\\t' : path.join(os.homedir(), 'aa', 't'));
 const dir = path.join(ROOT, `ex-${crypto.randomBytes(3).toString('hex')}`);
 
 let missing = null;

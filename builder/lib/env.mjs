@@ -23,8 +23,24 @@ export const KEYSTORE_DIR = path.join(ANYAPP_HOME, 'keystore');
 /** ABIs to build: x86_64 for the emulator, arm64-v8a for phones. */
 export const ABIS = 'x86_64,arm64-v8a';
 
-const DEFAULT_JAVA_HOME = 'D:\\tools\\android\\jdk';
-const DEFAULT_ANDROID_HOME = 'D:\\tools\\android\\sdk';
+// Where a toolchain usually is when JAVA_HOME / ANDROID_HOME are not set: the desktop app's own
+// tools folder first (what "Get the tools" installs), then this platform's usual places.
+const TOOLS_DIR = process.env.ANYAPP_TOOLS_DIR ? path.resolve(process.env.ANYAPP_TOOLS_DIR) : path.join(ANYAPP_HOME, 'tools');
+const DEFAULT_JAVA_HOMES =
+  process.platform === 'win32'
+    ? [path.join(TOOLS_DIR, 'jdk'), 'D:\\tools\\android\\jdk']
+    : [
+        path.join(TOOLS_DIR, 'jdk'),
+        '/usr/lib/jvm/java-21-openjdk',
+        '/usr/lib/jvm/java-21-openjdk-amd64',
+        '/usr/lib/jvm/default',
+        '/usr/lib/jvm/default-java',
+        '/opt/android-studio/jbr',
+      ];
+const DEFAULT_ANDROID_HOMES =
+  process.platform === 'win32'
+    ? [path.join(TOOLS_DIR, 'android-sdk'), 'D:\\tools\\android\\sdk']
+    : [path.join(TOOLS_DIR, 'android-sdk'), path.join(os.homedir(), 'Android', 'Sdk'), '/opt/android-sdk'];
 
 function firstExisting(...dirs) {
   return dirs.find((d) => d && fs.existsSync(d));
@@ -35,12 +51,12 @@ function firstExisting(...dirs) {
  * ANDROID_HOME from the environment when they exist, else this PC's toolchain paths.
  */
 export function androidEnv(extra = {}) {
-  const javaHome = firstExisting(process.env.ANYAPP_JAVA_HOME, process.env.JAVA_HOME, DEFAULT_JAVA_HOME);
+  const javaHome = firstExisting(process.env.ANYAPP_JAVA_HOME, process.env.JAVA_HOME, ...DEFAULT_JAVA_HOMES);
   const sdk = firstExisting(
     process.env.ANYAPP_ANDROID_HOME,
     process.env.ANDROID_HOME,
     process.env.ANDROID_SDK_ROOT,
-    DEFAULT_ANDROID_HOME,
+    ...DEFAULT_ANDROID_HOMES,
   );
   if (!javaHome) throw new Error('No JDK found: set JAVA_HOME (see docs/ENVIRONMENT.md).');
   if (!sdk) throw new Error('No Android SDK found: set ANDROID_HOME (see docs/ENVIRONMENT.md).');

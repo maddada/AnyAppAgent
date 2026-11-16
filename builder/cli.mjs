@@ -8,11 +8,15 @@
 //   node builder/cli.mjs keys list | backup <file> | restore <file> | move <app dir>
 //        (signing keys, docs/DISTRIBUTION.md; the password comes from ANYAPP_KEYS_PASSWORD or is asked for)
 import path from 'node:path';
+import os from 'node:os';
 
 import { appSigningKind, backupSigningKeys, buildApk, createApp, getIconPath, listSigningKeys, moveAppToOwnKey, restoreSigningKeys } from './index.mjs';
 import { readAppMeta } from './lib/presets.mjs';
 import { ensureDepsCache } from './lib/template.mjs';
 import { refillSpares, spareRootFor } from './lib/spare.mjs';
+
+/** Where `warm` puts things when no folder is given: the default apps folder (server/src/config.ts). */
+const DEFAULT_PROBE = process.platform === 'win32' ? 'C:\\aa\\apps\\x' : path.join(os.homedir(), 'aa', 'apps', 'x');
 
 function usage(msg) {
   if (msg) console.error(`error: ${msg}\n`);
@@ -102,11 +106,11 @@ try {
       // No spare: the pinned, patched Exact checkout and its one-time setup (lib/exact.mjs).
       const { ensureExact, exactEnv, exactDirFor } = await import('./lib/exact.mjs');
       const { androidEnv } = await import('./lib/env.mjs');
-      const probe = path.resolve(dirArg ?? 'C:\\aa\\apps\\x');
+      const probe = path.resolve(dirArg ?? DEFAULT_PROBE);
       const { env, javaHome, sdk } = androidEnv();
       log(`Exact checkout: ${await ensureExact(probe, log, { env: exactEnv(env, { javaHome, sdk, exactDir: exactDirFor(probe) }).env })}`);
     } else {
-      const root = spareRootFor(path.resolve(dirArg ?? 'C:\\aa\\apps\\x'), preset);
+      const root = spareRootFor(path.resolve(dirArg ?? DEFAULT_PROBE), preset);
       await refillSpares(root, log, preset);
     }
     log(`Warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);

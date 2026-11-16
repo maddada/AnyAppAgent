@@ -37,7 +37,8 @@ const env = goEnv(paths, {
   GOBIN: gobin,
   ANDROID_HOME: androidHome,
   ANDROID_NDK_HOME: ndk,
-  PATH: `${join(tools, "go", "bin")}${process.platform === "win32" ? ";" : ":"}${gobin}${process.platform === "win32" ? ";" : ":"}${process.env.PATH}`,
+  // gomobile runs javac: the JDK's bin goes on PATH too (JAVA_HOME, else Kiwimake's own JDK).
+  PATH: [join(tools, "go", "bin"), gobin, join(process.env.JAVA_HOME ?? join(tools, "jdk"), "bin"), process.env.PATH].join(process.platform === "win32" ? ";" : ":"),
 });
 delete env.GOOS;
 delete env.GOARCH;

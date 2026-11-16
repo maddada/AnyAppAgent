@@ -794,6 +794,7 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
   const c = s.companion;
   const ecOn = !!s.admin && s.admin.easyConnect.state !== "off";
   const [apk, setApk] = useState(s.settings.phoneApkPath);
+  const startLabel = /Windows/.test(navigator.userAgent) ? "Start with Windows" : "Start with this PC";
   return (
     <div className="page">
       <header className="dm-head">
@@ -811,10 +812,10 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
       <section className="list">
         <div className="srow">
           <div className="srow-main">
-            <span className="body">Start with Windows</span>
+            <span className="body">{startLabel}</span>
             <span className="sub">Kiwimake starts quietly next to the clock when you turn on this PC, so your phone can always make apps.</span>
           </div>
-          <Switch label="Start with Windows" on={s.settings.startWithWindows} onChange={() => api.setSetting("startWithWindows", !s.settings.startWithWindows)} />
+          <Switch label={startLabel} on={s.settings.startWithWindows} onChange={() => api.setSetting("startWithWindows", !s.settings.startWithWindows)} />
         </div>
         <div className="srow">
           <div className="srow-main">

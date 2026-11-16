@@ -130,10 +130,13 @@ describe("anyapp CLI", () => {
   });
 
   it("puts its folder first on the agent's PATH and survives agentEnv's stripping", () => {
-    const base = { Path: "C:\\x", ANYAPP_PORT: "1", OTHER: "y" };
-    const env = agentEnv(base, appsCliEnv("C:\\state", "id1", base));
+    const win = process.platform === "win32";
+    const x = win ? "C:\\x" : "/x";
+    const state = win ? "C:\\state" : "/state";
+    const base = { Path: x, ANYAPP_PORT: "1", OTHER: "y" };
+    const env = agentEnv(base, appsCliEnv(state, "id1", base));
     expect(env.ANYAPP_PORT).toBeUndefined();
-    expect(env.Path).toBe(["C:\\state\\bin", "C:\\x"].join(delimiter).replace(/\//g, "\\"));
+    expect(env.Path).toBe([join(state, "bin"), x].join(delimiter));
     expect(env[ENV_SELF_APP]).toBe("id1");
     expect(env[ENV_STATE_DIR]).toContain("state");
   });

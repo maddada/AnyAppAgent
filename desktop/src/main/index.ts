@@ -1,7 +1,7 @@
 // Kiwimake desktop: runs the companion, onboarding and the main window, sits in the tray.
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -494,7 +494,7 @@ function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void 
   settings = { ...settings, [key]: value };
   saveSettings(settingsFile, settings);
   if (key === "startWithWindows") {
-    app.setLoginItemSettings({ openAtLogin: Boolean(value), args: ["--hidden"] });
+    setOpenAtLogin(Boolean(value));
     updateTray();
   }
   if (key === "githubSkipped") void checkGitHub();
@@ -516,9 +516,37 @@ function markFile(name: string): string {
   return app.isPackaged ? join(process.resourcesPath, "mark", name) : join(paths.repoRoot, "shared", "theme", "mark", "windows", name);
 }
 
-function appIcon(name = "anyappagent.ico"): Electron.NativeImage {
+/** Windows reads the .ico; Linux (and macOS) need a PNG. */
+function appIcon(name = process.platform === "win32" ? "anyappagent.ico" : "icon-256.png"): Electron.NativeImage {
   const file = markFile(name);
   return existsSync(file) ? nativeImage.createFromPath(file) : nativeImage.createEmpty();
+}
+
+/**
+ * Start with the PC. Electron's login items only exist on Windows and macOS; Linux desktops read
+ * an XDG autostart entry (~/.config/autostart/<name>.desktop) instead.
+ */
+function setOpenAtLogin(open: boolean): void {
+  if (process.platform !== "linux") {
+    app.setLoginItemSettings({ openAtLogin: open, args: ["--hidden"] });
+    return;
+  }
+  const dir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "autostart");
+  const file = join(dir, "kiwimake.desktop");
+  try {
+    if (!open) {
+      rmSync(file, { force: true });
+      return;
+    }
+    // An AppImage runs from a temporary mount: start the AppImage file itself.
+    const exe = process.env.APPIMAGE || process.execPath;
+    const quote = (s: string) => `"${s.replace(/(["\\`$])/g, "\\$1")}"`;
+    const exec = [quote(exe), ...(app.isPackaged ? [] : [quote(app.getAppPath())]), "--hidden"].join(" ");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(file, ["[Desktop Entry]", "Type=Application", "Name=Kiwimake", "Comment=Makes apps for your phone", `Exec=${exec}`, "Terminal=false", "X-GNOME-Autostart-enabled=true", ""].join("\n"));
+  } catch (error) {
+    console.error(`[autostart] ${(error as Error).message}`);
+  }
 }
 
 function createWindow(show: boolean): void {
@@ -928,7 +956,7 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
     tray = new Tray(markFile("tray.png"));
     tray.on("click", () => showWindow());
     updateTray();
-    if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: settings.startWithWindows, args: ["--hidden"] });
+    if (app.isPackaged) setOpenAtLogin(settings.startWithWindows);
 
     // Tools first: the companion gets JAVA_HOME / ANDROID_HOME from them.
     await checkTools();

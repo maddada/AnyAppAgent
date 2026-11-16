@@ -1,6 +1,42 @@
-# Android toolchain and emulator on this PC
+# Android toolchain and emulator
 
-Everything here was installed and proven on 2026-11-10. Follow it literally.
+There are two development machines. **Linux** (below) is the one in use now. The Windows PC
+(further down, from "Versions and paths") is the original one and is set up again later.
+
+## Linux (Omarchy / Arch), set up 2026-11-15
+
+| What | Where |
+| --- | --- |
+| Repo | `~/dev/Kiwimake` |
+| JDK 21 (Microsoft OpenJDK 21.0.13) | `~/.anyappagent/tools/jdk` |
+| Android SDK (cmdline-tools latest, platform-tools, platforms;android-37.0, build-tools;37.0.0, ndk;27.1.12297006, cmake 3.30.5 and 3.22.1) | `~/.anyappagent/tools/android-sdk` |
+| Companion state (pairing, apps list, keys, chats) | `~/.anyappagent` |
+| Apps | `~/aa/apps/<slug>`; spare app folders in `~/aa/.spare`; builder tests in `~/aa/t` |
+| Node | system Node (26 works; 24+ needed) |
+
+The toolchain lives in the desktop app's own tools folder, so the desktop app, the companion and
+the builder all find it with no environment variables (each looks there after `JAVA_HOME` /
+`ANDROID_HOME`). A shell that runs Gradle or adb by hand:
+
+```bash
+export JAVA_HOME=~/.anyappagent/tools/jdk ANDROID_HOME=~/.anyappagent/tools/android-sdk
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
+```
+
+- **Run it**: `cd desktop && npm start` (builds, then opens the desktop app, which runs the
+  companion on port 8787). Companion alone, for tests: `cd server && npm start`.
+- **Phone on the same Wi-Fi** reaches the PC at its LAN address on port 8787. The firewall (ufw)
+  must allow it: `sudo ufw allow from 192.168.0.0/16 to any port 8787 proto tcp`. Easy Connect
+  (QR, from anywhere) needs no open port.
+- **No long-path problem on Linux**: the SDK's bundled ninja 1.10.2 is fine here; the ninja swap
+  (pitfall 1) is Windows only.
+- **No emulator** is set up on Linux yet; test on the real phone.
+- Electron's binary: npm 11 can skip install scripts. If `desktop/node_modules/electron/dist` is
+  missing, run `node node_modules/electron/install.js` in `desktop/`.
+
+# The Windows PC
+
+Everything below was installed and proven on 2026-11-10. Follow it literally there.
 
 ## Versions and paths
 

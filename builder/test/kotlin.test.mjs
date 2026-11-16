@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { after, before, test } from 'node:test';
@@ -15,10 +16,12 @@ import { buildApk, createApp, getIconPath, presetOf } from '../index.mjs';
 import { decodePng, encodePng, resizeSquare } from '../lib/png.mjs';
 import { KOTLIN_TEMPLATE_DIR } from '../lib/presets.mjs';
 import { run } from '../lib/exec.mjs';
+import { readCerts } from '../lib/apksign.mjs';
+import { androidEnv } from '../lib/env.mjs';
 
 process.env.ANYAPP_NO_SPARE = '1'; // no background spare refills from a test
 
-const ROOT = process.env.ANYAPP_TEST_DIR ?? 'C:\\aa\\t';
+const ROOT = process.env.ANYAPP_TEST_DIR ?? (process.platform === 'win32' ? 'C:\\aa\\t' : path.join(os.homedir(), 'aa', 't'));
 const dir = path.join(ROOT, `kt-${crypto.randomBytes(3).toString('hex')}`);
 const NAME = `Mum's "Tea" & <Timer>`;
 
@@ -112,12 +115,10 @@ test('buildApk builds a small signed APK, versionCode = build number, icon sizes
 
   // Both builds are signed with the same key, so 2 installs over 1.
   const certs = [];
+  // The builder's own apksigner call (java -jar, so Linux needs no java on PATH).
+  const { javaHome, sdk } = androidEnv();
   for (const apk of [first.apkPath, second.apkPath]) {
-    const sdk = process.env.ANDROID_HOME ?? 'D:\\tools\\android\\sdk';
-    const apksigner = path.join(sdk, 'build-tools', '37.0.0', process.platform === 'win32' ? 'apksigner.bat' : 'apksigner');
-    if (!fs.existsSync(apksigner)) return;
-    const { lines } = await run(apksigner, ['verify', '--print-certs', apk], { shell: process.platform === 'win32' });
-    certs.push(lines.find((l) => /certificate SHA-256 digest/.test(l)));
+    certs.push([...(await readCerts(javaHome, sdk, apk))].sort().join(','));
   }
   assert.ok(certs[0], 'apksigner printed no certificate');
   assert.equal(certs[0], certs[1]);

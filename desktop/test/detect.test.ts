@@ -181,12 +181,13 @@ describe("tools detection", () => {
       "D:/tools/android/jdk/bin/java": "",
       "D:/tools/android/jdk/release": JDK_RELEASE,
       ...fullSdk("D:/tools/android/sdk"),
-      "C:/node/node.exe": "",
-      "C:/node/node": "",
-      "C:/git/cmd/git.exe": "",
-      "C:/git/cmd/git": "",
+      "/pc/node/node.exe": "",
+      "/pc/node/node": "",
+      "/pc/git/cmd/git.exe": "",
+      "/pc/git/cmd/git": "",
     };
-    const env = { PATH: ["C:/node", "C:/git/cmd"].join(process.platform === "win32" ? ";" : ":"), JAVA_HOME: "D:/tools/android/jdk", ANDROID_HOME: "D:/tools/android/sdk" };
+    // No drive letters in PATH: on Linux and macOS ":" is the PATH separator.
+    const env = { PATH: ["/pc/node", "/pc/git/cmd"].join(process.platform === "win32" ? ";" : ":"), JAVA_HOME: "D:/tools/android/jdk", ANDROID_HOME: "D:/tools/android/sdk" };
     const t = await detectTools({ toolsDir: "C:/home/.anyappagent/tools", env, runner: fakeRunner({ "--version": { stdout: "v24.14.1" } }), fs: fakeFs(files) });
     expect(t.state).toBe("done");
     expect(t.summary).toBe("Ready. Found on this PC.");
@@ -211,7 +212,7 @@ describe("tools detection", () => {
     const t = await detectTools({ toolsDir: own, env: { PATH: "" }, runner: fakeRunner({ "--version": { stdout: "v24.22.2" } }), fs: fakeFs(files) });
     expect(t.state).toBe("done");
     expect(t.pieces.every((p) => p.source === "tools")).toBe(true);
-    expect(t.env?.path).toContain(join(own, "node"));
+    expect(t.env?.path).toContain(process.platform === "win32" ? join(own, "node") : join(own, "node", "bin"));
   });
 
   it("a PC with nothing needs the download", async () => {
@@ -260,7 +261,7 @@ describe("tools installer", () => {
       <archive><complete><size>1</size><checksum type="sha1">aaa</checksum><url>commandlinetools-linux-1_latest.zip</url></complete><host-os>linux</host-os></archive>
       <archive><complete><size>1</size><checksum type="sha1">57d04f2d</checksum><url>commandlinetools-win-16111833_latest.zip</url></complete><host-os>windows</host-os></archive>
     </archives></remotePackage>`;
-    expect(pickCmdlineTools(xml)).toEqual({ url: "https://dl.google.com/android/repository/commandlinetools-win-16111833_latest.zip", sha1: "57d04f2d" });
+    expect(pickCmdlineTools(xml, "windows")).toEqual({ url: "https://dl.google.com/android/repository/commandlinetools-win-16111833_latest.zip", sha1: "57d04f2d" });
     expect(pickCmdlineTools("<nothing/>")).toBeUndefined();
   });
 
@@ -291,12 +292,16 @@ describe("ninja check", () => {
   });
 
   it("an SDK that only needs the ninja fix gets just that step", () => {
-    const plan = planInstall([{ id: "jdk", label: "", ok: true }, { id: "sdk", label: "", ok: false, missing: ["ninja"] }, { id: "node", label: "", ok: true }, { id: "git", label: "", ok: true }], ["ninja"]);
+    const plan = planInstall([{ id: "jdk", label: "", ok: true }, { id: "sdk", label: "", ok: false, missing: ["ninja"] }, { id: "node", label: "", ok: true }, { id: "git", label: "", ok: true }], ["ninja"], "win32");
     expect(plan.map((s) => s.id)).toEqual(["ninja"]);
   });
 
+  it("Linux has no long-path limit, so no ninja fix there", () => {
+    expect(planInstall([{ id: "sdk", label: "", ok: false }], [], "linux").map((s) => s.id)).not.toContain("ninja");
+  });
+
   it("a fresh SDK install applies the ninja fix after the SDK pieces and installs both CMakes", () => {
-    const ids = planInstall([{ id: "sdk", label: "", ok: false }]).map((s) => s.id);
+    const ids = planInstall([{ id: "sdk", label: "", ok: false }], [], "win32").map((s) => s.id);
     const lastSdk = Math.max(...ids.map((id, i) => (id.startsWith("sdk:") ? i : -1)));
     expect(ids.indexOf("ninja")).toBeGreaterThan(lastSdk);
     expect(ids).toContain("sdk:cmake;3.30.5");

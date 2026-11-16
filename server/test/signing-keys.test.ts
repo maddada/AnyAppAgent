@@ -3,6 +3,8 @@ import type { Builder } from "../src/builder.ts";
 import { HttpError } from "../src/apps.ts";
 import { SigningKeys } from "../src/signing-keys.ts";
 
+const KEYS_FILE = process.platform === "win32" ? "C:\\keys.json" : "/keys.json";
+
 function fakeBuilder(): { builder: Builder; calls: { backup: unknown[]; restore: unknown[] } } {
   const calls = { backup: [] as unknown[], restore: [] as unknown[] };
   const builder = {
@@ -57,11 +59,11 @@ describe("SigningKeys", () => {
     const { builder, calls } = fakeBuilder();
     const keys = new SigningKeys(builder, () => new Map(), () => {});
     await expect(keys.backup("relative.json", "long enough")).rejects.toThrow(HttpError);
-    await expect(keys.backup("C:\\keys.json", "short")).rejects.toThrow(/at least 8/);
-    await expect(keys.restore("C:\\keys.json", 12345678)).rejects.toThrow(/at least 8/);
+    await expect(keys.backup(KEYS_FILE, "short")).rejects.toThrow(/at least 8/);
+    await expect(keys.restore(KEYS_FILE, 12345678)).rejects.toThrow(/at least 8/);
     expect(calls.backup).toHaveLength(0);
-    expect(await keys.backup("C:\\keys.json", "long enough")).toEqual({ file: "C:\\keys.json", count: 2, createdAt: "2026-11-11T00:00:00.000Z" });
-    expect(await keys.restore("C:\\keys.json", "long enough")).toEqual({ added: ["com.anyapp.tea"], same: ["shared"], conflicts: [] });
+    expect(await keys.backup(KEYS_FILE, "long enough")).toEqual({ file: KEYS_FILE, count: 2, createdAt: "2026-11-11T00:00:00.000Z" });
+    expect(await keys.restore(KEYS_FILE, "long enough")).toEqual({ added: ["com.anyapp.tea"], same: ["shared"], conflicts: [] });
   });
 
   it("turns a builder error (wrong password) into a 400 with its message", async () => {
@@ -70,7 +72,7 @@ describe("SigningKeys", () => {
       throw new Error("Wrong password, or the backup file was changed.");
     };
     const keys = new SigningKeys(builder, () => new Map(), () => {});
-    const error = await keys.restore("C:\\keys.json", "long enough").catch((e: unknown) => e);
+    const error = await keys.restore(KEYS_FILE, "long enough").catch((e: unknown) => e);
     expect(error).toBeInstanceOf(HttpError);
     expect((error as HttpError).status).toBe(400);
     expect((error as Error).message).toBe("Wrong password, or the backup file was changed.");
@@ -82,6 +84,6 @@ describe("SigningKeys", () => {
     expect(keys.available).toBe(false);
     await keys.refresh();
     expect(keys.state()).toBeUndefined();
-    await expect(keys.backup("C:\\keys.json", "long enough")).rejects.toThrow(/real builder/);
+    await expect(keys.backup(KEYS_FILE, "long enough")).rejects.toThrow(/real builder/);
   });
 });

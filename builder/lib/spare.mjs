@@ -2,7 +2,8 @@
 // createApp only has to rename it into place (instant on the same volume) and fill in the name.
 // After each claim a detached background process makes the next spare.
 //
-// One spare per preset: react-native spares in C:\aa\.spare, kotlin spares in C:\aa\.spare\kotlin.
+// One spare per preset: react-native spares in C:\aa\.spare (Linux: ~/aa/.spare), kotlin spares in
+// C:\aa\.spare\kotlin.
 // A kotlin spare is only a few files, but its refill also warms the shared Gradle caches once per
 // template version (see warmKotlin), so the first build of a new Kotlin app is quick too.
 //
@@ -11,6 +12,7 @@ import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,11 +23,21 @@ import { checkPreset } from './presets.mjs';
 const MARKER = '.anyapp-spare.json';
 const SPARES_WANTED = 1;
 
-/** Spares must be on the same volume as the app folder; ANYAPP_SPARE_DIR overrides. */
+/**
+ * Spares must be on the same volume as the app folder; ANYAPP_SPARE_DIR overrides.
+ * Windows: <drive>\aa\.spare. Elsewhere the filesystem root is not writable, so ~/aa/.spare for
+ * folders under the home folder (apps live in ~/aa/apps), else a .spare two levels up.
+ */
 export function spareRootFor(dir, preset = 'react-native') {
+  const resolved = path.resolve(dir);
+  const home = os.homedir();
   const base = process.env.ANYAPP_SPARE_DIR
     ? path.resolve(process.env.ANYAPP_SPARE_DIR)
-    : path.join(path.parse(path.resolve(dir)).root, 'aa', '.spare');
+    : process.platform === 'win32'
+      ? path.join(path.parse(resolved).root, 'aa', '.spare')
+      : resolved.startsWith(home + path.sep)
+        ? path.join(home, 'aa', '.spare')
+        : path.join(path.dirname(path.dirname(resolved)), '.spare');
   return checkPreset(preset) === 'react-native' ? base : path.join(base, preset);
 }
 

@@ -69,8 +69,14 @@ export async function extractZip(zip: string, dest: string, options: { flatten?:
   const staging = `${dest}.extract`;
   rmSync(staging, { recursive: true, force: true });
   mkdirSync(staging, { recursive: true });
-  const tar = process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
-  const result = await run(tar, ["-xf", zip, "-C", staging], { timeoutMs: 30 * 60_000 });
+  // Windows' own tar.exe is bsdtar and reads zips; GNU tar (Linux) does not, so zips use unzip
+  // there (it keeps the executable bits Google's and Node's archives carry). .tar.gz/.tar.xz use tar.
+  const win = process.platform === "win32";
+  const isZip = /\.zip$/i.test(zip);
+  const result =
+    !win && isZip
+      ? await run("unzip", ["-q", "-o", zip, "-d", staging], { timeoutMs: 30 * 60_000 })
+      : await run(win ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar", ["-xf", zip, "-C", staging], { timeoutMs: 30 * 60_000 });
   if (result.code !== 0) throw new Error(`Could not unpack ${zip}: ${result.stderr || result.error}`);
   let root = staging;
   if (options.flatten) {

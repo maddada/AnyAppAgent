@@ -2,13 +2,14 @@
 // tools folder (%USERPROFILE%\.anyappagent\tools unless ANYAPP_TOOLS_DIR is set). Only missing
 // pieces are installed; a toolchain already on the PC is never touched.
 //
-//   jdk          Microsoft Build of OpenJDK 21 (zip, sha256 from Microsoft)
+//   jdk          Microsoft Build of OpenJDK 21 (Windows zip or Linux tar.gz, sha256 from Microsoft)
 //   android-sdk  Android command-line tools (sha1 from Google's repository XML), then sdkmanager
 //                accepts the licences and installs REQUIRED_SDK_PACKAGES + EXTRA_SDK_PACKAGES
-//   node         Node.js 24 LTS (zip, sha256 from SHASUMS256.txt)
-//   git          PortableGit (Git with Git Bash, which Claude Code uses on Windows; sha256 from GitHub)
+//   node         Node.js 24 LTS (Windows zip or Linux tar.xz, sha256 from SHASUMS256.txt)
+//   git          Windows: PortableGit (Git with Git Bash, which Claude Code uses on Windows; sha256
+//                from GitHub). Linux: not downloaded, Git comes from the system's package manager.
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import type { ToolPiece } from "../../shared/types.ts";
 import { killTree, spawnHidden } from "../exec.ts";
@@ -28,7 +29,7 @@ export interface InstallPlanStep {
 }
 
 /** What will be installed, given what detection found. Pure. */
-export function planInstall(pieces: ToolPiece[], sdkMissing: string[] = []): InstallPlanStep[] {
+export function planInstall(pieces: ToolPiece[], sdkMissing: string[] = [], platform: NodeJS.Platform = process.platform): InstallPlanStep[] {
   const steps: InstallPlanStep[] = [];
   const need = (id: ToolPiece["id"]) => !pieces.find((p) => p.id === id)?.ok;
   if (need("jdk")) steps.push({ id: "jdk", label: "Getting the Java kit", weight: 200 });
@@ -42,7 +43,8 @@ export function planInstall(pieces: ToolPiece[], sdkMissing: string[] = []): Ins
       const wanted = sdkMissing.length ? [...sdkMissing.filter((p) => p !== "licenses" && p !== "ninja"), ...EXTRA_SDK_PACKAGES] : [...REQUIRED_SDK_PACKAGES, ...EXTRA_SDK_PACKAGES];
       for (const pkg of [...new Set(wanted)]) steps.push({ id: `sdk:${pkg}`, label: sdkLabel(pkg), weight: sdkWeight(pkg) });
     }
-    steps.push({ id: "ninja", label: "Fixing the native build helper for long folder names", weight: 3 });
+    // Only Windows has the 260-character path limit the bundled ninja trips over.
+    if (platform === "win32") steps.push({ id: "ninja", label: "Fixing the native build helper for long folder names", weight: 3 });
   }
   if (need("node")) steps.push({ id: "node", label: "Getting Node.js", weight: 35 });
   if (need("git")) steps.push({ id: "git", label: "Getting Git", weight: 60 });
@@ -77,14 +79,19 @@ export function parseSdkProgress(chunk: string): number | undefined {
   return pct >= 0 && pct <= 100 ? pct / 100 : undefined;
 }
 
-/** Picks the Windows command-line tools zip from Google's repository2-3.xml. */
-export function pickCmdlineTools(xml: string): { url: string; sha1: string } | undefined {
+/** Google's name for this computer's OS in repository2-3.xml. */
+export function sdkHostOs(platform: NodeJS.Platform = process.platform): string {
+  return platform === "win32" ? "windows" : platform === "darwin" ? "macosx" : "linux";
+}
+
+/** Picks this OS's command-line tools zip from Google's repository2-3.xml. */
+export function pickCmdlineTools(xml: string, hostOs: string = sdkHostOs()): { url: string; sha1: string } | undefined {
   const start = xml.indexOf('<remotePackage path="cmdline-tools;latest">');
   if (start < 0) return undefined;
   const block = xml.slice(start, xml.indexOf("</remotePackage>", start));
   const archives = block.split("<archive>").slice(1);
   for (const archive of archives) {
-    if (!/<host-os>windows<\/host-os>/.test(archive)) continue;
+    if (!archive.includes(`<host-os>${hostOs}</host-os>`)) continue;
     const url = archive.match(/<url>([^<]+)<\/url>/)?.[1];
     const sha1 = archive.match(/<checksum type="sha1">([0-9a-f]+)<\/checksum>/)?.[1];
     if (url && sha1) return { url: `https://dl.google.com/android/repository/${url}`, sha1 };
@@ -170,9 +177,11 @@ export class ToolsInstaller {
   }
 
   private async installJdk(report: (f: number, d?: string) => void): Promise<void> {
-    const url = "https://aka.ms/download-jdk/microsoft-jdk-21-windows-x64.zip";
+    const arch = process.arch === "arm64" ? "aarch64" : "x64";
+    const file = process.platform === "win32" ? `microsoft-jdk-21-windows-${arch}.zip` : process.platform === "darwin" ? `microsoft-jdk-21-macos-${arch}.tar.gz` : `microsoft-jdk-21-linux-${arch}.tar.gz`;
+    const url = `https://aka.ms/download-jdk/${file}`;
     const sum = (await fetchText(`${url}.sha256sum.txt`, this.abort.signal)).trim().split(/\s+/)[0];
-    const zip = join(this.downloads, "jdk.zip");
+    const zip = join(this.downloads, process.platform === "win32" ? "jdk.zip" : "jdk.tar.gz");
     await download({ url, dest: zip, signal: this.abort.signal, checksum: `sha256:${sum}`, onProgress: this.bytes((f, d) => report(f * 0.85, d)) });
     report(0.9, "Unpacking…");
     await extractZip(zip, join(this.opts.toolsDir, "jdk"), { flatten: true });
@@ -194,19 +203,19 @@ export class ToolsInstaller {
 
   private javaHome(): string {
     const ours = join(this.opts.toolsDir, "jdk");
-    if (existsSync(join(ours, "bin", "java.exe"))) return ours;
+    if (existsSync(join(ours, "bin", process.platform === "win32" ? "java.exe" : "java"))) return ours;
     const found = this.opts.pieces.find((p) => p.id === "jdk" && p.ok)?.path;
     if (!found) throw new Error("The Java kit is missing.");
     return found;
   }
 
-  /** Runs sdkmanager.bat with JAVA_HOME set; answers "y" to every licence question. */
+  /** Runs sdkmanager (.bat on Windows) with JAVA_HOME set; answers "y" to every licence question. */
   private sdkmanager(args: string[], onOutput?: (chunk: string) => void): Promise<void> {
-    const bat = join(this.sdkDir(), "cmdline-tools", "latest", "bin", "sdkmanager.bat");
+    const bat = join(this.sdkDir(), "cmdline-tools", "latest", "bin", process.platform === "win32" ? "sdkmanager.bat" : "sdkmanager");
     const javaHome = this.javaHome();
     return new Promise((resolve, reject) => {
       const child = spawnHidden(bat, [`--sdk_root=${this.sdkDir()}`, ...args], {
-        env: { ...process.env, JAVA_HOME: javaHome, PATH: `${join(javaHome, "bin")};${process.env.PATH ?? ""}` },
+        env: { ...process.env, JAVA_HOME: javaHome, PATH: `${join(javaHome, "bin")}${delimiter}${process.env.PATH ?? ""}` },
         stdio: ["pipe", "pipe", "pipe"],
       });
       this.child = child;
@@ -338,9 +347,14 @@ export class ToolsInstaller {
 
   private async installNode(report: (f: number, d?: string) => void): Promise<void> {
     const index = await fetchJson<{ version: string; lts: string | false; files: string[] }[]>("https://nodejs.org/dist/index.json", this.abort.signal);
-    const pick = index.find((v) => v.version.startsWith("v24.") && v.files.includes("win-x64-zip")) ?? index.find((v) => v.lts && v.files.includes("win-x64-zip"));
+    const arch = process.arch === "arm64" ? "arm64" : "x64";
+    const win = process.platform === "win32";
+    const os = win ? "win" : process.platform === "darwin" ? "darwin" : "linux";
+    // index.json lists "win-x64-zip", "linux-x64", "osx-arm64-tar"; the file names use win/linux/darwin.
+    const key = win ? `win-${arch}-zip` : process.platform === "darwin" ? `osx-${arch}-tar` : `linux-${arch}`;
+    const pick = index.find((v) => v.version.startsWith("v24.") && v.files.includes(key)) ?? index.find((v) => v.lts && v.files.includes(key));
     if (!pick) throw new Error("Could not find a Node.js download.");
-    const name = `node-${pick.version}-win-x64.zip`;
+    const name = `node-${pick.version}-${os}-${arch}.${win ? "zip" : "tar.xz"}`;
     const sums = await fetchText(`https://nodejs.org/dist/${pick.version}/SHASUMS256.txt`, this.abort.signal);
     const sum = sums.split("\n").find((l) => l.trim().endsWith(name))?.split(/\s+/)[0];
     const zip = join(this.downloads, name);
@@ -350,6 +364,9 @@ export class ToolsInstaller {
   }
 
   private async installGit(report: (f: number, d?: string) => void): Promise<void> {
+    if (process.platform !== "win32") {
+      throw new Error("Git is missing. Install it with your system's package manager (for example `sudo pacman -S git` or `sudo apt install git`), then press Check again.");
+    }
     const rel = await fetchJson<{ assets: { name: string; browser_download_url: string; digest?: string }[] }>("https://api.github.com/repos/git-for-windows/git/releases/latest", this.abort.signal);
     const asset = rel.assets.find((a) => /^PortableGit-.*-64-bit\.7z\.exe$/.test(a.name));
     if (!asset) throw new Error("Could not find the Git download.");

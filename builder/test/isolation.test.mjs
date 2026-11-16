@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
@@ -15,7 +16,7 @@ import { ensureDepsCache } from '../lib/template.mjs';
 
 process.env.ANYAPP_NO_SPARE = '1'; // do not start background spare refills from a test
 
-const ROOT = process.env.ANYAPP_TEST_DIR ?? 'C:\\aa\\t';
+const ROOT = process.env.ANYAPP_TEST_DIR ?? (process.platform === 'win32' ? 'C:\\aa\\t' : path.join(os.homedir(), 'aa', 't'));
 const SAMPLES = ['react/index.js', 'expo/package.json', 'react-native/package.json', 'typescript/package.json'];
 
 const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');

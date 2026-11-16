@@ -1,9 +1,12 @@
 // The Android toolchain the builder needs (JAVA_HOME, ANDROID_HOME). The desktop app sets both
 // when it starts the companion. A companion started by hand reads them, in this order, from:
 //   1. its own environment, 2. <state>\toolchain.json {"javaHome", "androidHome"},
-//   3. the paths in scripts/android-env.ps1 (docs/ENVIRONMENT.md).
+//   3. the paths in scripts/android-env.ps1 (docs/ENVIRONMENT.md),
+//   4. the desktop app's tools folder (<home>\.anyappagent\tools, or ANYAPP_TOOLS_DIR), then the
+//      usual places on Linux and macOS (/usr/lib/jvm, ~/Android/Sdk, /opt/android-sdk).
 // The result goes into process.env, where builder/ reads it.
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { REPO_DIR } from "./config.ts";
 import { readJson } from "./fs-util.ts";
@@ -48,6 +51,17 @@ export function findToolchain(stateDir: string, env: NodeJS.ProcessEnv = process
   ];
   const script = join(REPO_DIR, "scripts", "android-env.ps1");
   if (existsSync(script)) candidates.push({ ...fromEnvScript(readFileSync(script, "utf8")), source: "scripts/android-env.ps1" });
+  const tools = env.ANYAPP_TOOLS_DIR ?? join(homedir(), ".anyappagent", "tools");
+  candidates.push({ javaHome: join(tools, "jdk"), androidHome: join(tools, "android-sdk"), source: "tools folder" });
+  if (process.platform !== "win32") {
+    const home = env.HOME ?? homedir();
+    for (const javaHome of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java", "/opt/android-studio/jbr"]) {
+      candidates.push({ javaHome, source: "system" });
+    }
+    for (const androidHome of [join(home, "Android", "Sdk"), "/opt/android-sdk", join(home, "Library", "Android", "sdk")]) {
+      candidates.push({ androidHome, source: "system" });
+    }
+  }
   const javaHome = candidates.find((c) => isJdk(c.javaHome));
   const sdk = candidates.find((c) => isAndroidSdk(c.androidHome));
   if (!javaHome || !sdk) return null;
