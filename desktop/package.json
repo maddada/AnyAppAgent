@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "fake-companion": "node dev/fake-companion.mjs",
-    "dist": "pwsh -NoProfile -File dev/release-windows.ps1"
+    "dist": "pwsh -NoProfile -File dev/release-windows.ps1",
+    "dist:mac": "node dev/build-mac.mjs"
   },
   "dependencies": {
     "qrcode": "1.5.4",
@@ -156,6 +157,42 @@
       "en-US",
       "en-GB",
       "ar"
-    ]
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "../shared/theme/mark/mac/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Kiwimake-mac-${arch}.${ext}",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "notarize": false,
+      "minimumSystemVersion": "12.0",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Kiwimake listens only while you dictate a message to your app's chat.",
+        "LSApplicationCategoryType": "public.app-category.developer-tools"
+      },
+      "extraResources": [
+        {
+          "from": "../shared/theme/mark/mac",
+          "to": "mark",
+          "filter": [
+            "trayTemplate.png",
+            "trayTemplate@2x.png"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "title": "Kiwimake",
+      "artifactName": "Kiwimake-mac-${arch}.${ext}"
+    }
   }
 }
