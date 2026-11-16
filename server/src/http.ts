@@ -542,7 +542,7 @@ export function startHttpServer(deps: {
         return sendJson(res, 200, await apps.delete(id, { forGood: flag("forGood"), uninstall: flag("uninstall") }));
       }
     } else if (action === "icon" && (method === "GET" || method === "HEAD")) {
-      const app = apps.get(id);
+      const app = apps.iconApp(id);
       const icon = apps.icon(id);
       const headers = { "Content-Type": "image/png", "Cache-Control": "no-cache", ETag: `"${app.iconVersion}"` };
       if (req.headers["if-none-match"] === headers.ETag) {

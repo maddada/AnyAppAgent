@@ -436,9 +436,20 @@ export class AppManager {
   }
 
   icon(id: string): { path: string } | { png: Buffer } {
-    const record = this.record(id);
+    const record = this.iconRecord(id);
     const path = this.safeIconPath(record);
     return path ? { path } : { png: placeholderIconPng(record.app.name) };
+  }
+
+  /** The app an icon is asked for: one in the list, or one in Recently deleted (Settings shows it). */
+  iconApp(id: string): App {
+    return this.iconRecord(id).app;
+  }
+
+  private iconRecord(id: string): AppRecord {
+    const record = this.store.find(id) ?? this.store.findInTrash(id);
+    if (!record) throw new HttpError(404, "No such app.");
+    return record;
   }
 
   /** The session id of an app (not part of the protocol; for logs and the e2e script). */

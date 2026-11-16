@@ -101,6 +101,9 @@ describe("delete", () => {
     expect(trash.map((x) => x.id)).toEqual([a.id]);
     expect(trash[0]!.deletedAt).toBeTruthy();
     expect(existsSync(join(appsDir, "alpha"))).toBe(true);
+    // Settings shows its icon while it waits in Recently deleted.
+    expect(apps.iconApp(a.id).id).toBe(a.id);
+    expect(apps.icon(a.id)).toBeTruthy();
 
     const back = apps.restoreDeleted(a.id);
     expect(back.pin).toBeUndefined();
