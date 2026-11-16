@@ -5,7 +5,7 @@ import { engineName, type Engine } from "../../shared/engines.mts";
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppMove, AppPreset, ChangeSettingsRequest, CloneRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppMove, DeleteAppResult, AppPreset, ChangeSettingsRequest, CloneRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
 import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, type VersionRecord } from "./history.ts";
 import { MEMORY_FILE } from "./playbook.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
@@ -1413,7 +1413,13 @@ export class AppManager {
     };
   }
 
-  async delete(id: string): Promise<void> {
+  /**
+   * Deletes an app (Pin, hide and delete). By default it waits in Recently deleted with its files
+   * kept, so it can be restored. forGood also deletes its folder, chat and versions here and its
+   * GitHub repos; it can't come back. uninstall asks phones to uninstall it (they ask Android).
+   * trash: false is for a copy that moved to the cloud: gone from the list, never in the bin.
+   */
+  async delete(id: string, opts: { forGood?: boolean; uninstall?: boolean; trash?: boolean } = {}): Promise<DeleteAppResult> {
     const record = this.record(id);
     const rt = this.runtimes.get(id);
     if (rt) {
@@ -1422,9 +1428,127 @@ export class AppManager {
       this.runtimes.delete(id);
     }
     await this.workers?.forget(id);
+    const wasPinned = record.app.pin !== undefined;
+    delete record.app.pin;
     record.deleted = true;
+    record.deletedAt = nowIso();
+    record.inTrash = opts.trash !== false && !opts.forGood;
     this.store.save();
-    this.broadcast({ type: "app.deleted", appId: id });
+    this.broadcast({ type: "app.deleted", appId: id, ...(opts.uninstall ? { uninstall: true } : {}) });
+    if (wasPinned) this.renumberPins();
+    let problem: string | undefined;
+    if (opts.forGood) problem = await this.purge(record, true);
+    if (opts.trash !== false) this.broadcast({ type: "trash.updated", count: this.store.trash().length });
+    return { forGood: !!opts.forGood, ...(problem ? { problem } : {}) };
+  }
+
+  /** Recently deleted, newest first (each with deletedAt). */
+  trash(): App[] {
+    return this.store.trash().map((record) => ({ ...record.app, deletedAt: record.deletedAt }));
+  }
+
+  /** Brings an app back from Recently deleted: in the list again, not pinned, not hidden. */
+  restoreDeleted(id: string): App {
+    const record = this.store.findInTrash(id);
+    if (!record) throw new HttpError(404, "That app is not in Recently deleted.");
+    record.deleted = false;
+    delete record.inTrash;
+    delete record.deletedAt;
+    delete record.app.pin;
+    delete record.app.hidden;
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
+    this.broadcast({ type: "trash.updated", count: this.store.trash().length });
+    return record.app;
+  }
+
+  /** Empty: every app in Recently deleted is deleted for good here. Their GitHub repos stay. */
+  async emptyTrash(): Promise<void> {
+    for (const record of this.store.trash()) await this.purge(record, false);
+    this.broadcast({ type: "trash.updated", count: 0 });
+  }
+
+  /** Deletes a deleted app's files for good: folder, chat, versions, to-dos; with github also its repos. */
+  private async purge(record: AppRecord, github: boolean): Promise<string | undefined> {
+    const id = record.app.id;
+    const problems: string[] = [];
+    record.purged = true;
+    record.inTrash = false;
+    this.store.dropChat(id);
+    this.store.save();
+    const drop = (path: string, what: string) => {
+      try {
+        rmSync(path, { recursive: true, force: true, maxRetries: 3 });
+      } catch (e) {
+        problems.push(`Couldn't delete ${what}: ${(e as Error).message}`);
+      }
+    };
+    // Only the app's own folder: under the apps folder and named after it.
+    if (record.dir && record.dir.startsWith(this.config.appsDir) && record.dir !== this.config.appsDir) drop(record.dir, "its folder");
+    drop(this.store.chatPath(id), "its chat");
+    drop(this.store.apkDir(id), "its versions");
+    drop(join(this.store.stateDir, "todos", `${id}.json`), "its to-do list");
+    if (github && this.github.deleteRepo) {
+      const repos = [record.app.repoUrl, record.app.sharing?.releasesRepoUrl]
+        .filter((url): url is string => !!url)
+        .map((url) => url.replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, ""));
+      for (const full of repos) {
+        try {
+          await this.github.deleteRepo(full);
+        } catch (e) {
+          problems.push(`GitHub didn't delete ${full}: ${(e as Error).message}. You can delete it on github.com.`);
+        }
+      }
+    }
+    if (problems.length) this.log(`[${record.app.slug}] delete for good:`, problems.join(" "));
+    return problems.length ? problems.join(" ") : undefined;
+  }
+
+  // ---------- pins and hiding (shared by every phone and the desktop)
+
+  /** The whole Pinned section in order; apps not listed are unpinned. Returns the pinned apps. */
+  setPins(ids: string[]): App[] {
+    const order = [...new Set(ids)].filter((id) => {
+      const record = this.store.find(id);
+      return !!record && !record.app.hidden;
+    });
+    for (const record of this.store.apps()) {
+      const index = order.indexOf(record.app.id);
+      const next = index < 0 ? undefined : index;
+      if (record.app.pin === next) continue;
+      if (next === undefined) delete record.app.pin;
+      else record.app.pin = next;
+      // No touch(): pinning is not activity, so the list order by last change stays.
+      this.broadcast({ type: "app.updated", app: record.app });
+    }
+    this.store.save();
+    return this.pinned();
+  }
+
+  private pinned(): App[] {
+    return this.store
+      .apps()
+      .map((record) => record.app)
+      .filter((app) => app.pin !== undefined)
+      .sort((a, b) => a.pin! - b.pin!);
+  }
+
+  /** Closes the gaps after a pinned app left the section. */
+  private renumberPins(): void {
+    this.setPins(this.pinned().map((app) => app.id));
+  }
+
+  hide(id: string, hidden: boolean): App {
+    const record = this.record(id);
+    const wasPinned = record.app.pin !== undefined;
+    if (hidden) {
+      record.app.hidden = true;
+      delete record.app.pin;
+    } else delete record.app.hidden;
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
+    if (wasPinned) this.renumberPins();
+    return record.app;
   }
 
   // ---------- the per-app work queue

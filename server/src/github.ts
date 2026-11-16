@@ -1,6 +1,7 @@
 // The GitHub calls sharing needs, through the `gh` CLI that onboarding signed in (docs/DISTRIBUTION.md,
 // "GitHub"). Only repos named anyapp-<slug>-releases are ever created, made public, made private or
-// written to here; nothing is ever deleted.
+// written to here. The one deletion: deleteAppRepo, when the person deletes an app for good, and
+// only for anyapp-<slug> and anyapp-<slug>-releases.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -145,4 +146,22 @@ export async function writeAsset(full: string, tag: string, name: string, conten
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/** The app's own repos only: anyapp-<slug> or anyapp-<slug>-releases. */
+export const APP_REPO_PATTERN = /^anyapp-[a-z0-9-]+$/;
+
+/**
+ * Deletes an app's repo when the person deletes the app for good. Needs gh's delete_repo scope;
+ * without it GitHub refuses and the error says so. A repo that is already gone counts as deleted.
+ */
+export async function deleteAppRepo(full: string): Promise<void> {
+  const [owner, name] = full.split("/");
+  if (!owner || !name || !APP_REPO_PATTERN.test(name)) throw new Error(`Refusing to delete the repository ${full}`);
+  const result = await gh(["repo", "delete", full, "--yes"]);
+  if (result.code === 0) return;
+  const text = `${result.stderr}\n${result.stdout}`;
+  if (/could not resolve to a repository|not found|404/i.test(text)) return;
+  if (/delete_repo/i.test(text)) throw new Error("GitHub needs one more permission to delete repositories (run: gh auth refresh -s delete_repo)");
+  throw new Error(lastLine(result));
 }

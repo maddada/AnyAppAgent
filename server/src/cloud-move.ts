@@ -212,7 +212,7 @@ export class CloudMover {
         await link.call("/pc/move/step", { moveId, step: "chat" });
         await link.call("/pc/move/finish", { moveId, pcAppId: app.id });
         // Only now does the read-only copy go (its folder stays, as a deleted app's does).
-        if (here) await apps.delete(here.id);
+        if (here) await apps.delete(here.id, { trash: false });
         log(`[${m.slug}] moved here from the cloud: ${chat.items.length} chat items, next build ${m.buildHigh + 1}`);
         return apps.get(app.id);
       } catch (e) {

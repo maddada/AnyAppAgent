@@ -116,6 +116,13 @@ export interface App {
   // Added (cloud, after milestone 10): a change made in the cloud while this PC was off is still
   // running there; the PC brings it back when it ends. Absent otherwise and from older PCs.
   changingInCloud?: boolean;
+  // Added with pins (see "Pin, hide and delete"): the app's place in the Pinned section, 0 first.
+  // Absent when it is not pinned, and from older PCs.
+  pin?: number;
+  // Added: hidden from the app lists (Settings lists it under Hidden apps). Absent when shown.
+  hidden?: boolean;
+  // Added: set only on the rows of GET /api/trash (Recently deleted): when it was deleted.
+  deletedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -457,6 +464,30 @@ export interface EasyConnectPairRequest {
 // GET /api/apps -> App[]
 // GET /api/apps/:id -> App
 // DELETE /api/apps/:id -> 204 (removes the app from the list; keeps files and repo on the PC)
+//   Added with "Pin, hide and delete": the answer is 200 DeleteAppResult (older PCs answer 204), the
+//   app waits in Recently deleted (GET /api/trash) with its files kept, and two query flags:
+//   ?uninstall=1  phones uninstall it too (app.deleted carries uninstall: true; Android asks first)
+//   ?forGood=1    also deletes its folder, chat and versions on the PC and its GitHub repos; it
+//                 never reaches Recently deleted and can't come back
+export interface DeleteAppResult {
+  forGood: boolean;
+  problem?: string; // a plain sentence when part of a delete for good failed (say, GitHub refused)
+}
+
+// ---------- Pin, hide and delete (added)
+// Pins live on the PC so every phone and the desktop show the same Pinned section (App.pin).
+// PUT /api/pins  PinsRequest -> App[] (the pinned apps, in order). The whole Pinned section in its
+//   new order: apps not in ids are unpinned. Unknown, hidden and deleted ids are left out. Older PCs: 404.
+export interface PinsRequest {
+  ids: string[];
+}
+// POST /api/apps/:id/hide  HideRequest -> App (hiding also unpins it)
+export interface HideRequest {
+  hidden: boolean;
+}
+// GET /api/trash -> App[] (Recently deleted, newest first; each row has deletedAt)
+// POST /api/trash/:id/restore -> App (back in the list, not pinned, not hidden; reinstalls like any app)
+// DELETE /api/trash -> 204 (Empty: every app in it is deleted for good on this PC; GitHub keeps its code)
 
 // POST /api/apps -> App (returns at once with status "creating"; progress arrives over the socket)
 export interface CreateAppRequest {
@@ -555,7 +586,8 @@ export interface UpdateTodoRequest {
 export type ServerEvent =
   | { type: "hello"; serverName: string; protocol: 1 }
   | { type: "app.updated"; app: App } // also sent for a new app
-  | { type: "app.deleted"; appId: string }
+  | { type: "app.deleted"; appId: string; uninstall?: boolean } // uninstall added: phones uninstall it too (Android asks)
+  | { type: "trash.updated"; count: number } // added: Recently deleted changed (count: apps in it now)
   | { type: "chat.item"; item: ChatItem } // upsert by item.id
   | { type: "apk.ready"; app: App } // a new APK can be downloaded and installed now
   | { type: "worker.updated"; worker: WorkerInfo } // a worker started or changed (its main-chat row also arrives as chat.item)

@@ -13,6 +13,8 @@ export interface GithubApi {
   createPublic(full: string, description: string): Promise<void>;
   setVisibility(full: string, visibility: "public" | "private"): Promise<void>;
   putFile(full: string, path: string, content: Buffer, message: string): Promise<void>;
+  /** Deleting an app for good (Pin, hide and delete): its own repos only. Optional for test doubles. */
+  deleteRepo?(full: string): Promise<void>;
 }
 
 export const realGithub: GithubApi = {
@@ -21,6 +23,7 @@ export const realGithub: GithubApi = {
   createPublic: github.createPublicRepo,
   setVisibility: github.setVisibility,
   putFile: github.putFile,
+  deleteRepo: github.deleteAppRepo,
 };
 
 export interface ShareDeps {

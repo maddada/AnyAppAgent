@@ -34,6 +34,8 @@ import type {
   ShareRequest,
   ServerEvent,
   UpdateTodoRequest,
+  HideRequest,
+  PinsRequest,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
 import type { SigningKeys } from "./signing-keys.ts";
@@ -405,6 +407,34 @@ export function startHttpServer(deps: {
       if (method === "POST") return sendJson(res, 200, apps.dismissReminder());
       return sendError(res, 405, "Method not allowed.");
     }
+    // Pin, hide and delete: the Pinned section (shared by every phone and the desktop) and Recently deleted.
+    if (path === "/api/pins") {
+      if (method !== "PUT") return sendError(res, 405, "Method not allowed.");
+      const body = await readBody<Partial<PinsRequest>>(req, 64 * 1024);
+      if (!Array.isArray(body.ids) || body.ids.some((id) => typeof id !== "string")) throw new HttpError(400, '"ids" must be a list of app ids.');
+      return sendJson(res, 200, apps.setPins(body.ids));
+    }
+    if (path === "/api/trash") {
+      if (method === "GET") return sendJson(res, 200, apps.trash());
+      if (method === "DELETE") {
+        await apps.emptyTrash();
+        res.writeHead(204);
+        return void res.end();
+      }
+      return sendError(res, 405, "Method not allowed.");
+    }
+    const restoreDeleted = /^\/api\/trash\/([^/]+)\/restore$/.exec(path);
+    if (restoreDeleted) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      return sendJson(res, 200, apps.restoreDeleted(decodeURIComponent(restoreDeleted[1]!)));
+    }
+    const hide = /^\/api\/apps\/([^/]+)\/hide$/.exec(path);
+    if (hide) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      const body = await readBody<Partial<HideRequest>>(req, 4 * 1024);
+      if (typeof body.hidden !== "boolean") throw new HttpError(400, '"hidden" must be true or false.');
+      return sendJson(res, 200, apps.hide(decodeURIComponent(hide[1]!), body.hidden));
+    }
     if (path === "/api/apps") {
       if (method === "GET") return sendJson(res, 200, apps.list());
       if (method === "POST") {
@@ -508,9 +538,8 @@ export function startHttpServer(deps: {
     if (action === undefined) {
       if (method === "GET") return sendJson(res, 200, apps.get(id));
       if (method === "DELETE") {
-        await apps.delete(id);
-        res.writeHead(204);
-        return void res.end();
+        const flag = (name: string) => url.searchParams.get(name) === "1";
+        return sendJson(res, 200, await apps.delete(id, { forGood: flag("forGood"), uninstall: flag("uninstall") }));
       }
     } else if (action === "icon" && (method === "GET" || method === "HEAD")) {
       const app = apps.get(id);

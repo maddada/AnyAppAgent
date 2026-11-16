@@ -13,6 +13,12 @@ export interface AppRecord {
   engineSessions?: Partial<Record<"claude" | "codex", string>>;
   iconStamp?: string;
   deleted?: boolean;
+  /** When the person deleted it (Recently deleted shows it). */
+  deletedAt?: string;
+  /** Deleted into Recently deleted (not set for a copy that moved to the cloud, or older deletes). */
+  inTrash?: boolean;
+  /** Deleted for good: its folder, chat and versions are gone. The record keeps its slug taken. */
+  purged?: boolean;
 }
 
 class Debounced {
@@ -115,10 +121,31 @@ export class Store {
   chat(appId: string): ChatLog {
     let log = this.chats.get(appId);
     if (!log) {
-      log = new ChatLog(appId, join(this.stateDir, "chat", `${appId}.json`));
+      log = new ChatLog(appId, this.chatPath(appId));
       this.chats.set(appId, log);
     }
     return log;
+  }
+
+  /** Recently deleted: deleted into the bin and not yet deleted for good, newest first. */
+  trash(): AppRecord[] {
+    return this.records
+      .filter((record) => record.deleted && record.inTrash && !record.purged)
+      .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+  }
+
+  /** A record in Recently deleted, by app id. */
+  findInTrash(id: string): AppRecord | undefined {
+    return this.trash().find((record) => record.app.id === id);
+  }
+
+  chatPath(appId: string): string {
+    return join(this.stateDir, "chat", `${appId}.json`);
+  }
+
+  /** Forgets an app's chat in memory (its file is deleted by the caller). */
+  dropChat(appId: string): void {
+    this.chats.delete(appId);
   }
 
   apkDir(appId: string): string {
