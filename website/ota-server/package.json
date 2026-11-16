@@ -1,0 +1,9 @@
+{
+  "name": "kiwimake-ota-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "local": "node dev/local.mjs",
+    "test": "node --test dev/*.test.mjs"
+  }
+}

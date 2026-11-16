@@ -27,6 +27,7 @@ import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
 import { BrandLockup } from "@/ui/Brand";
 import { HealthBadge, HealthCard, ReminderBanner } from "@/ui/Trust";
+import { UpdateNotice } from "@/ui/Updates";
 import { LinkAskBanner } from "@/ui/LinkAsk";
 import { MoveButton, moveLine } from "@/ui/Move";
 import { border, elevation, icon, look, radius, size, space, useTheme } from "@/ui/theme";
@@ -324,6 +325,7 @@ function AppGrid() {
         refreshControl={<RefreshControl refreshing={false} onRefresh={reconnectNow} colors={[t.text]} progressBackgroundColor={t.surface} />}
       >
         <Header />
+        <UpdateNotice />
         <ReminderBanner />
         <LinkAskBanner />
         {showPinned ? <SectionLabel testID="pinned-label">Pinned</SectionLabel> : null}

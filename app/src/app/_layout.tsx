@@ -11,6 +11,8 @@ import { InstallPermissionSheet } from "@/ui/InstallPermissionSheet";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { authStorage, convex } from "@/lib/cloud";
 import { CloudBridge } from "@/lib/cloudSync";
+import { initAppUpdates } from "@/lib/appUpdate";
+import { initOverTheAirUpdates } from "@/lib/overTheAir";
 
 /** With a cloud in this build, the whole app sits inside Convex Auth (sign-in, the account, cloud apps). */
 function WithCloud({ children }: { children: React.ReactNode }) {
@@ -33,6 +35,9 @@ export default function RootLayout() {
     if (!booted) {
       booted = true;
       void boot();
+      // Kiwimake's own updates (release builds only): a newer APK, and over-the-air JavaScript.
+      initOverTheAirUpdates();
+      initAppUpdates();
     }
   }, []);
 

@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react-native";
 import Constants from "expo-constants";
 import { AnyAppNative } from "anyapp-native";
 import { AiSettingsGroup } from "@/ui/AiSettings";
+import { UpdatesGroup } from "@/ui/Updates";
 import { AppIcon } from "@/ui/AppIcon";
 import { emptyTrash, loadTrash, restoreApp, setHidden } from "@/lib/manage";
 import type { App } from "@/lib/protocol";
@@ -146,6 +147,8 @@ export default function Settings() {
             onPress={() => updatePrefs({ theme: nextTheme[theme] })}
           />
         </Group>
+
+        <UpdatesGroup Group={Group} Row={Row} Divider={Divider} />
 
         {pairing ? <HiddenAppsGroup /> : null}
 

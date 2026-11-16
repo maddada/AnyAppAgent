@@ -3,7 +3,9 @@
 //
 //   npm run apk               # reuses android/ if it exists
 //   npm run apk -- --clean    # regenerates android/ from app.json first (after config changes)
-//   npm run apk -- --release  # signed with the release key (docs/RELEASING.md), one APK per ABI
+//   npm run apk -- --release  # signed with the release key (docs/RELEASING.md), one APK per ABI,
+//                             # with the APK updater and over-the-air updates on (app.config.js)
+//   npm run apk -- --out <dir> # writes the APKs there instead of dist/ (test builds)
 //
 // Writes dist/AnyAppAgent.apk and dist/AnyAppAgent-universal.apk (the desktop installer bundles
 // the universal one). Without --release both are the same APK (x86_64 and arm64-v8a), signed with
@@ -22,6 +24,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const isWin = process.platform === "win32";
 const clean = process.argv.includes("--clean");
 const release = process.argv.includes("--release");
+const outArg = process.argv.indexOf("--out");
+const outDir = outArg > 0 && process.argv[outArg + 1] ? process.argv[outArg + 1] : join(root, "dist");
 
 const JAVA_HOME = process.env.JAVA_HOME && existsSync(process.env.JAVA_HOME) ? process.env.JAVA_HOME : String.raw`D:\tools\android\jdk`;
 const ANDROID_HOME = process.env.ANDROID_HOME && existsSync(process.env.ANDROID_HOME) ? process.env.ANDROID_HOME : String.raw`D:\tools\android\sdk`;
@@ -33,6 +37,10 @@ const env = {
   NODE_ENV: "production",
   PATH: [join(JAVA_HOME, "bin"), join(ANDROID_HOME, "platform-tools"), process.env.PATH].join(delimiter),
 };
+// A release build updates itself (app.config.js): the APK updater, and over-the-air updates signed
+// with the key whose certificate is certs/certificate.pem. Any other build has both off.
+if (release) env.KIWIMAKE_RELEASE = "1";
+else delete env.KIWIMAKE_RELEASE;
 
 function run(cmd, args, cwd) {
   console.log(`> ${cmd} ${args.join(" ")}`);
@@ -52,9 +60,16 @@ const signing = release ? (await import("./release-key.mjs")).releaseSigning() :
 // The Easy Connect bridge (jar + arm64-v8a/x86_64 libgojni.so) into the native module first.
 run(process.execPath, [join(root, "scripts", "stage-bridge.mjs")], root);
 
-if (clean || !existsSync(join(root, "android", "gradlew"))) {
-  run("npx", ["expo", "prebuild", "--platform", "android", "--no-install", ...(clean ? ["--clean"] : [])], root);
+// The native project carries the build's update settings (the update server, the runtime version),
+// so a release always regenerates it, and a build of the other kind never reuses it.
+const modeFile = join(root, "android", ".kiwimake-build-mode");
+const mode = JSON.stringify({ release, package: env.ANYAPP_ANDROID_PACKAGE ?? "", version: env.KIWIMAKE_APP_VERSION ?? "", ota: env.KIWIMAKE_OTA_SERVER ?? "", feed: env.KIWIMAKE_RELEASE_FEED ?? "" });
+const lastMode = existsSync(modeFile) ? readFileSync(modeFile, "utf8") : null;
+const cleanPrebuild = clean || release || (lastMode !== null && lastMode !== mode);
+if (cleanPrebuild || !existsSync(join(root, "android", "gradlew"))) {
+  run("npx", ["expo", "prebuild", "--platform", "android", "--no-install", ...(cleanPrebuild ? ["--clean"] : [])], root);
 }
+writeFileSync(modeFile, mode);
 
 // Expo prebuild restores its smaller defaults. Keep clean builds within the documented
 // toolchain settings (docs/ENVIRONMENT.md), including enough metaspace for the native modules.
@@ -83,7 +98,6 @@ if (signing) {
   outs.push([built, "AnyAppAgent.apk"], [built, "AnyAppAgent-universal.apk"]);
 }
 
-const outDir = join(root, "dist");
 mkdirSync(outDir, { recursive: true });
 console.log("");
 for (const [from, name] of outs) {

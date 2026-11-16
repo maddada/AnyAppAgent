@@ -29,6 +29,8 @@ yarn-error.*
 # macOS
 .DS_Store
 *.pem
+# The certificate over-the-air updates are checked against (app.config.js); its key is never here.
+!/certs/certificate.pem
 
 # local env files
 .env*.local

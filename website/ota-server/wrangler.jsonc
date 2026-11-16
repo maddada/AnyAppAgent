@@ -1,0 +1,11 @@
+// Kiwimake's over-the-air update server for the phone app (README.md in this folder).
+// Secret, set with `wrangler secret put UPLOAD_TOKEN`: the bearer token app/scripts/ota-publish.mjs
+// uploads with. At least 32 characters.
+{
+  "name": "kiwimake-ota",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-13",
+  "workers_dev": false,
+  "routes": [{ "pattern": "ota.kiwimake.ai", "custom_domain": true }],
+  "r2_buckets": [{ "binding": "OTA", "bucket_name": "kiwimake-ota" }],
+}
