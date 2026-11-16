@@ -5,7 +5,7 @@
 //   4. the desktop app's tools folder (<home>\.anyappagent\tools, or ANYAPP_TOOLS_DIR), then the
 //      usual places on Linux and macOS (/usr/lib/jvm, ~/Android/Sdk, /opt/android-sdk).
 // The result goes into process.env, where builder/ reads it.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { REPO_DIR } from "./config.ts";
@@ -44,6 +44,22 @@ export function fromEnvScript(text: string): { javaHome?: string; androidHome?: 
   return { javaHome: resolve("JAVA_HOME"), androidHome: resolve("ANDROID_HOME") };
 }
 
+/** JDKs on a Mac, newest first: /Library/Java/JavaVirtualMachines, Homebrew's openjdk, Android Studio's. */
+export function macJavaHomes(home: string): string[] {
+  const vm = (root: string) => {
+    try {
+      return readdirSync(root)
+        .filter((n) => n.endsWith(".jdk"))
+        .sort((a, b) => Number(b.match(/\d+/)?.[0] ?? 0) - Number(a.match(/\d+/)?.[0] ?? 0))
+        .map((n) => join(root, n, "Contents", "Home"));
+    } catch {
+      return [];
+    }
+  };
+  const brew = (prefix: string) => ["openjdk@21", "openjdk", "openjdk@17"].map((f) => join(prefix, "opt", f, "libexec", "openjdk.jdk", "Contents", "Home"));
+  return [...vm("/Library/Java/JavaVirtualMachines"), ...vm(join(home, "Library", "Java", "JavaVirtualMachines")), ...brew("/opt/homebrew"), ...brew("/usr/local"), "/Applications/Android Studio.app/Contents/jbr/Contents/Home"];
+}
+
 export function findToolchain(stateDir: string, env: NodeJS.ProcessEnv = process.env): Toolchain | null {
   const candidates: { javaHome?: string; androidHome?: string; source: string }[] = [
     { javaHome: env.JAVA_HOME, androidHome: env.ANDROID_HOME ?? env.ANDROID_SDK_ROOT, source: "environment" },
@@ -53,6 +69,13 @@ export function findToolchain(stateDir: string, env: NodeJS.ProcessEnv = process
   if (existsSync(script)) candidates.push({ ...fromEnvScript(readFileSync(script, "utf8")), source: "scripts/android-env.ps1" });
   const tools = env.ANYAPP_TOOLS_DIR ?? join(homedir(), ".anyappagent", "tools");
   candidates.push({ javaHome: join(tools, "jdk"), androidHome: join(tools, "android-sdk"), source: "tools folder" });
+  if (process.platform === "darwin") {
+    const home = env.HOME ?? homedir();
+    for (const javaHome of macJavaHomes(home)) candidates.push({ javaHome, source: "system" });
+    for (const androidHome of [join(home, "Library", "Android", "sdk"), "/opt/homebrew/share/android-commandlinetools", "/usr/local/share/android-commandlinetools"]) {
+      candidates.push({ androidHome, source: "system" });
+    }
+  }
   if (process.platform !== "win32") {
     const home = env.HOME ?? homedir();
     for (const javaHome of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java", "/opt/android-studio/jbr"]) {

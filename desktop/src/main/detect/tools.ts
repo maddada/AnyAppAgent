@@ -86,6 +86,13 @@ export function toolchainCandidates(toolsDir: string, env: NodeJS.ProcessEnv): {
       add(jdk, `${drive}:\\tools\\android\\jdk`);
       add(sdk, `${drive}:\\tools\\android\\sdk`);
     }
+  } else if (process.platform === "darwin") {
+    for (const p of macJdks(env.HOME ?? homedir())) add(jdk, p);
+    const home = env.HOME ?? homedir();
+    // Android Studio's SDK, then Homebrew's android-commandlinetools cask.
+    add(sdk, join(home, "Library", "Android", "sdk"));
+    add(sdk, "/opt/homebrew/share/android-commandlinetools");
+    add(sdk, "/usr/local/share/android-commandlinetools");
   } else {
     // Distro JDKs (Arch, Fedora, Debian/Ubuntu), Android Studio's own, then the usual SDK folders.
     for (const p of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java", "/opt/android-studio/jbr"]) add(jdk, p);
@@ -95,6 +102,34 @@ export function toolchainCandidates(toolsDir: string, env: NodeJS.ProcessEnv): {
     add(sdk, "/opt/android-sdk");
   }
   return { jdk, sdk };
+}
+
+/**
+ * JDKs on a Mac, newest first: the system's (/Library/Java/JavaVirtualMachines, where installers
+ * and `brew install --cask` put them), Homebrew's openjdk formulas, then Android Studio's own.
+ */
+export function macJdks(home: string, list: (dir: string) => string[] = safeList): string[] {
+  const vm = (root: string) =>
+    list(root)
+      .filter((n) => n.endsWith(".jdk"))
+      .sort((a, b) => (Number(b.match(/\d+/)?.[0] ?? 0) - Number(a.match(/\d+/)?.[0] ?? 0)) || b.localeCompare(a))
+      .map((n) => join(root, n, "Contents", "Home"));
+  const brew = (prefix: string) => ["openjdk@21", "openjdk", "openjdk@17"].map((f) => join(prefix, "opt", f, "libexec", "openjdk.jdk", "Contents", "Home"));
+  return [
+    ...vm("/Library/Java/JavaVirtualMachines"),
+    ...vm(join(home, "Library", "Java", "JavaVirtualMachines")),
+    ...brew("/opt/homebrew"),
+    ...brew("/usr/local"),
+    "/Applications/Android Studio.app/Contents/jbr/Contents/Home",
+  ];
+}
+
+function safeList(dir: string): string[] {
+  try {
+    return realFs.readdirSync(dir);
+  } catch {
+    return [];
+  }
 }
 
 export function parseNodeVersion(output: string): number | undefined {
@@ -197,7 +232,14 @@ export async function detectTools({ toolsDir, env, runner, fs = realFs }: ToolsD
   const ownGit = join(toolsDir, "git", "cmd", win ? "git.exe" : "git");
   const programGit = win ? join(env.ProgramFiles ?? "C:\\Program Files", "Git", "cmd", "git.exe") : undefined;
   const gitPath = fs.existsSync(ownGit) ? ownGit : (onPath(env, [win ? "git.exe" : "git"], fs) ?? (programGit && fs.existsSync(programGit) ? programGit : undefined));
-  pieces.push({ id: "git", label: "Git", ok: !!gitPath, path: gitPath, source: gitPath ? (gitPath === ownGit ? "tools" : "system") : "none" });
+  // macOS: /usr/bin/git is only a stub until Apple's Command Line Developer Tools are installed
+  // (it then opens Apple's installer instead of running). It counts only when it answers.
+  let gitOk = !!gitPath;
+  if (gitPath && process.platform === "darwin" && gitPath === "/usr/bin/git") {
+    const r = await runner("/usr/bin/xcode-select", ["-p"], { env, timeoutMs: 10_000 });
+    gitOk = r.code === 0 && r.stdout.trim().length > 0;
+  }
+  pieces.push({ id: "git", label: "Git", ok: gitOk, path: gitOk ? gitPath : undefined, source: gitOk ? (gitPath === ownGit ? "tools" : "system") : "none" });
 
   const ok = pieces.every((p) => p.ok);
   const fromPc = pieces.every((p) => p.source === "system");

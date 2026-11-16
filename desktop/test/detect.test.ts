@@ -130,8 +130,10 @@ describe("GitHub detection", () => {
   });
 
   it("names the portable gh zip", () => {
-    expect(ghAssetName("v2.103.3", "x64")).toBe("gh_2.103.3_windows_amd64.zip");
-    expect(ghAssetName("2.103.3", "arm64")).toBe("gh_2.103.3_windows_arm64.zip");
+    expect(ghAssetName("v2.103.3", "x64", "win32")).toBe("gh_2.103.3_windows_amd64.zip");
+    expect(ghAssetName("2.103.3", "arm64", "win32")).toBe("gh_2.103.3_windows_arm64.zip");
+    expect(ghAssetName("v2.104.0", "arm64", "darwin")).toBe("gh_2.104.0_macOS_arm64.zip");
+    expect(ghAssetName("v2.104.0", "x64", "darwin")).toBe("gh_2.104.0_macOS_amd64.zip");
   });
 });
 

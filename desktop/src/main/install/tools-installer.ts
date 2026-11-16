@@ -12,7 +12,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync
 import { delimiter, join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import type { ToolPiece } from "../../shared/types.ts";
-import { killTree, spawnHidden } from "../exec.ts";
+import { killTree, run, spawnHidden } from "../exec.ts";
 import { EXTRA_SDK_PACKAGES, REQUIRED_SDK_PACKAGES, sdkPackageDir } from "../detect/tools.ts";
 import { download, extractZip, fetchJson, fetchText, formatBytes } from "./download.ts";
 
@@ -184,7 +184,9 @@ export class ToolsInstaller {
     const zip = join(this.downloads, process.platform === "win32" ? "jdk.zip" : "jdk.tar.gz");
     await download({ url, dest: zip, signal: this.abort.signal, checksum: `sha256:${sum}`, onProgress: this.bytes((f, d) => report(f * 0.85, d)) });
     report(0.9, "Unpacking…");
-    await extractZip(zip, join(this.opts.toolsDir, "jdk"), { flatten: true });
+    // The macOS JDK is a bundle (jdk-21.jdk/Contents/Home/bin/java): keep only its Home, so the
+    // tools folder looks the same on every system (jdk/bin/java).
+    await extractZip(zip, join(this.opts.toolsDir, "jdk"), { flatten: true, ...(process.platform === "darwin" ? { inner: join("Contents", "Home") } : {}) });
   }
 
   private sdkDir(): string {
@@ -364,6 +366,12 @@ export class ToolsInstaller {
   }
 
   private async installGit(report: (f: number, d?: string) => void): Promise<void> {
+    if (process.platform === "darwin") {
+      // Git on a Mac comes with Apple's Command Line Developer Tools: this opens Apple's own
+      // installer window (free, no Apple account), the way Terminal offers it on first use.
+      await run("/usr/bin/xcode-select", ["--install"], { timeoutMs: 30_000 });
+      throw new Error("Apple's installer for Git opened in its own window. Choose Install there, wait until it says it is done, then press Check again.");
+    }
     if (process.platform !== "win32") {
       throw new Error("Git is missing. Install it with your system's package manager (for example `sudo pacman -S git` or `sudo apt install git`), then press Check again.");
     }
