@@ -37,6 +37,8 @@ Useful environment variables (all optional):
 | `ANYAPP_DESKTOP_THEME=light/dark` | Force a theme. |
 | `KIWIMAKE_SHELL_ENV=off` | Linux and macOS: do not ask the login shell for PATH at start-up (the usual tool folders are still added). |
 | `ANYAPP_KEEP_PATH=1` | Linux and macOS: leave PATH and the environment exactly as inherited. |
+| `ANYAPP_UPDATE_FEED` | Tests: a packaged copy reads its update feed (`latest*.yml`) from this address instead of the GitHub release (`docs/RELEASING.md`, "Updates of the desktop app"). |
+| `ANYAPP_UPDATE_FIRST_CHECK_MS` | Tests: look for an update this soon after the start (default 30 seconds). |
 | `ANYAPP_DESKTOP_DIALOG_FILE` | Dev and proofs only: the file the key backup and restore dialogs answer with, so a script can drive them. |
 | `ANYAPP_DESKTOP_SIMULATE` | Dev only, for screenshots: `claude=needed/signing-in,github=needed/code,tools=needed/installing,phone=none,hex=notInstalled/installing/notRunning`. |
 | `ANYAPP_DESKTOP_SHOTS=<folder>` | Dev only: walk every screen in light and dark, save PNGs, quit. `ANYAPP_DESKTOP_SHOTS_SET=flow/states/real`. |

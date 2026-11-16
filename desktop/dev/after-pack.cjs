@@ -1,5 +1,5 @@
 // Stage the companion from its lockfile. Never copy the developer's node_modules.
-const { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } = require("node:fs");
+const { cpSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const { join, resolve, relative, sep } = require("node:path");
 const { spawnSync } = require("node:child_process");
 
@@ -12,6 +12,20 @@ function keepRuntime(file) {
   return true;
 }
 exports.keepRuntime = keepRuntime;
+
+function materializeLinks(destRoot, srcRoot) {
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const file = join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        rmSync(file, { force: true });
+        if (!dir.endsWith(`${sep}.bin`)) cpSync(realpathSync(join(srcRoot, relative(destRoot, file))), file, { recursive: true, dereference: true });
+      } else if (entry.isDirectory()) walk(file);
+    }
+  };
+  walk(destRoot);
+}
+exports.materializeLinks = materializeLinks;
 exports.default = async function afterPack(context) {
   const repo = resolve(__dirname, "..", "..");
   const output = resolve(context.appOutDir, "..", "runtime-stage");
@@ -46,6 +60,11 @@ exports.default = async function afterPack(context) {
   const resources = mac ? join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources") : join(context.appOutDir, "resources");
   const dest = join(resources, "companion", "server", "node_modules");
   cpSync(nm, dest, { recursive: true, dereference: true });
+  // On the macos-15 runner (Node 24) cpSync kept node_modules/.bin links despite dereference, pointing
+  // into the staging folder deleted below, and codesign stopped at the broken link. No link may stay:
+  // each becomes a copy of what it points to. .bin links just go (the companion starts its tools by
+  // package path, never through node_modules/.bin).
+  materializeLinks(dest, nm);
   const companion = join(resources, "companion");
   const smoke = spawnSync(process.execPath, ["--input-type=module", "-e", [
     "./server/src/acp/session.ts", "./server/src/config.ts", "./builder/index.mjs",

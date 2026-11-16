@@ -161,9 +161,13 @@ Authenticode for AppImages and loose .deb files); the release page's SHA-256 dig
 
 Test a workflow change without a release: push a branch, then run
 `gh workflow run release-windows.yml --repo maddada/Kiwimake --ref <branch> -f tag=<branch> -f dry_run=true`.
-A dry run skips the Windows job (no Certum login), needs no draft and uploads nothing to any
-release: it builds, installs and smoke-tests both Linux packages and keeps them as the
-`linux-packages` workflow artifact for 7 days.
+A dry run skips the Windows and verify jobs (no Certum login), needs no draft and uploads nothing
+to any release: it builds, installs and smoke-tests both Linux packages, builds, signs, notarizes and
+checks both Macs (ad-hoc when the Developer ID secrets are not all set, "macOS" below), and keeps
+them with their update feeds as the `linux-packages` and `mac-packages-release` (or
+`mac-packages-adhoc`) workflow artifacts for 7 days. `-f dry_run_version=0.3.98` builds them as
+another version, so two dry runs give an older and a newer copy to test an update with (the artifact
+names end with the version).
 
 Locally on Linux: `cd desktop && npm run dist:linux`, then `dev/smoke-linux.sh dist/Kiwimake-x86_64.AppImage`.
 On Arch, electron-builder's bundled fpm needs `libcrypt.so.1` (package `libxcrypt-compat`) for the .deb.

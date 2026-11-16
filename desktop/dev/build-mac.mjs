@@ -40,7 +40,9 @@ const signing = adhoc
   ? ["-c.mac.identity=-", "-c.mac.hardenedRuntime=false", "-c.mac.notarize=false", "-c.dmg.sign=false"]
   : // Fail instead of quietly making an unsigned app when the Developer ID is not in the keychain.
     ["-c.forceCodeSigning=true", ...(dirOnly && !profile ? ["-c.mac.notarize=false"] : [])];
-step("npx", ["electron-builder", "--mac", ...(dirOnly ? ["--dir"] : []), ...archs.map((a) => `--${a}`), "--publish", "never", ...signing]);
+// DRY_RUN_VERSION (the release workflow's dry runs): build as another version, to test an update.
+const version = process.env.DRY_RUN_VERSION ? [`-c.extraMetadata.version=${process.env.DRY_RUN_VERSION}`] : [];
+step("npx", ["electron-builder", "--mac", ...(dirOnly ? ["--dir"] : []), ...archs.map((a) => `--${a}`), "--publish", "never", ...signing, ...version]);
 if (dirOnly) process.exit(0);
 
 if (!adhoc) {

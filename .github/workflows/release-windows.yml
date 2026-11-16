@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      dry_run_version:
+        description: Dry run only, optional. Build the desktop as this version (MAJOR.MINOR.PATCH), to test an update from one dry run to another.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -167,6 +172,7 @@ jobs:
         shell: bash
     env:
       RELEASE_TAG: ${{ inputs.tag }}
+      DRY_RUN_VERSION: ${{ inputs.dry_run && inputs.dry_run_version || '' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -218,7 +224,11 @@ jobs:
       - name: Build the AppImage and the .deb
         run: |
           set -euo pipefail
-          npm run dist:linux --prefix desktop
+          if [ "${{ inputs.dry_run }}" = true ] && [ -n "$DRY_RUN_VERSION" ]; then
+            npm run dist:linux --prefix desktop -- "-c.extraMetadata.version=$DRY_RUN_VERSION"
+          else
+            npm run dist:linux --prefix desktop
+          fi
           cd desktop/dist
           for name in Kiwimake-x86_64.AppImage kiwimake_amd64.deb; do
             [ -s "$name" ] || { echo "Missing $name"; exit 1; }
@@ -235,7 +245,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'maddada/Kiwimake/releases/latest/download' desktop/dist/linux-unpacked/resources/app-update.yml
-          version="$(node -p "require('./desktop/package.json').version")"
+          version="${DRY_RUN_VERSION:-$(node -p "require('./desktop/package.json').version")}"
           if [ "${{ inputs.dry_run }}" != true ]; then [ "v$version" = "$RELEASE_TAG" ]; fi
           node desktop/dev/update-feed.mjs write desktop/dist/latest-linux.yml --version "$version" \
             desktop/dist/Kiwimake-x86_64.AppImage desktop/dist/kiwimake_amd64.deb
@@ -253,7 +263,7 @@ jobs:
         if: ${{ inputs.dry_run }}
         uses: actions/upload-artifact@v7
         with:
-          name: linux-packages
+          name: linux-packages${{ inputs.dry_run_version && format('-{0}', inputs.dry_run_version) || '' }}
           path: |
             desktop/dist/Kiwimake-x86_64.AppImage
             desktop/dist/kiwimake_amd64.deb
@@ -292,6 +302,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       KIWIMAKE_APPLE_TEAM_ID: KTKP595G3B
+      DRY_RUN_VERSION: ${{ inputs.dry_run && inputs.dry_run_version || '' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -425,7 +436,7 @@ jobs:
       - name: Write the Mac update feed
         run: |
           set -euo pipefail
-          version="$(node -p "require('./desktop/package.json').version")"
+          version="${DRY_RUN_VERSION:-$(node -p "require('./desktop/package.json').version")}"
           node desktop/dev/update-feed.mjs write desktop/dist/latest-mac.yml --version "$version" \
             desktop/dist/Kiwimake-mac-arm64.zip desktop/dist/Kiwimake-mac-x64.zip \
             desktop/dist/Kiwimake-mac-arm64.dmg desktop/dist/Kiwimake-mac-x64.dmg
@@ -437,7 +448,7 @@ jobs:
         if: ${{ inputs.dry_run }}
         uses: actions/upload-artifact@v7
         with:
-          name: mac-packages-${{ steps.signing.outputs.mode }}
+          name: mac-packages-${{ steps.signing.outputs.mode }}${{ inputs.dry_run_version && format('-{0}', inputs.dry_run_version) || '' }}
           path: |
             desktop/dist/Kiwimake-mac-arm64.dmg
             desktop/dist/Kiwimake-mac-x64.dmg
