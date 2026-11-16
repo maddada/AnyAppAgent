@@ -10,6 +10,14 @@ import type { Builder } from "../src/builder.ts";
 import type { Config } from "../src/config.ts";
 import { Store } from "../src/store.ts";
 
+// The session is mocked below, but createSession still looks for the Claude CLI first and refuses
+// without it ("Claude is missing"). A CI runner has no Claude: pretend it is there, so the test
+// is the same on every machine.
+vi.mock("../../shared/engines.mts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../shared/engines.mts")>()),
+  findEngine: () => "/test/bin/claude",
+}));
+
 const quota = `Internal error: You've hit your weekly limit · resets Nov 15, 2pm (Asia/Dubai): {"errorKind":"rate_limit"}`;
 afterEach(() => vi.restoreAllMocks());
 
