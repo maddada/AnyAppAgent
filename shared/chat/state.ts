@@ -69,8 +69,6 @@ export function appAction(app: App, installedVersion: number | null | undefined)
 
 /** The state line while a plan or question page waits for the person (App.waitingForAnswer). */
 export const WAITING_FOR_ANSWER = "Waiting for your answer";
-/** The same on a half-width phone tile, which keeps to one short line. */
-export const WAITING_FOR_ANSWER_SHORT = "Your answer";
 /** The state line while a change made in the cloud (the PC was off) still runs there. */
 export const CHANGING_IN_CLOUD = "Changing in the cloud";
 
