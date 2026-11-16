@@ -8,7 +8,7 @@ import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, EllipsisVertic
 import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, headsUp as bigJobHeadsUp, mainChatReplying, MAX_IMAGES, type HeadsUp, type Row } from "@shared/chat/index";
 import { clipboardHasImage, clipboardHasNewPicture, dismissClipboardPicture, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
 import { ChatRow } from "@/chat/ChatRows";
-import { describeApp } from "@/lib/describe";
+import { describeApp, hasOldCopyInTheWay } from "@/lib/describe";
 import { installApp, launchApp } from "@/lib/installer";
 import type { App, ChatItem } from "@/lib/protocol";
 import { useDictation } from "@/lib/dictation";
@@ -168,6 +168,9 @@ function Header({ app }: { app: App | undefined }) {
   const state = app ? describeApp(app, pkg, install) : null;
   const action = app ? appAction(app, pkg) : "notReady";
   const installing = !!install && ["waiting", "downloading", "checking", "installing", "confirm"].includes(install.phase);
+  // An old copy with another key in the way: a plain Install would only fail again. The state
+  // line says "Remove old version" and the version card below has the button (describe.ts).
+  const oldCopyInTheWay = hasOldCopyInTheWay(install);
   return (
     <View
       style={{
@@ -190,7 +193,7 @@ function Header({ app }: { app: App | undefined }) {
         {state ? <StateLine kind={state.kind} label={state.label} role="caption" /> : null}
       </View>
       {app ? <TodoButton app={app} /> : null}
-      {app && action !== "notReady" && !installing ? (
+      {app && action !== "notReady" && !installing && !oldCopyInTheWay ? (
         <Button
           testID="chat-header-action"
           label={action === "open" ? "Open" : "Install"}

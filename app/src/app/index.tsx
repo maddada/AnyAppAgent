@@ -4,7 +4,7 @@ import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, CircleUser, Download, EllipsisVertical, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
-import { actionLabel, describeApp, tileState } from "@/lib/describe";
+import { actionLabel, describeApp, hasOldCopyInTheWay, REMOVE_OLD_AND_INSTALL, tileState } from "@/lib/describe";
 import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/chat/index";
 import { installApp, installFromLink, launchApp, removeOldAndInstall, updateFromLink } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
@@ -409,6 +409,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
 
   const action = shown ? appAction(shown, pkg) : "notReady";
   const installing = !!install && ["waiting", "downloading", "checking", "installing", "confirm"].includes(install.phase);
+  const oldCopyInTheWay = hasOldCopyInTheWay(install);
   const state = shown ? describeApp(shown, pkg, install) : null;
   const doInstall = () => shown && void installApp(shown);
   const doOpen = () => {
@@ -499,8 +500,15 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                   router.push(`/chat/${shown.id}`);
                 }}
               />
-              {install?.phase === "failed" ? <InstallFailure app={shown} message={install.message} conflict={install.conflict} /> : null}
-              {action === "install" || action === "update" || installing ? (
+              {install?.phase === "failed" ? <InstallFailure message={install.message} /> : null}
+              {oldCopyInTheWay ? (
+                <>
+                  {/* An old copy with another key in the way: Install would only fail again (describe.ts). */}
+                  <Button testID="app-primary" label={REMOVE_OLD_AND_INSTALL} icon={Download} onPress={() => removeOldAndInstall(shown)} />
+                  {pkg ? <Button testID="app-open" label="Open" icon={Smartphone} variant="quiet" onPress={doOpen} /> : null}
+                  <Button testID="app-change" label="Change it" icon={MessageCircle} variant="quiet" onPress={doChange} />
+                </>
+              ) : action === "install" || action === "update" || installing ? (
                 <>
                   <Button
                     testID="app-primary"
@@ -548,18 +556,14 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
   );
 }
 
-export function InstallFailure({ app, message, conflict }: { app: App; message?: string; conflict?: boolean }) {
+/** Why the last install failed. An old copy in the way gets its button as the sheet's main action. */
+export function InstallFailure({ message }: { message?: string }) {
   const t = useTheme();
   return (
     <View style={{ borderRadius: radius.card, backgroundColor: t.problemSoft, padding: space.md, gap: space.xs, marginBottom: space.xs }}>
       <T variant="row" color="problem">
         {message ?? "It didn't install."}
       </T>
-      {conflict ? (
-        <View style={{ alignItems: "flex-end" }}>
-          <Button label="Remove old version and install" variant="text" small onPress={() => removeOldAndInstall(app)} />
-        </View>
-      ) : null}
     </View>
   );
 }

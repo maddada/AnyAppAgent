@@ -9,8 +9,23 @@ import type { InstallProgress } from "./store";
  * app on itself (installed version, an install in progress).
  */
 export function describeApp(app: App, pkg: PackageInfo | null | undefined, install?: InstallProgress): StateText {
+  if (hasOldCopyInTheWay(install)) return { kind: "problem", label: REMOVE_OLD_SHORT };
   return describeShared(app, { installedVersion: pkg?.versionCode ?? null, install });
 }
+
+/**
+ * The copy on this phone is signed with another key (made on another PC, or by the cloud), so
+ * Android refuses to install over it (installer.ts). The one way forward is to remove it first:
+ * every place that offers to install the app (the chat's version card, the chat header, the
+ * options sheet) offers REMOVE_OLD_AND_INSTALL instead of a plain Install that would fail again.
+ */
+export function hasOldCopyInTheWay(install?: InstallProgress): boolean {
+  return install?.phase === "failed" && !!install.conflict;
+}
+
+export const REMOVE_OLD_AND_INSTALL = "Remove old version and install";
+/** The same, short enough for a tile, the chat header's state line and the header button. */
+export const REMOVE_OLD_SHORT = "Remove old version";
 
 export function actionLabel(action: AppAction, buildNumber?: number): string {
   return action === "install" ? "Install" : action === "update" ? (buildNumber ? `Install version ${buildNumber}` : "Update") : action === "open" ? "Open" : "Not ready yet";
@@ -44,7 +59,7 @@ export function tileState(app: App, pkg: PackageInfo | null | undefined, install
       case "done":
         return { kind: "ready", label: "Installed" };
       case "failed":
-        return { kind: "problem", label: install.conflict ? "Remove old version" : "Didn't install" };
+        return { kind: "problem", label: install.conflict ? REMOVE_OLD_SHORT : "Didn't install" };
     }
   }
   switch (app.status) {

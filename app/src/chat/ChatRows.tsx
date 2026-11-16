@@ -37,6 +37,7 @@ import {
   X,
 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
+import { hasOldCopyInTheWay, REMOVE_OLD_AND_INSTALL } from "@/lib/describe";
 import { installApp, launchApp, phoneAbis, removeOldAndInstall } from "@/lib/installer";
 import type { App, ChatImage, ChatItem, PageInfo, PlanEntry, WorkerInfo } from "@/lib/protocol";
 import { useStore, useClientFor, useOnlineFor } from "@/lib/store";
@@ -523,13 +524,18 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
     gap: space.lg,
     ...elevation(t.mode, 1),
   } as const;
+  // An old copy signed with another key is in the way (describe.ts): this version has to be
+  // installed as an APK after removing it, so the card never says "quick update, no install".
+  const oldCopyInTheWay = card.state === "ready" && hasOldCopyInTheWay(install);
+  const title = oldCopyInTheWay && !card.title.startsWith("Back to version") ? "Your app is ready" : card.title;
+  const sub = oldCopyInTheWay && card.state === "ready" ? `Version ${card.number}. The old copy on this phone has to go first` : card.sub;
   const head = (badge: React.ReactNode) => (
     <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
       {badge}
       <View style={{ flex: 1 }}>
-        <T variant="heading">{card.title}</T>
+        <T variant="heading">{title}</T>
         <T variant="row" color="textSecondary" selectable={card.state === "failed"}>
-          {card.sub}
+          {sub}
         </T>
       </View>
     </View>
@@ -573,18 +579,13 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
       {head(<Badge icon={Package} fill={t.readySoft} color={t.ready} />)}
       <WhatChanged lines={card.changes} />
       {phase === "failed" ? (
-        <View style={{ gap: space.xs }}>
-          <T variant="row" color="problem">
-            {install?.message}
-          </T>
-          {install?.conflict ? (
-            <View style={{ alignItems: "flex-end" }}>
-              <Button label="Remove old version and install" variant="text" small onPress={() => removeOldAndInstall(app)} />
-            </View>
-          ) : null}
-        </View>
+        <T variant="row" color="problem">
+          {install?.message}
+        </T>
       ) : null}
-      {installed && !busy ? (
+      {oldCopyInTheWay ? (
+        <Button testID="build-install" label={REMOVE_OLD_AND_INSTALL} icon={Download} onPress={() => removeOldAndInstall(app)} />
+      ) : installed && !busy ? (
         <Button testID="build-install" label="Open" icon={Smartphone} variant="quiet" onPress={() => launchApp(app)} />
       ) : (
         <Button
