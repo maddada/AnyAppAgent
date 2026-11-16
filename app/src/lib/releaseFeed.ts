@@ -2,7 +2,7 @@
 // Pure functions, no React: dev/releaseFeed.test.mjs runs them with `node --test`.
 //
 // Copied from Ghostex's src/updates/androidSelfUpdate.ts (read only, never imported). Every GitHub
-// release of maddada/AnyAppAgent is tagged v<version> and carries two phone APKs: AnyAppAgent.apk
+// release of maddada/Kiwimake is tagged v<version> and carries two phone APKs: AnyAppAgent.apk
 // (arm64-v8a, nearly every phone) and AnyAppAgent-universal.apk (arm64-v8a and x86_64: the emulator
 // and x86 tablets). GitHub gives each asset its size and SHA-256 (`digest`), which the download is
 // checked against before Android sees it.

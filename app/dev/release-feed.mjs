@@ -1,6 +1,6 @@
 // A stand-in for GitHub's newest-release answer, for proving the APK self-update on the emulator
 // (docs/RELEASING.md, "Updates of the phone app"): it answers like
-// https://api.github.com/repos/maddada/AnyAppAgent/releases/latest, with the APKs in a folder as the
+// https://api.github.com/repos/maddada/Kiwimake/releases/latest, with the APKs in a folder as the
 // release's files (name, size, SHA-256 digest), and serves them.
 //
 //   node dev/release-feed.mjs --dir <folder with AnyAppAgent.apk / AnyAppAgent-universal.apk> --version 0.3.4 [--port 8792]

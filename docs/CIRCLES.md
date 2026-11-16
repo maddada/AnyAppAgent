@@ -161,7 +161,7 @@ Notes:
 3. The shelf opens. The admin gets one quiet push ("Nana joined Yahia family") only if they turned it
    on; it is off by default.
 4. **Without Kiwimake**: the page offers **Get Kiwimake** (the latest phone release on GitHub,
-   `https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent.apk`, `docs/RELEASING.md`),
+   `https://github.com/maddada/Kiwimake/releases/latest/download/AnyAppAgent.apk`, `docs/RELEASING.md`),
    and "tap the invite link again". It also lists the circle's **public** apps (name, who shared it,
    size) with an Install link to each app's public GitHub release, so one app can be had without
    joining. **Private apps are never listed there**: their tile reads "Join to get this one".

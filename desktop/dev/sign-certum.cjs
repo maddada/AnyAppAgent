@@ -36,7 +36,7 @@ exports.default = async function sign(configuration) {
     spawnSync(
       signtool,
       ["sign", "/sha1", thumbprint, "/fd", "sha256", "/tr", "http://time.certum.pl", "/td", "sha256",
-        "/d", "Kiwimake", "/du", "https://github.com/maddada/AnyAppAgent", file],
+        "/d", "Kiwimake", "/du", "https://github.com/maddada/Kiwimake", file],
       { stdio: "inherit" },
     );
     const after = signatureOf(file);

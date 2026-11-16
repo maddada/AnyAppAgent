@@ -15,11 +15,11 @@ you make are your kiwis.
 
 | Where | File | |
 | --- | --- | --- |
-| **Phone** (Android 7 or newer) | [AnyAppAgent.apk](https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent.apk) | For nearly every phone (64-bit ARM). |
-| Phone, other devices | [AnyAppAgent-universal.apk](https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent-universal.apk) | Also runs on x86_64 devices such as the Android emulator and some tablets. Bigger. |
-| **PC** (Windows 10 or 11, 64-bit) | [Kiwimake-Setup.exe](https://github.com/maddada/AnyAppAgent/releases/latest/download/Kiwimake-Setup.exe) | The desktop app. It sets up everything else for you. |
+| **Phone** (Android 7 or newer) | [AnyAppAgent.apk](https://github.com/maddada/Kiwimake/releases/latest/download/AnyAppAgent.apk) | For nearly every phone (64-bit ARM). |
+| Phone, other devices | [AnyAppAgent-universal.apk](https://github.com/maddada/Kiwimake/releases/latest/download/AnyAppAgent-universal.apk) | Also runs on x86_64 devices such as the Android emulator and some tablets. Bigger. |
+| **PC** (Windows 10 or 11, 64-bit) | [Kiwimake-Setup.exe](https://github.com/maddada/Kiwimake/releases/latest/download/Kiwimake-Setup.exe) | The desktop app. It sets up everything else for you. |
 
-All releases and what changed in each: [Releases](https://github.com/maddada/AnyAppAgent/releases).
+All releases and what changed in each: [Releases](https://github.com/maddada/Kiwimake/releases).
 Kiwimake is not in the Play Store and never will be: you install it yourself (see
 [Installing on Android](#installing-on-android-sideloading) below).
 
@@ -97,14 +97,14 @@ More you get:
 ## Getting started
 
 1. **On your PC**: download and run
-   [Kiwimake-Setup.exe](https://github.com/maddada/AnyAppAgent/releases/latest/download/Kiwimake-Setup.exe).
+   [Kiwimake-Setup.exe](https://github.com/maddada/Kiwimake/releases/latest/download/Kiwimake-Setup.exe).
    The installer is not code signed yet, so Windows SmartScreen may say "Windows protected your
    PC": choose **More info**, then **Run anyway**. Kiwimake opens by itself when it is
    installed.
 2. **Follow the setup** in the desktop app: sign in to Claude, let it get the building tools, and
    optionally connect GitHub.
 3. **On your phone**: scan the download QR code the desktop app shows, or open
-   [AnyAppAgent.apk](https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent.apk)
+   [AnyAppAgent.apk](https://github.com/maddada/Kiwimake/releases/latest/download/AnyAppAgent.apk)
    in the phone's browser, and install it (next section).
 4. **Connect**: in the desktop app choose **Connect a phone**, and scan its code with
    Kiwimake on the phone.
@@ -123,7 +123,7 @@ can install the apps it makes for you.
 
 ### Step by step
 
-1. **Download** [AnyAppAgent.apk](https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent.apk)
+1. **Download** [AnyAppAgent.apk](https://github.com/maddada/Kiwimake/releases/latest/download/AnyAppAgent.apk)
    on your phone (or scan the QR code in the desktop app). If the browser warns that "this type
    of file can harm your device", choose **Download anyway**.
 2. **Open the file**: tap the finished download in the browser or in its notification, or open

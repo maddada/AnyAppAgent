@@ -4,7 +4,7 @@
   "version": "0.3.3",
   "private": true,
   "description": "Kiwimake for Windows and Linux: runs the companion, onboarding, connect a phone.",
-  "homepage": "https://github.com/maddada/AnyAppAgent",
+  "homepage": "https://github.com/maddada/Kiwimake",
   "license": "MIT",
   "desktopName": "kiwimake.desktop",
   "main": "out/main/index.js",

@@ -5,8 +5,8 @@ import pin from "../../../phone-release.json";
 import { download } from "./download.ts";
 
 export const PHONE_PIN = pin;
-export const pinnedPhoneUrl = `https://github.com/maddada/AnyAppAgent/releases/download/v${pin.version}/AnyAppAgent.apk`;
-export const universalPhoneUrl = `https://github.com/maddada/AnyAppAgent/releases/download/v${pin.version}/AnyAppAgent-universal.apk`;
+export const pinnedPhoneUrl = `https://github.com/maddada/Kiwimake/releases/download/v${pin.version}/AnyAppAgent.apk`;
+export const universalPhoneUrl = `https://github.com/maddada/Kiwimake/releases/download/v${pin.version}/AnyAppAgent-universal.apk`;
 export const phoneCachePath = (stateDir: string): string => join(stateDir, "downloads", `phone-${pin.version}-${pin.sha256.slice(0, 12)}.apk`);
 
 export async function validPhone(file: string): Promise<boolean> {

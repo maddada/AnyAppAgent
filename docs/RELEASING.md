@@ -1,7 +1,7 @@
 # Releasing Kiwimake
 
-A release is a GitHub release on `maddada/AnyAppAgent` with six files. The desktop app's
-download QR and the README link to `https://github.com/maddada/AnyAppAgent/releases/latest/download/<name>`,
+A release is a GitHub release on `maddada/Kiwimake` with six files. The desktop app's
+download QR and the README link to `https://github.com/maddada/Kiwimake/releases/latest/download/<name>`,
 so the phone APKs keep their old names for good (desktop apps already installed download
 `AnyAppAgent.apk`, even after the rename to Kiwimake). The installer is `Kiwimake-Setup.exe` from
 0.3.0 on (0.2.0 and earlier published it as `AnyAppAgent-Setup.exe`; nothing downloads it by name):
@@ -102,7 +102,7 @@ Required repository Actions secrets:
 - `CERTUM_SIMPLYSIGN_TOTP`: the current activation `otpauth://` URI or base32 seed, not a temporary code.
 
 The release operator can set these in GitHub Settings, Secrets and variables, Actions. When stored in
-1Password, transfer them from `op read` into `gh secret set <name> --repo maddada/AnyAppAgent` through
+1Password, transfer them from `op read` into `gh secret set <name> --repo maddada/Kiwimake` through
 stdin only. Never print values, put them in command arguments, write them to the repository, or try to
 read GitHub secrets back. If either value is unavailable, stop before publishing. The private signing
 key stays in Certum's cloud. The login step receives the credentials through its environment; later
@@ -154,7 +154,7 @@ Authenticode for AppImages and loose .deb files); the release page's SHA-256 dig
   Claude Code's binary is left out as on Windows (the user's installed CLI is used).
 
 Test a workflow change without a release: push a branch, then run
-`gh workflow run release-windows.yml --repo maddada/AnyAppAgent --ref <branch> -f tag=<branch> -f dry_run=true`.
+`gh workflow run release-windows.yml --repo maddada/Kiwimake --ref <branch> -f tag=<branch> -f dry_run=true`.
 A dry run skips the Windows job (no Certum login), needs no draft and uploads nothing to any
 release: it builds, installs and smoke-tests both Linux packages and keeps them as the
 `linux-packages` workflow artifact for 7 days.
@@ -170,7 +170,7 @@ builds do neither, so a debug-signed copy never offers the release APK.
 
 **A newer APK** (`app/src/lib/appUpdate.ts`, `app/src/lib/releaseFeed.ts`). At start, when it comes
 back to the front (at most every 6 hours) and on Settings, Updates, Check now, the phone reads
-`https://api.github.com/repos/maddada/AnyAppAgent/releases/latest`. That GitHub release is the
+`https://api.github.com/repos/maddada/Kiwimake/releases/latest`. That GitHub release is the
 update metadata; there is no other feed. The phone takes the release's version from its tag
 (`v<version>`) and, when it is newer than its own `versionName`, the asset for its processor:
 `AnyAppAgent.apk` (primary ABI arm64-v8a) or `AnyAppAgent-universal.apk` (anything else, the
@@ -284,10 +284,10 @@ apksigner verify --print-certs app\dist\AnyAppAgent.apk   # SHA-256 digest must 
 4. Tag the commit (`git tag -a v<version>`), push main and the tag, then create a **draft** with the APKs:
 
 ```powershell
-gh release create v<version> --repo maddada/AnyAppAgent --verify-tag --draft `
+gh release create v<version> --repo maddada/Kiwimake --verify-tag --draft `
   --title "Kiwimake <version>" --notes-file notes.md `
   app\dist\AnyAppAgent.apk app\dist\AnyAppAgent-universal.apk
-gh workflow run release-windows.yml --repo maddada/AnyAppAgent --ref main -f tag=v<version>
+gh workflow run release-windows.yml --repo maddada/Kiwimake --ref main -f tag=v<version>
 ```
 
 5. The workflow definition runs from main so CI fixes do not require moving a release tag; its
@@ -312,7 +312,7 @@ node scripts/ota-publish.mjs status   # the new version and its date
    Then, only when all six verified files are present, publish the draft:
 
 ```powershell
-gh release edit v<version> --repo maddada/AnyAppAgent --draft=false --latest
+gh release edit v<version> --repo maddada/Kiwimake --draft=false --latest
 ```
 
 7. Check that every `releases/latest/download/<name>` link returns the new file (size and SHA-256).

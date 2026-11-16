@@ -351,9 +351,13 @@ The product is **Kiwimake** (domain kiwimake.ai, being bought). The things peopl
   `com.anyapp.<slug>`), signing keys and their `CN=AnyAppAgent` subjects, the desktop app id
   `com.anyappagent.desktop` and its settings folder `%APPDATA%\AnyAppAgent`, the state folder
   `%USERPROFILE%\.anyappagent`, port 8787, the `anyapp` command, the `anyappagent://` link scheme,
-  protocol names, the repo `maddada/AnyAppAgent` and its folder names, environment variables, the
+  protocol names, the local folder names (`C:\dev\AnyAppAgent`), environment variables, the
   backup folder name `AnyAppAgent backup`, and the phone APK release assets `AnyAppAgent.apk` and
   `AnyAppAgent-universal.apk` (installed desktop apps download `latest/download/AnyAppAgent.apk`).
+- **The repository moved** to `maddada/Kiwimake` on GitHub (2026-11-17). GitHub redirects the old
+  `maddada/AnyAppAgent` URLs, so released apps keep working. The phone's release feed in
+  `app/app.config.js` still names the old address: that file is part of the phone's over-the-air
+  runtime version, so it changes with the next release that needs a new APK anyway.
 - The separate domain for people's web apps (`docs/WEB-APPS.md`) is still to be picked.
 
 ## Two engines and a smaller installer (added 2026-11-13)

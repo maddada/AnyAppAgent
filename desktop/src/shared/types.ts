@@ -142,7 +142,7 @@ export interface Settings {
 }
 
 /** The phone app on this project's public GitHub release (always the newest release). */
-export const PHONE_RELEASE_URL = "https://github.com/maddada/AnyAppAgent/releases/latest/download/AnyAppAgent.apk";
+export const PHONE_RELEASE_URL = "https://github.com/maddada/Kiwimake/releases/latest/download/AnyAppAgent.apk";
 
 export interface PhoneRelease {
   universalUrl?: string;
