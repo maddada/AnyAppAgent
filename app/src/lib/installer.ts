@@ -583,7 +583,11 @@ async function installWhenGone(appId: string): Promise<void> {
   for (let i = 0; i < 12; i++) {
     const app = getState().apps[appId];
     if (!app) return;
-    if (installedVersion(app) == null) {
+    if (AnyAppNative?.getPackageInfo(app.packageName) == null) {
+      // The old copy is gone: what it reported running (a quick update newer than the version
+      // about to be installed, for example) is not true of the next copy.
+      AnyAppNative?.forgetReports?.(app.packageName);
+      installedVersion(app);
       setInstall(appId, null);
       void installApp(app);
       return;

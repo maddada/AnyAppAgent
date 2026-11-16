@@ -187,6 +187,14 @@ class AnyAppNativeModule : Module() {
       signedLikeInstalled(toFile(path), packageName)
     }
 
+    /**
+     * Forgets what a removed app reported (the quick update it ran, the ones it refused), so the
+     * next copy of it starts from its own APK's version. Called once an old copy is gone.
+     */
+    Function("forgetReports") { packageName: String ->
+      UpdatesProvider.forgetReports(context, packageName)
+    }
+
     /** The ABIs this phone runs, best first (Build.SUPPORTED_ABIS), to pick the smallest APK. */
     // Kiwimake first (docs/DISTRIBUTION.md stage 5): apps followed from a share link.
     // "Change this app" (docs/CHANGE-THIS-APP.md): the person's own apps, so their row always shows.

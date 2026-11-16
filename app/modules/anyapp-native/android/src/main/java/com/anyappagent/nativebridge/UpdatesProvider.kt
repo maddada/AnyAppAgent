@@ -105,6 +105,11 @@ class UpdatesProvider : ContentProvider() {
       notifyApp(ctx, pkg)
     }
 
+    /** What a removed copy of the app reported; the next copy starts from its own APK. */
+    fun forgetReports(ctx: Context, pkg: String) {
+      prefs(ctx).edit().remove("running:$pkg").remove("runningCopy:$pkg").remove("bad:$pkg").apply()
+    }
+
     fun clearReady(ctx: Context, pkg: String) {
       prefs(ctx).edit().remove("ready:$pkg").apply()
       otaFile(ctx, pkg).delete()
@@ -145,7 +150,26 @@ class UpdatesProvider : ContentProvider() {
       ""
     }
 
-    fun reportedRunning(ctx: Context, pkg: String): Long = prefs(ctx).getLong("running:$pkg", 0)
+    /** When this copy of the app was installed. An app removed and installed again is a new copy. */
+    private fun installedAt(ctx: Context, pkg: String): Long? = try {
+      ctx.packageManager.getPackageInfo(pkg, 0).firstInstallTime
+    } catch (_: Exception) {
+      null
+    }
+
+    /**
+     * The quick update this copy of the app said it runs. A report from an earlier copy (the app
+     * was removed, for example an old copy signed with another key that Kiwimake had removed)
+     * says nothing about this one: without this, a fresh version 3 counted as the version 9 the
+     * old copy ran, and Kiwimake offered nothing until a version 10. Reports saved before the
+     * copy was recorded (older Kiwimake) still count.
+     */
+    fun reportedRunning(ctx: Context, pkg: String): Long {
+      val p = prefs(ctx)
+      val copy = p.getLong("runningCopy:$pkg", -1L)
+      if (copy != -1L && copy != installedAt(ctx, pkg)) return 0
+      return p.getLong("running:$pkg", 0)
+    }
 
     fun badBuilds(ctx: Context, pkg: String): Set<Long> = try {
       val a = JSONArray(prefs(ctx).getString("bad:$pkg", "[]"))
@@ -168,7 +192,10 @@ class UpdatesProvider : ContentProvider() {
 
     private fun onReport(ctx: Context, pkg: String, values: ContentValues) {
       val e = prefs(ctx).edit()
-      values.getAsLong("running")?.let { e.putLong("running:$pkg", it) }
+      values.getAsLong("running")?.let {
+        e.putLong("running:$pkg", it)
+        installedAt(ctx, pkg)?.let { at -> e.putLong("runningCopy:$pkg", at) }
+      }
       values.getAsLong("bad")?.let { bad ->
         val all = badBuilds(ctx, pkg) + bad
         e.putString("bad:$pkg", JSONArray(all.sorted().takeLast(50)).toString())

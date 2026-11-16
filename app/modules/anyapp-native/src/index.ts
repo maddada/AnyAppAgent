@@ -83,6 +83,11 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
    * not installed or Android cannot tell. Missing on builds before it was added.
    */
   signedLikeInstalled?(path: string, packageName: string): boolean | null;
+  /**
+   * Forgets what a removed app reported (the quick update it ran, the ones it refused), so the next
+   * copy starts from its own APK's version. Missing on builds before it was added.
+   */
+  forgetReports?(packageName: string): void;
   /** Build.SUPPORTED_ABIS, best first ("arm64-v8a", ...). Missing on builds before it was added. */
   supportedAbis?(): string[];
   /** Apps followed from a share link: Kiwimake handles their updates (docs/DISTRIBUTION.md stage 5). */
