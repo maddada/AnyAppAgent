@@ -6,6 +6,7 @@ import { apkFor } from "@shared/chat/index";
 import type { App, BuildInfo } from "./protocol";
 import { clientFor, getState, setInstall, setState, type InstallProgress } from "./store";
 import { loadPrefs, savePrefs, type Prefs } from "./storage";
+import { packagesToCheck } from "./packages";
 import { keptAlive, updateKeepAlive } from "./keepalive";
 
 /** The notification icon's tint: the accent from the shared theme (README: color.light.accent). */
@@ -26,9 +27,10 @@ export const installerHooks = { linkTrouble: () => {} };
 
 // ---------- what is installed
 
-export function refreshPackages() {
+/** Asks Android which apps are installed: the given packages, or every one the list or the cache knows. */
+export function refreshPackages(only?: string[]) {
   if (!AnyAppNative) return;
-  const names = Object.values(getState().apps).map((a) => a.packageName);
+  const names = only ?? packagesToCheck(getState().apps, getState().packages);
   if (names.length === 0) return;
   try {
     const info = AnyAppNative.getPackagesInfo(names);

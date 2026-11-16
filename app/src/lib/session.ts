@@ -20,6 +20,7 @@ import {
   upsertHelperItems,
   setTodos,
   setSuggestions,
+  storeHooks,
   useStore,
   upsertHelpers,
   replaceHelperChat,
@@ -33,6 +34,8 @@ import { loadTrash, onAppDeleted } from "./manage";
 
 export async function boot() {
   startReports();
+  // Apps that come back (restored, unhidden) have Android asked again whether they are installed.
+  storeHooks.recheckPackages = (names) => refreshPackages(names);
   const [pairing, prefs] = await Promise.all([loadPairing(), loadPrefs()]);
   setState({ prefs });
   // Pairing first, then ready: a cold start straight into a screen that needs the pairing (the

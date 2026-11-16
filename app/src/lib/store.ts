@@ -4,6 +4,7 @@ import { appAction as sharedAppAction, Drafts, mergeHelpers, mergeItems, replace
 import type { Attachment } from "@/chat/attachments";
 import { Client } from "./api";
 import { CloudClient, isCloudApp, isCloudId, type AppClient } from "./cloud";
+import { packagesComingBack } from "./packages";
 import { byLastChange, visibleApps } from "./pins";
 import type { AccountLinkInfo, App, CareState, ChatItem, Suggestion, TodoItem, WorkerInfo } from "./protocol";
 import { defaultPrefs, type Pairing, type Prefs } from "./storage";
@@ -111,6 +112,13 @@ export const useStore = create<State>(() => ({
 export const getState = useStore.getState;
 export const setState = useStore.setState;
 
+/**
+ * Set by session.ts: ask Android again about these packages (installer.ts refreshPackages). Called
+ * when apps come back into the list (restored, unhidden, new to it): the cache may say "installed"
+ * from before an uninstall, and the tile would show Open instead of Install.
+ */
+export const storeHooks = { recheckPackages: (_names: string[]) => {} };
+
 // ---------- apps
 
 /** Where an app is made: "cloud" apps come from the account, the others from the paired PC. */
@@ -123,12 +131,14 @@ export function placeOf(app: Pick<App, "id" | "cloud">): "cloud" | "pc" {
  * place's apps stay as they are (one grid, docs/CLOUD.md "One grid").
  */
 export function setApps(list: App[], place: "pc" | "cloud" = "pc") {
+  const back = packagesComingBack(getState().apps, list);
   setState((s) => {
     const apps: Record<string, App> = {};
     for (const app of Object.values(s.apps)) if (placeOf(app) !== place) apps[app.id] = app;
     for (const app of list) apps[app.id] = app;
     return place === "pc" ? { apps, appsLoaded: true } : { apps, cloudAppsLoaded: true };
   });
+  if (back.length > 0) storeHooks.recheckPackages(back);
 }
 
 /** Forgets one place's apps (unpairing the PC, signing out of the cloud). */
@@ -160,7 +170,9 @@ export function useClientFor(appId: string | undefined): AppClient | null {
 }
 
 export function upsertApp(app: App) {
+  const back = packagesComingBack(getState().apps, [app]);
   setState((s) => ({ apps: { ...s.apps, [app.id]: app } }));
+  if (back.length > 0) storeHooks.recheckPackages(back);
 }
 
 export function removeApp(appId: string) {
