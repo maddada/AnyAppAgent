@@ -3,7 +3,7 @@
   "productName": "Kiwimake",
   "version": "0.3.3",
   "private": true,
-  "description": "Kiwimake for Windows and Linux: runs the companion, onboarding, connect a phone.",
+  "description": "Kiwimake for Windows, macOS and Linux: runs the companion, onboarding, connect a phone.",
   "homepage": "https://github.com/maddada/Kiwimake",
   "license": "MIT",
   "desktopName": "kiwimake.desktop",
@@ -22,6 +22,7 @@
     "dist:mac": "node dev/build-mac.mjs"
   },
   "dependencies": {
+    "electron-updater": "6.8.12",
     "qrcode": "1.5.4",
     "ws": "8.22.2"
   },
@@ -48,6 +49,13 @@
     "directories": {
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/maddada/Kiwimake/releases/latest/download",
+        "channel": "latest"
+      }
+    ],
     "files": [
       "out/**",
       "package.json"
@@ -136,7 +144,10 @@
         "signingHashAlgorithms": [
           "sha256"
         ],
-        "rfc3161TimeStampServer": "http://time.certum.pl"
+        "rfc3161TimeStampServer": "http://time.certum.pl",
+        "publisherName": [
+          "Open Source Developer Mohamad Yahia Youssef"
+        ]
       },
       "target": [
         {
@@ -232,12 +243,20 @@
             "arm64",
             "x64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ],
       "artifactName": "Kiwimake-mac-${arch}.${ext}",
-      "identity": "-",
-      "hardenedRuntime": false,
-      "notarize": false,
+      "hardenedRuntime": true,
+      "entitlements": "dev/entitlements.mac.plist",
+      "entitlementsInherit": "dev/entitlements.mac.plist",
+      "notarize": true,
       "minimumSystemVersion": "12.0",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Kiwimake listens only while you dictate a message to your app's chat.",
@@ -256,7 +275,8 @@
     },
     "dmg": {
       "title": "Kiwimake",
-      "artifactName": "Kiwimake-mac-${arch}.${ext}"
+      "artifactName": "Kiwimake-mac-${arch}.${ext}",
+      "sign": true
     }
   }
 }

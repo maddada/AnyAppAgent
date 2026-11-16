@@ -20,6 +20,7 @@ import { FromOthersButton, FromOthersDialog } from "./FromOthers.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
 import { AppIcon, Dialog, Icon, Spinner, StateLine, Switch, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
 import { BackupGroup, HealthBadge, ReminderCard, UsageGroup } from "./Trust.tsx";
+import { UpdateNotice, UpdatesGroup } from "./Update.tsx";
 import { BEHIND_LABEL, headsUp } from "../../../../shared/chat/index.ts";
 
 const api = window.anyapp;
@@ -339,6 +340,7 @@ function AppsPage({
             </div>
           </div>
         )}
+        <UpdateNotice u={s.update} />
         <ReminderCard care={s.care} />
         {listError && <p className="label problem-text apps-list-error">{listError}</p>}
         {pinned.length + rest.length === 0 ? (
@@ -949,6 +951,7 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
           </div>
         </div>
       </section>
+      <UpdatesGroup u={s.update} auto={s.settings.autoUpdates} />
       <BackupGroup s={s} />
       <SigningKeysGroup s={s} />
       <UsageGroup s={s} />

@@ -11,6 +11,8 @@ module.exports = {
     signtoolOptions: {
       sign: require("./sign-certum.cjs").default,
       signingHashAlgorithms: ["sha256"],
+      // Written into resources/app-update.yml: the updater installs only an update signed by this name.
+      publisherName: base.win.signtoolOptions.publisherName,
     },
   },
 };

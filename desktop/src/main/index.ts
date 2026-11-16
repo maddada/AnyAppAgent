@@ -1,11 +1,12 @@
 // Kiwimake desktop: runs the companion, onboarding and the main window, sits in the tray.
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, shell, Tray } from "electron";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
+import electronUpdater from "electron-updater";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
 import type { AccountAction, BackupAction, Checks, HexCheck, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
 import { ensurePhone, phoneCachePath, pinnedPhoneUrl, universalPhoneUrl } from "./install/phone.ts";
@@ -29,6 +30,7 @@ import { loadSettings, saveSettings } from "./settings.ts";
 import { ClaudeSignIn, GitHubSignIn } from "./signin.ts";
 import { runScreenshots } from "./shots.ts";
 import { adoptShellEnv } from "./shell-env.ts";
+import { DesktopUpdates, updateKind } from "./updates.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -487,12 +489,14 @@ async function snapshot(): Promise<Snapshot> {
     icons,
     checks,
     settings,
+    update: updates.state,
     advanced: { toolsDir: paths.toolsDir, stateDir: paths.stateDir, appsDir: paths.appsDir, companionDir: paths.serverDir, logTail: logTail.slice(-80) },
   };
 }
 
 let broadcastTimer: NodeJS.Timeout | undefined;
 function broadcast(): void {
+  updates.busyChanged();
   if (broadcastTimer) return;
   broadcastTimer = setTimeout(async () => {
     broadcastTimer = undefined;
@@ -512,6 +516,7 @@ function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void 
     updateTray();
   }
   if (key === "githubSkipped") void checkGitHub();
+  if (key === "autoUpdates") updates.autoChanged();
   if (key === "hexModel" || key === "dictationEngine") void checkHex();
   if (key === "engine") {
     checks.claude = { state: "checking", summary: "Checking…" };
@@ -668,6 +673,9 @@ function ipc(): void {
   ipcMain.handle("recheck", () => recheckAll());
   ipcMain.handle("engine:install", () => maintainEngine(true));
   ipcMain.handle("engine:update", () => maintainEngine(false));
+  ipcMain.handle("update:check", () => updates.check(true));
+  ipcMain.handle("update:restart", () => updates.restart());
+  ipcMain.handle("update:cancel", () => updates.cancel());
   ipcMain.handle("claude:signin", () => {
     const cli = claudeCli();
     if (cli) claudeSignIn.start(cli, settings.engine, env);
@@ -999,6 +1007,65 @@ function ipc(): void {
   });
 }
 
+// ---------------------------------------------------------------- Kiwimake's own updates
+
+/** What an update must not interrupt (an agent turn, a build, an install), as a sentence. */
+function updateBlocker(): string | null {
+  const busy = admin?.apps.find((a) => a.status === "working" || a.status === "building");
+  if (busy) return busy.status === "building" ? `${busy.name} is being built` : `${busy.name} is being changed`;
+  if (installer) return "Kiwimake is installing the Android tools";
+  if (engineBusy) return `${engineName(settings.engine)} is being updated`;
+  if (hexInstalling) return "Dictation is being installed";
+  return null;
+}
+
+const updates = (() => {
+  const resources = process.resourcesPath ?? "";
+  const feed = env.ANYAPP_UPDATE_FEED || undefined;
+  let packageType: string | undefined;
+  try {
+    packageType = readFileSync(join(resources, "package-type"), "utf8").trim();
+  } catch {
+    // not a .deb
+  }
+  const { kind, note } = updateKind({ platform: process.platform, packaged: app.isPackaged, hasUpdateConfig: existsSync(join(resources, "app-update.yml")), feedOverride: feed, appImage: env.APPIMAGE, packageType });
+  let updater: electronUpdater.AppUpdater | null = null;
+  if (kind !== "none") {
+    // Picked here, not by electron-updater's own guess: electron-builder writes the .deb's
+    // resources/package-type into the folder the AppImage is packed from too.
+    const { NsisUpdater, MacUpdater, AppImageUpdater, DebUpdater } = electronUpdater;
+    updater = kind === "windows" ? new NsisUpdater() : kind === "mac" ? new MacUpdater() : kind === "deb" ? new DebUpdater() : new AppImageUpdater();
+    updater.logger = { info: (m: unknown) => log(`[update] ${String(m)}`), warn: (m: unknown) => log(`[update] warn: ${String(m)}`), error: (m: unknown) => log(`[update] error: ${String(m)}`), debug: () => {} };
+    // Tests point a copy at a stand-in feed (docs/RELEASING.md, "Updates of the desktop app").
+    if (feed) updater.setFeedURL({ provider: "generic", url: feed });
+  }
+  return new DesktopUpdates(updater, {
+    kind,
+    ...(note ? { note } : {}),
+    version: app.getVersion(),
+    busy: updateBlocker,
+    autoUpdates: () => settings.autoUpdates,
+    prepareToQuit: async () => {
+      quitting = true;
+      log("[desktop] restarting to update: stopping the companion");
+      claudeSignIn.cancel();
+      githubSignIn.cancel();
+      admin?.close();
+      await companion.stop();
+      // The new copy (AppImage, Windows installer) starts before this one has left.
+      app.releaseSingleInstanceLock();
+    },
+    resume: () => {
+      log("[desktop] the update did not start: starting the companion again");
+      quitting = false;
+      app.requestSingleInstanceLock();
+      companion.start();
+    },
+    changed: () => broadcast(),
+    log,
+  });
+})();
+
 // ---------------------------------------------------------------- lifecycle
 
 if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
@@ -1029,6 +1096,8 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
     void checkClaude();
     void checkGitHub();
     void checkHex();
+    // Tests look sooner (ANYAPP_UPDATE_FIRST_CHECK_MS); people 30 seconds after the start.
+    updates.start(Number(env.ANYAPP_UPDATE_FIRST_CHECK_MS) || undefined);
 
     win?.on("focus", () => {
       void checkClaude();

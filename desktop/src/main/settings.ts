@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import { isEngine } from "../../../shared/engines.mts";
 import type { Settings } from "../shared/types.ts";
 
-export const DEFAULT_SETTINGS: Settings = { engine: "claude", onboardingDone: false, githubSkipped: false, startWithWindows: false, closeHintShown: false, phoneApkPath: "", hexModel: "", hexSkipped: false, dictationEngine: "" };
+export const DEFAULT_SETTINGS: Settings = { engine: "claude", onboardingDone: false, githubSkipped: false, startWithWindows: false, closeHintShown: false, phoneApkPath: "", hexModel: "", hexSkipped: false, dictationEngine: "", autoUpdates: true };
 
 export function loadSettings(file: string): Settings {
   try {

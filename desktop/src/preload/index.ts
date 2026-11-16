@@ -5,6 +5,9 @@ import type { AnyAppBridge, ChatItem, Snapshot, TodoItem, WorkerInfo } from "../
 const bridge: AnyAppBridge = {
   engineInstall: () => ipcRenderer.invoke("engine:install"),
   engineUpdate: () => ipcRenderer.invoke("engine:update"),
+  updateCheck: () => ipcRenderer.invoke("update:check"),
+  updateRestart: () => ipcRenderer.invoke("update:restart"),
+  updateCancel: () => ipcRenderer.invoke("update:cancel"),
   getSnapshot: () => ipcRenderer.invoke("snapshot"),
   onSnapshot: (listener) => {
     const fn = (_e: unknown, s: Snapshot) => listener(s);

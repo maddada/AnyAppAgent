@@ -139,6 +139,30 @@ export interface Settings {
   hexSkipped: boolean;
   /** Linux: the dictation app picked in Settings (empty: Superwhisper when installed, else Hex). */
   dictationEngine: "" | DictationEngine;
+  /** Look for a new Kiwimake by itself and download it in the background (src/main/updates.ts). */
+  autoUpdates: boolean;
+}
+
+/** How this copy of Kiwimake updates itself (src/main/updates.ts, docs/RELEASING.md). */
+export type UpdateKind = "windows" | "mac" | "appimage" | "deb" | "none";
+
+/** Kiwimake's own update: never installed without a click, never while an app is being made. */
+export interface UpdateState {
+  kind: UpdateKind;
+  /** The running version. */
+  current: string;
+  phase: "off" | "idle" | "checking" | "latest" | "downloading" | "ready" | "waiting" | "installing" | "error";
+  /** The new version (downloading, ready, waiting, installing). */
+  version?: string;
+  percent?: number;
+  /** waiting: what has to finish before Kiwimake restarts, as a sentence. */
+  waitingFor?: string;
+  /** error: a plain sentence. */
+  error?: string;
+  /** When Kiwimake last looked (ms since 1970). */
+  checkedAt?: number;
+  /** off: why this copy does not update itself. */
+  note?: string;
 }
 
 /** The phone app on this project's public GitHub release (always the newest release). */
@@ -185,6 +209,7 @@ export interface Snapshot {
   icons: Record<string, string>; // appId -> data URL
   checks: Checks;
   settings: Settings;
+  update: UpdateState;
   advanced: {
     toolsDir: string;
     stateDir: string;
@@ -219,6 +244,10 @@ export type BackupAction =
 export interface AnyAppBridge {
   engineInstall(): Promise<void>;
   engineUpdate(): Promise<void>;
+  /** Kiwimake's own update (src/main/updates.ts): look now, restart into it, or stop waiting. */
+  updateCheck(): Promise<void>;
+  updateRestart(): Promise<void>;
+  updateCancel(): Promise<void>;
   getSnapshot(): Promise<Snapshot>;
   onSnapshot(listener: (snapshot: Snapshot) => void): () => void;
   onChatItem(listener: (item: ChatItem) => void): () => void;
