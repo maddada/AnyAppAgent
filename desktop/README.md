@@ -1,4 +1,4 @@
-# Kiwimake desktop (Windows)
+# Kiwimake desktop (Windows and Linux)
 
 The one program a user installs on their PC. It runs the companion (`../server/`) for them, walks
 them through setup in plain words, shows their apps, and connects their phone. No terminal anywhere.
@@ -13,7 +13,15 @@ npm start          # build, then run
 npm test           # unit tests (detection of Claude, GitHub, tools; installer helpers)
 npm run typecheck
 npm run dist       # Windows installer in dist/ (electron-builder, NSIS)
+npm run dist:linux # dist/Kiwimake-x86_64.AppImage and dist/kiwimake_amd64.deb (Linux only)
+dev/smoke-linux.sh dist/Kiwimake-x86_64.AppImage   # start it isolated (port 8797), check it answers, stop it
 ```
+
+On Linux, a desktop launcher starts the app without the user's shell PATH. At start-up the app
+asks the login shell once for its environment (`src/main/shell-env.ts`, like VS Code) and adds the
+usual tool folders (mise, asdf, Volta, nvm, npm global, Bun, `~/.local/bin`), so it finds claude,
+codex, node and gh as a terminal would. JDKs installed by mise, asdf or SDKMAN are found without
+`JAVA_HOME`. `KIWIMAKE_SHELL_ENV=off` skips the shell probe.
 
 Useful environment variables (all optional):
 
@@ -25,6 +33,7 @@ Useful environment variables (all optional):
 | `ANYAPP_DESKTOP_USERDATA` | A separate settings folder (a fresh onboarding) for tests. |
 | `ANYAPP_HOST_APK` | The phone app's APK, if not set in Settings, Advanced, and not in `../app/dist/AnyAppAgent.apk`. |
 | `ANYAPP_DESKTOP_THEME=light/dark` | Force a theme. |
+| `KIWIMAKE_SHELL_ENV=off` | Linux and macOS: do not ask the login shell for PATH at start-up (the usual tool folders are still added). |
 | `ANYAPP_DESKTOP_DIALOG_FILE` | Dev and proofs only: the file the key backup and restore dialogs answer with, so a script can drive them. |
 | `ANYAPP_DESKTOP_SIMULATE` | Dev only, for screenshots: `claude=needed/signing-in,github=needed/code,tools=needed/installing,phone=none,hex=notInstalled/installing/notRunning`. |
 | `ANYAPP_DESKTOP_SHOTS=<folder>` | Dev only: walk every screen in light and dark, save PNGs, quit. `ANYAPP_DESKTOP_SHOTS_SET=flow/states/real`. |

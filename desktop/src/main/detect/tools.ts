@@ -3,7 +3,7 @@
 // A toolchain already on the PC is used as is and never modified.
 import * as realFs from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { ToolPiece, ToolsCheck } from "../../shared/types.ts";
 import type { Runner } from "../exec.ts";
 
@@ -66,7 +66,40 @@ export function missingSdkPackages(dir: string, fs: FsLike = realFs, required = 
 }
 
 /** Candidate JDK / SDK folders: ours first, then the environment, then the usual places. */
-export function toolchainCandidates(toolsDir: string, env: NodeJS.ProcessEnv): { jdk: { path: string; source: "tools" | "system" }[]; sdk: { path: string; source: "tools" | "system" }[] } {
+/** Lists a folder's entries; empty when it does not exist. */
+function listDir(dir: string): string[] {
+  try {
+    return realFs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+/** The JDK a real `java` on PATH belongs to (a shim, like mise's or asdf's, resolves elsewhere and is skipped). */
+function javaOnPath(env: NodeJS.ProcessEnv, real: (p: string) => string): string | undefined {
+  for (const dir of (env.PATH ?? "").split(":")) {
+    if (!dir) continue;
+    try {
+      const target = real(join(dir, "java"));
+      if (/\/bin\/java$/.test(target)) return dirname(dirname(target));
+    } catch {
+      // not here
+    }
+  }
+  return undefined;
+}
+
+/** Newest first, so "temurin-21" comes before "temurin-17" (numbers compared as numbers). */
+function newestFirst(names: string[]): string[] {
+  return [...names].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+}
+
+export function toolchainCandidates(
+  toolsDir: string,
+  env: NodeJS.ProcessEnv,
+  list: (dir: string) => string[] = listDir,
+  real: (p: string) => string = (p) => realFs.realpathSync(p),
+): { jdk: { path: string; source: "tools" | "system" }[]; sdk: { path: string; source: "tools" | "system" }[] } {
   const jdk: { path: string; source: "tools" | "system" }[] = [{ path: join(toolsDir, "jdk"), source: "tools" }];
   const sdk: { path: string; source: "tools" | "system" }[] = [{ path: join(toolsDir, "android-sdk"), source: "tools" }];
   const add = (list: typeof jdk, p: string | undefined) => {
@@ -87,9 +120,21 @@ export function toolchainCandidates(toolsDir: string, env: NodeJS.ProcessEnv): {
       add(sdk, `${drive}:\\tools\\android\\sdk`);
     }
   } else {
-    // Distro JDKs (Arch, Fedora, Debian/Ubuntu), Android Studio's own, then the usual SDK folders.
-    for (const p of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java", "/opt/android-studio/jbr"]) add(jdk, p);
+    // A real java on PATH, distro JDKs (Arch, Fedora, Debian/Ubuntu), Android Studio's own, then
+    // the JDKs version managers install without setting JAVA_HOME (mise, asdf, SDKMAN, IntelliJ).
     const home = env.HOME ?? homedir();
+    add(jdk, javaOnPath(env, real));
+    for (const p of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java"]) add(jdk, p);
+    for (const name of newestFirst(list("/usr/lib/jvm"))) add(jdk, join("/usr/lib/jvm", name));
+    add(jdk, "/opt/android-studio/jbr");
+    add(jdk, join(home, ".local", "share", "android-studio", "jbr"));
+    const managed = [
+      join(env.MISE_DATA_DIR || join(env.XDG_DATA_HOME || join(home, ".local", "share"), "mise"), "installs", "java"),
+      join(env.ASDF_DATA_DIR || join(home, ".asdf"), "installs", "java"),
+      join(env.SDKMAN_DIR || join(home, ".sdkman"), "candidates", "java"),
+      join(home, ".jdks"),
+    ];
+    for (const root of managed) for (const name of newestFirst(list(root))) add(jdk, join(root, name));
     add(sdk, join(home, "Android", "Sdk"));
     add(sdk, join(home, "Library", "Android", "sdk"));
     add(sdk, "/opt/android-sdk");

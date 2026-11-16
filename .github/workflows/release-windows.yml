@@ -1,4 +1,4 @@
-name: Sign Windows release with Certum
+name: Build the desktop release (Windows signed with Certum, Linux)
 
 on:
   workflow_dispatch:
@@ -8,6 +8,11 @@ on:
         required: true
         default: v0.3.1
         type: string
+      dry_run:
+        description: Linux only, no upload, no draft needed (tag may be a branch). Builds, installs and smoke-tests, keeps the files as a workflow artifact.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -18,6 +23,7 @@ concurrency:
 
 jobs:
   windows:
+    if: ${{ !inputs.dry_run }}
     runs-on: windows-2025
     timeout-minutes: 45
     defaults:
@@ -136,3 +142,115 @@ jobs:
       - name: Log out of SimplySign
         if: ${{ always() }}
         run: desktop/dev/certum-simplysign-login.ps1 -Logout
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            server/package-lock.json
+      - name: Require the draft release and its APKs
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected a stable version tag.'; exit 1; }
+          for part in desktop server app; do
+            version="$(node -p "require('./$part/package.json').version")"
+            [ "v$version" = "$RELEASE_TAG" ] || { echo "Version mismatch in $part."; exit 1; }
+          done
+          id="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json databaseId,isDraft --jq 'select(.isDraft) | .databaseId')"
+          [ -n "$id" ] || { echo 'The release must exist and remain a draft.'; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/releases/$id" > "$RUNNER_TEMP/release.json"
+          [ "$(jq -r .draft "$RUNNER_TEMP/release.json")" = true ] || { echo 'The release must exist and remain a draft.'; exit 1; }
+          mkdir -p app/dist
+          for name in AnyAppAgent.apk AnyAppAgent-universal.apk; do
+            digest="$(jq -r --arg n "$name" '[.assets[] | select(.name == $n)] | if length == 1 then .[0].digest // "" else "" end' "$RUNNER_TEMP/release.json")"
+            [[ "$digest" =~ ^sha256:[a-fA-F0-9]{64}$ ]] || { echo "Missing APK or SHA-256 digest: $name"; exit 1; }
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir app/dist
+            [ "sha256:$(sha256sum "app/dist/$name" | cut -d' ' -f1)" = "${digest,,}" ] || { echo "APK digest mismatch: $name"; exit 1; }
+          done
+      - name: Install build dependencies and check the desktop and companion
+        run: |
+          set -euo pipefail
+          git config --global user.name 'Kiwimake CI'
+          git config --global user.email 'ci@kiwimake.invalid'
+          npm ci --prefix server --no-audit --no-fund
+          npm ci --prefix desktop --no-audit --no-fund
+          npm run typecheck --prefix server
+          npm test --prefix server
+          npm run typecheck --prefix desktop
+          npm test --prefix desktop
+      - name: Pin the draft's phone APK
+        if: ${{ !inputs.dry_run }}
+        run: node desktop/dev/pin-phone.mjs
+      - name: Build the AppImage and the .deb
+        run: |
+          set -euo pipefail
+          npm run dist:linux --prefix desktop
+          cd desktop/dist
+          for name in Kiwimake-x86_64.AppImage kiwimake_amd64.deb; do
+            [ -s "$name" ] || { echo "Missing $name"; exit 1; }
+            echo "$name $(stat -c %s "$name") bytes sha256 $(sha256sum "$name" | cut -d' ' -f1)" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+          dpkg-deb --info kiwimake_amd64.deb
+          dpkg-deb --contents kiwimake_amd64.deb > "$RUNNER_TEMP/deb-contents.txt"
+          for path in ./opt/Kiwimake/kiwimake ./opt/Kiwimake/chrome-sandbox ./opt/Kiwimake/resources/apparmor-profile \
+                      ./opt/Kiwimake/resources/companion/server/bin/anyappagent.mjs ./usr/share/applications/kiwimake.desktop; do
+            grep -q " $path\$" "$RUNNER_TEMP/deb-contents.txt" || { echo "The .deb lacks $path"; exit 1; }
+          done
+      - name: Start the AppImage and the installed .deb
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb dbus-x11 fuse3 ./desktop/dist/kiwimake_amd64.deb
+          echo "apparmor_restrict_unprivileged_userns=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)"
+          ls -l /opt/Kiwimake/chrome-sandbox /etc/apparmor.d/kiwimake || true
+          xvfb-run -a dbus-launch --exit-with-session desktop/dev/smoke-linux.sh desktop/dist/Kiwimake-x86_64.AppImage
+          xvfb-run -a dbus-launch --exit-with-session desktop/dev/smoke-linux.sh /usr/bin/kiwimake
+      - name: Keep the dry-run packages
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages
+          path: |
+            desktop/dist/Kiwimake-x86_64.AppImage
+            desktop/dist/kiwimake_amd64.deb
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload both Linux packages to the draft
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true ] || { echo 'Refusing to change a public release.'; exit 1; }
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber desktop/dist/Kiwimake-x86_64.AppImage desktop/dist/kiwimake_amd64.deb
+      - name: Verify the uploaded packages again
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/verify-release"
+          mkdir -p "$dir"
+          for name in Kiwimake-x86_64.AppImage kiwimake_amd64.deb; do
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$dir"
+            cmp "$dir/$name" "desktop/dist/$name" || { echo "Uploaded bytes differ: $name"; exit 1; }
+          done
+          echo 'Both Linux packages are on the draft and match the tested builds. The release is still a draft.' >> "$GITHUB_STEP_SUMMARY"

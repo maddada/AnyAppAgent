@@ -3,7 +3,10 @@
   "productName": "Kiwimake",
   "version": "0.3.3",
   "private": true,
-  "description": "Kiwimake for Windows: runs the companion, onboarding, connect a phone.",
+  "description": "Kiwimake for Windows and Linux: runs the companion, onboarding, connect a phone.",
+  "homepage": "https://github.com/maddada/AnyAppAgent",
+  "license": "MIT",
+  "desktopName": "kiwimake.desktop",
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {
@@ -14,7 +17,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "fake-companion": "node dev/fake-companion.mjs",
-    "dist": "pwsh -NoProfile -File dev/release-windows.ps1"
+    "dist": "pwsh -NoProfile -File dev/release-windows.ps1",
+    "dist:linux": "electron-vite build && electron-builder --linux --x64 --publish never"
   },
   "dependencies": {
     "qrcode": "1.5.4",
@@ -93,6 +97,8 @@
           "**/*",
           "!build/**",
           "!android/**",
+          "!node_modules/**",
+          "!.expo/**",
           "!**/.vitest-cache/**"
         ]
       },
@@ -151,11 +157,69 @@
       "installerIcon": "../shared/theme/mark/windows/anyappagent.ico",
       "uninstallerIcon": "../shared/theme/mark/windows/anyappagent.ico"
     },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "executableName": "kiwimake",
+      "icon": "../shared/theme/mark/windows/icon-512.png",
+      "category": "Development",
+      "synopsis": "Make Android apps from your phone",
+      "description": "Make Android apps from your phone with Claude Code or Codex on this PC.",
+      "maintainer": "Kiwimake <maddada@users.noreply.github.com>",
+      "vendor": "Kiwimake",
+      "desktop": {
+        "entry": {
+          "Name": "Kiwimake",
+          "GenericName": "App maker",
+          "Keywords": "android;apps;phone;claude;codex;"
+        }
+      },
+      "syncDesktopName": true
+    },
+    "appImage": {
+      "artifactName": "Kiwimake-x86_64.AppImage",
+      "executableArgs": []
+    },
+    "deb": {
+      "artifactName": "kiwimake_amd64.deb",
+      "packageName": "kiwimake",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libgbm1",
+        "libasound2",
+        "git"
+      ],
+      "recommends": [],
+      "packageCategory": "devel"
+    },
     "afterPack": "./dev/after-pack.cjs",
     "electronLanguages": [
       "en-US",
       "en-GB",
       "ar"
-    ]
+    ],
+    "toolsets": {
+      "appimage": "1.0.3"
+    }
   }
 }

@@ -3,7 +3,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nati
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
@@ -28,6 +28,7 @@ import { firstExisting, resolvePaths } from "./paths.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
 import { ClaudeSignIn, GitHubSignIn } from "./signin.ts";
 import { runScreenshots } from "./shots.ts";
+import { adoptShellEnv } from "./shell-env.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const env = process.env;
@@ -410,7 +411,7 @@ async function installTools(): Promise<void> {
     warm: {
       cli: join(paths.repoRoot, "builder", "cli.mjs"),
       probeDir: join(paths.appsDir, "warm-probe"),
-      env: { ...process.env, PATH: [...(checks.tools.env?.path ?? []), process.env.PATH ?? ""].join(";") },
+      env: { ...process.env, PATH: [...(checks.tools.env?.path ?? []), process.env.PATH ?? ""].join(delimiter) },
     },
     onProgress: (p) => {
       checks.tools = { ...checks.tools, state: "working", install: { running: true, progress: p.progress, label: p.label, detail: p.detail } };
@@ -980,6 +981,8 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
 
   app.whenReady().then(async () => {
     log(`[desktop] start ${app.getVersion()} mode=${mode} port=${port} electron=${process.versions.electron} node=${process.versions.node}`);
+    // Started from a desktop launcher, there is no shell PATH: ask the login shell while the window opens.
+    const shellEnv = adoptShellEnv(env).then((line) => log(`[desktop] shell environment: ${line}`), (error) => log(`[desktop] shell environment: ${(error as Error).message}`));
     ipc();
     const hidden = process.argv.includes("--hidden");
     createWindow(!hidden);
@@ -988,6 +991,7 @@ if (!app.requestSingleInstanceLock() || process.argv.includes("--quit")) {
     updateTray();
     if (app.isPackaged) setOpenAtLogin(settings.startWithWindows);
 
+    await shellEnv;
     // Tools first: the companion gets JAVA_HOME / ANDROID_HOME from them.
     await checkTools();
     companion.start();

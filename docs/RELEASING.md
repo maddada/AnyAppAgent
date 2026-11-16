@@ -1,6 +1,6 @@
 # Releasing Kiwimake
 
-A release is a GitHub release on `maddada/AnyAppAgent` with four files. The desktop app's
+A release is a GitHub release on `maddada/AnyAppAgent` with six files. The desktop app's
 download QR and the README link to `https://github.com/maddada/AnyAppAgent/releases/latest/download/<name>`,
 so the phone APKs keep their old names for good (desktop apps already installed download
 `AnyAppAgent.apk`, even after the rename to Kiwimake). The installer is `Kiwimake-Setup.exe` from
@@ -12,6 +12,13 @@ so the phone APKs keep their old names for good (desktop apps already installed 
 | `AnyAppAgent-universal.apk` | The phone app, arm64-v8a and x86_64 (emulator, x86 tablets). |
 | `Kiwimake-Setup.exe` | The Windows installer (electron-builder names it `Kiwimake-Setup-<version>.exe`; upload it renamed). |
 | `AnyAppAgent-Setup.exe` | An identical copy of the signed Windows installer, for older links. |
+| `Kiwimake-x86_64.AppImage` | Linux, x64, most distributions: download, make executable, run. |
+| `kiwimake_amd64.deb` | Linux, x64, Ubuntu and Debian: `sudo apt install ./kiwimake_amd64.deb`. |
+
+The Linux names carry no version, so `releases/latest/download/<name>` always works; electron-builder
+writes them under these names directly (`desktop/package.json`, `appImage.artifactName` and
+`deb.artifactName`). The website's download section links to all of them except
+`AnyAppAgent-Setup.exe` and `AnyAppAgent-universal.apk`.
 
 ## The phone app's release key
 
@@ -115,6 +122,44 @@ the PC themselves. Keep any smoke test's settings, state, tools, apps and port s
 user's live instance. The PC has no self-updater; run the downloaded installer to update it.
 Update the phone by opening `AnyAppAgent.apk`, or scanning the desktop's phone-download QR.
 
+## Linux packages
+
+The `linux` job of the same workflow (`release-windows.yml`, kept under its old name so existing
+commands still work) runs on a disposable `ubuntu-24.04` runner, in parallel with the Windows job.
+It checks the tag, the versions and that the release is still a draft, downloads both APKs and
+checks their GitHub SHA-256 digests, runs the companion and desktop checks, pins the draft's APK
+(`desktop/dev/pin-phone.mjs`), and runs `npm run dist:linux` in `desktop/`. It checks the .deb's
+control file and contents, installs it with apt (which proves its dependencies resolve on Ubuntu
+24.04), then starts the AppImage and the installed app with `desktop/dev/smoke-linux.sh` under
+`xvfb-run` (own state folder, apps folder and port 8797) and waits for the companion to answer.
+Only then does it upload both packages to the draft and download them again to compare the bytes.
+It never makes the release public. The Linux packages are not signed (Linux has no equivalent of
+Authenticode for AppImages and loose .deb files); the release page's SHA-256 digests are the check.
+
+- **No Snap or Flatpak**: Kiwimake runs claude, codex, Git, adb and Gradle from the user's PC, so it
+  must not be sandboxed.
+- **AppImage**: built with electron-builder's static AppImage runtime (`toolsets.appimage`
+  `1.0.3`), which needs no `libfuse2` (Ubuntu 22.04 and later do not install it). Its launcher
+  (AppRun) tests `unshare -Ur true`; where unprivileged user namespaces are blocked (Ubuntu 23.10+
+  AppArmor, some hardened kernels) it starts Electron with `--no-sandbox`, otherwise with
+  Chromium's sandbox.
+- **.deb**: installs to `/opt/Kiwimake`, links `/usr/bin/kiwimake`, adds the menu entry and icon,
+  and installs electron-builder's AppArmor profile `/etc/apparmor.d/kiwimake` (allows user
+  namespaces for `/opt/Kiwimake/kiwimake` only), so the Chromium sandbox stays on. Where there are no
+  user namespaces at all it makes `chrome-sandbox` setuid root instead. Depends on Git (the
+  companion needs it; Kiwimake downloads the JDK, Android SDK and Node itself).
+- **Size**: about 126 MB AppImage and 106 MB .deb (310 MB installed); the companion's own copy of
+  Claude Code's binary is left out as on Windows (the user's installed CLI is used).
+
+Test a workflow change without a release: push a branch, then run
+`gh workflow run release-windows.yml --repo maddada/AnyAppAgent --ref <branch> -f tag=<branch> -f dry_run=true`.
+A dry run skips the Windows job (no Certum login), needs no draft and uploads nothing to any
+release: it builds, installs and smoke-tests both Linux packages and keeps them as the
+`linux-packages` workflow artifact for 7 days.
+
+Locally on Linux: `cd desktop && npm run dist:linux`, then `dev/smoke-linux.sh dist/Kiwimake-x86_64.AppImage`.
+On Arch, electron-builder's bundled fpm needs `libcrypt.so.1` (package `libxcrypt-compat`) for the .deb.
+
 ## Build
 
 From PowerShell, in a clean checkout of the commit to release (a worktree is fine), with the
@@ -125,7 +170,7 @@ toolchain from `docs/ENVIRONMENT.md`:
 cd app;     npm ci; npm run typecheck; npm run lint
 node scripts/build-apk.mjs --clean --release   # prints both APKs with size and sha256
 cd ..\desktop; npm ci; npm run typecheck; npm test
-# Windows packaging and signing run in release-windows.yml after the APKs are on the draft.
+# Windows signing and Linux packaging run in release-windows.yml after the APKs are on the draft.
 ```
 
 `build-apk.mjs --release` reads the key and password (above), loads
@@ -167,20 +212,22 @@ gh workflow run release-windows.yml --repo maddada/AnyAppAgent --ref main -f tag
 ```
 
 5. The workflow definition runs from main so CI fixes do not require moving a release tag; its
-   checkout always builds the supplied tag. Wait for it to succeed. Its `windows-signing-evidence` artifact contains the signed
+   checkout always builds the supplied tag. Wait for both jobs (`windows` and `linux`) to succeed. Its `windows-signing-evidence` artifact contains the signed
    `Kiwimake.exe` and `signatures.json`. Download both installer names from the draft and run
    `signtool verify /pa /v` on them. Check the exact signer above, the certificate thumbprint, a valid
    timestamp, and identical hashes for the two installer names. Check the APKs against the locally
    verified signed outputs. Do not run the installer or change the user's running app.
-6. Only when all four verified files are present, publish the draft:
+   Download both Linux packages from the draft and check their SHA-256 against the `linux` job's
+   summary.
+6. Only when all six verified files are present, publish the draft:
 
 ```powershell
 gh release edit v<version> --repo maddada/AnyAppAgent --draft=false --latest
 ```
 
 7. Check that every `releases/latest/download/<name>` link returns the new file (size and SHA-256).
-   A failed or interrupted Windows job must never expose a release with just the APKs. Rerun the
-   workflow against the same draft; it replaces only the two Windows installer assets.
+   A failed or interrupted Windows or Linux job must never expose a release without all six files.
+   Rerun the workflow against the same draft; it replaces only the installer and package assets.
 
 ## Manual installer test builds
 

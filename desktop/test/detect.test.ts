@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { join } from "node:path";
 import { claudeCliCandidates, detectClaude, extractLoginUrl, interpretClaudeStatus, planLabel } from "../src/main/detect/claude.ts";
 import { detectGitHub, ghAssetName, parseDeviceFlow, parseGhAuthStatus } from "../src/main/detect/github.ts";
-import { checkJdk, detectTools, javaMajor, missingSdkPackages, parseNodeVersion, REQUIRED_SDK_PACKAGES, sdkPackageDir, toolsEnv, type FsLike } from "../src/main/detect/tools.ts";
+import { checkJdk, detectTools, toolchainCandidates, javaMajor, missingSdkPackages, parseNodeVersion, REQUIRED_SDK_PACKAGES, sdkPackageDir, toolsEnv, type FsLike } from "../src/main/detect/tools.ts";
 import { parseSdkProgress, pickCmdlineTools, planInstall } from "../src/main/install/tools-installer.ts";
 import type { Runner } from "../src/main/exec.ts";
 import { cmdQuote } from "../src/main/exec.ts";
@@ -234,6 +234,27 @@ describe("tools detection", () => {
 });
 
 // ------------------------------------------------------------- installer (pure parts)
+
+describe("JDK candidates on Linux", () => {
+  it.runIf(process.platform === "linux")("finds JDKs from a real java on PATH and from mise, newest first, with no JAVA_HOME", () => {
+    const dirs: Record<string, string[]> = {
+      "/h/.local/share/mise/installs/java": ["temurin-17.0.19+10", "temurin-21.0.2"],
+      "/usr/lib/jvm": ["java-17-openjdk"],
+    };
+    const real = (p: string) => {
+      if (p === "/opt/jdk-22/bin/java") return p;
+      if (p === "/h/.local/share/mise/shims/java") return "/usr/bin/mise";
+      throw new Error("ENOENT");
+    };
+    const env = { HOME: "/h", PATH: "/h/.local/share/mise/shims:/opt/jdk-22/bin" };
+    const jdk = toolchainCandidates("/t", env, (d) => dirs[d] ?? [], real).jdk.map((c) => c.path);
+    expect(jdk[0]).toBe(join("/t", "jdk"));
+    expect(jdk[1]).toBe("/opt/jdk-22");
+    expect(jdk).toContain("/usr/lib/jvm/java-17-openjdk");
+    const mise = jdk.filter((p) => p.includes("mise"));
+    expect(mise).toEqual(["/h/.local/share/mise/installs/java/temurin-21.0.2", "/h/.local/share/mise/installs/java/temurin-17.0.19+10"]);
+  });
+});
 
 describe("tools installer", () => {
   it("plans only what is missing", () => {

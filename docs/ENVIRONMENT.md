@@ -31,6 +31,11 @@ export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
 - **No long-path problem on Linux**: the SDK's bundled ninja 1.10.2 is fine here; the ninja swap
   (pitfall 1) is Windows only.
 - **No emulator** is set up on Linux yet; test on the real phone.
+- **Linux packages**: `cd desktop && npm run dist:linux` writes `dist/Kiwimake-x86_64.AppImage` and
+  `dist/kiwimake_amd64.deb` (`docs/RELEASING.md`, Linux packages). The .deb step needs
+  `libcrypt.so.1` (`sudo pacman -S libxcrypt-compat`, or point `LD_LIBRARY_PATH` at an extracted
+  copy). Try a build without touching the running app: `dev/smoke-linux.sh dist/Kiwimake-x86_64.AppImage`
+  (own state folder, port 8797).
 - Electron's binary: npm 11 can skip install scripts. If `desktop/node_modules/electron/dist` is
   missing, run `node node_modules/electron/install.js` in `desktop/`.
 
