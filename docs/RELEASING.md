@@ -1,6 +1,6 @@
 # Releasing Kiwimake
 
-A release is a GitHub release on `maddada/Kiwimake` with six files. The desktop app's
+A release is a GitHub release on `maddada/Kiwimake` with thirteen files. The desktop app's
 download QR and the README link to `https://github.com/maddada/Kiwimake/releases/latest/download/<name>`,
 so the phone APKs keep their old names for good (desktop apps already installed download
 `AnyAppAgent.apk`, even after the rename to Kiwimake). The installer is `Kiwimake-Setup.exe` from
@@ -14,11 +14,16 @@ so the phone APKs keep their old names for good (desktop apps already installed 
 | `AnyAppAgent-Setup.exe` | An identical copy of the signed Windows installer, for older links. |
 | `Kiwimake-x86_64.AppImage` | Linux, x64, most distributions: download, make executable, run. |
 | `kiwimake_amd64.deb` | Linux, x64, Ubuntu and Debian: `sudo apt install ./kiwimake_amd64.deb`. |
+| `Kiwimake-mac-arm64.dmg` | macOS, Apple silicon (M1 and later): Developer ID signed and notarized. |
+| `Kiwimake-mac-x64.dmg` | macOS, Intel. |
+| `Kiwimake-mac-arm64.zip`, `Kiwimake-mac-x64.zip` | The same Mac apps, for the desktop's own updater (Squirrel.Mac reads a zip). |
+| `latest.yml`, `latest-mac.yml`, `latest-linux.yml` | The desktop's update feeds ("Updates of the desktop app" below). |
 
 The Linux names carry no version, so `releases/latest/download/<name>` always works; electron-builder
-writes them under these names directly (`desktop/package.json`, `appImage.artifactName` and
-`deb.artifactName`). The website's download section links to all of them except
-`AnyAppAgent-Setup.exe` and `AnyAppAgent-universal.apk`.
+writes them under these names directly (`desktop/package.json`, `appImage.artifactName`,
+`deb.artifactName` and the Mac `artifactName`). The website's download section links to the
+Windows and Linux installers and the phone APK (not `AnyAppAgent-Setup.exe`,
+`AnyAppAgent-universal.apk`, the Mac files, the zips or the feeds).
 
 ## The phone app's release key
 
@@ -119,7 +124,8 @@ Never sign only the outer installer: that would leave the installed app unsigned
 
 Do not run the installer or quit the user's running desktop app during a release. The user updates
 the PC themselves. Keep any smoke test's settings, state, tools, apps and port separate from the
-user's live instance. The PC has no self-updater; run the downloaded installer to update it.
+user's live instance. The desktop app updates itself from the first release after 0.3.3 ("Updates of
+the desktop app" below); 0.3.3 and earlier are updated by running the downloaded installer once.
 The phone app updates itself from the first release after 0.3.3 ("Updates of the phone app" below);
 0.3.3 and earlier are updated by opening `AnyAppAgent.apk`, or scanning the desktop's
 phone-download QR.
@@ -161,6 +167,82 @@ release: it builds, installs and smoke-tests both Linux packages and keeps them 
 
 Locally on Linux: `cd desktop && npm run dist:linux`, then `dev/smoke-linux.sh dist/Kiwimake-x86_64.AppImage`.
 On Arch, electron-builder's bundled fpm needs `libcrypt.so.1` (package `libxcrypt-compat`) for the .deb.
+
+## Updates of the desktop app
+
+Copied in spirit from Ghostex (read only, never imported): Ghostex updates its native Mac app with
+Sparkle and an EdDSA-signed appcast, its Windows app with Velopack and its AppImage with
+AppImageUpdate. Kiwimake is one Electron app, so it uses **electron-updater**
+(`desktop/src/main/updates.ts`), which does the same for all four installers from one kind of feed.
+Sparkle itself is a native Mac framework and does not fit an Electron app.
+
+**The feed.** `desktop/package.json` `build.publish` is electron-updater's generic provider at
+`https://github.com/maddada/Kiwimake/releases/latest/download`; electron-builder writes it into each
+build as `resources/app-update.yml`. The app reads `latest.yml` (Windows), `latest-mac.yml` or
+`latest-linux.yml` from the newest public release, so a draft is never offered. CI writes each feed
+from the final signed and stapled files under their stable names with `desktop/dev/update-feed.mjs`
+(the version, and each file's size and SHA-512), and checks it again after the upload.
+
+**What is checked before an update is installed:**
+
+- Every download: its size and SHA-512 against the feed, which comes from GitHub over HTTPS.
+- Windows: the downloaded installer must carry a valid Authenticode signature by
+  `Open Source Developer Mohamad Yahia Youssef` (`win.signtoolOptions.publisherName`, written into
+  `app-update.yml`); anything else is refused.
+- macOS: Squirrel.Mac replaces the app only with one that satisfies the running app's code
+  signature requirement (the same Developer ID team). An ad-hoc build cannot update itself.
+- Linux: the SHA-512 only (Linux has no signature check for AppImages or loose .debs). The feed
+  itself is not separately signed; see "Signing the feed" below.
+
+**How each installer updates:**
+
+| Installer | How |
+| --- | --- |
+| Windows (NSIS, per user) | Downloads `Kiwimake-Setup.exe`, checks its signature, runs it silently, which replaces the app and starts it again. No administrator prompt. |
+| macOS | Downloads the zip for this Mac (`arm64` or `x64`); Squirrel.Mac checks it, swaps the app and starts it again. |
+| AppImage | Downloads `Kiwimake-x86_64.AppImage`, replaces the file the person started (same path and name) and starts it. |
+| .deb | Downloads `kiwimake_amd64.deb` and installs it with `pkexec dpkg -i`: the PC asks for the person's password. Cancelling leaves the old version running. |
+
+A copy from anywhere else (a source checkout, an unpacked Linux folder) says in Settings that it does
+not update itself, and never looks.
+
+**The person stays in control.** With "Update Kiwimake by itself" on (Settings, Updates; the default)
+it looks 30 seconds after it starts and every 6 hours, and downloads a new version in the background.
+Nothing is installed until they click **Restart to update** in the notice over the apps list (or in
+Settings). If an app is being changed or built at that moment (an agent turn or a build), or the
+Android tools, the AI engine or dictation are being installed, Kiwimake says what it is waiting for
+and restarts only when that is done ("Don't wait" cancels). Before the installer starts, Kiwimake stops
+its companion and lets go of its one-copy lock, so the new copy starts cleanly. If the installer does
+not start (a cancelled password prompt, a refused signature), the companion starts again and the
+notice offers Try again. With automatic updates off it never looks by itself; Check now still works.
+It never installs on quit, never downgrades and never takes a prerelease.
+
+Settings, apps, the state folder, tools and the phone pairing live outside the app, so an update
+keeps them (proven with the AppImage, below).
+
+**Test an update without a release.** Build two copies with different versions, serve a folder with
+the newer file and its feed, and start the older one against it with its own state:
+
+```bash
+cd desktop && npx electron-vite build
+npx electron-builder --linux AppImage --x64 --publish never -c.extraMetadata.version=0.3.98 -c.directories.output=/tmp/k-old
+npx electron-builder --linux AppImage --x64 --publish never -c.extraMetadata.version=0.3.99 -c.directories.output=/tmp/k-new
+# a folder with the newer Kiwimake-x86_64.AppImage and a latest-linux.yml for it, served on any port
+ANYAPP_UPDATE_FEED=http://127.0.0.1:<feed port>/ ANYAPP_UPDATE_FIRST_CHECK_MS=3000 \
+  ANYAPP_STATE_DIR=<dir>/state ANYAPP_APPS_DIR=<dir>/apps ANYAPP_PORT=<not 8787> ANYAPP_ENGINE_UPDATES=off \
+  <dir>/Kiwimake-x86_64.AppImage
+```
+
+`ANYAPP_UPDATE_FEED` points any packaged copy at another feed; `ANYAPP_UPDATE_FIRST_CHECK_MS` makes
+the first look sooner. `desktop/dev/prove-update-linux.sh` does all of it and checks the result. On a
+Mac, the same works with two disk images from dry runs of the release workflow (macOS, below):
+install the older one in /Applications, serve the newer zip with a `latest-mac.yml`.
+
+**Signing the feed** (not done, a possible next step): Sparkle signs Ghostex's appcast with an
+EdDSA key. electron-updater has no such check, so a changed feed on GitHub plus a changed Linux file
+would pass on Linux (Windows and macOS still check the publisher's signature). Adding it means a new
+Ed25519 key, kept like the phone's update key, and a check of a `latest-*.yml.sig` before the
+updater reads the feed.
 
 ## Updates of the phone app
 
@@ -291,13 +373,16 @@ gh workflow run release-windows.yml --repo maddada/Kiwimake --ref main -f tag=v<
 ```
 
 5. The workflow definition runs from main so CI fixes do not require moving a release tag; its
-   checkout always builds the supplied tag. Wait for both jobs (`windows` and `linux`) to succeed. Its `windows-signing-evidence` artifact contains the signed
+   checkout always builds the supplied tag. Wait for all four jobs (`windows`, `mac`, `linux`, then
+   `verify`) to succeed. `verify` downloads all thirteen files from the draft and checks the three
+   update feeds against them; it is the gate for step 6. The `windows-signing-evidence` artifact contains the signed
    `Kiwimake.exe` and `signatures.json`. Download both installer names from the draft and run
    `signtool verify /pa /v` on them. Check the exact signer above, the certificate thumbprint, a valid
    timestamp, and identical hashes for the two installer names. Check the APKs against the locally
    verified signed outputs. Do not run the installer or change the user's running app.
    Download both Linux packages from the draft and check their SHA-256 against the `linux` job's
-   summary.
+   summary. The `mac` job already ran `desktop/dev/verify-mac.sh` (Developer ID, hardened runtime,
+   notarized, stapled, accepted by Gatekeeper) on both disk images and both zips.
 6. Publish the over-the-air update exported with the build (`app/`, with the signing key and the
    upload token from "Updates of the phone app"). Add `--new-runtime` when this release changed
    the runtime version (the export prints it; `status` says whether the server has served it):
@@ -309,15 +394,39 @@ node scripts/ota-publish.mjs status   # the new version and its date
 
    Do it before the release goes public: phones whose APK has this runtime then take it over the
    air, and the APK updater offers the new APK only to phones on an older runtime.
-   Then, only when all six verified files are present, publish the draft:
+   Then, only when the `verify` job passed (all thirteen files present, feeds matching), publish the draft:
 
 ```powershell
 gh release edit v<version> --repo maddada/Kiwimake --draft=false --latest
 ```
 
 7. Check that every `releases/latest/download/<name>` link returns the new file (size and SHA-256).
-   A failed or interrupted Windows or Linux job must never expose a release without all six files.
-   Rerun the workflow against the same draft; it replaces only the installer and package assets.
+   Check that `releases/latest/download/latest.yml` (and the Mac and Linux feeds) name the new
+   version: from then on every desktop copy with automatic updates on downloads it within 6 hours.
+   A failed or interrupted job must never expose a release without all thirteen files.
+   Rerun the workflow against the same draft; it replaces only the installer, package and feed assets.
+
+## Release notes
+
+Each release's notes end with these two paragraphs (adjust the versions):
+
+```markdown
+Kiwimake on your computer updates itself from this version on: it downloads the update in the
+background and installs it when you click Restart to update (Settings, Updates). From 0.3.3 or
+earlier, download and install it once: Kiwimake-Setup.exe (Windows), Kiwimake-mac-arm64.dmg
+(Apple silicon Macs) or Kiwimake-mac-x64.dmg (Intel Macs), Kiwimake-x86_64.AppImage or
+kiwimake_amd64.deb (Linux). The Windows installer and app are signed by Open Source Developer
+Mohamad Yahia Youssef using Certum; the Mac app is signed with Apple Developer ID Mohamad Youssef
+(KTKP595G3B) and notarized by Apple.
+
+Update your phone by opening AnyAppAgent.apk, or scanning the phone-download code in the desktop
+app. Install over your existing copy to keep your data. AnyAppAgent-universal.apk also supports
+x86_64 devices. AnyAppAgent-Setup.exe is the same Windows installer under its old name.
+```
+
+From the next release on, the first paragraph is only: Kiwimake on your computer updates itself
+(Settings, Updates). New downloads: the same file names as above.
+
 
 ## Manual installer test builds
 
@@ -330,29 +439,77 @@ installer names, verifies the uploaded bytes, and keeps the release a draft.
 Certum accepts each one-time code once. Avoid starting a signing job while a Ghostex or codex-swap
 job is logging in to the same SimplySign account.
 
-## macOS (not released yet)
+## macOS
 
-`npm run dist:mac` in `desktop/` (on a Mac) runs `dev/build-mac.mjs`: `electron-vite build`, then
-electron-builder's `mac` target, which writes two disk images with stable names, ready for
-`releases/latest/download/<name>` links:
+The `mac` job of `release-windows.yml` runs on a disposable `macos-15` runner (Apple silicon), in
+parallel with the Windows and Linux jobs. `npm run dist:mac` in `desktop/` runs `dev/build-mac.mjs`:
+`electron-vite build`, then electron-builder's `mac` target for both processors, with stable names
+ready for `releases/latest/download/<name>` links:
 
 | File | What |
 | --- | --- |
-| `Kiwimake-mac-arm64.dmg` | Apple silicon (M1 and later). |
+| `Kiwimake-mac-arm64.dmg` | Apple silicon (M1 and later), for people. |
 | `Kiwimake-mac-x64.dmg` | Intel Macs. |
+| `Kiwimake-mac-arm64.zip`, `Kiwimake-mac-x64.zip` | The same apps for the updater (Squirrel.Mac reads a zip). |
+| `latest-mac.yml` | Their update feed (`dev/update-feed.mjs`). |
 
 Two images, not one universal app: the companion's runtime packages are staged per architecture
 (`dev/after-pack.cjs` runs `npm ci --cpu=<arch> --os=darwin`), and a universal merge would need
-both sets to be identical. No `.zip` is made: electron-builder needs one only for its auto-updater,
-which Kiwimake does not use.
+both sets to be identical.
 
-### Signing: ad-hoc today
+### Developer ID signing and notarization
 
-No Apple Developer ID exists for Kiwimake yet, so the apps are **ad-hoc signed** (`"identity": "-"`)
-and **not notarized**. Hardened runtime is off: only notarization needs it, and the ad-hoc build
-was tested end to end without it. (A copy re-signed ad-hoc with hardened runtime and
-`dev/entitlements.mac.plist` also opened and painted its window, in a quick check with the fake
-companion.)
+The same Apple Developer ID Application certificate and notarization account as Ghostex:
+`Developer ID Application: Mohamad Youssef (KTKP595G3B)`, valid until 2031-02-09.
+
+1. The job makes a keychain of its own with a random password, imports the certificate into it, and
+   stores the notarization credentials in it as the notarytool profile `kiwimake-notary`
+   (`notarytool store-credentials` checks them with Apple first). The keychain is deleted at the end.
+2. electron-builder signs every binary in the app with the Developer ID, hardened runtime and
+   `dev/entitlements.mac.plist` (JIT and unsigned executable memory for V8; library validation off,
+   for the companion's native modules run by Electron in Node mode; the microphone for dictation),
+   with a secure timestamp, then notarizes the app and staples its ticket before it makes the disk
+   images and zips (`-c.forceCodeSigning=true`: no Developer ID, no build).
+3. `build-mac.mjs` then signs each disk image (`dmg.sign`), notarizes it and staples it too, so
+   Gatekeeper accepts it before it is opened, even offline.
+4. `dev/verify-mac.sh` checks, in CI, for both processors: the disk image (`codesign --verify --strict`,
+   the Developer ID authority, `spctl --assess --type open --context context:primary-signature`,
+   `stapler validate`), and the app inside it and inside the zip (`codesign --verify --deep --strict`,
+   authority and team, hardened runtime flag, secure timestamp, the entitlements,
+   `spctl --assess --type execute`, `stapler validate`).
+5. The job starts the Apple silicon app from its disk image with its own state folder, apps folder and
+   port 8797, and waits for the companion to answer (Electron in Node mode under hardened runtime).
+
+The first open then shows only macOS's usual "Kiwimake is an app downloaded from the Internet. Are you
+sure you want to open it?" with an Open button.
+
+Required repository Actions secrets (the names Ghostex uses for the same values):
+
+| Secret | What | Where the value is kept |
+| --- | --- | --- |
+| `APPLE_DEVELOPER_ID_P12_BASE64` | The certificate and its private key, `.p12`, base64 | 1Password, Personal, "2026-02-09 Apple Developer Certificate (Outside App store)" (the `.p12` file) |
+| `APPLE_DEVELOPER_ID_P12_PASSWORD` | That `.p12`'s password | Not in 1Password; Ghostex's copy is in its GitHub secrets only |
+| `APPLE_NOTARY_APPLE_ID` | The Apple ID that notarizes | 1Password, Personal, "2026-03-25 Apple Dev Generated Password and certificate to sign apps" |
+| `APPLE_NOTARY_TEAM_ID` | `KTKP595G3B` | Same item |
+| `APPLE_NOTARY_APP_PASSWORD` | An app-specific password of that Apple ID | Same item |
+
+Transfer them like the Certum secrets: `op read` into `gh secret set <name> --repo maddada/Kiwimake`
+through stdin only, never printed. For the certificate: `base64 -w0 <file.p12> | gh secret set
+APPLE_DEVELOPER_ID_P12_BASE64 --repo maddada/Kiwimake`. A new `.p12` can be exported from the Mac
+that holds the certificate (Keychain Access, My Certificates, "Developer ID Application: Mohamad
+Youssef", Export, with a new password); set both P12 secrets from that export.
+
+A release run stops when any of them is missing. A dry run builds an ad-hoc copy instead (and still
+checks the notarization credentials with Apple when they are set) and says so in the job summary.
+
+### On a Mac by hand
+
+`npm run dist:mac` makes the signed and notarized build too, with the Developer ID in the login
+keychain and a notarytool profile: `xcrun notarytool store-credentials kiwimake-notary --apple-id
+<id> --team-id KTKP595G3B` (it asks for the app-specific password), then
+`APPLE_KEYCHAIN_PROFILE=kiwimake-notary npm run dist:mac`. Without a Developer ID,
+`npm run dist:mac -- --adhoc` makes an ad-hoc signed copy (no hardened runtime, not notarized), which
+cannot update itself and which macOS opens only after "Open Anyway":
 
 What a person sees (checked on macOS 27.0.1, Apple silicon, with a DMG carrying the browser's
 quarantine flag): they open the DMG, drag Kiwimake to Applications and open it. macOS refuses:
@@ -370,21 +527,3 @@ clicked through, because answering security prompts is the person's own decision
 opens normally, until a new version is downloaded. While the first "Not Opened" prompt is still on
 screen, macOS holds that copy: opening it again stops before it starts, and even a copy started
 another way from that folder never shows its window. Click Done first.
-
-### What Developer ID signing and notarization need
-
-1. An Apple Developer Program membership (99 USD a year) for the publisher, and a **Developer ID
-   Application** certificate made in it (Certificates, Identifiers & Profiles).
-2. The certificate and its key as a `.p12` for the build machine or CI: `CSC_LINK` (file or base64)
-   and `CSC_KEY_PASSWORD`. Remove `"identity": "-"` (electron-builder then picks the Developer ID).
-3. `"hardenedRuntime": true` with `"entitlements"` and `"entitlementsInherit"` set to
-   `dev/entitlements.mac.plist` (JIT and unsigned executable memory for V8, library validation off
-   for the companion's native modules run by Electron in Node mode, microphone for dictation).
-   Run the real companion once with that combination (Electron in Node mode, Gradle, adb).
-4. Notarization: `"notarize": true` and an App Store Connect API key (`APPLE_API_KEY`,
-   `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`) or an Apple ID with an app-specific password
-   (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). electron-builder submits the app
-   and staples the ticket; sign and notarize the `.dmg` too.
-5. Then the first open shows only macOS's usual "Kiwimake is an app downloaded from the Internet.
-   Are you sure you want to open it?" with an Open button.
-

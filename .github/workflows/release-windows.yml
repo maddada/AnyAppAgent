@@ -1,4 +1,4 @@
-name: Build the desktop release (Windows signed with Certum, Linux)
+name: Build the desktop release (Windows signed with Certum, macOS signed and notarized, Linux)
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
         default: v0.3.1
         type: string
       dry_run:
-        description: Linux only, no upload, no draft needed (tag may be a branch). Builds, installs and smoke-tests, keeps the files as a workflow artifact.
+        description: No Windows job, no upload, no draft needed (tag may be a branch). Builds, signs (Mac, when its secrets are set), checks and smoke-tests macOS and Linux, keeps the files as workflow artifacts.
         required: false
         default: false
         type: boolean
@@ -102,13 +102,23 @@ jobs:
         run: desktop/dev/certum-simplysign-login.ps1 -Login
       - name: Build, sign and verify the desktop app and installers
         run: npm run dist --prefix desktop
+      - name: Write the Windows update feed
+        run: |
+          # The updater installs only an update signed by this publisher (resources/app-update.yml).
+          $updateConfig = Get-Content -Raw desktop/dist/win-unpacked/resources/app-update.yml
+          if ($updateConfig -notmatch 'Open Source Developer Mohamad Yahia Youssef' -or $updateConfig -notmatch 'maddada/Kiwimake/releases/latest/download') {
+            throw "app-update.yml lacks the publisher name or the feed address: $updateConfig"
+          }
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          node desktop/dev/update-feed.mjs write desktop/dist/latest.yml --version $version desktop/dist/Kiwimake-Setup.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload both installer names to the draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $release = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or -not $release.isDraft) { throw 'Refusing to change a public release.' }
-          gh release upload $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --clobber desktop/dist/Kiwimake-Setup.exe desktop/dist/AnyAppAgent-Setup.exe
+          gh release upload $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --clobber desktop/dist/Kiwimake-Setup.exe desktop/dist/AnyAppAgent-Setup.exe desktop/dist/latest.yml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify the uploaded installers again
         env:
@@ -129,6 +139,12 @@ jobs:
                 -not $signature.TimeStamperCertificate) { throw "Unexpected signer or missing timestamp: $name" }
             if ((Get-FileHash $file).Hash -ne (Get-FileHash "desktop/dist/$name").Hash) { throw "Uploaded bytes differ: $name" }
           }
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern latest.yml --dir $downloadDir
+          if ($LASTEXITCODE -ne 0) { throw 'latest.yml download failed' }
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $feed = Join-Path $downloadDir 'latest.yml'
+          node desktop/dev/update-feed.mjs verify $feed $downloadDir --version $version
+          if ($LASTEXITCODE -ne 0) { throw 'latest.yml does not match the uploaded installer' }
           'Both uploaded installers passed Certum signature, timestamp and SHA-256 verification. The release is still a draft.' >> $env:GITHUB_STEP_SUMMARY
       - name: Keep signing evidence and the signed app executable
         uses: actions/upload-artifact@v7
@@ -211,9 +227,19 @@ jobs:
           dpkg-deb --info kiwimake_amd64.deb
           dpkg-deb --contents kiwimake_amd64.deb > "$RUNNER_TEMP/deb-contents.txt"
           for path in ./opt/Kiwimake/kiwimake ./opt/Kiwimake/chrome-sandbox ./opt/Kiwimake/resources/apparmor-profile \
+                      ./opt/Kiwimake/resources/app-update.yml ./opt/Kiwimake/resources/package-type \
                       ./opt/Kiwimake/resources/companion/server/bin/anyappagent.mjs ./usr/share/applications/kiwimake.desktop; do
             grep -q " $path\$" "$RUNNER_TEMP/deb-contents.txt" || { echo "The .deb lacks $path"; exit 1; }
           done
+      - name: Write the Linux update feed
+        run: |
+          set -euo pipefail
+          grep -q 'maddada/Kiwimake/releases/latest/download' desktop/dist/linux-unpacked/resources/app-update.yml
+          version="$(node -p "require('./desktop/package.json').version")"
+          if [ "${{ inputs.dry_run }}" != true ]; then [ "v$version" = "$RELEASE_TAG" ]; fi
+          node desktop/dev/update-feed.mjs write desktop/dist/latest-linux.yml --version "$version" \
+            desktop/dist/Kiwimake-x86_64.AppImage desktop/dist/kiwimake_amd64.deb
+          cat desktop/dist/latest-linux.yml
       - name: Start the AppImage and the installed .deb
         run: |
           set -euo pipefail
@@ -231,6 +257,7 @@ jobs:
           path: |
             desktop/dist/Kiwimake-x86_64.AppImage
             desktop/dist/kiwimake_amd64.deb
+            desktop/dist/latest-linux.yml
           if-no-files-found: error
           retention-days: 7
       - name: Upload both Linux packages to the draft
@@ -240,7 +267,7 @@ jobs:
         run: |
           set -euo pipefail
           [ "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true ] || { echo 'Refusing to change a public release.'; exit 1; }
-          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber desktop/dist/Kiwimake-x86_64.AppImage desktop/dist/kiwimake_amd64.deb
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber desktop/dist/Kiwimake-x86_64.AppImage desktop/dist/kiwimake_amd64.deb desktop/dist/latest-linux.yml
       - name: Verify the uploaded packages again
         if: ${{ !inputs.dry_run }}
         env:
@@ -249,8 +276,242 @@ jobs:
           set -euo pipefail
           dir="$RUNNER_TEMP/verify-release"
           mkdir -p "$dir"
-          for name in Kiwimake-x86_64.AppImage kiwimake_amd64.deb; do
+          for name in Kiwimake-x86_64.AppImage kiwimake_amd64.deb latest-linux.yml; do
             gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$dir"
             cmp "$dir/$name" "desktop/dist/$name" || { echo "Uploaded bytes differ: $name"; exit 1; }
           done
+          node desktop/dev/update-feed.mjs verify "$dir/latest-linux.yml" "$dir" --version "${RELEASE_TAG#v}"
           echo 'Both Linux packages are on the draft and match the tested builds. The release is still a draft.' >> "$GITHUB_STEP_SUMMARY"
+
+  mac:
+    runs-on: macos-15
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      KIWIMAKE_APPLE_TEAM_ID: KTKP595G3B
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            server/package-lock.json
+      - name: Require the draft release and its APKs
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected a stable version tag.'; exit 1; }
+          for part in desktop server app; do
+            version="$(node -p "require('./$part/package.json').version")"
+            [ "v$version" = "$RELEASE_TAG" ] || { echo "Version mismatch in $part."; exit 1; }
+          done
+          id="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json databaseId,isDraft --jq 'select(.isDraft) | .databaseId')"
+          [ -n "$id" ] || { echo 'The release must exist and remain a draft.'; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/releases/$id" > "$RUNNER_TEMP/release.json"
+          [ "$(jq -r .draft "$RUNNER_TEMP/release.json")" = true ] || { echo 'The release must exist and remain a draft.'; exit 1; }
+          mkdir -p app/dist
+          for name in AnyAppAgent.apk AnyAppAgent-universal.apk; do
+            digest="$(jq -r --arg n "$name" '[.assets[] | select(.name == $n)] | if length == 1 then .[0].digest // "" else "" end' "$RUNNER_TEMP/release.json" | tr 'A-F' 'a-f')"
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "Missing APK or SHA-256 digest: $name"; exit 1; }
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir app/dist
+            [ "sha256:$(shasum -a 256 "app/dist/$name" | cut -d' ' -f1)" = "$digest" ] || { echo "APK digest mismatch: $name"; exit 1; }
+          done
+      - name: Install build dependencies and check the desktop
+        run: |
+          set -euo pipefail
+          git config --global user.name 'Kiwimake CI'
+          git config --global user.email 'ci@kiwimake.invalid'
+          npm ci --prefix server --no-audit --no-fund
+          npm ci --prefix desktop --no-audit --no-fund
+          npm run typecheck --prefix desktop
+          npm test --prefix desktop
+      - name: Pin the draft's phone APK
+        if: ${{ !inputs.dry_run }}
+        run: node desktop/dev/pin-phone.mjs
+      - name: Set up Developer ID signing and notarization
+        id: signing
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.APPLE_NOTARY_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "$CERTIFICATE_BASE64" ] || missing="$missing APPLE_DEVELOPER_ID_P12_BASE64"
+          [ -n "$CERTIFICATE_PASSWORD" ] || missing="$missing APPLE_DEVELOPER_ID_P12_PASSWORD"
+          [ -n "$NOTARY_APPLE_ID" ] || missing="$missing APPLE_NOTARY_APPLE_ID"
+          [ -n "$NOTARY_TEAM_ID" ] || missing="$missing APPLE_NOTARY_TEAM_ID"
+          [ -n "$NOTARY_APP_PASSWORD" ] || missing="$missing APPLE_NOTARY_APP_PASSWORD"
+          # A keychain of its own, with a random password, deleted at the end of the job.
+          keychain="$RUNNER_TEMP/kiwimake-signing.keychain-db"
+          keychain_password="$(openssl rand -base64 30)"
+          echo "::add-mask::$keychain_password"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          notary=no
+          if [ -n "$NOTARY_APPLE_ID" ] && [ -n "$NOTARY_TEAM_ID" ] && [ -n "$NOTARY_APP_PASSWORD" ]; then
+            # store-credentials checks them with Apple before it saves them.
+            xcrun notarytool store-credentials kiwimake-notary --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" \
+              --password "$NOTARY_APP_PASSWORD" --keychain "$keychain"
+            notary=yes
+            echo "- Notarization credentials: accepted by Apple" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          certificate=no
+          if [ -n "$CERTIFICATE_BASE64" ] && [ -n "$CERTIFICATE_PASSWORD" ]; then
+            printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+            security import "$RUNNER_TEMP/developer-id.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+            rm -f "$RUNNER_TEMP/developer-id.p12"
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+            security find-identity -v -p codesigning "$keychain" | grep -F "Developer ID Application: Mohamad Youssef ($KIWIMAKE_APPLE_TEAM_ID)"
+            certificate=yes
+            echo "- Developer ID certificate: imported" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "keychain=$keychain" >> "$GITHUB_OUTPUT"
+          if [ "$certificate" = yes ] && [ "$notary" = yes ]; then
+            echo "mode=release" >> "$GITHUB_OUTPUT"
+            { echo "APPLE_KEYCHAIN=$keychain"; echo "APPLE_KEYCHAIN_PROFILE=kiwimake-notary"; echo "CSC_NAME=Mohamad Youssef ($KIWIMAKE_APPLE_TEAM_ID)"; } >> "$GITHUB_ENV"
+          elif [ "$DRY_RUN" = true ]; then
+            echo "mode=adhoc" >> "$GITHUB_OUTPUT"
+            echo "- **Ad-hoc build**: the secrets$missing are not set, so this dry run is neither Developer ID signed nor notarized." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "A release needs these repository secrets:$missing" >&2
+            exit 1
+          fi
+      - name: Build, sign, notarize and verify both Macs
+        run: npm run dist:mac --prefix desktop -- ${{ steps.signing.outputs.mode == 'adhoc' && '--adhoc' || '' }}
+      - name: Start the Apple silicon app from its disk image
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/mac-smoke"
+          mkdir -p "$work/state" "$work/apps" "$work/mnt"
+          hdiutil attach desktop/dist/Kiwimake-mac-arm64.dmg -nobrowse -readonly -noautoopen -mountpoint "$work/mnt" -quiet
+          ditto "$work/mnt/Kiwimake.app" "$work/Kiwimake.app"
+          hdiutil detach "$work/mnt" -quiet
+          grep -q 'maddada/Kiwimake/releases/latest/download' "$work/Kiwimake.app/Contents/Resources/app-update.yml"
+          ANYAPP_STATE_DIR="$work/state" ANYAPP_APPS_DIR="$work/apps" ANYAPP_PORT=8797 ANYAPP_ENGINE_UPDATES=off \
+            "$work/Kiwimake.app/Contents/MacOS/Kiwimake" > "$work/output.log" 2>&1 &
+          pid=$!
+          answered=0
+          for _ in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:8797/api/health > /dev/null 2>&1; then answered=1; break; fi
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+          done
+          kill "$pid" 2>/dev/null || true
+          sleep 5
+          kill -9 "$pid" 2>/dev/null || true
+          if [ "$answered" != 1 ]; then
+            tail -60 "$work/output.log" || true
+            tail -60 "$work/state/desktop/logs/desktop.log" || true
+            echo 'The Mac app did not start its companion.'
+            exit 1
+          fi
+          echo "- The Apple silicon app from the disk image started and its companion answered (${{ steps.signing.outputs.mode }} build)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Write the Mac update feed
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./desktop/package.json').version")"
+          node desktop/dev/update-feed.mjs write desktop/dist/latest-mac.yml --version "$version" \
+            desktop/dist/Kiwimake-mac-arm64.zip desktop/dist/Kiwimake-mac-x64.zip \
+            desktop/dist/Kiwimake-mac-arm64.dmg desktop/dist/Kiwimake-mac-x64.dmg
+          cd desktop/dist
+          for name in Kiwimake-mac-arm64.dmg Kiwimake-mac-x64.dmg Kiwimake-mac-arm64.zip Kiwimake-mac-x64.zip; do
+            echo "- $name $(stat -f %z "$name") bytes sha256 $(shasum -a 256 "$name" | cut -d' ' -f1)" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Keep the dry-run disk images
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: mac-packages-${{ steps.signing.outputs.mode }}
+          path: |
+            desktop/dist/Kiwimake-mac-arm64.dmg
+            desktop/dist/Kiwimake-mac-x64.dmg
+            desktop/dist/Kiwimake-mac-arm64.zip
+            desktop/dist/Kiwimake-mac-x64.zip
+            desktop/dist/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload the Mac files to the draft
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true ] || { echo 'Refusing to change a public release.'; exit 1; }
+          cd desktop/dist
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            Kiwimake-mac-arm64.dmg Kiwimake-mac-x64.dmg Kiwimake-mac-arm64.zip Kiwimake-mac-x64.zip latest-mac.yml
+      - name: Verify the uploaded Mac files again
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/verify-release"
+          mkdir -p "$dir"
+          for name in Kiwimake-mac-arm64.dmg Kiwimake-mac-x64.dmg Kiwimake-mac-arm64.zip Kiwimake-mac-x64.zip latest-mac.yml; do
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$dir"
+            cmp "$dir/$name" "desktop/dist/$name" || { echo "Uploaded bytes differ: $name"; exit 1; }
+          done
+          node desktop/dev/update-feed.mjs verify "$dir/latest-mac.yml" "$dir" --version "${RELEASE_TAG#v}"
+          echo 'The Mac files are on the draft and match the verified builds. The release is still a draft.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Delete the signing keychain
+        if: ${{ always() && steps.signing.outputs.keychain != '' }}
+        run: security delete-keychain "${{ steps.signing.outputs.keychain }}" || true
+
+  verify:
+    # Every desktop file is on the draft and every update feed matches its files: only then may the
+    # release go public (docs/RELEASING.md, step 6).
+    if: ${{ !inputs.dry_run }}
+    needs: [windows, mac, linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+          sparse-checkout: desktop/dev
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Check every file on the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = true ] || { echo 'The release must still be a draft.'; exit 1; }
+          dir="$RUNNER_TEMP/release"
+          mkdir -p "$dir"
+          files="AnyAppAgent.apk AnyAppAgent-universal.apk Kiwimake-Setup.exe AnyAppAgent-Setup.exe latest.yml
+                 Kiwimake-mac-arm64.dmg Kiwimake-mac-x64.dmg Kiwimake-mac-arm64.zip Kiwimake-mac-x64.zip latest-mac.yml
+                 Kiwimake-x86_64.AppImage kiwimake_amd64.deb latest-linux.yml"
+          echo '| File | Bytes | SHA-256 |' >> "$GITHUB_STEP_SUMMARY"
+          echo '| --- | --- | --- |' >> "$GITHUB_STEP_SUMMARY"
+          for name in $files; do
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$dir"
+            [ -s "$dir/$name" ] || { echo "Missing on the draft: $name"; exit 1; }
+            echo "| $name | $(stat -c %s "$dir/$name") | $(sha256sum "$dir/$name" | cut -d' ' -f1) |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          cmp "$dir/Kiwimake-Setup.exe" "$dir/AnyAppAgent-Setup.exe"
+          for feed in latest.yml latest-mac.yml latest-linux.yml; do
+            node desktop/dev/update-feed.mjs verify "$dir/$feed" "$dir" --version "${RELEASE_TAG#v}"
+          done
+          echo "All 13 files are on the draft and the three update feeds match them. Ready to publish (docs/RELEASING.md, step 6)." >> "$GITHUB_STEP_SUMMARY"
