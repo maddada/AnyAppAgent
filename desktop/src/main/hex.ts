@@ -58,7 +58,8 @@ export function supported(platform: string = process.platform, arch: string = pr
 export function findInstall(dir: string, platform: string = process.platform): { version: string; exe: string } | undefined {
   if (platform === "linux") {
     try {
-      const version = readlinkSync(join(dir, "current")).trim().replace(/^versions\//, "").replace(/\/+$/, "");
+      // Either separator: Node on Windows (where the tests also run) reads the link back as versions\<v>.
+      const version = readlinkSync(join(dir, "current")).trim().replace(/^versions[\\/]/, "").replace(/[\\/]+$/, "");
       if (version) return { version, exe: join(dir, "current", "hex") };
     } catch {
       // no direct install link: look for current-version below
