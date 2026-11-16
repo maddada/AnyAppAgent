@@ -171,8 +171,11 @@ function updateDetails(manifest: Partial<Updates.Manifest> | undefined, id: stri
 /** The JavaScript running now: the APK's own (`builtIn`), or a downloaded update and what it carries. */
 export function useRunningUpdate(): { builtIn: boolean; details: UpdateDetails } {
   const { currentlyRunning } = useUpdates();
+  // After an APK update expo-updates copies the APK's own code into its database and runs it from
+  // there (isEmbeddedLaunch false). Only a published update carries `extra.kiwimake`.
+  const published = (currentlyRunning.manifest as { extra?: { kiwimake?: unknown } } | undefined)?.extra?.kiwimake !== undefined;
   return {
-    builtIn: currentlyRunning.isEmbeddedLaunch,
+    builtIn: currentlyRunning.isEmbeddedLaunch || !published,
     details: updateDetails(currentlyRunning.manifest, currentlyRunning.updateId, currentlyRunning.createdAt),
   };
 }

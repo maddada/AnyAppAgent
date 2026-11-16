@@ -123,7 +123,9 @@ export function UpdatesGroup({
     ? "This build doesn't update itself."
     : running.builtIn
       ? "Running the code inside the app."
-      : `Running the update of ${running.details.createdAt ? formatWhen(running.details.createdAt) : "an earlier day"}.`;
+      : running.details.createdAt
+        ? `Running the update of ${formatWhen(running.details.createdAt)}.`
+        : "Running an update.";
 
   const line: { kind: StateKind; label: string } | null = manual.running ? { kind: "working", label: "Checking for updates" } : manual.result ? checkLine(manual.result) : null;
 
