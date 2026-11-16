@@ -267,6 +267,16 @@ describe("tools installer", () => {
     expect(pickCmdlineTools("<nothing/>")).toBeUndefined();
   });
 
+  it("picks the Mac command-line tools for this Mac's processor", () => {
+    // cmdline-tools 23 on macOS (repository2-3.xml, 2026-11-17): one archive per processor.
+    const xml = `<remotePackage path="cmdline-tools;latest"><archives>
+      <archive><complete><size>1</size><checksum type="sha1">aaaa</checksum><url>commandlinetools-mac_x86_64-16111833_latest.zip</url></complete><host-os>macosx</host-os><host-arch>x64</host-arch></archive>
+      <archive><complete><size>1</size><checksum type="sha1">bbbb</checksum><url>commandlinetools-mac_arm64-16111833_latest.zip</url></complete><host-os>macosx</host-os><host-arch>aarch64</host-arch></archive>
+    </archives></remotePackage>`;
+    expect(pickCmdlineTools(xml, "macosx", "aarch64")?.url).toMatch(/mac_arm64/);
+    expect(pickCmdlineTools(xml, "macosx", "x64")?.url).toMatch(/mac_x86_64/);
+  });
+
   it("reads sdkmanager percentages", () => {
     expect(parseSdkProgress("[=======          ] 45% Downloading android-ndk.zip...")).toBeCloseTo(0.45);
     expect(parseSdkProgress("\r[==] 10%\r[====] 20%")).toBeCloseTo(0.2);
