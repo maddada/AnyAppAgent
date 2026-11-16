@@ -176,9 +176,25 @@ export function reminderText(h: HealthReminder | undefined): { title: string; bo
     title: "Your monthly app check",
     body:
       h.behind === 1
-        ? "One app is behind the newest version of Kiwimake's template. Tap the yellow sign on it to update it."
-        : `${h.behind} apps are behind the newest version of Kiwimake's template. Tap the yellow sign on one to update it.`,
+        ? "A newer version of Kiwimake's app template is available for one app. Open its chat to update it or dismiss it."
+        : `A newer version of Kiwimake's app template is available for ${h.behind} apps. Open an app's chat to update it or dismiss it.`,
   };
+}
+
+/**
+ * The calm suggestion inside an app's chat (phone and PC) while a newer template is available and
+ * the person has not dismissed it. Optional by design: the app works fine as it is.
+ */
+export function updateSuggestion(appName: string): { title: string; body: string } {
+  return {
+    title: "A newer version of Kiwimake's app template is available",
+    body: `Updating brings ${appName} the newest built-in parts. It's optional: ${appName} works fine as it is.`,
+  };
+}
+
+/** Whether an app's chat shows the update suggestion (AppHealth.dismissed hides it for that update). */
+export function showsUpdateSuggestion(app: { health?: { behind: true; dismissed?: true } }): boolean {
+  return Boolean(app.health?.behind && !app.health.dismissed);
 }
 
 export const BEHIND_LABEL = "Needs an update";

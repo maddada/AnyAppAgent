@@ -25,7 +25,7 @@ import { Spinner } from "@/ui/Spinner";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
 import { DictationNote, MicButton } from "@/ui/MicButton";
-import { HeadsUpCard } from "@/ui/Trust";
+import { HeadsUpCard, UpdateSuggestion } from "@/ui/Trust";
 import { border, elevation, icon, radius, size, space, typeStyle, useTheme } from "@/ui/theme";
 
 const EMPTY: ChatItem[] = [];
@@ -90,6 +90,7 @@ export default function Chat() {
   return (
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: keyboard > 0 ? keyboard : 0 }}>
       <Header app={app} />
+      {app ? <UpdateSuggestion app={app} /> : null}
       <View style={{ flex: 1 }}>
       <FlatList
         ref={list}

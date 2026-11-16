@@ -763,16 +763,22 @@ export interface AppHealth {
   // done; the notice then says "Updating to the newest template..." with no button. Absent otherwise
   // and from older PCs. If the app is still behind afterwards, the notice comes back.
   updating?: true;
+  // Added: true when the person dismissed this update (POST /api/apps/:id/dismiss-update). Clients
+  // then show no suggestion for it. It is kept per update: when a newer template makes the app
+  // behind in a new way, the PC clears it and the suggestion shows again. Absent from older PCs.
+  dismissed?: true;
 }
 export interface HealthReminder {
   due: boolean; // show the monthly reminder now
-  behind: number; // apps that are behind
+  behind: number; // apps that are behind (changed: dismissed updates are not counted)
   lastAt: string | null; // when it was last shown and put away
   nextAt: string | null; // when it is due next (null while no app is behind)
 }
 // POST /api/apps/:id/keep-healthy -> 202: sends the app's agent the update message as the person's own
 //   message; 409 when the app is not behind. The chat shows the short line "Update to the newest
 //   template"; the full instruction goes to the agent only (changed: it showed the whole instruction).
+// POST /api/apps/:id/dismiss-update -> 200 App (added): hides the update suggestion for this update
+//   on every phone and the desktop (AppHealth.dismissed); 409 when the app is not behind.
 
 // ---------- Backup (added: "Never lose your apps", docs/TRUST.md)
 export interface BackupSummary {

@@ -896,6 +896,7 @@ function ipc(): void {
   ipcMain.handle("helpers:stop", (_e, appId: string, workerId: string) => chatAction((c) => c.stopHelper(String(appId), String(workerId)))());
   ipcMain.handle("apps:rebuild", (_e, appId: string) => chatAction((c) => c.rebuild(String(appId)))());
   ipcMain.handle("apps:keep-healthy", (_e, appId: string) => chatAction((c) => c.keepHealthy(String(appId)))());
+  ipcMain.handle("apps:dismiss-update", (_e, appId: string) => chatAction((c) => c.dismissUpdate(String(appId)))());
   // Moving an app to the cloud (docs/CLOUD.md section 3): the companion runs it; App.move shows it.
   ipcMain.handle("apps:move", (_e, appId: string) => chatAction((c) => c.moveToCloud(String(appId)))());
   // Pin, hide and delete (shared/protocol.ts "Pin, hide and delete").

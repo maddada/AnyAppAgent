@@ -298,6 +298,8 @@ export interface AnyAppBridge {
   dismissReminder(): Promise<ActionResult>;
   /** "Update it" on an app that is behind the newest template. */
   keepHealthy(appId: string): Promise<ActionResult>;
+  /** "Dismiss" on an app's update suggestion: hidden for this update, on every phone too. */
+  dismissUpdate(appId: string): Promise<ActionResult>;
   /** Moves a PC app to the cloud through the PC link (the app's `move` shows it). */
   moveToCloud(appId: string): Promise<ActionResult>;
   /** Asks for a backup file, then adds the keys in it that this PC does not have. */

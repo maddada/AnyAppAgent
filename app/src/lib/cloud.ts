@@ -120,6 +120,7 @@ export class CloudClient {
   care = () => Promise.reject(new ApiError("no usage meter in the cloud", 404));
   dismissReminder = notYet("Reminders");
   keepHealthy = notYet("Keep my apps healthy");
+  dismissUpdate = notYet("Keep my apps healthy");
   share = notYet("Sharing");
   publish = notYet("Publishing");
   pullBack = notYet("Pulling a version back");

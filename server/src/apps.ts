@@ -35,7 +35,7 @@ import { isJsonObject } from "./acp/acp-client.ts";
 import { appsCliEnv, firstOverview, OVERVIEW_FILE, overviewNeedsAgent } from "./apps-cli.ts";
 import { overviewNudge } from "./playbook.ts";
 import { addUsage, UsageMeter } from "./usage.ts";
-import { appHealth, HealthReminders, keepHealthyMessage, Templates } from "./health.ts";
+import { appHealth, HealthReminders, keepHealthyMessage, Templates, updateKey } from "./health.ts";
 import { Backups } from "./backup.ts";
 import { REPO_DIR } from "./config.ts";
 import { ownerName, setOwnerName, Suggestions } from "./change.ts";
@@ -641,11 +641,12 @@ export class AppManager {
       this.log(`[${record.app.slug}] health check failed: ${(error as Error).message}`);
       return;
     }
-    const before = JSON.stringify(record.app.health?.reasons ?? null);
+    const before = JSON.stringify([record.app.health?.reasons ?? null, record.app.health?.dismissed ?? false]);
     if (health && this.runtimes.get(record.app.id)?.healthUpdate) health.updating = true;
+    if (health && record.healthDismissed && record.healthDismissed === updateKey(health, this.templates)) health.dismissed = true;
     if (health) record.app.health = health;
     else delete record.app.health;
-    if (JSON.stringify(health?.reasons ?? null) === before) return;
+    if (JSON.stringify([health?.reasons ?? null, health?.dismissed ?? false]) === before) return;
     if (announce) {
       this.touch(record);
       this.careChanged();
@@ -654,7 +655,7 @@ export class AppManager {
 
   /** What GET /api/care returns: the usage meter, the monthly reminder and the backup. */
   care(): CareState {
-    const behind = this.store.apps().filter((r) => r.app.health?.behind).length;
+    const behind = this.store.apps().filter((r) => r.app.health?.behind && !r.app.health.dismissed).length;
     return { usage: this.usage.state(), health: this.reminders.state(behind), backup: this.backups.summary() };
   }
 
@@ -674,6 +675,24 @@ export class AppManager {
       this.lastCare = text;
       this.broadcast({ type: "care.updated", care });
     }, 100);
+  }
+
+  /**
+   * "Dismiss" on an app's update suggestion: hidden for this update on every phone and the desktop;
+   * a newer update (another template version, or behind in another way) shows it again.
+   */
+  dismissUpdate(id: string): App {
+    const record = this.record(id);
+    this.refreshHealth(record);
+    const health = record.app.health;
+    if (!health) throw new HttpError(409, `${record.app.name} is already up to date.`);
+    record.healthDismissed = updateKey(health, this.templates);
+    health.dismissed = true;
+    // Not activity: "Active ..." on the app stays as it was.
+    this.store.save();
+    this.broadcast({ type: "app.updated", app: record.app });
+    this.careChanged();
+    return record.app;
   }
 
   /** "Update it" on an app that is behind: the update message goes to its agent as the person's own. */

@@ -530,6 +530,12 @@ export function startHttpServer(deps: {
       apps.keepHealthy(decodeURIComponent(healthy[1]));
       return sendJson(res, 202, {});
     }
+    // "Dismiss" on an app's update suggestion: POST /api/apps/:id/dismiss-update
+    const dismissUpdate = /^\/api\/apps\/([^/]+)\/dismiss-update$/.exec(path);
+    if (dismissUpdate) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      return sendJson(res, 200, apps.dismissUpdate(decodeURIComponent(dismissUpdate[1])));
+    }
     const match = /^\/api\/apps\/([^/]+)(?:\/([a-z]+))?$/.exec(path);
     if (!match) return sendError(res, 404, "Not found.");
     const id = decodeURIComponent(match[1]);

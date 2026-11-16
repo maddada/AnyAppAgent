@@ -19,6 +19,8 @@ export interface AppRecord {
   inTrash?: boolean;
   /** Deleted for good: its folder, chat and versions are gone. The record keeps its slug taken. */
   purged?: boolean;
+  /** The update the person dismissed (health.ts updateKey); a newer one shows again. */
+  healthDismissed?: string;
 }
 
 class Debounced {

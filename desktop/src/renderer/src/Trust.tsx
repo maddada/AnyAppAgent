@@ -1,10 +1,10 @@
 // The desktop side of docs/TRUST.md: "Never lose your apps" (the backup in Settings and the restore
 // on a new PC), the usage meter (Settings and under each message), and "Keep my apps healthy" (the
-// yellow sign on an app that is behind, its "Update it", and the monthly reminder).
+// calm update suggestion above an app's chat, with Update and Dismiss, and the monthly reminder).
 import { useState } from "react";
 import { CloudUpload, FolderOpen, Gauge, RotateCcw, TriangleAlert } from "lucide-react";
 import type { App, AppUsage, CareState, ChatItem, UsageState } from "../../../../shared/protocol.ts";
-import { aiName, BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, planUnknown, planLines, reminderText, usageLine, usageRows } from "../../../../shared/chat/index.ts";
+import { aiName, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, planUnknown, planLines, reminderText, showsUpdateSuggestion, updateSuggestion, usageLine, usageRows } from "../../../../shared/chat/index.ts";
 import type { Snapshot } from "../../shared/types.ts";
 import { Icon, Spinner } from "./ui.tsx";
 
@@ -20,24 +20,15 @@ function day(iso: string | null | undefined): string | null {
 
 // ------------------------------------------------------------------ keep my apps healthy
 
-/** The yellow sign on an app's icon while it is behind the newest template. */
-export function HealthBadge({ app }: { app: App }) {
-  if (!app.health?.behind) return null;
-  return (
-    <span className="health-badge" title={BEHIND_LABEL} aria-label={BEHIND_LABEL} data-testid={`behind-${app.slug}`}>
-      !
-    </span>
-  );
-}
-
 /**
- * Above an app's chat while it is behind: what is behind, and "Update it" (after a heads-up). While
- * the update runs (AppHealth.updating) only a calm line shows; if the app is still behind after it,
- * the notice comes back.
+ * Above an app's chat while a newer template is available: a calm, optional suggestion, never a
+ * warning. "Dismiss" hides it for this update here and on every phone; a newer update shows it again.
+ * "Update" asks once (the heads-up), then sends the update. While the update runs
+ * (AppHealth.updating) only a calm line shows; if the app is still behind after it, the card is back.
  */
 export function HealthNotice({ app, care, online }: { app: App; care: CareState | null; online: boolean }) {
   const [asking, setAsking] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"update" | "dismiss" | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (!app.health?.behind) return null;
   if (app.health.updating) {
@@ -48,44 +39,43 @@ export function HealthNotice({ app, care, online }: { app: App; care: CareState 
       </div>
     );
   }
+  if (!showsUpdateSuggestion(app)) return null;
+  const words = updateSuggestion(app.name);
   const h = headsUp({ text: "", keepHealthy: true, usage: care?.usage, appUsage: app.usage })!;
-  const go = async () => {
-    setBusy(true);
+  const run = async (what: "update" | "dismiss") => {
+    setBusy(what);
     setError(null);
-    const r = await api.keepHealthy(app.id);
-    setBusy(false);
-    if (!r.ok) return setError(r.error ?? "That didn't send. Try again.");
+    const r = what === "update" ? await api.keepHealthy(app.id) : await api.dismissUpdate(app.id);
+    setBusy(null);
+    if (!r.ok) return setError(r.error ?? "That didn't go through. Try again.");
     setAsking(false);
   };
   return (
-    <div className="health-notice" data-testid="health-notice">
-      <span className="health-badge big" aria-hidden>
-        !
-      </span>
+    <div className="health-notice" data-testid="update-suggestion">
       <div className="grow">
-        <div className="body">{app.name} is behind the newest template</div>
-        {app.health.reasons.map((r) => (
-          <div key={r} className="label secondary">
-            {r}
-          </div>
-        ))}
-        {asking && <p className="label heads-up-body">{h.body}</p>}
+        <div className="body">{words.title}</div>
+        <div className={asking ? "label heads-up-body" : "label secondary"}>{asking ? h.body : words.body}</div>
         {error && <div className="label problem-text">{error}</div>}
       </div>
       <div className="notice-actions">
         {asking ? (
           <>
-            <button className="btn btn-quiet btn-sm" disabled={busy} onClick={() => setAsking(false)}>
+            <button className="btn btn-quiet btn-sm" disabled={busy !== null} onClick={() => setAsking(false)}>
               Not now
             </button>
-            <button className="btn btn-primary btn-sm" disabled={busy || !online} onClick={() => void go()} data-testid="keep-healthy-send">
-              {busy ? "Sending..." : h.send}
+            <button className="btn btn-primary btn-sm" disabled={busy !== null || !online} onClick={() => void run("update")} data-testid="keep-healthy-send">
+              {busy === "update" ? "Sending..." : h.send}
             </button>
           </>
         ) : (
-          <button className="btn btn-primary btn-sm" disabled={!online || app.status === "creating"} onClick={() => setAsking(true)} data-testid="keep-healthy">
-            Update it
-          </button>
+          <>
+            <button className="btn btn-quiet btn-sm" disabled={busy !== null || !online} onClick={() => void run("dismiss")} data-testid="update-dismiss">
+              {busy === "dismiss" ? "Dismissing..." : "Dismiss"}
+            </button>
+            <button className="btn btn-primary btn-sm" disabled={busy !== null || !online || app.status === "creating"} onClick={() => setAsking(true)} data-testid="keep-healthy">
+              Update
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -98,9 +88,6 @@ export function ReminderCard({ care }: { care: CareState | null }) {
   if (!words) return null;
   return (
     <div className="card notice apps-notice reminder" data-testid="health-reminder">
-      <span className="health-badge" aria-hidden>
-        !
-      </span>
       <div className="grow">
         <div className="body">{words.title}</div>
         <div className="label secondary">{words.body}</div>

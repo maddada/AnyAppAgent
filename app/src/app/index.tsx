@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown, CircleUser, Download, EllipsisVertical, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, hasOldCopyInTheWay, REMOVE_OLD_AND_INSTALL, tileState } from "@/lib/describe";
-import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/chat/index";
+import { installLabel, headsUp as bigJobHeadsUp } from "@shared/chat/index";
 import { installApp, installFromLink, launchApp, removeOldAndInstall, updateFromLink } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
@@ -26,7 +26,7 @@ import { Sheet } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
 import { BrandLockup } from "@/ui/Brand";
-import { HealthBadge, HealthCard, ReminderBanner } from "@/ui/Trust";
+import { ReminderBanner } from "@/ui/Trust";
 import { UpdateNotice } from "@/ui/Updates";
 import { LinkAskBanner } from "@/ui/LinkAsk";
 import { MoveButton, moveLine } from "@/ui/Move";
@@ -547,8 +547,7 @@ function AppTile({
   const t = useTheme();
   const pkg = useStore((s) => s.packages[app.packageName]);
   const line = tileState(app, pkg, useStore((s) => s.installs[app.id]));
-  const base = pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
-  const label = app.health?.behind ? `${base}. ${BEHIND_LABEL}` : base;
+  const label = pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
   // Where it is made shows only when the person has both places (docs/CLOUD.md, "One grid").
   const bothPlaces = useStore((s) => !!s.pairing && s.cloudAuth === "signedIn");
   const pcOnline = useStore((s) => s.connection === "online");
@@ -574,11 +573,6 @@ function AppTile({
     >
       <View>
         <AppIcon app={app} size={size.appIcon} />
-        {app.health?.behind ? (
-          <View style={{ position: "absolute", top: -6, right: -6 }}>
-            <HealthBadge app={app} onPress={onOptions} />
-          </View>
-        ) : null}
       </View>
       <T
         variant="name"
@@ -719,13 +713,6 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
             <DeletePanel app={shown} installed={!!pkg} onDone={onClose} onCancel={() => (selection?.manage ? onClose() : setConfirmRemove(false))} />
           ) : (
             <View style={{ gap: space.sm }}>
-              <HealthCard
-                app={shown}
-                onSent={() => {
-                  onClose();
-                  router.push(`/chat/${shown.id}`);
-                }}
-              />
               {install?.phase === "failed" ? <InstallFailure message={install.message} /> : null}
               {oldCopyInTheWay ? (
                 <>

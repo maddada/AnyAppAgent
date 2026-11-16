@@ -394,6 +394,11 @@ export class AdminClient extends EventEmitter {
     return this.request("POST", `/api/apps/${encodeURIComponent(appId)}/keep-healthy`, {});
   }
 
+  /** "Dismiss" on an app's update suggestion: kept on the PC, so every phone hides it too. */
+  dismissUpdate(appId: string): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/dismiss-update`, {});
+  }
+
   async dismissReminder(): Promise<void> {
     this.care = await this.request<CareState>("POST", "/api/care/reminder", {});
     this.emit("care", this.care);

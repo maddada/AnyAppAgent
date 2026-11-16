@@ -1,118 +1,81 @@
-// The phone side of docs/TRUST.md: the yellow sign on an app that is behind and its "Update it",
+// The phone side of docs/TRUST.md: the calm update suggestion inside an app's chat (Update, Dismiss),
 // the monthly reminder, the usage under each message, the heads-up before a big job, and the plan
 // and backup lines in Settings. Words and numbers come from shared/chat/trust.ts (same as the PC).
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { Gauge, TriangleAlert } from "lucide-react-native";
-import { BEHIND_LABEL, UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, planUnknown, planLines, reminderText, usageLine } from "@shared/chat/index";
+import { UPDATING_LABEL, cacheLine, formatTokens, headsUp, type HeadsUp, newTokens, planUnknown, planLines, reminderText, showsUpdateSuggestion, updateSuggestion, usageLine } from "@shared/chat/index";
 import type { App, CareState, ChatItem } from "@/lib/protocol";
-import { useStore } from "@/lib/store";
+import { upsertApp, useClientFor, useOnlineFor, useStore } from "@/lib/store";
 import { Button } from "./Button";
 import { StateLine } from "./StateLine";
 import { T } from "./Text";
 import { border, icon, radius, size, space, useTheme } from "./theme";
 
-const BADGE = 22;
-
-/** The yellow sign on an app's icon while it is behind the newest template; a tap opens its sheet. */
-export function HealthBadge({ app, big, onPress }: { app: App; big?: boolean; onPress?: () => void }) {
-  const t = useTheme();
-  if (!app.health?.behind) return null;
-  const d = big ? BADGE + 6 : BADGE;
-  return (
-    <Pressable
-      testID={`behind-${app.slug}`}
-      accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={BEHIND_LABEL}
-      disabled={!onPress}
-      onPress={onPress}
-      hitSlop={12}
-      style={{
-        width: d,
-        height: d,
-        borderRadius: d / 2,
-        backgroundColor: t.attention,
-        alignItems: "center",
-        justifyContent: "center",
-        borderWidth: big ? 0 : 2,
-        borderColor: t.tileBg,
-      }}
-    >
-      <T variant="label" style={{ color: t.onAttention, fontWeight: "700", lineHeight: undefined }} maxFontSizeMultiplier={1.2}>
-        !
-      </T>
-    </Pressable>
-  );
-}
-
 /**
- * In an app's sheet while it is behind: what is behind, and "Update it" after a heads-up. While the
- * update runs (AppHealth.updating) one calm line instead; still behind afterwards, the card is back.
+ * Inside an app's chat while a newer template is available (docs/TRUST.md): a calm, optional
+ * suggestion, never a warning. "Dismiss" hides it for this update on every phone and the PC; a newer
+ * update shows it again. "Update" asks once (the heads-up), then sends the update message. While
+ * the update runs (AppHealth.updating) one calm line takes its place.
  */
-export function HealthCard({ app, onSent }: { app: App; onSent: () => void }) {
+export function UpdateSuggestion({ app }: { app: App }) {
   const t = useTheme();
-  const client = useStore((s) => s.client);
+  const client = useClientFor(app.id);
+  const online = useOnlineFor(app.id);
   const care = useStore((s) => s.care);
   const [asking, setAsking] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"update" | "dismiss" | null>(null);
   const [error, setError] = useState<string | null>(null);
   if (!app.health?.behind) return null;
+  const card = { gap: space.xs, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surface, borderWidth: border.width, borderColor: t.border, marginHorizontal: space.md, marginTop: space.sm };
   if (app.health.updating) {
     return (
-      <View testID="health-updating" style={{ padding: space.lg, borderRadius: radius.card, backgroundColor: t.surfaceSunken, marginBottom: space.md }}>
+      <View testID="health-updating" style={card}>
         <StateLine kind="working" label={UPDATING_LABEL} lines={0} />
       </View>
     );
   }
+  if (!showsUpdateSuggestion(app)) return null;
+  const words = updateSuggestion(app.name);
   const h = headsUp({ text: "", keepHealthy: true, usage: care?.usage, appUsage: app.usage })!;
-  const send = async () => {
+  const run = async (what: "update" | "dismiss") => {
     if (!client) return;
-    setBusy(true);
+    setBusy(what);
     setError(null);
     try {
-      await client.keepHealthy(app.id);
-      setAsking(false);
-      onSent();
+      if (what === "update") {
+        await client.keepHealthy(app.id);
+        setAsking(false);
+      } else upsertApp(await client.dismissUpdate(app.id));
     } catch (e) {
-      setError((e as Error).message || "That didn't send. Try again.");
+      setError((e as Error).message || "That didn't go through. Try again.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
   return (
-    <View
-      testID="health-card"
-      style={{ gap: space.xs, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surfaceSunken, marginBottom: space.md, borderLeftWidth: 3, borderLeftColor: t.attention }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-        <HealthBadge app={app} big />
-        <T variant="body" style={{ flex: 1 }}>
-          Behind the newest template
-        </T>
-      </View>
-      {app.health.reasons.map((r) => (
-        <T key={r} variant="label" color="textSecondary">
-          {r}
-        </T>
-      ))}
-      {asking ? (
-        <T variant="label" style={{ marginTop: space.xs }}>
-          {h.body}
-        </T>
-      ) : null}
+    <View testID="update-suggestion" style={card}>
+      <T variant="body">{words.title}</T>
+      <T variant="label" color="textSecondary">
+        {asking ? h.body : words.body}
+      </T>
       {error ? (
         <T variant="label" color="problem">
           {error}
         </T>
       ) : null}
+      {/* Design rule (AGENTS.md): the words take the full width; the buttons sit below, on the right. */}
       <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: space.sm, marginTop: space.sm }}>
         {asking ? (
           <>
             <Button label="Not now" variant="quiet" small onPress={() => setAsking(false)} />
-            <Button testID="keep-healthy-send" label={h.send} small busy={busy} onPress={() => void send()} />
+            <Button testID="keep-healthy-send" label={h.send} small busy={busy === "update"} disabled={!online} onPress={() => void run("update")} />
           </>
         ) : (
-          <Button testID="keep-healthy" label="Update it" small onPress={() => setAsking(true)} />
+          <>
+            <Button testID="update-dismiss" label="Dismiss" variant="quiet" small busy={busy === "dismiss"} disabled={!online} onPress={() => void run("dismiss")} />
+            <Button testID="keep-healthy" label="Update" small disabled={!online || app.status === "creating"} onPress={() => setAsking(true)} />
+          </>
         )}
       </View>
     </View>
@@ -131,16 +94,7 @@ export function ReminderBanner() {
       testID="health-reminder"
       style={{ gap: space.xs, padding: space.lg, borderRadius: radius.card, backgroundColor: t.surface, borderWidth: border.width, borderColor: t.border, marginBottom: space.md }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-        <View style={{ width: BADGE, height: BADGE, borderRadius: BADGE / 2, backgroundColor: t.attention, alignItems: "center", justifyContent: "center" }}>
-          <T variant="label" style={{ color: t.onAttention, fontWeight: "700", lineHeight: undefined }} maxFontSizeMultiplier={1.2}>
-            !
-          </T>
-        </View>
-        <T variant="body" style={{ flex: 1 }}>
-          {words.title}
-        </T>
-      </View>
+      <T variant="body">{words.title}</T>
       <T variant="label" color="textSecondary">
         {words.body}
       </T>

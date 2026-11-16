@@ -137,6 +137,7 @@ export class Client {
   care = () => this.call<CareState>("/api/care");
   dismissReminder = () => this.call<CareState>("/api/care/reminder", "POST", {});
   keepHealthy = (id: string) => this.call<void>(`/api/apps/${encodeURIComponent(id)}/keep-healthy`, "POST", {});
+  dismissUpdate = (id: string) => this.call<App>(`/api/apps/${encodeURIComponent(id)}/dismiss-update`, "POST", {});
   answerPermission = (id: string, body: PermissionAnswerRequest) =>
     this.call<void>(`/api/apps/${encodeURIComponent(id)}/permission`, "POST", body);
 

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { AppUsage, UsageState } from "../../protocol.ts";
-import { aiName, cacheLine, formatTokens, headsUp, PLAN_UNKNOWN, planLine, planUnknown, reminderText, usageLine, usageRows, resetLabel } from "../index.ts";
+import { aiName, cacheLine, formatTokens, headsUp, PLAN_UNKNOWN, planLine, planUnknown, reminderText, showsUpdateSuggestion, updateSuggestion, usageLine, usageRows, resetLabel } from "../index.ts";
 
 const now = new Date(2026, 10, 11, 10, 0);
 const u = (input: number, cacheRead = 0) => ({ inputTokens: input, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: cacheRead });
@@ -61,8 +61,19 @@ test("a heads-up before a big job, quiet for a small one", () => {
 
 test("the monthly reminder", () => {
   assert.equal(reminderText({ due: false, behind: 2, lastAt: null, nextAt: null }), null);
-  assert.match(reminderText({ due: true, behind: 2, lastAt: null, nextAt: null })!.body, /^2 apps are behind/);
-  assert.match(reminderText({ due: true, behind: 1, lastAt: null, nextAt: null })!.body, /^One app is behind/);
+  assert.match(reminderText({ due: true, behind: 2, lastAt: null, nextAt: null })!.body, /available for 2 apps\./);
+  assert.match(reminderText({ due: true, behind: 1, lastAt: null, nextAt: null })!.body, /available for one app\./);
+  assert.doesNotMatch(reminderText({ due: true, behind: 1, lastAt: null, nextAt: null })!.body, /yellow sign/);
+});
+
+test("the update suggestion: calm words, hidden once dismissed", () => {
+  const s = updateSuggestion("Tea Timer");
+  assert.equal(s.title, "A newer version of Kiwimake's app template is available");
+  assert.match(s.body, /optional: Tea Timer works fine as it is\.$/);
+  assert.doesNotMatch(s.title + s.body, /—/);
+  assert.equal(showsUpdateSuggestion({}), false);
+  assert.equal(showsUpdateSuggestion({ health: { behind: true } }), true);
+  assert.equal(showsUpdateSuggestion({ health: { behind: true, dismissed: true } }), false);
 });
 
 test("the PC's engine is named: Claude by default, Codex when the companion says so", () => {

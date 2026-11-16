@@ -62,6 +62,8 @@ function gradleSdk(dir: string): { target: number | null; compile: number | null
 }
 
 interface TemplateFacts {
+  /** Changes whenever the newest template does (its Expo, its built-in parts, its Android). */
+  version: string;
   expoMajor: number | null;
   parts: { dir: string; words: string; files: Map<string, string> }[];
   kotlin: { target: number | null; compile: number | null };
@@ -94,7 +96,13 @@ export class Templates {
       if (!existsSync(root)) continue;
       parts.push({ ...p, files: new Map(filesOf(root).map((f) => [f, fileHash(join(root, f))])) });
     }
-    this.facts = { expoMajor: expoMajor(this.reactNativeDir), parts, kotlin: gradleSdk(this.kotlinDir) };
+    const expo = expoMajor(this.reactNativeDir);
+    const kotlin = gradleSdk(this.kotlinDir);
+    const version = createHash("sha256")
+      .update(JSON.stringify([expo, kotlin, parts.map((p) => [p.dir, [...p.files]])]))
+      .digest("hex")
+      .slice(0, 16);
+    this.facts = { version, expoMajor: expo, parts, kotlin };
     this.stamp = stamp;
     return this.facts;
   }
@@ -145,6 +153,14 @@ function listWords(words: string[]): string {
 export function appHealth(dir: string, preset: AppPreset | undefined, templates: Templates): AppHealth | undefined {
   const reasons = behindReasons(dir, preset, templates);
   return reasons.length > 0 ? { behind: true, reasons, checkedAt: nowIso() } : undefined;
+}
+
+/**
+ * Which update this is, for "Dismiss": the newest template's version and what is behind. A newer
+ * template (or the app falling behind in another way) gives a new key, so the suggestion shows again.
+ */
+export function updateKey(health: AppHealth, templates: Templates): string {
+  return `${templates.read().version}:${createHash("sha256").update(health.reasons.join("\n")).digest("hex").slice(0, 16)}`;
 }
 
 /**

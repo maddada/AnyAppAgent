@@ -19,9 +19,9 @@ import { ShareButton, ShareDialog } from "./Share.tsx";
 import { FromOthersButton, FromOthersDialog } from "./FromOthers.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
 import { AppIcon, Dialog, Icon, Spinner, StateLine, Switch, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
-import { BackupGroup, HealthBadge, ReminderCard, UsageGroup } from "./Trust.tsx";
+import { BackupGroup, ReminderCard, UsageGroup } from "./Trust.tsx";
 import { UpdateNotice, UpdatesGroup } from "./Update.tsx";
-import { BEHIND_LABEL, headsUp } from "../../../../shared/chat/index.ts";
+import { headsUp } from "../../../../shared/chat/index.ts";
 
 const api = window.anyapp;
 type Page = "apps" | "phones" | "setup" | "account" | "settings";
@@ -292,7 +292,6 @@ function AppsPage({
         <button className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined} title={a.name}>
           <span className="icon-wrap">
             <AppIcon icon={s.icons[a.id]} small />
-            <HealthBadge app={a} />
           </span>
           <div className="arow-main">
             <div className="arow-top">
@@ -300,7 +299,6 @@ function AppsPage({
               <span className="arow-meta">{[v ? `v${v.number}` : "", a.updatedAt ? `Active ${timeAgo(a.updatedAt)}` : ""].filter(Boolean).join(", ")}</span>
             </div>
             <StateLine state={st.state} text={st.text} />
-            {a.health?.behind && st.state !== "working" && <span className="caption attention-text">{BEHIND_LABEL}</span>}
           </div>
         </button>
         <button

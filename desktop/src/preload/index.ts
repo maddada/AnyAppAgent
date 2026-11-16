@@ -72,6 +72,7 @@ const bridge: AnyAppBridge = {
   backupRestore: (password) => ipcRenderer.invoke("backup:restore", password),
   dismissReminder: () => ipcRenderer.invoke("care:dismiss"),
   keepHealthy: (appId) => ipcRenderer.invoke("apps:keep-healthy", appId),
+  dismissUpdate: (appId) => ipcRenderer.invoke("apps:dismiss-update", appId),
   moveToCloud: (appId) => ipcRenderer.invoke("apps:move", appId),
   setPins: (ids) => ipcRenderer.invoke("apps:pins", ids),
   hideApp: (appId, hidden) => ipcRenderer.invoke("apps:hide", appId, hidden),

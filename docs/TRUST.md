@@ -109,11 +109,19 @@ Honest numbers only, from what Claude Code reports through ACP:
     missing or different (line endings and build output ignored).
   - Kotlin: a lower `targetSdk` (or `compileSdk`) than `template-kotlin`.
   - Expo Exact (alpha): not checked.
-- **The yellow sign**: a mustard badge with "!" on the app's icon (phone home grid, PC app list,
-  with "Needs an update" under the PC row). The colour is new in the Workbench theme:
-  `attention` / `onAttention` / `attentionText` in `shared/theme/tokens.ts`.
-- **Update it**: the app's sheet on the phone and the top of its chat on the PC say what is behind
-  and offer "Update it". After the heads-up it sends the app's agent one message as the person's
+- **No sign on the icon** (changed 2026-11-17, the user's wish): an app that is behind carries no
+  badge on the phone's home grid or in the PC's app list. Being behind is fine; it is a suggestion,
+  not a warning.
+- **The suggestion** inside the app: at the top of its chat, phone and PC, a calm card in neutral
+  colours: "A newer version of Kiwimake's app template is available", that it is optional, and
+  **Update** and **Dismiss** below the words, on the right (`updateSuggestion` in
+  `shared/chat/trust.ts`).
+- **Dismiss** (`POST /api/apps/:id/dismiss-update`): kept on the PC (`AppRecord.healthDismissed`,
+  the template's version plus what is behind, `updateKey` in `server/src/health.ts`), so every
+  phone and the desktop hide it (`AppHealth.dismissed`). A newer template, or the app falling
+  behind in another way, gives a new key and the suggestion shows again. Dismissed apps are not
+  counted by the monthly reminder.
+- **Update**: the suggestion asks once (the heads-up, "Update it"). After the heads-up it sends the app's agent one message as the person's
   own: the chat shows the short line "Update to the newest template", and the agent alone gets the
   instruction that names what is behind, where the newest template is (read only) and what to keep
   (everything the app does, its look and its data). The agent hands it to a helper as usual, and
@@ -122,9 +130,9 @@ Honest numbers only, from what Claude Code reports through ACP:
   the build are all done, the app carries `health.updating` and the notice is one calm line,
   "Updating to the newest template...", with no button; if the app is still behind after it (the
   update failed or was stopped), the notice comes back.
-- **Monthly reminder**: while any app is behind, a card on the phone's home and at the top of the
-  PC's app list ("Your monthly app check: 2 apps are behind ..."). "Got it" puts it away for 30
-  days. The apps are checked at start, after every build and every 6 hours.
+- **Monthly reminder**: while any app is behind (and not dismissed), a card with no sign on the
+  phone's home and at the top of the PC's app list ("Your monthly app check: a newer version of
+  Kiwimake's app template is available for 2 apps ..."). "Got it" puts it away for 30 days. The apps are checked at start, after every build and every 6 hours.
 - **Later (the card's batch flow)**: updating every app in one go, each on a branch that merges only
   when its build passes. Not built.
 
