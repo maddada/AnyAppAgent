@@ -3,13 +3,16 @@ package com.anyapp.feedback
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ClipData
 import android.content.Context
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
@@ -32,9 +35,12 @@ import java.util.Date
 import kotlin.concurrent.thread
 
 /**
- * The feedback screen: the screenshot, numbered arrows drawn by dragging, a notes box, Save.
- * Save makes one picture, copies it to the clipboard and saves it in the gallery's "Feedback"
- * album, says "Copied and saved" and closes. Nothing else on purpose.
+ * The feedback screen: the screenshot, numbered arrows drawn by dragging, a notes box, and what to
+ * do with the picture (one picture: the screenshot, the arrows and the notes):
+ * - Send to Kiwimake (only on the phone of the person who made the app, see [KiwimakeLink]): it
+ *   lands in this app's chat on their PC; the screen says so and closes.
+ * - Save: copies it to the clipboard and keeps it in the gallery's "Feedback" album.
+ * - Share: Android's share sheet (WhatsApp to the app's maker, for example).
  */
 class FeedbackActivity : Activity() {
   private lateinit var palette: FeedbackColors
@@ -44,8 +50,12 @@ class FeedbackActivity : Activity() {
   private lateinit var notes: EditText
   private lateinit var undo: LinearLayout
   private lateinit var save: TextView
+  private lateinit var share: TextView
+  private lateinit var send: TextView
+  private lateinit var caption: TextView
   private lateinit var toast: LinearLayout
   private var saving = false
+  private var canSend = false
   private val dp get() = resources.displayMetrics.density
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +71,11 @@ class FeedbackActivity : Activity() {
     fonts = FeedbackFonts.of(this)
     setContentView(build())
     edgeToEdge() // after setContentView: the window's insets controller needs the decor view
+    // Send to Kiwimake shows once Kiwimake says this app is one of the person's own (a quick IPC).
+    thread(name = "anyapp-feedback-host") {
+      val yes = KiwimakeLink.canSend(this)
+      runOnUiThread { if (yes && !isFinishing) showSend() }
+    }
     if (Build.VERSION.SDK_INT >= 33) {
       onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { close() }
     }
@@ -153,19 +168,18 @@ class FeedbackActivity : Activity() {
       contentDescription = "Notes"
     }
     bottom.addView(notes, LinearLayout.LayoutParams(MATCH, WRAP))
-    save = TextView(this).apply {
-      text = "Save"
-      gravity = Gravity.CENTER
-      typeface = fonts.textStrong
-      setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-      setTextColor(palette.onAccent)
-      background = ripple(palette.accent, px(12).toFloat())
-      contentDescription = "Save: copy the picture and save it to the gallery"
-      setOnClickListener { onSave() }
-    }
-    bottom.addView(save, LinearLayout.LayoutParams(MATCH, px(52)).apply { topMargin = px(12) })
-    val caption = TextView(this).apply {
-      text = "Copies the picture and keeps it in your gallery"
+    // Send to Kiwimake: the main button, shown only on the owner's phone (showSend).
+    send = button("Send to Kiwimake", primary = true, description = "Send to Kiwimake: put the picture and notes in this app's chat") { onSend() }
+    send.visibility = View.GONE
+    bottom.addView(send, LinearLayout.LayoutParams(MATCH, px(52)).apply { topMargin = px(12) })
+    val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+    save = button("Save", primary = true, description = "Save: copy the picture and save it to the gallery") { onSave() }
+    share = button("Share", primary = false, description = "Share the picture with another app") { onShare() }
+    row.addView(save, LinearLayout.LayoutParams(0, px(52), 1f))
+    row.addView(share, LinearLayout.LayoutParams(0, px(52), 1f).apply { marginStart = px(10) })
+    bottom.addView(row, LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = px(10) })
+    caption = TextView(this).apply {
+      text = "Save keeps it in your gallery. Share sends it to anyone."
       typeface = fonts.text
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
       setTextColor(palette.textTertiary)
@@ -175,7 +189,7 @@ class FeedbackActivity : Activity() {
     bottom.addView(caption, LinearLayout.LayoutParams(MATCH, WRAP))
     column.addView(bottom, LinearLayout.LayoutParams(MATCH, WRAP))
 
-    // "Copied and saved", shown for a moment after Save.
+    // "Copied and saved" or "Sent to ...'s chat", shown for a moment; some carry an action.
     toast = LinearLayout(this).apply {
       orientation = LinearLayout.HORIZONTAL
       gravity = Gravity.CENTER_VERTICAL
@@ -191,9 +205,17 @@ class FeedbackActivity : Activity() {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         setTextColor(palette.text)
         setPadding(px(10), 0, 0, 0)
+      }, LinearLayout.LayoutParams(0, WRAP, 1f))
+      addView(TextView(context).apply {
+        tag = "toastAction"
+        typeface = fonts.textStrong
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        setTextColor(palette.accent)
+        setPadding(px(16), px(6), 0, px(6))
+        visibility = View.GONE
       })
     }
-    root.addView(toast, FrameLayout.LayoutParams(WRAP, WRAP, Gravity.CENTER))
+    root.addView(toast, FrameLayout.LayoutParams(MATCH, WRAP, Gravity.CENTER).apply { leftMargin = px(24); rightMargin = px(24) })
 
     onArrowsChanged()
     applyInsets(root)
@@ -287,6 +309,14 @@ class FeedbackActivity : Activity() {
     notes.clearFocus()
   }
 
+  /** Send to Kiwimake is the main action: Save and Share become the quiet ones. */
+  private fun showSend() {
+    canSend = true
+    send.visibility = View.VISIBLE
+    style(save, primary = false)
+    caption.text = "Send puts it in this app's chat in Kiwimake. Share sends it to anyone."
+  }
+
   private fun onSave() {
     if (saving) return
     if (FeedbackImage.galleryNeedsPermission(this)) { // Android 9 and older only
@@ -303,55 +333,180 @@ class FeedbackActivity : Activity() {
     if (requestCode == 41) doSave()
   }
 
-  private fun doSave() {
+  /** Makes the one picture off the main thread, then runs [then] there with it (null: it failed). */
+  private fun makePicture(pressed: TextView, busyLabel: String, then: (Bitmap?) -> Unit) {
     saving = true
     hideKeyboard()
-    save.alpha = 0.6f
-    save.text = "Saving"
+    pressed.alpha = 0.6f
+    pressed.text = busyLabel
     val arrows = canvasView.arrows.toList()
     val text = notes.text.toString()
     val unit = canvasView.exportUnit()
-    val appName = applicationInfo.loadLabel(packageManager).toString()
     val now = Date()
-    thread(name = "anyapp-feedback-save") {
-      val result = try {
-        val picture = FeedbackImage.render(this, shot, arrows, text, unit, appName, now)
-        FeedbackImage.save(this, picture, appName, now).also { picture.recycle() }
+    thread(name = "anyapp-feedback-picture") {
+      val picture = try {
+        FeedbackImage.render(this, shot, arrows, text, unit, appName(), now)
       } catch (_: Throwable) {
-        FeedbackImage.Result(copied = false, savedToGallery = false)
+        null
       }
-      runOnUiThread { done(result) }
+      then(picture)
     }
   }
 
-  private fun done(result: FeedbackImage.Result) {
-    val message = when {
-      result.copied && result.savedToGallery -> "Copied and saved"
-      result.copied -> "Copied (could not save to the gallery)"
-      result.savedToGallery -> "Saved to the gallery"
-      else -> "Could not save the picture"
+  private fun appName() = applicationInfo.loadLabel(packageManager).toString()
+
+  private fun ready() {
+    saving = false
+    for ((b, label) in listOf(save to "Save", share to "Share", send to "Send to Kiwimake")) {
+      b.alpha = 1f
+      b.text = label
     }
+  }
+
+  private fun doSave() {
+    makePicture(save, "Saving") { picture ->
+      val result = try {
+        if (picture == null) FeedbackImage.Result(copied = false, savedToGallery = false)
+        else FeedbackImage.save(this, picture, appName(), Date()).also { picture.recycle() }
+      } catch (_: Throwable) {
+        FeedbackImage.Result(copied = false, savedToGallery = false)
+      }
+      runOnUiThread {
+        val message = when {
+          result.copied && result.savedToGallery -> "Saved to your gallery and copied"
+          result.copied -> "Copied (could not save to the gallery)"
+          result.savedToGallery -> "Saved to your gallery"
+          else -> "Could not save the picture"
+        }
+        val ok = result.copied || result.savedToGallery
+        showToast(message, ok)
+        toast.postDelayed({ if (ok) leave() else { ready(); hideToast() } }, if (ok) 1800L else 2200L)
+      }
+    }
+  }
+
+  private fun onShare() {
+    if (saving) return
+    makePicture(share, "Preparing") { picture ->
+      val file = try {
+        picture?.let { FeedbackImage.write(this, it, appName(), Date()).also { _ -> it.recycle() } }
+      } catch (_: Throwable) {
+        null
+      }
+      runOnUiThread {
+        ready()
+        if (file == null) return@runOnUiThread flash("Could not make the picture")
+        val uri = FeedbackProvider.uriFor(this, file)
+        val text = notes.text.toString().trim()
+        val intent = Intent(Intent.ACTION_SEND).apply {
+          type = "image/png"
+          putExtra(Intent.EXTRA_STREAM, uri)
+          if (text.isNotEmpty()) putExtra(Intent.EXTRA_TEXT, "${appName()}: $text")
+          clipData = ClipData.newUri(contentResolver, "Feedback", uri)
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+          startActivity(Intent.createChooser(intent, "Share feedback"))
+        } catch (_: Exception) {
+          flash("No app to share with")
+        }
+      }
+    }
+  }
+
+  private fun onSend() {
+    if (saving) return
+    makePicture(send, "Sending") { picture ->
+      val file = try {
+        picture?.let { FeedbackImage.write(this, it, appName(), Date()) }
+      } catch (_: Throwable) {
+        null
+      }
+      val width = picture?.width ?: 0
+      val height = picture?.height ?: 0
+      picture?.recycle()
+      runOnUiThread {
+        if (file == null) {
+          ready()
+          return@runOnUiThread flash("Could not make the picture")
+        }
+        KiwimakeLink.send(this, file, width, height, notes.text.toString().trim(), Feedback.pendingScreen) { code -> sent(code) }
+      }
+    }
+  }
+
+  private fun sent(code: Int) {
+    if (isFinishing) return
+    when (code) {
+      KiwimakeLink.SENT -> {
+        showToast("Sent to ${appName()}'s chat", ok = true, action = "Open chat") { openKiwimake() }
+        toast.postDelayed({ if (!isFinishing) leave() }, 2600L)
+      }
+      KiwimakeLink.WAITING -> {
+        showToast("Kept in Kiwimake: it sends when Kiwimake opens", ok = true, action = "Open Kiwimake") { openKiwimake() }
+        toast.postDelayed({ if (!isFinishing) leave() }, 5000L)
+      }
+      else -> {
+        ready()
+        flash(if (code == KiwimakeLink.NOT_YOURS) "Kiwimake did not take it. Try Save or Share." else "Could not reach Kiwimake. Try Save or Share.")
+      }
+    }
+  }
+
+  /** Kiwimake, on this app's chat (sending what waits for it when it opens). */
+  private fun openKiwimake() {
+    val host = KiwimakeLink.host(this) ?: return leave()
+    try {
+      startActivity(
+        Intent(Intent.ACTION_VIEW, Uri.parse("anyappagent://?chat=" + Uri.encode(packageName))).setPackage(host).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+      )
+    } catch (_: Exception) {
+      packageManager.getLaunchIntentForPackage(host)?.let { startActivity(it) }
+    }
+    leave()
+  }
+
+  private fun showToast(message: String, ok: Boolean, action: String? = null, onAction: (() -> Unit)? = null) {
     toast.findViewWithTag<TextView>("toastText").text = message
+    val act = toast.findViewWithTag<TextView>("toastAction")
+    act.text = action ?: ""
+    act.visibility = if (action != null) View.VISIBLE else View.GONE
+    act.setOnClickListener { onAction?.invoke() }
+    (toast.getChildAt(0) as ImageView).visibility = if (ok) View.VISIBLE else View.GONE
     toast.alpha = 0f
     toast.visibility = View.VISIBLE
     toast.animate().alpha(1f).setDuration(160).start()
-    val ok = result.copied || result.savedToGallery
-    toast.postDelayed({
-      if (ok) {
-        saving = false
-        leave()
-      } else {
-        saving = false
-        save.alpha = 1f
-        save.text = "Save"
-        toast.animate().alpha(0f).setDuration(160).withEndAction { toast.visibility = View.GONE }.start()
-      }
-    }, if (ok) 1300L else 2200L)
+  }
+
+  private fun hideToast() {
+    toast.animate().alpha(0f).setDuration(160).withEndAction { toast.visibility = View.GONE }.start()
+  }
+
+  /** A short note that something did not work; the screen stays as it was. */
+  private fun flash(message: String) {
+    showToast(message, ok = false)
+    toast.postDelayed({ hideToast() }, 2600L)
   }
 
   // ---- drawing helpers ------------------------------------------------------------------------
 
   private fun px(v: Int) = (v * dp + 0.5f).toInt()
+
+  private fun button(label: String, primary: Boolean, description: String, onClick: () -> Unit) = TextView(this).apply {
+    text = label
+    gravity = Gravity.CENTER
+    typeface = fonts.textStrong
+    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+    contentDescription = description
+    setOnClickListener { onClick() }
+    style(this, primary)
+  }
+
+  /** The main button is filled with the accent; the others are outlined. */
+  private fun style(view: TextView, primary: Boolean) {
+    view.setTextColor(if (primary) palette.onAccent else palette.text)
+    view.background = if (primary) ripple(palette.accent, px(12).toFloat()) else ripple(Color.TRANSPARENT, px(12).toFloat(), stroke = palette.borderStrong)
+  }
 
   private fun rounded(fill: Int, radius: Float, stroke: Int? = null) = GradientDrawable().apply {
     setColor(fill)

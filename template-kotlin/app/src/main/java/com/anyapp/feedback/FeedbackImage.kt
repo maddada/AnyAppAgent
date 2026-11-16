@@ -96,15 +96,20 @@ internal object FeedbackImage {
     Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
       context.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
 
-  fun save(context: Context, picture: Bitmap, appName: String, at: Date): Result {
+  /** Writes [picture] into the app's own folder (served by [FeedbackProvider]), keeping the newest few. */
+  fun write(context: Context, picture: Bitmap, appName: String, at: Date): File {
     val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(at)
     val slug = appName.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "-").trim('-').ifEmpty { "app" }
-    val name = "feedback-$slug-$stamp.png"
-
     val folder = FeedbackProvider.folder(context)
-    val file = File(folder, name)
+    val file = File(folder, "feedback-$slug-$stamp.png")
     FileOutputStream(file).use { picture.compress(Bitmap.CompressFormat.PNG, 100, it) }
     folder.listFiles { f -> f.name.endsWith(".png") }?.sortedByDescending { it.lastModified() }?.drop(KEEP)?.forEach { it.delete() }
+    return file
+  }
+
+  fun save(context: Context, picture: Bitmap, appName: String, at: Date): Result {
+    val file = write(context, picture, appName, at)
+    val name = file.name
 
     val copied = try {
       val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

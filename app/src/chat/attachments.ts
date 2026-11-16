@@ -54,10 +54,28 @@ export async function takePhoto(): Promise<Attachment[]> {
 
 export const clipboardHasImage = () => Clipboard.hasImageAsync().catch(() => false);
 
+/** The clipboard picture already pasted or turned down: not offered again (fingerprint of its data). */
+let usedClip: string | null = null;
+const fingerprint = (data: string) => `${data.length}:${data.slice(0, 64)}:${data.slice(-64)}`;
+
+/** True when the clipboard holds a picture not pasted or turned down yet: the chat offers it in one tap. */
+export async function clipboardHasNewPicture(): Promise<boolean> {
+  if (!(await clipboardHasImage())) return false;
+  const image = await Clipboard.getImageAsync({ format: "png" }).catch(() => null);
+  return !!image && fingerprint(image.data) !== usedClip;
+}
+
+/** "Not this one": the picture on the clipboard is not offered again. */
+export async function dismissClipboardPicture(): Promise<void> {
+  const image = await Clipboard.getImageAsync({ format: "png" }).catch(() => null);
+  if (image) usedClip = fingerprint(image.data);
+}
+
 /** The picture on the clipboard (a copied screenshot, for example), or null. */
 export async function pastePicture(): Promise<Attachment | null> {
   const image = await Clipboard.getImageAsync({ format: "png" });
   if (!image) return null;
+  usedClip = fingerprint(image.data);
   const parsed = parseDataUrl(image.data);
   if (!parsed) return null;
   return prepare(image.data, image.size.width, image.size.height);

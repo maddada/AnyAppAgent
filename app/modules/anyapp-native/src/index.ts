@@ -52,6 +52,8 @@ type Events = {
   onNetworkChanged: () => void;
   /** An app made with Kiwimake crashed (docs/VERSIONS.md): takeWaitingCrashes() has its report. */
   onAppCrash: (event: { packageName: string }) => void;
+  /** "Send to Kiwimake" on an app's feedback screen: takeWaitingFeedback() has it. */
+  onAppFeedback: (event: { packageName: string; token?: string }) => void;
   /** An app answered requestDiary: `diary` is a JSON array of { at, text }. */
   onAppDiary: (event: { packageName: string; requestId: string; diary: string }) => void;
   /** An app reported the version it runs, or a quick update it refused or rolled back. */
@@ -108,6 +110,10 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   cancelNotification(id: number): void;
   /** JSON [{ packageName, report }] of crashes waiting to go to the PC (forgotten once read). Missing on older builds. */
   takeWaitingCrashes?(): string;
+  /** Feedback waiting to go to the apps' chats, as JSON [{packageName, file, width, height, notes, screen, at}]; forgets it. Missing on older builds. */
+  takeWaitingFeedback?(): string;
+  /** Tells the app that handed feedback over (token from onAppFeedback) whether it is in its chat now. */
+  feedbackSent?(token: string, sent: boolean): void;
   /** Asks an app for its diary (answer: onAppDiary); false when the app is not on this phone. */
   requestDiary?(packageName: string, requestId: string): boolean;
   /** The share Kiwimake was opened with or received last, once (null after). Missing on older builds. */

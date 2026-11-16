@@ -1,4 +1,4 @@
-import { answerDiaryRequest, sendCrashes, startReports } from "./reports";
+import { answerDiaryRequest, sendCrashes, sendFeedback, startReports } from "./reports";
 import { AppState, PermissionsAndroid, Platform } from "react-native";
 import * as Device from "expo-device";
 import { AnyAppNative } from "anyapp-native";
@@ -610,6 +610,7 @@ function onNetworkChanged() {
 function onForeground() {
   refreshPackages();
   void sendCrashes();
+  void sendFeedback();
   reconnectNow();
   void resumePendingInstall();
 }
@@ -678,6 +679,7 @@ async function resync() {
     resumeUnfinishedInstalls();
     for (const app of apps) void autoInstallIfNew(app);
     void sendCrashes();
+    void sendFeedback();
     void resumePendingInstall();
     const { chatLoaded } = getState();
     await Promise.all(Object.keys(chatLoaded).filter((id) => chatLoaded[id] && apps.some((a) => a.id === id)).map((id) => loadChat(id)));

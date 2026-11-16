@@ -41,7 +41,7 @@ export default function Home() {
   const pairing = useStore((s) => s.pairing);
   const authLost = useStore((s) => s.authLost);
   const cloudAuth = useStore((s) => s.cloudAuth);
-  const params = useLocalSearchParams<{ install?: string; update?: string; crash?: string }>();
+  const params = useLocalSearchParams<{ install?: string; update?: string; crash?: string; chat?: string }>();
   const apps = useStore((s) => s.apps);
 
   // Tapped "ready to install" notification: anyappagent://?install=<appId>
@@ -68,6 +68,16 @@ export default function Home() {
     router.setParams({ crash: undefined });
     router.push(`/chat/${app.id}`);
   }, [params.crash, apps]);
+
+  // An app's feedback screen ("Open chat") or its waiting-feedback notification:
+  // anyappagent://?chat=<package name> opens that app's chat (waiting feedback is sent on the way in).
+  useEffect(() => {
+    if (!params.chat) return;
+    const app = Object.values(apps).find((a) => a.packageName === params.chat);
+    if (!app) return;
+    router.setParams({ chat: undefined });
+    router.push(`/chat/${app.id}`);
+  }, [params.chat, apps]);
 
   // Shared into Kiwimake from another app ("Like this, but mine"): opens its screen.
   useEffect(() => {

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Keyboard, Pressable, ScrollView, TextInput, View } from "react-native";
+import { AppState, FlatList, Keyboard, Pressable, ScrollView, TextInput, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, ClipboardPaste, EllipsisVertical, Globe, History, Image as ImageIcon, ImagePlus, ListTodo, Send, Square, X } from "lucide-react-native";
 import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, headsUp as bigJobHeadsUp, mainChatReplying, MAX_IMAGES, type HeadsUp, type Row } from "@shared/chat/index";
-import { clipboardHasImage, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
+import { clipboardHasImage, clipboardHasNewPicture, dismissClipboardPicture, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
 import { ChatRow } from "@/chat/ChatRows";
 import { describeApp } from "@/lib/describe";
 import { installApp, launchApp } from "@/lib/installer";
@@ -317,6 +318,29 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
   const [tray, setTray] = useState(false);
   const [canPaste, setCanPaste] = useState(false);
   const [adding, setAdding] = useState(false);
+  // A picture on the clipboard (a screenshot, a feedback picture, one from WhatsApp): offered in one
+  // tap above the chat box, until it is pasted or turned down. Checked on open, whenever Kiwimake
+  // comes back to the front, and when the clipboard changes.
+  const [offerPaste, setOfferPaste] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = () => void clipboardHasNewPicture().then((yes) => alive && setOfferPaste(yes), () => {});
+    check();
+    const front = AppState.addEventListener("change", (s) => s === "active" && check());
+    const clip = Clipboard.addClipboardListener(check);
+    return () => {
+      alive = false;
+      front.remove();
+      Clipboard.removeClipboardListener(clip);
+    };
+  }, []);
+  const pasteOffered = () => {
+    setOfferPaste(false);
+    void add(async () => {
+      const one = await pastePicture();
+      return one ? [one] : [];
+    });
+  };
   // Send, Queue (the agent is busy: it waits its turn) or Stop: the same rule as the desktop.
   const state = composerState(app, text, { sending, stopping, online: !!client && online, images: attached.length });
   const showStop = state.button === "stop";
@@ -410,6 +434,22 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
       {isCloudId(appId) ? <BoxNote appId={appId} /> : null}
       {isCloudId(appId) && !app ? <CloudRowLoader appId={appId} /> : null}
       <DictationNote dictation={dictation} style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }} />
+      {offerPaste && !tray && attached.length < MAX_IMAGES ? (
+        <View testID="paste-offer" style={{ flexDirection: "row", alignItems: "center", gap: space.xs, paddingBottom: space.sm }}>
+          <Button testID="paste-offer-paste" label="Paste the picture you copied" icon={ClipboardPaste} variant="quiet" small onPress={pasteOffered} />
+          <IconButton
+            testID="paste-offer-dismiss"
+            icon={X}
+            label="Not this picture"
+            iconSize={icon.size.sm}
+            color={t.textTertiary}
+            onPress={() => {
+              setOfferPaste(false);
+              void dismissClipboardPicture();
+            }}
+          />
+        </View>
+      ) : null}
       {tray ? (
         <View testID="attach-tray" style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm, paddingBottom: space.sm }}>
           <Button testID="attach-gallery" label="Photos" icon={ImageIcon} variant="quiet" small onPress={() => void add(() => pickFromGallery(MAX_IMAGES - attached.length))} />
@@ -421,10 +461,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
               icon={ClipboardPaste}
               variant="quiet"
               small
-              onPress={() => void add(async () => {
-                const one = await pastePicture();
-                return one ? [one] : [];
-              })}
+              onPress={pasteOffered}
             />
           ) : null}
         </View>

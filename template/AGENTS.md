@@ -345,9 +345,12 @@ so anyone can tell them what to change. It needs no code and works on its own:
   opens a feedback screen over a screenshot of the current screen.
 - Dragging draws an arrow with a number at its start (`#1`, `#2`, ...). Undo takes back the last
   one. Below is a notes box; each new arrow adds its `#n ` line there to fill in.
-- Save makes one picture (the screenshot, the arrows and the notes), copies it to the clipboard
-  and keeps it in the gallery's "Feedback" album, says "Copied and saved" and closes. The person
-  pastes it into Kiwimake's chat, WhatsApp or anywhere.
+- The buttons make one picture (the screenshot, the arrows and the notes):
+  - **Send to Kiwimake** (only on the phone of the person who made the app): the picture and the
+    notes arrive in this app's chat, so they reach you as a message and you start on it. If
+    Kiwimake is not running it keeps the picture and sends it when it opens.
+  - **Save** copies it to the clipboard and keeps it in the gallery's "Feedback" album.
+  - **Share** opens Android's share sheet (WhatsApp to the app's maker, for example).
 
 Never remove it, never add options to it, and never draw your own feedback screen. When a
 feedback picture comes to you in the chat, `#1`, `#2` in the notes are the numbered arrows on the

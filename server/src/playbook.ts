@@ -30,7 +30,8 @@ about anything, make a page.`;
 export function feedbackPicturesLine(): string {
   return `Feedback pictures: a picture of an app screen with numbered arrows and notes under it comes
 from the app's shake-to-give-feedback screen; "#n" in the notes means arrow n, so read each note
-against its arrow.`;
+against its arrow. A message that starts "Feedback from the app (shake and point at it)" was sent
+straight from that screen: treat it like any message from the person and start on it.`;
 }
 
 /** Plan first (the person's rule): confirm a plan before building a new app or a large change. */

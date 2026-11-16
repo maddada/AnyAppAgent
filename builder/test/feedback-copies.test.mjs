@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const kotlinMain = path.join(repo, 'template-kotlin', 'app', 'src', 'main');
 const rnMain = path.join(repo, 'template', 'modules', 'feedback', 'android', 'src', 'main');
-const CORE = ['AnnotateView.kt', 'Feedback.kt', 'FeedbackActivity.kt', 'FeedbackImage.kt', 'FeedbackProvider.kt', 'FeedbackStyle.kt', 'ShakeDetector.kt'];
+const CORE = ['AnnotateView.kt', 'Feedback.kt', 'FeedbackActivity.kt', 'FeedbackImage.kt', 'FeedbackProvider.kt', 'FeedbackStyle.kt', 'KiwimakeLink.kt', 'ShakeDetector.kt'];
 
 test('the feedback core is the same in both templates', () => {
   const kotlin = path.join(kotlinMain, 'java', 'com', 'anyapp', 'feedback');

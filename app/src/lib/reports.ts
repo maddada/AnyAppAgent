@@ -4,6 +4,8 @@
 import type { CrashReport, DiaryAnswer, DiaryEntry, ServerEvent } from "./protocol";
 import { AnyAppNative } from "../../modules/anyapp-native";
 import { clientFor, getState, useStore, type InstallProgress } from "./store";
+import { File } from "expo-file-system";
+import { prepare, toUploads } from "../chat/attachments";
 
 /** Crashes taken from the native queue that could not be sent yet (sent on the next connect). */
 let unsent: { packageName: string; report: CrashReport }[] = [];
@@ -13,7 +15,88 @@ const diaryWaits = new Map<string, (diary: string) => void>();
 export function startReports(): void {
   if (!AnyAppNative) return;
   AnyAppNative.addListener("onAppCrash", () => void sendCrashes());
+  AnyAppNative.addListener("onAppFeedback", (e) => {
+    if (e.token) answerTokens.push(e.token);
+    void sendFeedback();
+  });
   AnyAppNative.addListener("onAppDiary", (e) => diaryWaits.get(e.requestId)?.(e.diary));
+}
+
+/** A feedback picture and its notes, sent from an app's shake-to-give-feedback screen. */
+interface WaitingFeedback {
+  packageName: string;
+  file: string;
+  width: number;
+  height: number;
+  notes: string;
+  screen?: string;
+}
+
+/** Feedback taken from the native queue that could not be sent yet (sent on the next connect). */
+let unsentFeedback: WaitingFeedback[] = [];
+let sendingFeedback = false;
+let sendAgain = false;
+/** Apps waiting to hear "it is in the chat" (their Send stays open until then, a few seconds at most). */
+const answerTokens: string[] = [];
+
+/**
+ * Sends every waiting feedback to its app's chat as a message with the picture, so the app's agent
+ * starts on it at once (shared/protocol.ts SendMessageRequest). The notes are the message; the
+ * picture carries the arrows (#1, #2) they refer to.
+ */
+export async function sendFeedback(): Promise<void> {
+  if (!AnyAppNative?.takeWaitingFeedback) return;
+  if (sendingFeedback) {
+    sendAgain = true; // more arrived while sending: one more round after this one
+    return;
+  }
+  sendingFeedback = true;
+  try {
+    do {
+      sendAgain = false;
+      // Sending is a plain request to the PC (no need for the live connection): it worked or it waits.
+      const sent = await sendFeedbackRound();
+      for (const token of answerTokens.splice(0)) AnyAppNative.feedbackSent?.(token, sent);
+    } while (sendAgain);
+  } finally {
+    sendingFeedback = false;
+  }
+}
+
+/** One pass over the waiting feedback; true when nothing is left waiting. */
+async function sendFeedbackRound(): Promise<boolean> {
+  const { client, apps } = getState();
+  if (!client || !AnyAppNative?.takeWaitingFeedback) return false;
+  {
+    try {
+      const fresh = JSON.parse(AnyAppNative.takeWaitingFeedback() || "[]") as WaitingFeedback[];
+      unsentFeedback = [...unsentFeedback, ...fresh].slice(-20);
+    } catch {
+      // a broken queue is dropped
+    }
+    const left: WaitingFeedback[] = [];
+    for (const item of unsentFeedback) {
+      const app = Object.values(apps).find((a) => a.packageName === item.packageName);
+      const picture = new File(`file://${item.file}`);
+      if (!app || !picture.exists) {
+        if (picture.exists) picture.delete();
+        continue; // an app this PC does not know, or a picture that is gone
+      }
+      try {
+        const upload = await prepare(picture.uri, item.width || 1080, item.height || 2400);
+        const words = item.notes.trim();
+        await client.send(app.id, {
+          text: words ? `Feedback from the app (shake and point at it):\n${words}` : "Feedback from the app (shake and point at it): see the picture.",
+          images: toUploads([upload]),
+        });
+        picture.delete();
+      } catch {
+        left.push(item);
+      }
+    }
+    unsentFeedback = left;
+  }
+  return unsentFeedback.length === 0;
 }
 
 /** Sends every waiting crash to the PC (each lands as a "crash" card in its app's chat). */

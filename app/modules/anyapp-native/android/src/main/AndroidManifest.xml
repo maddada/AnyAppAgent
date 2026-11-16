@@ -33,6 +33,7 @@
       <intent-filter>
         <action android:name="com.anyappagent.action.CRASH" />
         <action android:name="com.anyappagent.action.DIARY" />
+        <action android:name="com.anyappagent.action.FEEDBACK" />
       </intent-filter>
     </receiver>
     <!-- Kiwimake first (docs/DISTRIBUTION.md stage 5): apps made with Kiwimake find it by this

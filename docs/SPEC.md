@@ -398,3 +398,23 @@ doesn't happen to users").
 - Kiwimake checks the signing key before installing (`signedLikeInstalled`) and, instead of
   Android's prompt, Play Protect and a failure, shows "Remove old version" with one button that
   removes it and installs the new one. Android's install prompt is no longer opened twice.
+
+## Feedback that sends (added 2026-11-16)
+
+The user, after shake feedback seemed to vanish: "it should actually send", then picked on a page:
+Send stays in the app, the agent starts at once, and pasting a copied picture is one tap. Also: a
+toast after Save, a button to send to Kiwimake when it is their app, and Share for WhatsApp.
+
+- **The feedback screen** (template core, `KiwimakeLink.kt`) has Send to Kiwimake (only when
+  Kiwimake's `owns/<pkg>` says the app is the person's), Save (clipboard and gallery, a toast) and
+  Share (Android's share sheet). Send hands the picture (a one-off `content://` grant from the
+  app's feedback provider) and the notes to Kiwimake in an ordered broadcast
+  (`com.anyappagent.action.FEEDBACK`, sender proven by a PendingIntent, as crash reports).
+- **Kiwimake** (`AppReports.kt`) copies the picture, queues it, and keeps the broadcast open until
+  its JavaScript has put it in the app's chat (`reports.ts` `sendFeedback`: a normal message with
+  the picture), then answers SENT; no answer within 8 s answers WAITING (sent on the next connect).
+  Without its JavaScript running it answers WAITING and posts "Feedback for <app> is ready to
+  send". The app says "Sent to <app>'s chat" (Open chat) or "Kept in Kiwimake" (Open Kiwimake).
+  `anyappagent://?chat=<package>` opens an app's chat. No protocol change.
+- **Paste**: the chat shows "Paste the picture you copied" above the chat box while the clipboard
+  holds a picture not pasted or turned down yet.

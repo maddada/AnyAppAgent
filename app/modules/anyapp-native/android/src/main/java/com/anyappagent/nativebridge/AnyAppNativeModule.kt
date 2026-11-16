@@ -81,7 +81,7 @@ class AnyAppNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("AnyAppNative")
 
-    Events("onInstallStatus", "onNetworkChanged", "onAppReport", "onAppCrash", "onAppDiary", "onShareIn")
+    Events("onInstallStatus", "onNetworkChanged", "onAppReport", "onAppCrash", "onAppDiary", "onAppFeedback", "onShareIn")
 
     // Shared into Kiwimake while it runs ("Like this, but mine"): JS takes it with takeSharedItem.
     OnNewIntent { intent ->
@@ -93,6 +93,7 @@ class AnyAppNativeModule : Module() {
 
     OnCreate {
       AppReports.onCrash = { pkg -> sendEvent("onAppCrash", mapOf("packageName" to pkg)) }
+      AppReports.onFeedback = { pkg, token -> sendEvent("onAppFeedback", mapOf("packageName" to pkg, "token" to token)) }
       AppReports.onDiary = { pkg, requestId, diary -> sendEvent("onAppDiary", mapOf("packageName" to pkg, "requestId" to requestId, "diary" to diary)) }
       InstallEvents.listener = { sessionId, status, message, packageName, confirm -> onInstallEvent(sessionId, status, message, packageName, confirm) }
       UpdatesProvider.reportListener = { pkg -> sendEvent("onAppReport", mapOf("packageName" to pkg)) }
@@ -113,6 +114,7 @@ class AnyAppNativeModule : Module() {
       networkObserver = null
       InstallEvents.listener = null
       AppReports.onCrash = null
+      AppReports.onFeedback = null
       AppReports.onDiary = null
       UpdatesProvider.reportListener = null
     }
@@ -417,6 +419,16 @@ class AnyAppNativeModule : Module() {
     // ---------- crash reports and diaries from the apps (docs/VERSIONS.md)
 
     /** JSON [{packageName, report}] of the crashes waiting to go to the PC; they are forgotten here. */
+    /** Feedback from the person's apps waiting to go to their chats (AppReports.takeFeedback); forgets it. */
+    Function("takeWaitingFeedback") {
+      AppReports.takeWaitingFeedback(context)
+    }
+
+    /** The feedback handed over with [token] is in its chat (true) or waits for the next connect. */
+    Function("feedbackSent") { token: String, sent: Boolean ->
+      AppReports.feedbackSent(token, sent)
+    }
+
     Function("takeWaitingCrashes") {
       AppReports.takeWaiting(context)
     }
