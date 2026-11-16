@@ -88,7 +88,19 @@ export interface HexCheck {
   /** The model dictation uses. */
   model?: string;
   install?: { running: boolean; line?: string; error?: string };
+  /**
+   * The app dictation uses: Hex, or on Linux Superwhisper when it is installed (Omarchy ships it).
+   * Absent means Hex. With Superwhisper the other fields describe it, and it is ready once installed.
+   */
+  engine?: DictationEngine;
+  /** Linux: Superwhisper is installed, so the user can pick it or Hex. */
+  superwhisper?: boolean;
+  /** The PC's system (process.platform), for the steps and words that differ. */
+  platform?: string;
 }
+
+/** The app dictation transcribes with. */
+export type DictationEngine = "hex" | "superwhisper";
 
 export interface Checks {
   claude: ClaudeCheck;
@@ -125,6 +137,8 @@ export interface Settings {
   hexModel: string;
   /** The dictation step was skipped in the setup. */
   hexSkipped: boolean;
+  /** Linux: the dictation app picked in Settings (empty: Superwhisper when installed, else Hex). */
+  dictationEngine: "" | DictationEngine;
 }
 
 /** The phone app on this project's public GitHub release (always the newest release). */

@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
-import type { AccountAction, BackupAction, Checks, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
+import type { AccountAction, BackupAction, Checks, HexCheck, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
 import { ensurePhone, phoneCachePath, pinnedPhoneUrl, universalPhoneUrl } from "./install/phone.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
@@ -23,6 +23,7 @@ import { detectDeps } from "./detect/deps.ts";
 import { run } from "./exec.ts";
 import { ToolsInstaller } from "./install/tools-installer.ts";
 import { HEX_SITE, HexFailure, hexState, hexTranscribe, installHex, openHex } from "./hex.ts";
+import { SuperwhisperFailure, superwhisperBinary, superwhisperTranscribe } from "./superwhisper.ts";
 import { firstExisting, resolvePaths } from "./paths.ts";
 import { loadSettings, saveSettings } from "./settings.ts";
 import { ClaudeSignIn, GitHubSignIn } from "./signin.ts";
@@ -293,10 +294,20 @@ let hexInstallError: string | undefined;
 async function checkHex(): Promise<void> {
   const forced = simulate.get("hex");
   const install = hexInstalling ? checks.hex.install : hexInstallError ? { running: false, error: hexInstallError } : undefined;
-  let next = await hexState({ env, home: homedir(), savedModel: settings.hexModel || undefined });
+  // Linux: Superwhisper when it is installed (Omarchy ships it), unless Settings picks Hex; like
+  // Ghostex, it is ready once installed, and looking for it never starts its service.
+  const superwhisper = forced ? false : !!superwhisperBinary(env, homedir());
+  const engine = superwhisper && settings.dictationEngine !== "hex" ? "superwhisper" : "hex";
+  let next: HexCheck =
+    engine === "superwhisper"
+      ? { state: "ready", summary: "Superwhisper is ready.", models: [] }
+      : await hexState({ env, home: homedir(), savedModel: settings.hexModel || undefined });
   if (forced === "notInstalled" || forced === "installing") next = { state: "notInstalled", summary: "Hex isn't installed on this PC.", models: [] };
   if (forced === "notRunning") next = { state: "notRunning", summary: "Hex is installed but not open.", installedVersion: "3.4.0", models: [] };
-  next.install = forced === "installing" ? { running: true, line: "Downloading Hex 3.4.0" } : install;
+  next.install = engine === "superwhisper" ? undefined : forced === "installing" ? { running: true, line: "Downloading Hex 3.4.0" } : install;
+  next.engine = engine;
+  if (superwhisper) next.superwhisper = true;
+  next.platform = process.platform;
   if (JSON.stringify(next) === JSON.stringify(checks.hex)) return;
   checks.hex = next;
   broadcast();
@@ -498,7 +509,7 @@ function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void 
     updateTray();
   }
   if (key === "githubSkipped") void checkGitHub();
-  if (key === "hexModel") void checkHex();
+  if (key === "hexModel" || key === "dictationEngine") void checkHex();
   if (key === "engine") {
     checks.claude = { state: "checking", summary: "Checking…" };
     void checkClaude();
@@ -685,20 +696,25 @@ function ipc(): void {
       }
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: error instanceof HexFailure ? error.message : `Hex couldn't be opened. Open it from the Start menu, or get it from ${HEX_SITE}` };
+      const where = process.platform === "linux" ? "your app launcher" : "the Start menu";
+      return { ok: false, error: error instanceof HexFailure ? error.message : `Hex couldn't be opened. Open it from ${where}, or get it from ${HEX_SITE}` };
     }
   });
   ipcMain.handle("hex:transcribe", async (_e, wav: ArrayBuffer) => {
     try {
       const bytes = new Uint8Array(wav);
       const started = Date.now();
-      const text = await hexTranscribe({ env, home: homedir(), savedModel: settings.hexModel || undefined, wav: bytes });
+      const withSuperwhisper = checks.hex.engine === "superwhisper";
+      const text = withSuperwhisper
+        ? await superwhisperTranscribe({ env, home: homedir(), wav: bytes })
+        : await hexTranscribe({ env, home: homedir(), savedModel: settings.hexModel || undefined, wav: bytes });
       // Never the words themselves: only how long it took.
-      log(`[hex] transcribed ${Math.round(bytes.byteLength / 32_000)} s of audio in ${Date.now() - started} ms`);
+      log(`[${withSuperwhisper ? "superwhisper" : "hex"}] transcribed ${Math.round(bytes.byteLength / 32_000)} s of audio in ${Date.now() - started} ms`);
       return { ok: true, text };
     } catch (error) {
-      const f = error instanceof HexFailure ? error : new HexFailure("failed", "Hex couldn't transcribe this. Try again.");
-      log(`[hex] transcribe failed: ${f.code}`);
+      const name = checks.hex.engine === "superwhisper" ? "Superwhisper" : "Hex";
+      const f = error instanceof HexFailure || error instanceof SuperwhisperFailure ? error : new HexFailure("failed", `${name} couldn't transcribe this. Try again.`);
+      log(`[${name.toLowerCase()}] transcribe failed: ${f.code}`);
       void checkHex();
       return { ok: false, error: f.message, code: f.code };
     }

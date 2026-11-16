@@ -7,7 +7,7 @@ import type { Snapshot } from "../../shared/types.ts";
 import { PairingDialog } from "./Pairing.tsx";
 import { Icon, Spinner, Wordmark } from "./ui.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
-import { HEX_SETUP, HexCard } from "./Hex.tsx";
+import { HexCard, dictationSetup } from "./Hex.tsx";
 
 const api = window.anyapp;
 
@@ -540,18 +540,25 @@ function PhonePairStep({ s, onPaired }: { s: Snapshot; onPaired: () => void }) {
 
 function DictationStep({ s }: { s: Snapshot }) {
   const ready = s.checks.hex.state === "ready";
+  const superwhisper = s.checks.hex.engine === "superwhisper";
   return (
     <>
       <Head
         eyebrow={`${stepOf("dictation")}, optional`}
         title="Talk instead of typing"
-        lede="If you want to dictate while using this app, you can install Hex on this PC. Hex is a free app that turns your voice into text right here, offline. Then you can speak your changes in any chat on this PC instead of typing them."
+        lede={
+          superwhisper
+            ? "Superwhisper is on this PC, so you can dictate while using this app: speak your changes in any chat on this PC instead of typing them. Kiwimake hands your recording to Superwhisper, which turns it into text."
+            : "If you want to dictate while using this app, you can install Hex on this PC. Hex is a free app that turns your voice into text right here, offline. Then you can speak your changes in any chat on this PC instead of typing them."
+        }
       />
-      {!ready && <How items={HEX_SETUP} />}
+      {!ready && <How items={dictationSetup(s.checks.hex)} />}
       <HexCard hex={s.checks.hex} hexModel={s.settings.hexModel} />
-      <p className="label secondary" style={{ marginTop: "var(--aa-space-lg)", maxWidth: "var(--aa-size-reading-width)" }}>
-        Not now? Skip this step. You can set up Hex any time in Settings.
-      </p>
+      {!superwhisper && (
+        <p className="label secondary" style={{ marginTop: "var(--aa-space-lg)", maxWidth: "var(--aa-size-reading-width)" }}>
+          Not now? Skip this step. You can set up Hex any time in Settings.
+        </p>
+      )}
     </>
   );
 }

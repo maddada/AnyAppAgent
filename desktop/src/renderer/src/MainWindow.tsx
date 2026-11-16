@@ -841,7 +841,11 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
       <UsageGroup s={s} />
       <section className="settings-group">
         <h2 className="heading">Dictation</h2>
-        <p className="callout secondary">Speak your changes in a chat on this PC instead of typing them. It uses Hex, a free app that turns your voice into text on this PC, offline.</p>
+        <p className="callout secondary">
+          {s.checks.hex.engine === "superwhisper"
+            ? "Speak your changes in a chat on this PC instead of typing them. It uses Superwhisper, the dictation app on this PC, with the mode, language and vocabulary set in Superwhisper."
+            : "Speak your changes in a chat on this PC instead of typing them. It uses Hex, a free app that turns your voice into text on this PC, offline."}
+        </p>
         <HexCard hex={s.checks.hex} hexModel={s.settings.hexModel} />
       </section>
       <section className="list">

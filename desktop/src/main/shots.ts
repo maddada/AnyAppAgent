@@ -36,6 +36,7 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
   if (set === "history") return historySet(js, shot, log).catch((e) => log(`[shots] history set failed: ${(e as Error).message}`));
   if (set === "change") return changeSet(js, shot, log).catch((e) => log(`[shots] change set failed: ${(e as Error).message}`));
   if (set === "cloud") return cloudSet(js, shot, log).catch((e) => log(`[shots] cloud set failed: ${(e as Error).message}`));
+  if (set === "dictation") return dictationSet(js, shot).catch((e) => log(`[shots] dictation set failed: ${(e as Error).message}`));
   if (set === "account") return accountSet(dir, js, shot, log).catch((e) => log(`[shots] account set failed: ${(e as Error).message}`));
   if (set === "real") {
     // Against the real companion: a phone pairs (an outside script plays the phone), then an app is
@@ -148,6 +149,33 @@ export async function runScreenshots(win: BrowserWindow, dir: string, log: (l: s
 }
 
 type Js = (code: string) => Promise<unknown>;
+
+/** The setup's dictation step and Settings' Dictation section, light and dark, with what this PC has (Hex, or Superwhisper on Linux). */
+async function dictationSet(js: Js, shot: (name: string) => Promise<void>): Promise<void> {
+  for (const theme of ["light", "dark"] as const) {
+    nativeTheme.themeSource = theme;
+    await wait(300);
+    await js(`window.__app.setup("welcome")`);
+    await wait(600);
+    await js(`window.__onb.goto("dictation")`);
+    await shot(`${theme}-dictation-step`);
+    // On Linux with Superwhisper installed, the same step with Hex picked instead.
+    if ((await js(`window.anyapp.getSnapshot().then((s) => !!s.checks.hex.superwhisper)`)) === true) {
+      await js(`window.anyapp.setSetting("dictationEngine", "hex")`);
+      await wait(1500);
+      await shot(`${theme}-dictation-step-hex`);
+      await js(`window.anyapp.setSetting("dictationEngine", "")`);
+      await wait(1500);
+    }
+    await js(`window.anyapp.setSetting("onboardingDone", true); window.__app.setup(null)`);
+    await wait(400);
+    await js(`window.__main.page("settings")`);
+    await js(`setTimeout(() => [...document.querySelectorAll("h2")].find((h) => h.textContent === "Dictation")?.scrollIntoView({ block: "start" }), 50)`);
+    await shot(`${theme}-dictation-settings`);
+    await js(`window.__main.page("apps")`);
+  }
+  nativeTheme.themeSource = "system";
+}
 
 /**
  * Pages in the chat, light and dark: the chat with a page card and an answers card, the page's own

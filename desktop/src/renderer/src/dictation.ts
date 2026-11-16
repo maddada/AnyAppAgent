@@ -1,6 +1,6 @@
 // Dictation into the chat box with Hex (like Ghostex's Dictate): the microphone is recorded here,
 // turned into a 16 kHz mono WAV, and the main process asks Hex on this PC to transcribe it
-// (src/main/hex.ts). Nothing leaves the PC.
+// (src/main/hex.ts), or on Linux Superwhisper when it is installed (src/main/superwhisper.ts).
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 
@@ -62,7 +62,10 @@ export function insertAt(value: string, start: number, end: number, text: string
   return { value: before + piece + after, caret: before.length + lead.length + text.length };
 }
 
-export function useDictation({ onText }: { onText: (text: string) => void }) {
+/** `engine` names the app that transcribes (Hex, or Superwhisper on Linux); `platform` is the PC's system. */
+export function useDictation({ onText, engine = "Hex", platform }: { onText: (text: string) => void; engine?: string; platform?: string }) {
+  const named = useRef({ engine, platform });
+  named.current = { engine, platform };
   const [phase, setPhase] = useState<DictationPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [level, setLevel] = useState(0);
@@ -94,7 +97,9 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
       const name = (e as Error).name;
       setError(
         name === "NotAllowedError"
-          ? "Windows blocked the microphone. In Windows Settings, Privacy & security, Microphone, turn on \"Let desktop apps access your microphone\", then try again."
+          ? named.current.platform === "linux"
+            ? "The microphone was blocked. Check that it is on and not muted in your system's sound settings, then try again."
+            : "Windows blocked the microphone. In Windows Settings, Privacy & security, Microphone, turn on \"Let desktop apps access your microphone\", then try again."
           : name === "NotFoundError"
             ? "No microphone found. Plug one in, then try again."
             : "The microphone couldn't start. Try again.",
@@ -140,8 +145,8 @@ export function useDictation({ onText }: { onText: (text: string) => void }) {
         const res = await window.anyapp.hexTranscribe(wav);
         if (res.ok) {
           if (res.text) textRef.current(res.text);
-          else setError("Hex heard nothing. Speak a little closer to the microphone, then try again.");
-        } else setError(res.error ?? "Hex couldn't transcribe this. Try again.");
+          else setError(`${named.current.engine} heard nothing. Speak a little closer to the microphone, then try again.`);
+        } else setError(res.error ?? `${named.current.engine} couldn't transcribe this. Try again.`);
       } catch {
         setError("The recording couldn't be read. Try again.");
       }

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { App, ChatImage, ChatItem, HexCheck, PageInfo, WorkerInfo } from "../../shared/types.ts";
 import { DICTATE_HOTKEY, HOLD_MS, insertAt, isDictateHotkey, useDictation } from "./dictation.ts";
+import { engineName } from "./Hex.tsx";
 import {
   answerLines, buildCard, crashCard, DIARY_PRIVACY, diaryLine, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
 } from "../../../../shared/chat/index.ts";
@@ -335,7 +336,10 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
   // Dictation with Hex (dictation.ts): the transcript goes in at the caret.
   const textNow = useRef(text);
   textNow.current = text;
+  const dictateWith = engineName(hex);
   const dictation = useDictation({
+    engine: dictateWith,
+    platform: hex?.platform,
     onText: (said) => {
       const el = box.current;
       const value = textNow.current;
@@ -462,7 +466,7 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
           <textarea
             ref={box}
             data-testid="composer-input"
-            placeholder={dictation.phase === "recording" ? "Listening. Stop when you're done." : dictation.phase === "transcribing" ? "Hex is writing it down..." : state.placeholder}
+            placeholder={dictation.phase === "recording" ? "Listening. Stop when you're done." : dictation.phase === "transcribing" ? `${dictateWith} is writing it down...` : state.placeholder}
             value={text}
             rows={1}
             onChange={(e) => setText(e.target.value)}
@@ -492,8 +496,8 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
             data-testid="composer-mic"
             onClick={dictate}
             disabled={dictation.phase === "starting" || dictation.phase === "transcribing"}
-            aria-label={dictation.phase === "recording" ? "Stop and write it down" : "Dictate with Hex"}
-            title={dictation.phase === "recording" ? `Stop (${DICTATE_HOTKEY}). Esc cancels.` : hexReady ? `Dictate with Hex (${DICTATE_HOTKEY}). Tap to start and tap to stop, or hold and let go.` : hex ? hexProblem(hex) : "Dictate with Hex"}
+            aria-label={dictation.phase === "recording" ? "Stop and write it down" : `Dictate with ${dictateWith}`}
+            title={dictation.phase === "recording" ? `Stop (${DICTATE_HOTKEY}). Esc cancels.` : hexReady ? `Dictate with ${dictateWith} (${DICTATE_HOTKEY}). Tap to start and tap to stop, or hold and let go.` : hex ? hexProblem(hex) : `Dictate with ${dictateWith}`}
           >
             {dictation.phase === "transcribing" || dictation.phase === "starting" ? <Spinner /> : <Icon of={dictation.phase === "recording" ? Square : Mic} size="md" />}
           </button>

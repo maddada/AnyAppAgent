@@ -11,15 +11,21 @@
 //   {transcript}. The token is never logged or shown.
 // - Installing runs Hex's own installer (anoma.ly/hex/install-windows.ps1), which checks the
 //   release's Authenticode signature and installs for this user only (no administrator).
-import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+// - Linux (like Ghostex's server/src/managed_tools/hex.rs): Hex keeps its data in
+//   $XDG_DATA_HOME/hex (else ~/.local/share/hex), where a direct install links `current` to
+//   `versions/<v>` and puts `hex` in ~/.local/bin; a distribution package puts `hex` in /usr/bin.
+//   `hex start` opens it. Installing runs Hex's own anoma.ly/hex/install-linux.sh, which checks the
+//   release's signature and installs for this user only (no password).
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, isAbsolute, join } from "node:path";
 import type { HexCheck, HexModelView } from "../shared/types.ts";
 
 export const API_VERSION = "2";
 export const HEX_SITE = "https://anoma.ly/hex/";
 export const WINDOWS_INSTALLER = "https://anoma.ly/hex/install-windows.ps1";
+export const LINUX_INSTALLER = "https://anoma.ly/hex/install-linux.sh";
 /** Hex refuses uploads over 64 MiB. */
 export const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
 const QUICK_MS = 5_000;
@@ -30,9 +36,10 @@ const REFUSED = "Hex refused the request. Quit and reopen Hex, then try again.";
 
 type Env = Record<string, string | undefined>;
 
-/** Hex's data folder: HEX_APPLICATION_SUPPORT_DIR, else %APPDATA%\hex. */
-export function supportDir(env: Env, home: string): string {
+/** Hex's data folder: HEX_APPLICATION_SUPPORT_DIR, else %APPDATA%\hex (Linux: $XDG_DATA_HOME/hex, else ~/.local/share/hex). */
+export function supportDir(env: Env, home: string, platform: string = process.platform): string {
   if (env.HEX_APPLICATION_SUPPORT_DIR) return env.HEX_APPLICATION_SUPPORT_DIR;
+  if (platform === "linux") return join(env.XDG_DATA_HOME && isAbsolute(env.XDG_DATA_HOME) ? env.XDG_DATA_HOME : join(home, ".local", "share"), "hex");
   return join(env.APPDATA || join(home, "AppData", "Roaming"), "hex");
 }
 
@@ -44,8 +51,19 @@ export function supported(platform: string = process.platform, arch: string = pr
   return undefined;
 }
 
-/** The installed version and its program, from a direct install's `current-version`. */
-export function findInstall(dir: string): { version: string; exe: string } | undefined {
+/**
+ * The installed version and its program, from a direct install's `current-version` (Windows), or
+ * on Linux its `current -> versions/<v>` link.
+ */
+export function findInstall(dir: string, platform: string = process.platform): { version: string; exe: string } | undefined {
+  if (platform === "linux") {
+    try {
+      const version = readlinkSync(join(dir, "current")).trim().replace(/^versions\//, "").replace(/\/+$/, "");
+      if (version) return { version, exe: join(dir, "current", "hex") };
+    } catch {
+      // no direct install link: look for current-version below
+    }
+  }
   try {
     const version = readFileSync(join(dir, "current-version"), "utf8").trim();
     if (!version) return undefined;
@@ -216,12 +234,52 @@ export class HexClient {
 
 const view = (m: HexModel): HexModelView => ({ id: m.id, name: m.name });
 
+const isFile = (p: string) => {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+};
+
+// `hex --version` answers by path; asked once per path, since Hex is looked for every few seconds.
+const packagedSeen = new Map<string, string | null>();
+
+/**
+ * Linux: a `hex` on PATH (or in ~/.local/bin, /usr/bin) that a package manager put there. Another
+ * program may be called `hex`; Hex's own `--version` starts with its name.
+ */
+export function findPackaged(env: Env, home: string): { version: string; exe: string } | undefined {
+  const dirs = (env.PATH ?? "").split(delimiter).filter(Boolean);
+  dirs.push(join(home, ".local", "bin"), "/usr/local/bin", "/usr/bin");
+  const exe = dirs.map((d) => join(d, "hex")).find(isFile);
+  if (!exe) return undefined;
+  if (!packagedSeen.has(exe)) {
+    let version: string | null = null;
+    try {
+      const out = execFileSync(exe, ["--version"], { timeout: 3_000, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+      if (out.toLowerCase().startsWith("hex")) version = /(\d+\.\d+(?:\.\d+)?)/.exec(out)?.[1] ?? "";
+    } catch {
+      // not Hex, or it didn't answer
+    }
+    packagedSeen.set(exe, version);
+  }
+  const version = packagedSeen.get(exe);
+  return version === null || version === undefined ? undefined : { version, exe };
+}
+
+/** Hex on this PC: a direct install, else (Linux) a packaged `hex`. */
+function locate(env: Env, home: string, platform: string): { dir: string; installed?: { version: string; exe: string } } {
+  const dir = supportDir(env, home, platform);
+  const installed = findInstall(dir, platform) ?? (platform === "linux" && process.platform === "linux" ? findPackaged(env, home) : undefined);
+  return { dir, installed };
+}
+
 /** Where the user stands with Hex on this PC. */
 export async function hexState(opts: { env: Env; home: string; savedModel?: string; fetcher?: typeof fetch; platform?: string; arch?: string }): Promise<HexCheck> {
   const unsupported = supported(opts.platform, opts.arch);
   if (unsupported) return { state: "unsupported", summary: unsupported, models: [] };
-  const dir = supportDir(opts.env, opts.home);
-  const installed = findInstall(dir);
+  const { dir, installed } = locate(opts.env, opts.home, opts.platform ?? process.platform);
   const d = readDiscovery(dir);
   if (!d.ok) {
     if (d.why === "version") return { state: "problem", summary: versionMessage(d.version ?? ""), installedVersion: installed?.version, models: [] };
@@ -254,7 +312,7 @@ export async function hexTranscribe(opts: { env: Env; home: string; savedModel?:
   const d = readDiscovery(dir);
   if (!d.ok) {
     if (d.why === "version") throw new HexFailure("version", versionMessage(d.version ?? ""));
-    throw findInstall(dir) ? new HexFailure("notRunning", NOT_RUNNING) : new HexFailure("notInstalled", "Dictation needs Hex. Install it in Settings, then try again.");
+    throw locate(opts.env, opts.home, process.platform).installed ? new HexFailure("notRunning", NOT_RUNNING) : new HexFailure("notInstalled", "Dictation needs Hex. Install it in Settings, then try again.");
   }
   const client = new HexClient(d.discovery, opts.fetcher);
   await client.health();
@@ -267,10 +325,10 @@ export async function hexTranscribe(opts: { env: Env; home: string; savedModel?:
 
 /** Opens the installed Hex (detached, so it keeps running on its own). */
 export function openHex(env: Env, home: string): void {
-  const found = findInstall(supportDir(env, home));
+  const found = locate(env, home, process.platform).installed;
   if (!found || !existsSync(found.exe)) throw new HexFailure("notInstalled", "Hex isn't installed on this PC.");
-  // The Start Menu shortcut Hex's installer makes runs `hex.exe app`.
-  const child = spawn(found.exe, ["app"], { detached: true, stdio: "ignore", windowsHide: false });
+  // The Start Menu shortcut Hex's installer makes runs `hex.exe app`; on Linux `hex start` opens it.
+  const child = spawn(found.exe, [process.platform === "linux" ? "start" : "app"], { detached: true, stdio: "ignore", windowsHide: false });
   child.on("error", () => undefined);
   child.unref();
 }
@@ -281,23 +339,26 @@ export function stripEscapes(line: string): string {
 }
 
 /**
- * Runs Hex's own Windows installer from a new temporary folder. `onLine` gets its output, line by
- * line. Resolves when it finishes; rejects with its last lines when it fails.
+ * Runs Hex's own installer (Windows, or Linux) from a new temporary folder. `onLine` gets its
+ * output, line by line. Resolves when it finishes; rejects with its last lines when it fails.
  */
 export async function installHex(opts: { onLine: (line: string) => void; fetcher?: typeof fetch; signal?: AbortSignal }): Promise<void> {
-  if (process.platform !== "win32") throw new Error(`Kiwimake installs Hex only on Windows. Download it from ${HEX_SITE}`);
-  const res = await (opts.fetcher ?? fetch)(WINDOWS_INSTALLER, { signal: AbortSignal.timeout(60_000) }).catch(() => {
+  const linux = process.platform === "linux";
+  if (process.platform !== "win32" && !linux) throw new Error(`Kiwimake installs Hex only on Windows and Linux. Download it from ${HEX_SITE}`);
+  const res = await (opts.fetcher ?? fetch)(linux ? LINUX_INSTALLER : WINDOWS_INSTALLER, { signal: AbortSignal.timeout(60_000) }).catch(() => {
     throw new Error("Couldn't reach Hex's website. Check the internet connection, then try again.");
   });
   if (!res.ok) throw new Error(`Hex's website answered ${res.status}. Try again later, or download Hex from its website.`);
   const script = await res.text();
   const scratch = mkdtempSync(join(tmpdir(), "anyapp-hex-"));
-  const file = join(scratch, "install-windows.ps1");
+  const file = join(scratch, linux ? "install-linux.sh" : "install-windows.ps1");
   writeFileSync(file, script);
   const tail: string[] = [];
   try {
     await new Promise<void>((resolve, reject) => {
-      const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", file], { cwd: scratch, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      const child = linux
+        ? spawn("/bin/sh", [file, "install"], { cwd: scratch, stdio: ["ignore", "pipe", "pipe"] })
+        : spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", file], { cwd: scratch, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
       const timer = setTimeout(() => child.kill(), INSTALL_MS);
       opts.signal?.addEventListener("abort", () => child.kill());
       const onData = (chunk: Buffer) => {
