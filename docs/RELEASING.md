@@ -212,9 +212,10 @@ which Kiwimake does not use.
 ### Signing: ad-hoc today
 
 No Apple Developer ID exists for Kiwimake yet, so the apps are **ad-hoc signed** (`"identity": "-"`)
-and **not notarized**. Hardened runtime is off on purpose: an ad-hoc signed build with hardened
-runtime opened a window that never painted (macOS 27.0.1, Electron 45.2.3), while the same app
-signed without it worked.
+and **not notarized**. Hardened runtime is off: only notarization needs it, and the ad-hoc build
+was tested end to end without it. (A copy re-signed ad-hoc with hardened runtime and
+`dev/entitlements.mac.plist` also opened and painted its window, in a quick check with the fake
+companion.)
 
 What a person sees (checked on macOS 27.0.1, Apple silicon, with a DMG carrying the browser's
 quarantine flag): they open the DMG, drag Kiwimake to Applications and open it. macOS refuses:
@@ -229,8 +230,9 @@ next to "Kiwimake.app was blocked…", confirm with their password or Touch ID, 
 Anyway** once more. (Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Kiwimake.app`.)
 (The dialog above was seen in the test; the Settings steps are macOS's standard way and were not
 clicked through, because answering security prompts is the person's own decision.) After that it
-opens normally, until a new version is downloaded. While the first "Not Opened"
-prompt is still on screen, macOS holds every further launch of that copy.
+opens normally, until a new version is downloaded. While the first "Not Opened" prompt is still on
+screen, macOS holds that copy: opening it again stops before it starts, and even a copy started
+another way from that folder never shows its window. Click Done first.
 
 ### What Developer ID signing and notarization need
 
@@ -241,7 +243,7 @@ prompt is still on screen, macOS holds every further launch of that copy.
 3. `"hardenedRuntime": true` with `"entitlements"` and `"entitlementsInherit"` set to
    `dev/entitlements.mac.plist` (JIT and unsigned executable memory for V8, library validation off
    for the companion's native modules run by Electron in Node mode, microphone for dictation).
-   Check again that the window paints with that combination (see the ad-hoc note above).
+   Run the real companion once with that combination (Electron in Node mode, Gradle, adb).
 4. Notarization: `"notarize": true` and an App Store Connect API key (`APPLE_API_KEY`,
    `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`) or an Apple ID with an app-specific password
    (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). electron-builder submits the app
