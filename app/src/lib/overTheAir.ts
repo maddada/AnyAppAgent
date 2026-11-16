@@ -13,9 +13,15 @@
 // phones safe on its own: an update that crashes before its first screen is rolled back to the one
 // before, and the server can tell every phone to go back to the code inside the APK
 // (scripts/ota-publish.mjs rollback-to-embedded).
+//
+// A rolled-back update is still on the server, and expo-updates still reports it as downloaded, so
+// the notice would offer it again. Kiwimake remembers the downloaded update it was about to run; when
+// a later launch runs something else, that update failed, and it is never offered again.
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
 import { useUpdates } from "expo-updates";
+import { File, Paths } from "expo-file-system";
+import { useEffect } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 
 export const OTA_ENABLED = Updates.isEnabled;
@@ -72,12 +78,53 @@ export function restartToApplyUpdate(): Promise<void> {
   return Updates.reloadAsync();
 }
 
+type LaunchMemory = { pending: string | null; bad: string[] };
+const memoryFile = () => new File(Paths.document, "ota-launches.json");
+let memory: LaunchMemory = { pending: null, bad: [] };
+
+function readMemory(): LaunchMemory {
+  try {
+    const file = memoryFile();
+    if (!file.exists) return { pending: null, bad: [] };
+    const value = JSON.parse(file.textSync()) as Partial<LaunchMemory>;
+    return { pending: typeof value.pending === "string" ? value.pending : null, bad: Array.isArray(value.bad) ? value.bad.filter((id) => typeof id === "string") : [] };
+  } catch {
+    return { pending: null, bad: [] };
+  }
+}
+
+function writeMemory(next: LaunchMemory) {
+  memory = next;
+  try {
+    memoryFile().write(JSON.stringify(next));
+  } catch {
+    // best effort
+  }
+}
+
+/** At start: the update this launch should have run, when it runs something else, failed. */
+function learnFromLaunch() {
+  const before = readMemory();
+  memory = before;
+  if (before.pending === null) return;
+  const running = (Updates.updateId ?? "").toLowerCase();
+  const failed = running !== before.pending;
+  writeMemory({ pending: null, bad: failed ? [...before.bad, before.pending].slice(-20) : before.bad });
+}
+
+/** Remembers the downloaded update the next launch will run (called while it waits). */
+function rememberPending(id: string) {
+  const lower = id.toLowerCase();
+  if (memory.pending !== lower && !memory.bad.includes(lower)) writeMemory({ ...memory, pending: lower });
+}
+
 let installed = false;
 
 /** Checks when Kiwimake comes back to the front, on top of expo-updates' own check at launch. */
 export function initOverTheAirUpdates(): void {
   if (!OTA_ENABLED || installed) return;
   installed = true;
+  learnFromLaunch();
   AppState.addEventListener("change", (status: AppStateStatus) => {
     if (status === "active" && Date.now() - lastCheckAt >= CHECK_INTERVAL_MS) void checkForOverTheAirUpdate();
   });
@@ -130,10 +177,15 @@ export function useRunningUpdate(): { builtIn: boolean; details: UpdateDetails }
   };
 }
 
-/** A downloaded update waiting for a restart, with what it carries, or null. */
+/** A downloaded update waiting for a restart, with what it carries, or null (also for one that failed before). */
 export function useDownloadedUpdate(): UpdateDetails | null {
   const { isUpdatePending, downloadedUpdate } = useUpdates();
-  if (!isUpdatePending) return null;
+  const id = isUpdatePending ? (downloadedUpdate?.updateId ?? null) : null;
+  const bad = id !== null && memory.bad.includes(id.toLowerCase());
+  useEffect(() => {
+    if (id !== null && !bad) rememberPending(id);
+  }, [id, bad]);
+  if (!isUpdatePending || bad) return null;
   return updateDetails(downloadedUpdate?.manifest, downloadedUpdate?.updateId, downloadedUpdate?.createdAt);
 }
 

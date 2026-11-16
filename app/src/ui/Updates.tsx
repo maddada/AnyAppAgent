@@ -37,7 +37,7 @@ export function UpdateNotice() {
   const download = useAppUpdate((s) => s.download);
   const dismissed = useAppUpdate((s) => s.dismissed);
   const card = { gap: space.sm, padding: space.lg, marginBottom: space.md, borderRadius: radius.card, borderWidth: border.width, borderColor: t.border, backgroundColor: t.surface } as const;
-  const buttons = { flexDirection: "row", justifyContent: "flex-end", gap: space.sm } as const;
+  const buttons = { flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: space.sm } as const;
 
   if (ready !== null && dismissed !== "ota") {
     return (
@@ -211,7 +211,7 @@ function ActionBlock({
         </View>
       </View>
       {line ? <StateLine kind={line.kind} label={line.label} lines={3} /> : null}
-      <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: space.sm }}>{children}</View>
+      <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: space.sm }}>{children}</View>
     </View>
   );
 }
