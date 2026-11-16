@@ -38,9 +38,12 @@ export function isNewerVersion(candidate: string, installed: string): boolean {
   return false;
 }
 
-/** The APK for a phone with these ABIs (best first): the arm64-v8a one when it runs arm64, else the universal one. */
+/**
+ * The APK for a phone with these ABIs (best first): the arm64-v8a one when that is its own
+ * processor, else the universal one (an x86_64 emulator also lists arm64-v8a, through translation).
+ */
 export function apkNameFor(abis: string[]): string {
-  return abis.length === 0 || abis.includes("arm64-v8a") ? APK_ARM64 : APK_UNIVERSAL;
+  return abis.length === 0 || abis[0] === "arm64-v8a" ? APK_ARM64 : APK_UNIVERSAL;
 }
 
 type Asset = { name?: unknown; browser_download_url?: unknown; size?: unknown; digest?: unknown };

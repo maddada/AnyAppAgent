@@ -15,9 +15,9 @@ test("parseVersion and isNewerVersion compare MAJOR.MINOR.PATCH, with or without
   assert.throws(() => parseVersion("0.3"), /MAJOR.MINOR.PATCH/);
 });
 
-test("apkNameFor: arm64 phones take the small APK, the emulator the universal one", () => {
+test("apkNameFor: arm64 phones take the small APK, the emulator (x86_64 first) the universal one", () => {
   assert.equal(apkNameFor(["arm64-v8a", "armeabi-v7a"]), "AnyAppAgent.apk");
-  assert.equal(apkNameFor(["x86_64", "arm64-v8a"]), "AnyAppAgent.apk");
+  assert.equal(apkNameFor(["x86_64", "arm64-v8a"]), "AnyAppAgent-universal.apk");
   assert.equal(apkNameFor(["x86_64"]), "AnyAppAgent-universal.apk");
   assert.equal(apkNameFor([]), "AnyAppAgent.apk");
 });
