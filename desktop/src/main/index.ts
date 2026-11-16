@@ -187,6 +187,7 @@ async function connectAdmin(): Promise<void> {
       broadcast();
     });
     client.on("care", () => broadcast());
+    client.on("trash", () => broadcast());
     client.on("chat", (item: ChatItem) => {
       win?.webContents.send("chat:item", item);
       if (item.kind === "page" && item.page?.answeredAt) pageAnswered(item.appId, item.page.id);
@@ -480,6 +481,7 @@ async function snapshot(): Promise<Snapshot> {
     admin: admin?.state ?? null,
     pairing: await pairingView(),
     apps: admin?.apps ?? [],
+    trash: admin?.trash ?? [],
     care: admin?.care ?? null,
     icons,
     checks,
@@ -858,6 +860,18 @@ function ipc(): void {
   ipcMain.handle("apps:keep-healthy", (_e, appId: string) => chatAction((c) => c.keepHealthy(String(appId)))());
   // Moving an app to the cloud (docs/CLOUD.md section 3): the companion runs it; App.move shows it.
   ipcMain.handle("apps:move", (_e, appId: string) => chatAction((c) => c.moveToCloud(String(appId)))());
+  // Pin, hide and delete (shared/protocol.ts "Pin, hide and delete").
+  ipcMain.handle("apps:pins", (_e, ids: unknown) => chatAction((c) => c.setPins(Array.isArray(ids) ? ids.map(String) : []))());
+  ipcMain.handle("apps:hide", (_e, appId: string, hidden: boolean) => chatAction((c) => c.hide(String(appId), Boolean(hidden)))());
+  ipcMain.handle("apps:delete", async (_e, appId: string, opts?: { uninstall?: unknown; forGood?: unknown }) => {
+    let result: { forGood: boolean; problem?: string } = { forGood: false };
+    const r = await chatAction(async (c) => {
+      result = await c.deleteApp(String(appId), { uninstall: opts?.uninstall === true, forGood: opts?.forGood === true });
+    })();
+    return r.ok ? { ...r, ...result } : r;
+  });
+  ipcMain.handle("trash:restore", (_e, appId: string) => chatAction((c) => c.restoreDeleted(String(appId)))());
+  ipcMain.handle("trash:empty", () => chatAction((c) => c.emptyTrash())());
   // Sharing and publishing (docs/DISTRIBUTION.md).
   ipcMain.handle("apps:share", (_e, appId: string, shared: boolean) => chatAction((c) => c.share(String(appId), Boolean(shared)))());
   ipcMain.handle("apps:publish", (_e, appId: string, notes: string, channel: string) =>

@@ -179,6 +179,8 @@ export interface Snapshot {
   admin: AdminState | null;
   pairing: PairingView;
   apps: App[];
+  /** Recently deleted (each has deletedAt), newest first; empty on an older companion. */
+  trash: App[];
   care: CareState | null; // the usage meter, the monthly reminder and the backup (docs/TRUST.md); null on older companions
   icons: Record<string, string>; // appId -> data URL
   checks: Checks;
@@ -277,6 +279,16 @@ export interface AnyAppBridge {
   hexOpen(): Promise<{ ok: boolean; error?: string }>;
   hexCheck(): Promise<void>;
   hexTranscribe(wav: ArrayBuffer): Promise<{ ok: boolean; text?: string; error?: string; code?: string }>;
+
+  // Pin, hide and delete (shared/protocol.ts "Pin, hide and delete").
+  /** The whole Pinned section in its new order; apps left out are unpinned. */
+  setPins(ids: string[]): Promise<ActionResult>;
+  hideApp(appId: string, hidden: boolean): Promise<ActionResult>;
+  /** Delete: to Recently deleted; uninstall: phones uninstall it; forGood: its PC files and GitHub repos go for good. */
+  deleteApp(appId: string, opts: { uninstall?: boolean; forGood?: boolean }): Promise<ActionResult & { forGood?: boolean; problem?: string }>;
+  restoreDeleted(appId: string): Promise<ActionResult>;
+  /** Empties Recently deleted: deleted for good on this PC (GitHub keeps the code). */
+  emptyTrash(): Promise<ActionResult>;
 
   getMessages(appId: string): Promise<ChatItem[]>;
   getHelpers(appId: string): Promise<WorkerInfo[]>;

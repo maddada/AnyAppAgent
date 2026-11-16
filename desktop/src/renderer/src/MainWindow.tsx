@@ -2,12 +2,14 @@
 // split: the list of apps on the left, and on the right either the open app's chat (Chat.tsx, the
 // same chat as on the phone) or today's activity with the phone panels. New app works from here
 // too, with the same fields and words as the phone's New app sheet.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, CircleAlert, Cloud, Download, FolderOpen, KeyRound, LayoutGrid, ListChecks, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, UserRound, Wrench } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { ChevronDown, CircleAlert, Cloud, Download, Ellipsis, EyeOff, FolderOpen, KeyRound, LayoutGrid, ListChecks, Pin, PinOff, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, Trash2, UserRound, Wrench } from "lucide-react";
+import { DeleteAppDialog, HiddenAppsGroup, Menu, RecentlyDeletedGroup, type MenuItem } from "./AppActions.tsx";
+import { appSections, dropIndex, placePin, samePins, unpin } from "./pins.ts";
 import { AccountPage } from "./Account.tsx";
 import { MoveButton, MoveDialog } from "./Move.tsx";
 import type { LucideIcon } from "lucide-react";
-import type { AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
+import type { App, AppPreset, CheckState, Snapshot } from "../../shared/types.ts";
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
 import { ChatView } from "./Chat.tsx";
 import { HexCard } from "./Hex.tsx";
@@ -16,7 +18,7 @@ import { PairingDialog } from "./Pairing.tsx";
 import { ShareButton, ShareDialog } from "./Share.tsx";
 import { FromOthersButton, FromOthersDialog } from "./FromOthers.tsx";
 import { GetPhoneAppDialog } from "./PhoneApp.tsx";
-import { AppIcon, Dialog, Icon, Spinner, StateLine, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
+import { AppIcon, Dialog, Icon, Spinner, StateLine, Switch, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
 import { BackupGroup, HealthBadge, ReminderCard, UsageGroup } from "./Trust.tsx";
 import { BEHIND_LABEL, headsUp } from "../../../../shared/chat/index.ts";
 
@@ -193,15 +195,129 @@ function AppsPage({
   goSetup: () => void;
   goSettings: () => void;
 }) {
-  const apps = useMemo(() => [...s.apps].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [s.apps]);
+  const { pinned, rest } = useMemo(() => appSections(s.apps), [s.apps]);
+  const pinIds = pinned.map((a) => a.id);
   const blocking = setupRows(s).find((r) => r.needsYou && r.blocks);
-  const app = apps.find((a) => a.id === open);
+  // Hidden apps are not in the list, so a hidden app's chat closes.
+  const app = s.apps.find((a) => a.id === open && !a.hidden);
   const online = s.companion.phase === "running";
   // A helper's chat is open beside the main chat: in a narrow window the app list folds to icons.
   const [helperOpen, setHelperOpen] = useState(false);
   const [sharing, setSharing] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
   const [others, setOthers] = useState<string | null>(null);
+  // Pin, hide and delete: the row menu, the Delete dialog, and dragging rows in and out of Pinned.
+  const [menu, setMenu] = useState<{ app: App; x: number; y: number } | null>(null);
+  const [deleting, setDeleting] = useState<App | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [drag, setDrag] = useState<string | null>(null);
+  const [target, setTarget] = useState<{ zone: "pinned"; index: number } | { zone: "rest" } | null>(null);
+  const pinnedBox = useRef<HTMLDivElement>(null);
+  const savePins = async (ids: string[]) => {
+    if (samePins(ids, pinIds)) return;
+    setListError(null);
+    const r = await api.setPins(ids);
+    if (!r.ok) setListError(r.error ?? "That didn't work. Try again.");
+  };
+  const hide = async (a: App) => {
+    setListError(null);
+    const r = await api.hideApp(a.id, true);
+    if (!r.ok) setListError(r.error ?? "That didn't work. Try again.");
+    else if (open === a.id) onOpen(null);
+  };
+  const menuItems = (a: App): MenuItem[] => {
+    const moving = a.move?.state === "running";
+    return [
+      a.pin !== undefined
+        ? { label: "Unpin", icon: PinOff, onSelect: () => void savePins(unpin(pinIds, a.id)) }
+        : { label: "Pin to top", icon: Pin, onSelect: () => void savePins([...pinIds, a.id]) },
+      { label: "Hide", icon: EyeOff, onSelect: () => void hide(a) },
+      { label: "Delete", icon: Trash2, danger: true, separatorBefore: true, disabled: moving, title: moving ? "It is moving to the cloud. Delete it once the move is done." : undefined, onSelect: () => setDeleting(a) },
+    ];
+  };
+  // Where a dragged row would land: a slot in Pinned (a line shows it), or the rest of the list (unpins).
+  const dragOver = (e: DragEvent) => {
+    if (!drag) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const box = pinnedBox.current;
+    let next: typeof target = { zone: "rest" };
+    if (box && e.clientY <= box.getBoundingClientRect().bottom + 4) {
+      const mids = [...box.querySelectorAll<HTMLElement>("[data-pin-row]")].map((el) => {
+        const r = el.getBoundingClientRect();
+        return r.top + r.height / 2;
+      });
+      next = { zone: "pinned", index: dropIndex(mids, e.clientY) };
+    }
+    if (JSON.stringify(next) !== JSON.stringify(target)) setTarget(next);
+  };
+  const endDrag = () => {
+    setDrag(null);
+    setTarget(null);
+  };
+  const dropped = (e: DragEvent) => {
+    e.preventDefault();
+    const id = drag;
+    const t = target;
+    endDrag();
+    if (!id || !t) return;
+    if (t.zone === "pinned") void savePins(placePin(pinIds, id, t.index));
+    else if (pinIds.includes(id)) void savePins(unpin(pinIds, id));
+  };
+  // The line shows only where a drop would change the order.
+  const lineAt = drag && target?.zone === "pinned" && !samePins(placePin(pinIds, drag, target.index), pinIds) ? target.index : -1;
+  const row = (a: App, pinIndex: number) => {
+    const st = appState(a);
+    const v = a.latestApk ?? a.latestBuild;
+    const line = pinIndex >= 0 && lineAt === pinIndex ? " drop-before" : pinIndex >= 0 && pinIndex === pinned.length - 1 && lineAt === pinned.length ? " drop-after" : "";
+    return (
+      <div
+        key={a.id}
+        className={`arow-wrap${drag === a.id ? " is-dragging" : ""}${menu?.app.id === a.id ? " has-menu" : ""}${line}`}
+        data-pin-row={pinIndex >= 0 ? "" : undefined}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", a.id);
+          // Changing the list inside dragstart cancels the drag in Chromium: show the drop zone a moment later.
+          setTimeout(() => setDrag(a.id), 0);
+        }}
+        onDragEnd={endDrag}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenu({ app: a, x: e.clientX, y: e.clientY });
+        }}
+      >
+        <button className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined} title={a.name}>
+          <span className="icon-wrap">
+            <AppIcon icon={s.icons[a.id]} small />
+            <HealthBadge app={a} />
+          </span>
+          <div className="arow-main">
+            <div className="arow-top">
+              <span className="body arow-name">{a.name}</span>
+              <span className="arow-meta">{[v ? `v${v.number}` : "", a.updatedAt ? `Active ${timeAgo(a.updatedAt)}` : ""].filter(Boolean).join(", ")}</span>
+            </div>
+            <StateLine state={st.state} text={st.text} />
+            {a.health?.behind && st.state !== "working" && <span className="caption attention-text">{BEHIND_LABEL}</span>}
+          </div>
+        </button>
+        <button
+          className="arow-more"
+          aria-label={`More for ${a.name}`}
+          aria-haspopup="menu"
+          aria-expanded={menu?.app.id === a.id}
+          title="More"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setMenu(menu?.app.id === a.id ? null : { app: a, x: r.left, y: r.bottom + 4 });
+          }}
+        >
+          <Icon of={Ellipsis} size="sm" />
+        </button>
+      </div>
+    );
+  };
   return (
     <div className={`apps-split${helperOpen ? " helper-open" : ""}`}>
       <section className="apps-pane" aria-label="Your apps">
@@ -224,7 +340,8 @@ function AppsPage({
           </div>
         )}
         <ReminderCard care={s.care} />
-        {apps.length === 0 ? (
+        {listError && <p className="label problem-text apps-list-error">{listError}</p>}
+        {pinned.length + rest.length === 0 ? (
           <div className="apps-empty">
             <strong className="heading">No apps yet</strong>
             <p className="callout secondary">Describe your first app here or in Kiwimake on your phone. This PC makes it, and it appears on your phone, ready to open.</p>
@@ -233,27 +350,25 @@ function AppsPage({
             </button>
           </div>
         ) : (
-          <div className="apps-list">
-            {apps.map((a) => {
-              const st = appState(a);
-              const v = a.latestApk ?? a.latestBuild;
-              return (
-                <button key={a.id} className={`arow${a.id === open ? " is-selected" : ""}`} onClick={() => onOpen(a.id)} aria-current={a.id === open ? "page" : undefined} title={a.name}>
-                  <span className="icon-wrap">
-                    <AppIcon icon={s.icons[a.id]} small />
-                    <HealthBadge app={a} />
-                  </span>
-                  <div className="arow-main">
-                    <div className="arow-top">
-                      <span className="body arow-name">{a.name}</span>
-                      <span className="arow-meta">{[v ? `v${v.number}` : "", a.updatedAt ? `Active ${timeAgo(a.updatedAt)}` : ""].filter(Boolean).join(", ")}</span>
-                    </div>
-                    <StateLine state={st.state} text={st.text} />
-                    {a.health?.behind && st.state !== "working" && <span className="caption attention-text">{BEHIND_LABEL}</span>}
-                  </div>
-                </button>
-              );
-            })}
+          <div className={`apps-list${drag ? " is-dragging" : ""}`} onDragOver={dragOver} onDrop={dropped} onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node | null) && setTarget(null)} data-testid="apps-list">
+            {pinned.length > 0 ? (
+              <div ref={pinnedBox} className="apps-group apps-pinned" aria-label="Pinned">
+                <div className="eyebrow apps-group-label">Pinned</div>
+                {pinned.map((a, i) => row(a, i))}
+              </div>
+            ) : (
+              drag && (
+                <div ref={pinnedBox} className={`pin-drop${target?.zone === "pinned" ? " is-over" : ""}`}>
+                  <Icon of={Pin} size="sm" /> <span>Drop here to pin</span>
+                </div>
+              )
+            )}
+            {rest.length > 0 && (
+              <div className={`apps-group${drag && pinIds.includes(drag) && target?.zone === "rest" ? " is-drop" : ""}`} aria-label={pinned.length > 0 ? "All apps" : undefined}>
+                {pinned.length > 0 && <div className="eyebrow apps-group-label">All apps</div>}
+                {rest.map((a) => row(a, -1))}
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -276,8 +391,10 @@ function AppsPage({
             care={s.care}
           />
         ) : (
-          <Overview s={s} hasApps={apps.length > 0} onConnect={onConnect} onGetApp={onGetApp} />
+          <Overview s={s} hasApps={pinned.length + rest.length > 0} onConnect={onConnect} onGetApp={onGetApp} />
         )}
+        {menu && <Menu x={menu.x} y={menu.y} label={`${menu.app.name} actions`} items={menuItems(menu.app)} onClose={() => setMenu(null)} />}
+        {deleting && <DeleteAppDialog app={deleting} onClose={() => setDeleting(null)} />}
         {app && sharing === app.id && <ShareDialog app={app} onClose={() => setSharing(null)} />}
         {app && moving === app.id && <MoveDialog app={app} onClose={() => setMoving(null)} />}
         {app && others === app.id && (
@@ -663,10 +780,6 @@ function SetupPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId) =>
 
 // ------------------------------------------------------------------ Settings
 
-function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: () => void; disabled?: boolean; label: string }) {
-  return <button type="button" className={`switch${on ? " on" : ""}`} role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onChange} />;
-}
-
 /** "Tea Timer", or a plain name for the PC's shared key (docs/DISTRIBUTION.md). */
 function keyName(s: Snapshot, id: string): string {
   if (id === "shared") return "the shared key (apps made before per-app keys)";
@@ -848,6 +961,8 @@ function SettingsPage({ s, openSetup }: { s: Snapshot; openSetup: (step: StepId)
         </p>
         <HexCard hex={s.checks.hex} hexModel={s.settings.hexModel} />
       </section>
+      <HiddenAppsGroup s={s} />
+      <RecentlyDeletedGroup s={s} />
       <section className="list">
         <div className="srow">
           <div className="srow-main">

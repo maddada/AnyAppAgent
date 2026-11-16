@@ -354,6 +354,38 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .arow-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: var(--aa-type-label-weight); }
 .arow-meta { flex: none; color: var(--aa-text-tertiary); font-size: var(--aa-type-caption-size); line-height: var(--aa-type-caption-line); white-space: nowrap; }
 .arow .state > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Pin, hide and delete: the Pinned and All apps sections, the row's More button, dragging rows in and out of Pinned. */
+.apps-group { display: flex; flex-direction: column; gap: var(--aa-space-hair); border-radius: var(--aa-radius-button); }
+.apps-group + .apps-group { margin-top: var(--aa-space-md); }
+.apps-group-label { padding: var(--aa-space-xs) var(--aa-space-md); }
+.apps-group.is-drop { box-shadow: inset 0 0 0 var(--aa-focus-width) var(--aa-border-strong); background: var(--aa-surface-sunken); }
+.apps-list-error { margin: 0 calc(var(--aa-space-sm) + var(--aa-space-md)) var(--aa-space-sm); }
+.arow-wrap { position: relative; border-radius: var(--aa-radius-button); }
+.arow-wrap.is-dragging { opacity: 0.45; }
+.arow-wrap.has-menu .arow { background: var(--aa-selected-bg); }
+.arow-more { position: absolute; top: 50%; right: var(--aa-space-sm); transform: translateY(-50%); width: var(--aa-size-button-height-small); height: var(--aa-size-button-height-small); display: grid; place-items: center; border-radius: var(--aa-radius-button); color: var(--aa-text-secondary); background: var(--aa-surface-overlay); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border), var(--aa-shadow-1); opacity: 0; pointer-events: none; transition: opacity var(--aa-duration-fast); }
+.arow-wrap:hover .arow-more, .arow-wrap:focus-within .arow-more, .arow-wrap.has-menu .arow-more { opacity: 1; pointer-events: auto; }
+.apps-list.is-dragging .arow-more { opacity: 0; pointer-events: none; }
+.arow-more:hover, .arow-more[aria-expanded="true"] { color: var(--aa-text); }
+.arow-wrap.drop-before::before, .arow-wrap.drop-after::after { content: ""; position: absolute; left: var(--aa-space-sm); right: var(--aa-space-sm); height: var(--aa-space-hair); border-radius: var(--aa-radius-full); background: var(--aa-accent); pointer-events: none; z-index: 1; }
+.arow-wrap.drop-before::before { top: calc(-1 * var(--aa-space-hair)); }
+.arow-wrap.drop-after::after { bottom: calc(-1 * var(--aa-space-hair)); }
+.pin-drop { display: flex; align-items: center; justify-content: center; gap: var(--aa-space-sm); min-height: var(--aa-size-button-height); margin-bottom: var(--aa-space-sm); border: var(--aa-focus-width) dashed var(--aa-border-strong); border-radius: var(--aa-radius-button); color: var(--aa-text-secondary); font-family: var(--aa-type-label-family); font-size: var(--aa-type-label-size); line-height: var(--aa-type-label-line); font-weight: var(--aa-type-label-weight); }
+.pin-drop.is-over { border-color: var(--aa-accent); color: var(--aa-text); background: var(--aa-selected-bg); }
+/* The row menu (right-click or More). */
+.menu { position: fixed; z-index: 50; min-width: 184px; padding: var(--aa-space-xs); display: flex; flex-direction: column; background: var(--aa-surface-overlay); border-radius: var(--aa-radius-card); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border), var(--aa-shadow-3); animation: pop var(--aa-duration-fast) var(--aa-ease-enter); }
+.menu-item { width: 100%; display: flex; align-items: center; gap: var(--aa-space-sm); height: var(--aa-size-button-height-small); padding: 0 var(--aa-space-md); border-radius: var(--aa-radius-button); color: var(--aa-text); text-align: left; font-family: var(--aa-type-label-family); font-size: var(--aa-type-label-size); font-weight: var(--aa-type-label-weight); }
+.menu-item .ic { color: var(--aa-text-secondary); }
+.menu-item:hover:not(:disabled), .menu-item:focus-visible { background: var(--aa-selected-bg); outline: none; }
+.menu-item.danger, .menu-item.danger .ic { color: var(--aa-problem); }
+.menu-item:disabled, .menu-item:disabled .ic { color: var(--aa-text-tertiary); cursor: default; }
+.menu-sep { height: var(--aa-border-width); margin: var(--aa-space-xs) var(--aa-space-sm); background: var(--aa-border); }
+/* The Delete dialog's choices: text at the left, its switch at the right, like a settings row. */
+.toggle-rows { display: flex; flex-direction: column; border-radius: var(--aa-radius-card); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-border); }
+.toggle-row { display: flex; align-items: center; gap: var(--aa-space-md); padding: var(--aa-space-md) var(--aa-space-lg); border-top: var(--aa-border-width) solid var(--aa-border); }
+.toggle-row:first-child { border-top: 0; }
+.toggle-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-hair); }
+.toggle-text .label { color: var(--aa-text); }
 .apps-empty { padding: var(--aa-space-sm) calc(var(--aa-space-sm) + var(--aa-space-md)) var(--aa-space-xl); display: flex; flex-direction: column; align-items: flex-start; gap: var(--aa-space-md); overflow-y: auto; }
 .apps-empty .panel { align-self: stretch; margin-top: var(--aa-space-lg); }
 .apps-detail { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -499,6 +531,8 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
   .apps-split.helper-open .apps-list { padding-top: var(--aa-space-md); }
   .apps-split.helper-open .arow { justify-content: center; padding: var(--aa-space-sm); }
   .apps-split.helper-open .arow-main { display: none; }
+  .apps-split.helper-open .apps-group-label, .apps-split.helper-open .arow-more, .apps-split.helper-open .pin-drop span { display: none; }
+  .apps-split.helper-open .apps-pinned { padding-bottom: var(--aa-space-sm); border-bottom: var(--aa-border-width) solid var(--aa-border); border-radius: 0; }
 }
 .helper-chat-replace { flex: 1; min-width: 0; }
 .helper-chat .timeline { padding-left: var(--aa-space-lg); padding-right: var(--aa-space-lg); }

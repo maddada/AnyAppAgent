@@ -82,6 +82,10 @@ export function appState(app: App): { state: UiState; text: string } {
   return { state: st.kind, text: st.label };
 }
 
+export function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: () => void; disabled?: boolean; label: string }) {
+  return <button type="button" className={`switch${on ? " on" : ""}`} role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={onChange} />;
+}
+
 export function AppIcon({ icon, small }: { icon?: string; small?: boolean }) {
   return <div className={`appicon${small ? " small" : ""}`}>{icon ? <img src={icon} alt="" /> : null}</div>;
 }

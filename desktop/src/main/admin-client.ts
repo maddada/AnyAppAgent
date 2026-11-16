@@ -26,6 +26,7 @@ import type {
   BackupState,
   CareState,
   ChatItem,
+  DeleteAppResult,
   ImageUpload,
   KeysBackupRequest,
   KeysBackupResult,
@@ -104,6 +105,8 @@ export class AdminClient extends EventEmitter {
   adminRoutes = false;
   state: AdminState | null = null;
   apps: App[] = [];
+  /** Recently deleted (GET /api/trash), newest first; empty on an older companion. */
+  trash: App[] = [];
 
   constructor(
     private readonly base: string,
@@ -159,6 +162,7 @@ export class AdminClient extends EventEmitter {
     await this.refreshState();
     await this.refreshApps();
     await this.refreshCare();
+    await this.refreshTrash();
     this.openSocket();
     // The fallback has no admin.state events; poll the files instead.
     this.pollTimer = setInterval(() => {
@@ -217,6 +221,15 @@ export class AdminClient extends EventEmitter {
     }
   }
 
+  async refreshTrash(): Promise<void> {
+    try {
+      this.trash = await this.request<App[]>("GET", "/api/trash");
+    } catch {
+      this.trash = []; // an older companion: no Recently deleted
+    }
+    this.emit("trash", this.trash);
+  }
+
   private openSocket(): void {
     if (this.closed) return;
     const path = this.adminRoutes ? "/api/admin/events" : "/ws";
@@ -236,6 +249,7 @@ export class AdminClient extends EventEmitter {
       this.socketTimer = setTimeout(() => {
         void this.refreshApps();
         void this.refreshState();
+        void this.refreshTrash();
         this.openSocket();
       }, 2_000);
     });
@@ -258,6 +272,9 @@ export class AdminClient extends EventEmitter {
       case "app.deleted":
         this.apps = this.apps.filter((a) => a.id !== event.appId);
         this.emit("apps", this.apps);
+        break;
+      case "trash.updated":
+        void this.refreshTrash();
         break;
       case "chat.item":
         this.emit("chat", event.item);
@@ -476,6 +493,62 @@ export class AdminClient extends EventEmitter {
       this.emit("apps", this.apps);
     }
     return app;
+  }
+
+  // ---------- pin, hide and delete (shared/protocol.ts "Pin, hide and delete")
+
+  /** The whole Pinned section in its new order; apps left out are unpinned. Shown here at once, then confirmed by app.updated. */
+  async setPins(ids: string[]): Promise<void> {
+    const before = this.apps;
+    this.apps = this.apps.map((a) => {
+      const i = ids.indexOf(a.id);
+      if (i < 0 && a.pin === undefined) return a;
+      const { pin: _pin, ...rest } = a;
+      return i < 0 ? rest : { ...rest, pin: i };
+    });
+    this.emit("apps", this.apps);
+    try {
+      await this.request<App[]>("PUT", "/api/pins", { ids });
+    } catch (error) {
+      this.apps = before;
+      this.emit("apps", this.apps);
+      throw (error as { status?: number }).status === 404 ? new Error("Pinning needs a newer Kiwimake companion.") : error;
+    }
+  }
+
+  async hide(appId: string, hidden: boolean): Promise<App> {
+    const app = await this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/hide`, { hidden });
+    this.upsert(app);
+    return app;
+  }
+
+  /** Delete: to Recently deleted, and with forGood also its folder, chat, versions and GitHub repos. An older companion answers 204. */
+  async deleteApp(appId: string, opts: { uninstall?: boolean; forGood?: boolean }): Promise<DeleteAppResult> {
+    const q = [opts.uninstall ? "uninstall=1" : "", opts.forGood ? "forGood=1" : ""].filter(Boolean).join("&");
+    const result = await this.request<DeleteAppResult | undefined>("DELETE", `/api/apps/${encodeURIComponent(appId)}${q ? `?${q}` : ""}`, undefined, 5 * 60_000);
+    this.apps = this.apps.filter((a) => a.id !== appId);
+    this.emit("apps", this.apps);
+    await this.refreshTrash();
+    return result ?? { forGood: !!opts.forGood };
+  }
+
+  async restoreDeleted(appId: string): Promise<App> {
+    const app = await this.request<App>("POST", `/api/trash/${encodeURIComponent(appId)}/restore`, {});
+    this.upsert(app);
+    await this.refreshTrash();
+    return app;
+  }
+
+  async emptyTrash(): Promise<void> {
+    await this.request("DELETE", "/api/trash", undefined, 5 * 60_000);
+    await this.refreshTrash();
+  }
+
+  private upsert(app: App): void {
+    const i = this.apps.findIndex((a) => a.id === app.id);
+    if (i >= 0) this.apps[i] = app;
+    else this.apps.push(app);
+    this.emit("apps", this.apps);
   }
 
   /** A ticket for a page an agent published: the companion answers the path the page is served at. */
