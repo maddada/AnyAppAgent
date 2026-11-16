@@ -16,9 +16,16 @@
 //   `versions/<v>` and puts `hex` in ~/.local/bin; a distribution package puts `hex` in /usr/bin.
 //   `hex start` opens it. Installing runs Hex's own anoma.ly/hex/install-linux.sh, which checks the
 //   release's signature and installs for this user only (no password).
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+// - macOS (Apple silicon only; Hex is a Mac app first), like Ghostex's managed_tools/hex.rs:
+//   Hex keeps its data in ~/Library/Application Support/hex. It is `Hex.app` (bundle id
+//   anomaly.hex) in /Applications or ~/Applications. Installing downloads Hex.zip from the Anomaly
+//   release service's stable manifest (the source Hex's own updater uses), checks its size,
+//   SHA-256, bundle id and the code signature Hex's updater requires (Developer ID, team
+//   5NZ4Q7NXJ4, notarized), and puts it in /Applications (~/Applications when that is not
+//   writable). No password.
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { accessSync, constants as fsConstants, existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, isAbsolute, join } from "node:path";
 import type { HexCheck, HexModelView } from "../shared/types.ts";
 
@@ -26,6 +33,12 @@ export const API_VERSION = "2";
 export const HEX_SITE = "https://anoma.ly/hex/";
 export const WINDOWS_INSTALLER = "https://anoma.ly/hex/install-windows.ps1";
 export const LINUX_INSTALLER = "https://anoma.ly/hex/install-linux.sh";
+/** The release service's manifest Hex's own Mac updater reads. */
+export const MAC_MANIFEST = "https://anoma.ly/release/hex/desktop/stable.json";
+const MAC_ORIGIN = "https://anoma.ly";
+export const MAC_BUNDLE_ID = "anomaly.hex";
+/** What Hex's own updater requires of a new Hex.app (Hex's app/update-requirement.txt, via Ghostex). */
+export const MAC_REQUIREMENT = 'anchor apple generic and identifier "anomaly.hex" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "5NZ4Q7NXJ4" and notarized';
 /** Hex refuses uploads over 64 MiB. */
 export const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
 const QUICK_MS = 5_000;
@@ -40,6 +53,7 @@ type Env = Record<string, string | undefined>;
 export function supportDir(env: Env, home: string, platform: string = process.platform): string {
   if (env.HEX_APPLICATION_SUPPORT_DIR) return env.HEX_APPLICATION_SUPPORT_DIR;
   if (platform === "linux") return join(env.XDG_DATA_HOME && isAbsolute(env.XDG_DATA_HOME) ? env.XDG_DATA_HOME : join(home, ".local", "share"), "hex");
+  if (platform === "darwin") return join(home, "Library", "Application Support", "hex");
   return join(env.APPDATA || join(home, "AppData", "Roaming"), "hex");
 }
 
@@ -269,9 +283,29 @@ export function findPackaged(env: Env, home: string): { version: string; exe: st
   return version === null || version === undefined ? undefined : { version, exe };
 }
 
-/** Hex on this PC: a direct install, else (Linux) a packaged `hex`. */
+/** A value from an app's Info.plist (binary or XML), through macOS's own plutil. */
+function plistValue(plist: string, key: string): string | undefined {
+  const r = spawnSync("/usr/bin/plutil", ["-extract", key, "raw", "-o", "-", plist], { encoding: "utf8", timeout: 3_000 });
+  return r.status === 0 ? r.stdout.trim() || undefined : undefined;
+}
+
+/** The Mac's Hex.app in /Applications or ~/Applications, told apart by its bundle id; exe is the .app. */
+export function findMacApp(home: string, read: (plist: string, key: string) => string | undefined = plistValue): { version: string; exe: string } | undefined {
+  for (const dir of ["/Applications", join(home, "Applications")]) {
+    const app = join(dir, "Hex.app");
+    const plist = join(app, "Contents", "Info.plist");
+    if (!existsSync(plist)) continue;
+    if (read(plist, "CFBundleIdentifier") !== MAC_BUNDLE_ID) continue;
+    return { version: read(plist, "CFBundleShortVersionString") ?? "", exe: app };
+  }
+  return undefined;
+}
+
+/** Hex on this PC: a direct install, else (Linux) a packaged `hex`, or (macOS) Hex.app. */
 function locate(env: Env, home: string, platform: string): { dir: string; installed?: { version: string; exe: string } } {
   const dir = supportDir(env, home, platform);
+  // A Hex whose data folder is set elsewhere (HEX_APPLICATION_SUPPORT_DIR) is not the one in Applications.
+  if (platform === "darwin") return { dir, installed: findInstall(dir, platform) ?? (process.platform === "darwin" && !env.HEX_APPLICATION_SUPPORT_DIR ? findMacApp(home) : undefined) };
   const installed = findInstall(dir, platform) ?? (platform === "linux" && process.platform === "linux" ? findPackaged(env, home) : undefined);
   return { dir, installed };
 }
@@ -328,6 +362,13 @@ export async function hexTranscribe(opts: { env: Env; home: string; savedModel?:
 export function openHex(env: Env, home: string): void {
   const found = locate(env, home, process.platform).installed;
   if (!found || !existsSync(found.exe)) throw new HexFailure("notInstalled", "Hex isn't installed on this PC.");
+  if (process.platform === "darwin") {
+    // Hex.app, the way Finder opens it (once; a running Hex just comes forward).
+    const child = spawn("/usr/bin/open", [found.exe], { detached: true, stdio: "ignore" });
+    child.on("error", () => undefined);
+    child.unref();
+    return;
+  }
   // The Start Menu shortcut Hex's installer makes runs `hex.exe app`; on Linux `hex start` opens it.
   const child = spawn(found.exe, [process.platform === "linux" ? "start" : "app"], { detached: true, stdio: "ignore", windowsHide: false });
   child.on("error", () => undefined);
@@ -343,7 +384,8 @@ export function stripEscapes(line: string): string {
  * Runs Hex's own installer (Windows, or Linux) from a new temporary folder. `onLine` gets its
  * output, line by line. Resolves when it finishes; rejects with its last lines when it fails.
  */
-export async function installHex(opts: { onLine: (line: string) => void; fetcher?: typeof fetch; signal?: AbortSignal }): Promise<void> {
+export async function installHex(opts: { onLine: (line: string) => void; fetcher?: typeof fetch; signal?: AbortSignal; home?: string }): Promise<void> {
+  if (process.platform === "darwin") return installHexMac(opts);
   const linux = process.platform === "linux";
   if (process.platform !== "win32" && !linux) throw new Error(`Kiwimake installs Hex only on Windows and Linux. Download it from ${HEX_SITE}`);
   const res = await (opts.fetcher ?? fetch)(linux ? LINUX_INSTALLER : WINDOWS_INSTALLER, { signal: AbortSignal.timeout(60_000) }).catch(() => {
@@ -383,6 +425,90 @@ export async function installHex(opts: { onLine: (line: string) => void; fetcher
         else reject(new Error(tail.slice(-4).join("\n") || `Hex's installer stopped (exit ${code}).`));
       });
     });
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+/** `release.targets[name]` of the release service's manifest, its URL made absolute. Only HTTPS. */
+export function manifestTarget(manifest: unknown, name: string, origin = MAC_ORIGIN): { version: string; url: string; size: number; sha256: string } {
+  const release = (manifest as { release?: { version?: unknown; targets?: Record<string, { url?: unknown; size?: unknown; sha256?: unknown }> } })?.release;
+  const version = typeof release?.version === "string" && release.version ? release.version : undefined;
+  if (!version) throw new Error("Hex's release feed names no version.");
+  const t = release?.targets?.[name];
+  if (typeof t?.url !== "string") throw new Error(`Hex's release feed has no ${name} download.`);
+  const url = t.url.startsWith("/") ? `${origin.replace(/\/$/, "")}${t.url}` : t.url;
+  if (!url.startsWith("https://")) throw new Error("Hex's release feed gave a download that isn't HTTPS.");
+  if (typeof t.size !== "number" || t.size <= 0) throw new Error("Hex's release feed gave no size for the download.");
+  if (typeof t.sha256 !== "string" || !/^[0-9a-f]{64}$/i.test(t.sha256)) throw new Error("Hex's release feed gave no SHA-256 for the download.");
+  return { version, url, size: t.size, sha256: t.sha256.toLowerCase() };
+}
+
+const writable = (dir: string) => {
+  try {
+    accessSync(dir, fsConstants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+function runQuiet(cmd: string, args: string[], timeout = 5 * 60_000): boolean {
+  return spawnSync(cmd, args, { stdio: "ignore", timeout }).status === 0;
+}
+
+/** macOS: Hex.app from Hex's release service, checked like Hex's own updater checks it, into Applications. */
+async function installHexMac(opts: { onLine: (line: string) => void; fetcher?: typeof fetch; signal?: AbortSignal; home?: string }): Promise<void> {
+  const unsupported = supported();
+  if (unsupported) throw new Error(`${unsupported} Download Hex from ${HEX_SITE}`);
+  const get = opts.fetcher ?? fetch;
+  const res = await get(MAC_MANIFEST, { signal: AbortSignal.timeout(60_000) }).catch(() => {
+    throw new Error("Couldn't reach Hex's website. Check the internet connection, then try again.");
+  });
+  if (!res.ok) throw new Error(`Hex's website answered ${res.status}. Try again later, or download Hex from its website.`);
+  const target = manifestTarget(await res.json(), "macos-arm64");
+  opts.onLine(`Downloading Hex ${target.version}`);
+  const scratch = mkdtempSync(join(tmpdir(), "anyapp-hex-"));
+  try {
+    const file = await get(target.url, { signal: opts.signal ?? AbortSignal.timeout(INSTALL_MS) }).catch(() => {
+      throw new Error("The Hex download didn't finish. Check the internet connection, then try again.");
+    });
+    if (!file.ok) throw new Error(`Hex's website answered ${file.status}. Try again later.`);
+    const bytes = Buffer.from(await file.arrayBuffer());
+    if (bytes.byteLength !== target.size) throw new Error("The Hex download wasn't the size Hex's release feed gave, so Kiwimake did not install it. Try again.");
+    const { createHash } = await import("node:crypto");
+    if (createHash("sha256").update(bytes).digest("hex") !== target.sha256) throw new Error("The Hex download was damaged (checksum mismatch), so Kiwimake did not install it. Try again.");
+    const zip = join(scratch, "Hex.zip");
+    writeFileSync(zip, bytes);
+    opts.onLine("Checking Hex's signature");
+    const unpacked = join(scratch, "unpacked");
+    const app = join(unpacked, "Hex.app");
+    if (!runQuiet("/usr/bin/ditto", ["-x", "-k", zip, unpacked]) || !existsSync(app)) throw new Error("The Hex download didn't contain Hex.app.");
+    if (plistValue(join(app, "Contents", "Info.plist"), "CFBundleIdentifier") !== MAC_BUNDLE_ID) throw new Error("The downloaded app isn't Hex, so Kiwimake did not install it.");
+    if (!runQuiet("/usr/bin/codesign", ["--verify", "--deep", "--strict", `-R=${MAC_REQUIREMENT}`, app])) throw new Error("The downloaded Hex isn't signed by Hex's developer, so Kiwimake did not install it.");
+    // /Applications, or ~/Applications when this account cannot write there (or Hex already lives there).
+    const home = opts.home ?? homedir();
+    const userApps = join(home, "Applications");
+    const appsDir = existsSync(join(userApps, "Hex.app")) || !writable("/Applications") ? userApps : "/Applications";
+    mkdirSync(appsDir, { recursive: true });
+    const staged = join(appsDir, `.Hex.app.new-${process.pid}`);
+    rmSync(staged, { recursive: true, force: true });
+    if (!runQuiet("/usr/bin/ditto", [app, staged])) {
+      rmSync(staged, { recursive: true, force: true });
+      throw new Error(`Kiwimake couldn't write to ${appsDir}. Download Hex from ${HEX_SITE} instead.`);
+    }
+    const dest = join(appsDir, "Hex.app");
+    const running = spawnSync("/usr/bin/pgrep", ["-f", "/Hex.app/Contents/MacOS/"], { encoding: "utf8" }).stdout.trim().length > 0;
+    if (running) {
+      opts.onLine("Quitting Hex to replace it");
+      runQuiet("/usr/bin/osascript", ["-e", `tell application id "${MAC_BUNDLE_ID}" to quit`], 20_000);
+    }
+    const old = `${dest}.old-${process.pid}`;
+    if (existsSync(dest)) renameSync(dest, old);
+    renameSync(staged, dest);
+    rmSync(old, { recursive: true, force: true });
+    opts.onLine(`Hex ${target.version} is installed`);
+    runQuiet("/usr/bin/open", [dest], 20_000);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

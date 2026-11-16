@@ -8,7 +8,8 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKe
 export type DictationPhase = "idle" | "starting" | "recording" | "transcribing";
 
 /** The hotkey, as Ghostex has it: Ctrl+Alt+Space. Tap to start and tap to stop, or hold and let go. */
-export const DICTATE_HOTKEY = "Ctrl+Alt+Space";
+// The same keys on a Mac are Control and Option.
+export const DICTATE_HOTKEY = typeof navigator !== "undefined" && /Macintosh/.test(navigator.userAgent) ? "Control+Option+Space" : "Ctrl+Alt+Space";
 /** A press held at least this long stops when the keys come up (Ghostex's Auto mode). */
 export const HOLD_MS = 300;
 
@@ -99,6 +100,8 @@ export function useDictation({ onText, engine = "Hex", platform }: { onText: (te
         name === "NotAllowedError"
           ? named.current.platform === "linux"
             ? "The microphone was blocked. Check that it is on and not muted in your system's sound settings, then try again."
+            : named.current.platform === "darwin"
+              ? "macOS blocked the microphone. In System Settings, Privacy & Security, Microphone, turn on Kiwimake, then try again."
             : "Windows blocked the microphone. In Windows Settings, Privacy & security, Microphone, turn on \"Let desktop apps access your microphone\", then try again."
           : name === "NotFoundError"
             ? "No microphone found. Plug one in, then try again."

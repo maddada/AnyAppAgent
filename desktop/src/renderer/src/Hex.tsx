@@ -27,9 +27,16 @@ const HEX_SETUP_LINUX: [string, string][] = [
   HEX_SETUP[2],
 ];
 
+/** The same steps on a Mac, where Hex goes into Applications and macOS asks for the microphone. */
+const HEX_SETUP_MAC: [string, string][] = [
+  ["Install Hex", "Click Install Hex below. It goes into Applications in about a minute, with no password needed."],
+  ["Open Hex and allow the microphone", "macOS asks once. Turn on Launch at login in Hex so it is always there."],
+  HEX_SETUP[2],
+];
+
 /** The setup steps for the app dictation uses on this PC. */
 export function dictationSetup(check: HexCheck): [string, string][] {
-  return check.platform === "linux" ? HEX_SETUP_LINUX : HEX_SETUP;
+  return check.platform === "linux" ? HEX_SETUP_LINUX : check.platform === "darwin" ? HEX_SETUP_MAC : HEX_SETUP;
 }
 
 /** The name of the app dictation uses. */
@@ -56,7 +63,7 @@ function viewOf(hex: HexCheck): View {
     case "notInstalled":
       return { tone: "todo", title: "Hex isn't installed", line: "Hex is a free app that turns your voice into text on this PC. It works offline and needs no account." };
     case "notRunning":
-      return { tone: "todo", title: "Hex isn't open", line: hex.platform === "linux" ? "Dictation needs Hex open. Turn on Launch at login in Hex so it starts with your PC." : "Dictation needs Hex open. Turn on Open at login in Hex so it starts with your PC." };
+      return { tone: "todo", title: "Hex isn't open", line: hex.platform === "linux" || hex.platform === "darwin" ? `Dictation needs Hex open. Turn on Launch at login in Hex so it starts with your ${hex.platform === "darwin" ? "Mac" : "PC"}.` : "Dictation needs Hex open. Turn on Open at login in Hex so it starts with your PC." };
     case "noModels":
       return { tone: "todo", title: "Hex has no speech model yet", line: "In Hex's settings, under Models, download one. Kiwimake finds it by itself." };
     case "ready":
