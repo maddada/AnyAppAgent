@@ -206,8 +206,10 @@ and refuses anything else. The release PC keeps, never in Git:
 | The update signing key (RSA, PEM) | `~/.anyappagent-release/ota-signing/private-key.pem` (folder `700`, file `600`) |
 | The update server's upload token | `~/.anyappagent-release/ota-upload-token`, or `KIWIMAKE_OTA_UPLOAD_TOKEN` |
 
-Keep a copy of both in the owner's password manager. Losing the key stops updates until every
-phone installs an APK with a new certificate.
+Both are backed up, with the public key and the certificate, in the owner's 1Password item
+"Kiwimake OTA" (vault Personal); `bash ~/.appwin-secrets/restore-secrets.sh ota` restores them on a
+new release PC. Losing the key stops updates until every phone installs an APK with a new
+certificate. The server is live since 2026-11-17 (`website/ota-server/README.md`).
 
 `app/scripts/ota-export.mjs` and `app/scripts/ota-publish.mjs` (run from `app/`):
 

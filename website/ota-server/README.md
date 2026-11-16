@@ -45,7 +45,17 @@ If the key is lost, updates stop until every phone installs an APK with a new ce
 leaks together with the upload token, someone could ship JavaScript to every phone: rotate it then
 (new key and certificate with `npx expo-updates codesigning:generate`, then a new APK).
 
-## One-time setup (not done yet)
+## One-time setup (done on 2026-11-17)
+
+Live: the Worker `kiwimake-ota` on the custom domain `https://ota.kiwimake.ai`, with the R2 bucket
+`kiwimake-ota` and the secret `UPLOAD_TOKEN`, in the Cloudflare account that owns the `kiwimake.ai`
+zone (the website's account). The upload token is in `~/.anyappagent-release/ota-upload-token`
+(mode 600). The token, the signing key, its public key and the certificate are backed up in the
+1Password item "Kiwimake OTA" (vault Personal); `bash ~/.appwin-secrets/restore-secrets.sh ota`
+puts them back on a new PC. Redeploy after a change to `src/worker.js` with
+`npx --yes wrangler@4.161.0 deploy` from this folder.
+
+How it was set up, for a new account:
 
 From this folder, logged in to the Cloudflare account that owns the `kiwimake.ai` zone. R2 has a
 free tier (10 GB stored, no egress fees), but Cloudflare asks for a payment method on the account
@@ -59,8 +69,7 @@ npx --yes wrangler@4.161.0 secret put UPLOAD_TOKEN < ~/.anyappagent-release/ota-
 curl -sS -o /dev/null -w '%{http_code}\n' https://ota.kiwimake.ai/v1/status/production/android/x   # 404: it answers
 ```
 
-Save the token and the private key in the password manager. Until the server exists, release APKs
-still work: their update check simply finds nothing, and new versions arrive as APKs.
+`wrangler secret put` reads the token from the file, so it never appears on a command line.
 
 ## Day to day
 
