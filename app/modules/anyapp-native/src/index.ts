@@ -75,6 +75,12 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   install(path: string, answerWithinMs: number): Promise<InstallResult>;
   /** Shows Android's install prompt again for an install still waiting for the person; true when one opened. */
   reopenInstallPrompt?(): boolean;
+  /**
+   * Whether the APK can replace the installed app (same signing key, or one its lineage vouches
+   * for): false means Android will refuse it until the old copy is removed; null when the app is
+   * not installed or Android cannot tell. Missing on builds before it was added.
+   */
+  signedLikeInstalled?(path: string, packageName: string): boolean | null;
   /** Build.SUPPORTED_ABIS, best first ("arm64-v8a", ...). Missing on builds before it was added. */
   supportedAbis?(): string[];
   /** Apps followed from a share link: Kiwimake handles their updates (docs/DISTRIBUTION.md stage 5). */

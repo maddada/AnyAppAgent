@@ -156,23 +156,33 @@ class AnyAppNativeModule : Module() {
     // ---------- installing
 
     /**
-     * Shows Android's install prompt again for a session still waiting for the person (Android
-     * blocks it when Kiwimake is not in front, and another prompt can cover it). True when one
-     * was opened. Called when Kiwimake comes back to the front.
+     * Shows Android's install prompt for a session still waiting for the person when Android never
+     * showed it (it blocks the prompt while Kiwimake is not in front). True when one was opened.
+     * Called when Kiwimake comes back to the front. A prompt Kiwimake already opened from its own
+     * screen is never opened again: Kiwimake is only in front again once the person answered it
+     * (Update, Cancel, or Play Protect's own screens after Update), and opening it again then put
+     * a second, stale "Do you want to update this app?" over the real one.
      */
     Function("reopenInstallPrompt") {
-      val sessionId = pending.keys.firstOrNull { prompts.containsKey(it) } ?: return@Function false
+      val sessionId = pending.keys.firstOrNull { prompts.containsKey(it) && !shownPrompts.containsKey(it) } ?: return@Function false
       val confirm = prompts[sessionId] ?: return@Function false
-      // On the main thread, in order: close the copy that may be open, then open it again
-      // (never two copies of the same prompt).
       mainHandler.post {
         try {
-          shownPrompts.remove(sessionId)?.let { (ref, requestCode) -> ref.get()?.finishActivity(requestCode) }
           showPrompt(sessionId, confirm)
         } catch (_: Exception) {
         }
       }
       true
+    }
+
+    /**
+     * Whether the APK at [path] can replace the installed [packageName]: true when the installed
+     * copy's signing certificate is the APK's or one in its rotation history, false when it is
+     * another key (Android would refuse with INSTALL_FAILED_UPDATE_INCOMPATIBLE, after its prompt
+     * and Play Protect's), null when the app is not installed or this Android cannot tell.
+     */
+    Function("signedLikeInstalled") { path: String, packageName: String ->
+      signedLikeInstalled(toFile(path), packageName)
     }
 
     /** The ABIs this phone runs, best first (Build.SUPPORTED_ABIS), to pick the smallest APK. */
@@ -622,6 +632,28 @@ class AnyAppNativeModule : Module() {
     closePrompt(sessionId)
     sendEvent("onInstallStatus", mapOf("sessionId" to sessionId, "status" to status, "message" to message, "packageName" to packageName))
     pending.remove(sessionId)?.resolve(mapOf("status" to status, "message" to message, "packageName" to packageName))
+  }
+
+  @Suppress("DEPRECATION")
+  private fun signedLikeInstalled(file: File, packageName: String): Boolean? {
+    if (Build.VERSION.SDK_INT < 28 || !file.exists()) return null
+    val pm = context.packageManager
+    return try {
+      val installed = pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo ?: return null
+      val archive = pm.getPackageArchiveInfo(file.path, PackageManager.GET_SIGNING_CERTIFICATES)?.signingInfo ?: return null
+      if (installed.hasMultipleSigners() || archive.hasMultipleSigners()) {
+        // Several signers: Android wants exactly the same set.
+        return installed.apkContentsSigners.toSet() == archive.apkContentsSigners.toSet()
+      }
+      // One signer: the installed copy's current certificate (last in its history) must be the
+      // APK's own or one the APK's rotation lineage vouches for.
+      val current = installed.signingCertificateHistory.lastOrNull() ?: return null
+      archive.signingCertificateHistory.any { it == current } || archive.apkContentsSigners.any { it == current }
+    } catch (_: PackageManager.NameNotFoundException) {
+      null
+    } catch (_: Exception) {
+      null
+    }
   }
 
   private fun packageInfo(packageName: String): Map<String, Any?>? {

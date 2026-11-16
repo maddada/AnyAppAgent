@@ -231,6 +231,10 @@ export async function resumePendingInstall() {
   // An install waiting for the person's yes: Android may have blocked its prompt while Kiwimake
   // was in the background, or another prompt covered it. Show it again.
   if (current && getState().installs[current]?.phase === "installing") AnyAppNative?.reopenInstallPrompt?.();
+  for (const appId of [...removingOld]) {
+    removingOld.delete(appId);
+    void installWhenGone(appId);
+  }
   const waiting = getState().needInstallPermission;
   if (waiting && AnyAppNative?.canInstallPackages()) {
     setState({ needInstallPermission: null });
@@ -373,6 +377,15 @@ async function installOne(appId: string, options: InstallOptions = {}) {
       await AnyAppNative.setAppReady(app.packageName, "apk", build.number, null);
       console.log(`${app.packageName} ${build.number}: downloaded, waiting for Reload in the app`);
       setInstall(appId, null);
+      return;
+    }
+
+    // Signed with another key than the copy on the phone (made on another PC, or by the cloud):
+    // Android would show its prompt and Play Protect's, then refuse. Say so at once instead, and
+    // offer to remove the old copy (removeOldAndInstall carries on by itself after that).
+    if (AnyAppNative.signedLikeInstalled?.(file.uri, app.packageName) === false) {
+      clearUnfinished(appId);
+      setInstall(appId, { buildNumber: build.number, phase: "failed", conflict: true, message: conflictMessage(app.name) });
       return;
     }
 
@@ -523,12 +536,7 @@ function finish(app: App, buildNumber: number, result: InstallResult, fileName: 
       return;
     case "conflict":
       clearUnfinished(app.id);
-      setInstall(app.id, {
-        buildNumber,
-        phase: "failed",
-        conflict: true,
-        message: "The version on your phone was made differently, so this one can't replace it. Remove it, then install again.",
-      });
+      setInstall(app.id, { buildNumber, phase: "failed", conflict: true, message: conflictMessage(app.name) });
       return;
     case "timeout":
       // The download is kept: tapping Install again goes straight to installing.
@@ -536,9 +544,51 @@ function finish(app: App, buildNumber: number, result: InstallResult, fileName: 
       setInstall(app.id, { buildNumber, phase: "failed", message: "Android didn't finish installing it. Tap Install to try again." });
       return;
     default:
+      // Some phones report a signing mismatch as a plain failure: treat it as the conflict it is.
+      if (/UPDATE_INCOMPATIBLE|signatures do not match/i.test(result.message ?? "")) {
+        clearUnfinished(app.id);
+        setInstall(app.id, { buildNumber, phase: "failed", conflict: true, message: conflictMessage(app.name) });
+        return;
+      }
       // Android's own message (INSTALL_PARSE_FAILED_..., file paths) is for logs, not for people.
       if (result.message) console.warn(`install ${app.packageName}: ${result.status}: ${result.message}`);
       setInstall(app.id, { buildNumber, phase: "failed", message: plainInstallError(result) });
+  }
+}
+
+/** The copy on the phone is signed with another key: only removing it lets this one in. */
+function conflictMessage(name: string): string {
+  return `The ${name} on your phone was made on another PC, so Android won't let this version replace it. Remove the old one and this one installs right after. Anything saved in the old one is removed with it.`;
+}
+
+/** Apps whose old copy the person chose to remove: installed as soon as it is gone. */
+const removingOld = new Set<string>();
+
+/**
+ * "Remove old version and install": opens Android's uninstall prompt for the old copy, then
+ * installs this version by itself when Kiwimake is back in front and the old copy is gone.
+ */
+export function removeOldAndInstall(app: App): void {
+  if (!AnyAppNative) return;
+  removingOld.add(app.id);
+  AnyAppNative.requestUninstall(app.packageName);
+}
+
+/**
+ * After Android's uninstall prompt closes, the removal itself finishes a moment later: look a few
+ * times, then install. Still there after that means the person kept it (Cancel); the card keeps
+ * offering the button.
+ */
+async function installWhenGone(appId: string): Promise<void> {
+  for (let i = 0; i < 12; i++) {
+    const app = getState().apps[appId];
+    if (!app) return;
+    if (installedVersion(app) == null) {
+      setInstall(appId, null);
+      void installApp(app);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 750));
   }
 }
 

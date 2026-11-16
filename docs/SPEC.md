@@ -388,3 +388,13 @@ show model selector, just the user can pick either in setup."
   companion's runtime packages staged with `npm ci --omit=dev`, without source maps, declaration
   files, tests, examples or theme previews. On the phone: resource shrinking, and the Go bridge
   built with `-trimpath -ldflags=-s -w`.
+
+## Safer installs over an old copy (added 2026-11-16)
+
+After moving to a new PC, the user's phone looped through Android's install prompt and Play Protect
+and then "Failed to install" for every app made on the old PC or by the cloud ("Fix it so this
+doesn't happen to users").
+
+- Kiwimake checks the signing key before installing (`signedLikeInstalled`) and, instead of
+  Android's prompt, Play Protect and a failure, shows "Remove old version" with one button that
+  removes it and installs the new one. Android's install prompt is no longer opened twice.

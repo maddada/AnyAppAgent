@@ -38,7 +38,7 @@ export function tileState(app: App, pkg: PackageInfo | null | undefined, install
       case "done":
         return { kind: "ready", label: "Installed" };
       case "failed":
-        return { kind: "problem", label: "Didn't install" };
+        return { kind: "problem", label: install.conflict ? "Remove old version" : "Didn't install" };
     }
   }
   switch (app.status) {

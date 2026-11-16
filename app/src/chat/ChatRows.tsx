@@ -37,8 +37,7 @@ import {
   X,
 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
-import { AnyAppNative } from "anyapp-native";
-import { installApp, launchApp, phoneAbis } from "@/lib/installer";
+import { installApp, launchApp, phoneAbis, removeOldAndInstall } from "@/lib/installer";
 import type { App, ChatImage, ChatItem, PageInfo, PlanEntry, WorkerInfo } from "@/lib/protocol";
 import { useStore, useClientFor, useOnlineFor } from "@/lib/store";
 import { isCloudId } from "@/lib/cloud";
@@ -578,7 +577,11 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
           <T variant="row" color="problem">
             {install?.message}
           </T>
-          {install?.conflict ? <Button label="Remove the old one" variant="text" small onPress={() => AnyAppNative?.requestUninstall(app.packageName)} /> : null}
+          {install?.conflict ? (
+            <View style={{ alignItems: "flex-end" }}>
+              <Button label="Remove old version and install" variant="text" small onPress={() => removeOldAndInstall(app)} />
+            </View>
+          ) : null}
         </View>
       ) : null}
       {installed && !busy ? (

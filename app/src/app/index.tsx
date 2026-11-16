@@ -6,7 +6,7 @@ import { ChevronDown, CircleUser, Download, Inbox, ListTodo, MessageCircle, Plus
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, tileState } from "@/lib/describe";
 import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/chat/index";
-import { installApp, installFromLink, launchApp, updateFromLink } from "@/lib/installer";
+import { installApp, installFromLink, launchApp, removeOldAndInstall, updateFromLink } from "@/lib/installer";
 import type { App, AppPreset } from "@/lib/protocol";
 import { PRESET_CHOICES as PRESETS, type PresetChoice } from "@shared/presets";
 import { useDictation } from "@/lib/dictation";
@@ -98,14 +98,17 @@ function AppGrid() {
   /**
    * One tap: open the app when it is on this phone. Not on it yet but built: start the install
    * (the tile says "Tap to install", then shows the download). Anything else (busy installing,
-   * failed, no version yet, can't be launched): the options sheet, which says why and what to do.
+   * failed, no version yet, can't be launched, an old copy in the way): the options sheet, which
+   * says why and what to do.
    */
   const tapApp = (app: App) => {
     const s = getState();
     const install = s.installs[app.id];
     const pkg = s.packages[app.packageName];
     const busy = !!install && ["waiting", "downloading", "checking", "installing", "confirm"].includes(install.phase);
-    if (pkg && launchApp(app)) return;
+    // An old copy signed with another key: the sheet says why and offers to remove it, instead
+    // of opening the old copy as if all were well.
+    if (pkg && !install?.conflict && launchApp(app)) return;
     if (!pkg && !busy && install?.phase !== "failed" && appAction(app, pkg) === "install") {
       void installApp(app);
       return;
@@ -511,7 +514,11 @@ export function InstallFailure({ app, message, conflict }: { app: App; message?:
       <T variant="row" color="problem">
         {message ?? "It didn't install."}
       </T>
-      {conflict ? <Button label="Remove the old one" variant="text" small onPress={() => AnyAppNative?.requestUninstall(app.packageName)} /> : null}
+      {conflict ? (
+        <View style={{ alignItems: "flex-end" }}>
+          <Button label="Remove old version and install" variant="text" small onPress={() => removeOldAndInstall(app)} />
+        </View>
+      ) : null}
     </View>
   );
 }
