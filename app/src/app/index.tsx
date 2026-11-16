@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Switch, TextInput, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, CircleUser, Download, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
+import { ChevronDown, CircleUser, Download, EllipsisVertical, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, tileState } from "@/lib/describe";
 import { installLabel , BEHIND_LABEL, headsUp as bigJobHeadsUp } from "@shared/chat/index";
@@ -32,8 +32,10 @@ import { border, elevation, icon, look, radius, size, space, useTheme } from "@/
 /** COMPONENTS.md 3 and 4: the New app plus is 28, the sheet head icon 56 (no icon-size token for either). */
 const NEW_TILE_PLUS = 28;
 const SHEET_ICON = 56;
-/** Large text settings grow the tile names and the home hint up to this, then they shrink to fit. */
+/** Large text settings grow the tile names up to this, then they shrink to fit. */
 const TILE_TEXT_MAX_SCALE = 1.6;
+/** The chat and options buttons on a tile: 48 dp, a bigger target than the 44 dp minimum. */
+const TILE_BUTTON = 48;
 
 type Tile = { kind: "new" } | { kind: "app"; app: App };
 
@@ -103,7 +105,6 @@ function AppGrid() {
   // The user's apps first, newest first; the New app slot closes the grid (as in the renders).
   const tiles: Tile[] = useMemo(() => [...sortedApps(apps).map((app) => ({ kind: "app" as const, app })), { kind: "new" }], [apps]);
   const tileWidth = (width - size.screenGutter * 2 - size.gridGap) / 2;
-  const hasApps = tiles.length > 1;
 
   /**
    * One tap: open the app when it is on this phone. Not on it yet but built: start the install
@@ -133,7 +134,7 @@ function AppGrid() {
         keyExtractor={(item) => (item.kind === "new" ? "new" : item.app.id)}
         numColumns={2}
         columnWrapperStyle={{ gap: size.gridGap }}
-        contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: hasApps ? space["2xl"] : insets.bottom + space["2xl"] }}
+        contentContainerStyle={{ paddingHorizontal: size.screenGutter, gap: size.gridGap, paddingBottom: insets.bottom + space["2xl"] }}
         refreshControl={<RefreshControl refreshing={false} onRefresh={reconnectNow} colors={[t.text]} progressBackgroundColor={t.surface} />}
         ListHeaderComponent={
           <>
@@ -154,24 +155,12 @@ function AppGrid() {
                 AnyAppNative?.haptic?.();
                 setSelected({ id: item.app.id, manage: false });
               }}
+              onOptions={() => setSelected({ id: item.app.id, manage: false })}
+              onChat={() => router.push(`/chat/${item.app.id}`)}
             />
           )
         }
       />
-      {hasApps ? (
-        <T
-          testID="home-hint"
-          variant="caption"
-          color="textTertiary"
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.4}
-          maxFontSizeMultiplier={TILE_TEXT_MAX_SCALE}
-          style={{ textAlign: "center", paddingHorizontal: size.screenGutter, paddingTop: space.xs, paddingBottom: insets.bottom + space.sm }}
-        >
-          Hold to see options or prompt
-        </T>
-      ) : null}
       <AppSheet selection={selected} onClose={() => setSelected(null)} />
       <NewAppSheet visible={creating} onClose={() => setCreating(false)} />
     </View>
@@ -225,7 +214,7 @@ function TileStateLine({ app }: { app: App }) {
   const pkg = useStore((s) => s.packages[app.packageName]);
   const install = useStore((s) => s.installs[app.id]);
   const line = tileState(app, pkg, install);
-  return <StateLine kind={line.kind} label={line.label} fit />;
+  return <StateLine testID={`app-state-${app.slug}`} kind={line.kind} label={line.label} attention={line.attention} fit />;
 }
 
 /** Tiles: scale to 0.98 while pressed (COMPONENTS.md 3). */
@@ -268,7 +257,44 @@ function PressScale({
   );
 }
 
-function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number; onPress: () => void; onLongPress: () => void }) {
+/** A round button on a tile (chat, options): 48 dp, a quiet filled circle so it reads as a button. */
+function TileButton({ icon: Icon, label, onPress, testID }: { icon: typeof MessageCircle; label: string; onPress: () => void; testID: string }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        width: TILE_BUTTON,
+        height: TILE_BUTTON,
+        borderRadius: radius.full,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: pressed ? t.borderStrong : t.surfaceSunken,
+      })}
+    >
+      <Icon size={icon.size.md} color={t.textSecondary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+    </Pressable>
+  );
+}
+
+function AppTile({
+  app,
+  width,
+  onPress,
+  onLongPress,
+  onOptions,
+  onChat,
+}: {
+  app: App;
+  width: number;
+  onPress: () => void;
+  onLongPress: () => void;
+  onOptions: () => void;
+  onChat: () => void;
+}) {
   const t = useTheme();
   const pkg = useStore((s) => s.packages[app.packageName]);
   const line = tileState(app, pkg, useStore((s) => s.installs[app.id]));
@@ -281,7 +307,7 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
     <PressScale
       testID={`app-tile-${app.slug}`}
       label={label}
-      hint="Hold for options and its chat"
+      hint="Hold for options"
       onPress={onPress}
       onLongPress={onLongPress}
       style={{
@@ -318,6 +344,11 @@ function AppTile({ app, width, onPress, onLongPress }: { app: App; width: number
       <View style={{ flex: 1, minHeight: space.xs }} />
       {bothPlaces ? <PlaceMark place={placeOf(app)} off={placeOf(app) === "pc" && !pcOnline} /> : null}
       <TileStateLine app={app} />
+      {/* Design rule (AGENTS.md): the words keep the tile's full width; its buttons sit below them, on the right. */}
+      <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: space.sm, marginTop: space.sm, alignSelf: "stretch" }}>
+        <TileButton testID={`app-chat-${app.slug}`} icon={MessageCircle} label={`Chat about ${app.name}`} onPress={onChat} />
+        <TileButton testID={`app-options-${app.slug}`} icon={EllipsisVertical} label={`${app.name} options`} onPress={onOptions} />
+      </View>
     </PressScale>
   );
 }
