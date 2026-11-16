@@ -19,7 +19,8 @@
  *
  * Environment: KIWIMAKE_OTA_SIGNING_KEY_FILE (default ~/.anyappagent-release/ota-signing/private-key.pem),
  * KIWIMAKE_OTA_UPLOAD_TOKEN (or the file ~/.anyappagent-release/ota-upload-token), and optionally
- * KIWIMAKE_OTA_SERVER (default https://ota.kiwimake.ai). Every signature is checked against the
+ * KIWIMAKE_OTA_SERVER (default https://ota.kiwimake.ai; KIWIMAKE_OTA_PUBLIC_URL when phones reach it
+ * at another address, as the emulator does at 10.0.2.2). Every signature is checked against the
  * certificate the app ships before anything is uploaded, so a wrong key fails here, not on phones.
  * Neither the key nor the token is ever printed.
  */
@@ -33,6 +34,8 @@ import { DEFAULT_CHANNEL, DEFAULT_KEY_FILE, DEFAULT_TOKEN_FILE, fetchServed, man
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SERVER = otaServer();
+/** The address phones fetch assets from, when it differs from the one this script talks to (local tests). */
+const PUBLIC_URL = (process.env.KIWIMAKE_OTA_PUBLIC_URL || SERVER).replace(/\/+$/, "");
 const KEY_ID = "main";
 
 const CONTENT_TYPES = {
@@ -159,7 +162,7 @@ function buildUpdate(platformDir) {
         fail(error.message);
       }
     }
-    return { hash: base64url, key, contentType, ...(launch ? {} : { fileExtension: `.${ext}` }), url: `${SERVER}/v1/assets/${hex}` };
+    return { hash: base64url, key, contentType, ...(launch ? {} : { fileExtension: `.${ext}` }), url: `${PUBLIC_URL}/v1/assets/${hex}` };
   };
   const manifest = {
     id: randomUUID(),

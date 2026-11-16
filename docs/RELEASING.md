@@ -120,7 +120,9 @@ Never sign only the outer installer: that would leave the installed app unsigned
 Do not run the installer or quit the user's running desktop app during a release. The user updates
 the PC themselves. Keep any smoke test's settings, state, tools, apps and port separate from the
 user's live instance. The PC has no self-updater; run the downloaded installer to update it.
-Update the phone by opening `AnyAppAgent.apk`, or scanning the desktop's phone-download QR.
+The phone app updates itself from the first release after 0.3.3 ("Updates of the phone app" below);
+0.3.3 and earlier are updated by opening `AnyAppAgent.apk`, or scanning the desktop's
+phone-download QR.
 
 ## Linux packages
 
@@ -160,6 +162,73 @@ release: it builds, installs and smoke-tests both Linux packages and keeps them 
 Locally on Linux: `cd desktop && npm run dist:linux`, then `dev/smoke-linux.sh dist/Kiwimake-x86_64.AppImage`.
 On Arch, electron-builder's bundled fpm needs `libcrypt.so.1` (package `libxcrypt-compat`) for the .deb.
 
+## Updates of the phone app
+
+Copied from Ghostex's phone app (read only, never imported). A release APK (built with `--release`,
+which sets `KIWIMAKE_RELEASE=1` for `app/app.config.js`) updates itself in two ways. Debug and test
+builds do neither, so a debug-signed copy never offers the release APK.
+
+**A newer APK** (`app/src/lib/appUpdate.ts`, `app/src/lib/releaseFeed.ts`). At start, when it comes
+back to the front (at most every 6 hours) and on Settings, Updates, Check now, the phone reads
+`https://api.github.com/repos/maddada/AnyAppAgent/releases/latest`. That GitHub release is the
+update metadata; there is no other feed. The phone takes the release's version from its tag
+(`v<version>`) and, when it is newer than its own `versionName`, the asset for its processor:
+`AnyAppAgent.apk` (primary ABI arm64-v8a) or `AnyAppAgent-universal.apk` (anything else, the
+emulator). It downloads it into its cache, checks the size and the SHA-256 GitHub lists for the
+asset (`digest`), checks it is signed with the same key as itself, and opens Android's installer.
+Android replaces Kiwimake keeping its data (the pairing, the apps list, the settings) and offers
+Open. The home screen shows a notice ("Kiwimake <version> is ready to install", Not now, Install).
+It does not offer the APK when the update server already gives this APK that release over the air
+(`/v1/status`, below). So a release must keep:
+
+- The tag `v<version>` equal to `app/app.json` `expo.version` (MAJOR.MINOR.PATCH), and the release
+  marked latest, not a draft or prerelease (`gh release edit --latest`, step 6 below).
+- The two APK names. They are the same files `desktop/phone-release.json` pins, so the desktop's
+  download and the phone's own update are always the same bytes.
+- The release key. An APK signed with any other key is refused before Android sees it.
+
+**Over-the-air JavaScript** (`expo-updates`, `app/src/lib/overTheAir.ts`). A change to JavaScript
+only reaches phones without a new APK, from Kiwimake's update server: a Cloudflare Worker with one
+R2 bucket at `https://ota.kiwimake.ai` (`website/ota-server/`, its README has the setup and the
+local test). The phone checks at every launch and when it comes back to the front (at most every
+30 minutes), downloads in the background, and runs the update at the next launch or when the
+person taps Restart now. Only APKs with the same **runtime version** take an update: a hash of the
+native inputs (`node app/scripts/ota-runtime-version.js --explain` lists them; the release version
+fields are left out). Change any of them and the release needs a new APK.
+
+Every update is signed. The app carries the certificate `app/certs/certificate.pem` (CN "Kiwimake
+phone app updates", valid until 2056, SHA-256
+`B0:9F:7F:AD:F6:4B:32:42:49:87:36:30:EB:BB:F8:EE:7D:1C:DC:E6:C3:67:86:86:8F:FD:46:FB:6F:A6:3F:6D`)
+and refuses anything else. The release PC keeps, never in Git:
+
+| What | Where |
+| --- | --- |
+| The update signing key (RSA, PEM) | `~/.anyappagent-release/ota-signing/private-key.pem` (folder `700`, file `600`) |
+| The update server's upload token | `~/.anyappagent-release/ota-upload-token`, or `KIWIMAKE_OTA_UPLOAD_TOKEN` |
+
+Keep a copy of both in the owner's password manager. Losing the key stops updates until every
+phone installs an APK with a new certificate.
+
+`app/scripts/ota-export.mjs` and `app/scripts/ota-publish.mjs` (run from `app/`):
+
+```
+node scripts/ota-export.mjs <dir> [--whats-new '["One short line."]']   the update, from a clean checkout
+node scripts/ota-publish.mjs publish <dir> [--new-runtime] [--dry-run]  signs and uploads it
+node scripts/ota-publish.mjs status [--runtime <rv>]                    what phones on a runtime get now
+node scripts/ota-publish.mjs rollback-to-embedded --runtime <rv>        phones go back to the APK's own code
+node scripts/ota-publish.mjs history --runtime <rv>
+node scripts/ota-publish.mjs republish --runtime <rv> --from <name>     serve an earlier update again
+```
+
+`publish` refuses a runtime the server has never served unless `--new-runtime`: no installed app
+runs it, which is right only when the APK with that runtime is released at the same time. An
+update that crashes before its first screen is rolled back on the phone by expo-updates itself.
+
+A fix that is only JavaScript can go out without a GitHub release: commit it, then from a clean
+checkout `node scripts/ota-export.mjs <dir>` and `node scripts/ota-publish.mjs publish <dir>`. It
+carries `app.json`'s version (the newest release's), so phones read it as that release plus a fix.
+Never publish an update a thread has not been told to publish.
+
 ## Build
 
 From PowerShell, in a clean checkout of the commit to release (a worktree is fine), with the
@@ -183,6 +252,14 @@ installed desktop downloads `releases/download/v<version>/AnyAppAgent.apk` the f
 offers the phone download, checks it against that pin and keeps it in its state folder; the
 companion serves that file for the download QR. So the release must publish the exact APK that was
 pinned, which the workflow guarantees by building from the draft's assets.
+
+`--release` also turns on the phone's own updates (above): it regenerates `android/` every time,
+with the runtime version of this checkout. Export the over-the-air update of the same commit right
+after the build, from the same clean checkout (it refuses uncommitted changes):
+
+```powershell
+node scripts/ota-export.mjs ..\ota-<version> --whats-new '["One short line per change."]'
+```
 
 Rebuild the Easy Connect bridge before a phone release so it gets the strip flags
 (`node server/easy-connect/build-android-bridge.mjs`, then `npm run apk` stages it).
@@ -219,7 +296,18 @@ gh workflow run release-windows.yml --repo maddada/AnyAppAgent --ref main -f tag
    verified signed outputs. Do not run the installer or change the user's running app.
    Download both Linux packages from the draft and check their SHA-256 against the `linux` job's
    summary.
-6. Only when all six verified files are present, publish the draft:
+6. Publish the over-the-air update exported with the build (`app/`, with the signing key and the
+   upload token from "Updates of the phone app"). Add `--new-runtime` when this release changed
+   the runtime version (the export prints it; `status` says whether the server has served it):
+
+```powershell
+node scripts/ota-publish.mjs publish ..\ota-<version> [--new-runtime]
+node scripts/ota-publish.mjs status   # the new version and its date
+```
+
+   Do it before the release goes public: phones whose APK has this runtime then take it over the
+   air, and the APK updater offers the new APK only to phones on an older runtime.
+   Then, only when all six verified files are present, publish the draft:
 
 ```powershell
 gh release edit v<version> --repo maddada/AnyAppAgent --draft=false --latest
