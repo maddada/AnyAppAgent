@@ -15,3 +15,4 @@ export * from "./pages.ts";
 export * from "./trust.ts";
 export * from "./history.ts";
 export * from "./suggestions.ts";
+export * from "./gallery.ts";

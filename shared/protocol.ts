@@ -890,3 +890,29 @@ export interface CloneRequest {
   originalName?: string; // for the chat and the new app's notes
   owner?: string;
 }
+
+// Ready apps: the gallery of official Kiwimake apps (added, docs/GALLERY.md). The list is
+// gallery.json (kiwimake.ai/gallery.json, and website/public/gallery.json in the Kiwimake repo);
+// shared/chat/gallery.ts reads it. Each app is a shared app: its releases repo holds the APKs,
+// update.json and each version's code, so Install takes the signed APK and Make it mine is
+// POST /api/clones with its repo.
+// GET /api/gallery -> GalleryList (the companion reads the list for the phone and the desktop and
+//   keeps it a few minutes; 502 when it cannot be read). Older PCs: 404.
+export interface GalleryApp {
+  package: string; // com.anyapp.<slug>
+  name: string;
+  line: string; // one line about it, shown under the badge
+  icon?: string; // https address (or a data: PNG) of its icon
+  repo: string; // owner/anyapp-<slug>-releases (public)
+  code?: string; // owner/anyapp-<slug>, when its code repo is public too
+  certSha256: string; // SHA-256 of its signing certificate, lowercase hex: the mark is earned by it
+  latest: { version: string; build: number }; // the newest published version the list knows
+  feed?: string; // its update.json, when not the releases repo's latest (test lists)
+  installUrl?: string; // its APK for a QR code, when not the releases repo's latest (test lists)
+}
+export interface GalleryList {
+  format: 1;
+  updatedAt?: string; // ISO 8601
+  maker?: string; // who made them, as the cards say it ("Kiwimake")
+  apps: GalleryApp[];
+}
