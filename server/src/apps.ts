@@ -3,9 +3,9 @@
 import { createSession, selectedEngine, resumeFor, rememberSession, type AgentSession } from "./acp/session.ts";
 import { engineName, type Engine } from "../../shared/engines.mts";
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ApkVariant, App, AppMove, DeleteAppResult, AppPreset, ChangeSettingsRequest, CloneRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
+import type { ApkVariant, App, AppMove, DeleteAppResult, AppPreset, ChangeSettingsRequest, CloneRequest, DuplicateAppRequest, RenameAppRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
 import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, type VersionRecord } from "./history.ts";
 import { MEMORY_FILE } from "./playbook.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
@@ -42,7 +42,7 @@ import { ownerName, setOwnerName, Suggestions } from "./change.ts";
 import { parseSuggestion } from "../../shared/chat/suggestions.ts";
 import { KEEP_HEALTHY_TEXT } from "../../shared/chat/trust.ts";
 import { downloadSource, extractZip, findReleaseSource, makeSourceZip, repoFromText, SourceError } from "./release-source.ts";
-import { cloneNote } from "./playbook.ts";
+import { cloneNote, duplicateNote, renameNote } from "./playbook.ts";
 
 export { HttpError } from "./http-error.ts";
 import { HttpError } from "./http-error.ts";
@@ -577,7 +577,8 @@ export class AppManager {
   }
 
   /** prompt: the person's words (the overview draft); agentPrompt: what the agent gets (with the PC's plan-first line). */
-  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt, itemId?: string, images: PromptImage[] = [], make?: (dir: string) => Promise<void>): Promise<void> {
+  /** buildOnly: no first agent turn, only a build (a Duplicate with nothing to change). */
+  private async finishCreate(record: ReadyRecord, prompt: string, agentPrompt = prompt, itemId?: string, images: PromptImage[] = [], make?: (dir: string) => Promise<void>, buildOnly = false): Promise<void> {
     const { app, dir } = record;
     try {
       mkdirSync(this.config.appsDir, { recursive: true });
@@ -614,7 +615,7 @@ export class AppManager {
     }
     // The first prompt goes in front of anything the user sent while the app was being set up.
     const rt = this.runtime(app.id);
-    rt.queue.unshift({ kind: "prompt", text: agentPrompt, ...(itemId ? { itemId } : {}), ...(images.length ? { images } : {}) });
+    rt.queue.unshift(buildOnly ? { kind: "build" } : { kind: "prompt", text: agentPrompt, ...(itemId ? { itemId } : {}), ...(images.length ? { images } : {}) });
     rt.held = false;
     if (!rt.running) void this.drain(record);
   }
@@ -963,7 +964,7 @@ export class AppManager {
     this.sharingBusy.add(id);
     try {
       if (shared) {
-        const { sharing, movedKey } = await shareApp(record.app, {
+        const { sharing, movedKey } = await shareApp(this.shareView(record), {
           github: this.github,
           ensureCodeRepo: () => this.ensureCodeRepo(record),
           ...(this.builder.keys
@@ -978,7 +979,7 @@ export class AppManager {
         // A plain build (no agent turn unless it fails), so the phone gets the build with the new key.
         if (movedKey && record.app.latestApk) this.enqueue(record, { kind: "build" });
       } else {
-        record.app.sharing = await unshareApp(record.app, { github: this.github, log: this.log });
+        record.app.sharing = await unshareApp(this.shareView(record), { github: this.github, log: this.log });
         this.touch(record);
       }
       return record.app;
@@ -1009,7 +1010,7 @@ export class AppManager {
         }
       }
       try {
-        const releases = await publishVersion(record.app, build, req, {
+        const releases = await publishVersion(this.shareView(record), build, req, {
           github: this.releaseApi,
           apks,
           currentSigner: () => this.currentSigner(record),
@@ -1049,7 +1050,7 @@ export class AppManager {
     if (this.sharingBusy.has(id)) throw new HttpError(409, "This app is already being published or shared.");
     this.sharingBusy.add(id);
     try {
-      const releases = await pullBack(record.app, buildNumber, {
+      const releases = await pullBack(this.shareView(record), buildNumber, {
         github: this.releaseApi,
         readUpdateJson: async (full, tag) => parseUpdateJson(await githubCli.downloadAsset(full, tag, "update.json")),
         writeAsset: (full, tag, name, content) => githubCli.writeAsset(full, tag, name, content),
@@ -1420,6 +1421,175 @@ export class AppManager {
       if (!record.deleted) this.log(`[${app.slug}] own version stopped:`, (error as Error).message);
     });
     return app;
+  }
+
+  /** The app as its sharing sees it: a renamed app keeps the slug its releases repo was made with (Rename). */
+  private shareView(record: AppRecord): App {
+    return record.shareSlug && record.shareSlug !== record.app.slug ? { ...record.app, slug: record.shareSlug } : record.app;
+  }
+
+  /**
+   * Duplicate (an app's options): a second, separate app from one of the person's own apps. Its code
+   * with its Git history and the agent's notes, a new package id, its own signing key and its own
+   * private repo; versions start at 1 and its chat starts fresh with one line saying where it came
+   * from. Data saved inside the app on a phone is never copied. With `change`, its agent starts on
+   * it; without, it is only built, so it installs next to the original.
+   */
+  duplicate(id: string, req: Partial<DuplicateAppRequest>): App {
+    const source = this.record(id);
+    this.writable(source);
+    const adopt = this.builder.adoptApp;
+    if (!adopt) throw new HttpError(409, "This PC cannot duplicate apps.");
+    if (!source.ready || source.app.status === "creating") throw new HttpError(409, "This app is not ready yet.");
+    if (source.app.preset === "expo-exact") throw new HttpError(409, "Expo Exact apps cannot be duplicated yet.");
+    const cleanName = String(req.name ?? "").trim().replace(/\s+/g, " ");
+    if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the copy a name of up to 50 characters.");
+    const change = typeof req.change === "string" ? req.change.trim().slice(0, 4000) : "";
+    const build = source.app.latestApk?.number;
+    const from = `Copied from ${source.app.name}${build ? `, version ${build}` : ""}.`;
+    const app = this.newRecordApp(cleanName, change || from);
+    app.preset = source.app.preset ?? "react-native";
+    const record: ReadyRecord = { app, dir: join(this.config.appsDir, app.slug) };
+    this.store.add(record);
+    this.runtime(app.id).held = true;
+    this.broadcast({ type: "app.updated", app });
+    this.emitItem(record, { id: randomUUID(), kind: "assistant", text: from });
+    const note = duplicateNote({ name: source.app.name, ...(build ? { build } : {}) }, cleanName);
+    let itemId: string | undefined;
+    if (change) {
+      itemId = randomUUID();
+      this.emitItem(record, { id: itemId, kind: "user", text: change });
+    } else {
+      // Nothing to change now: told to the agent with the person's first message instead.
+      record.agentNote = note;
+    }
+    const sourceDir = source.dir;
+    this.log(`[${app.slug}] duplicating ${source.app.slug}`);
+    this.finishCreate(
+      record,
+      change || from,
+      `${note}\n\n${change}`,
+      itemId,
+      [],
+      async (dir) => {
+        const made = await adopt({ src: sourceDir, dir, name: cleanName, slug: app.slug, packageName: app.packageName, onLog: () => {} });
+        app.preset = made.preset;
+        // Its history comes along (adoptApp leaves .git out); its GitHub address does not.
+        if (existsSync(join(sourceDir, ".git")) && !existsSync(join(dir, ".git"))) cpSync(join(sourceDir, ".git"), join(dir, ".git"), { recursive: true });
+        if (existsSync(join(dir, ".git"))) await git.dropOrigin(dir);
+      },
+      !change,
+    ).catch((error: unknown) => {
+      if (!record.deleted) this.log(`[${app.slug}] duplicate stopped:`, (error as Error).message);
+    });
+    return app;
+  }
+
+  /** Apps being renamed right now (one change at a time). */
+  private readonly renaming = new Set<string>();
+
+  /**
+   * Rename (an app's options): a new name, folder and private repo name; the package id stays, so the
+   * phone updates it in place. newPackage: also a new package id and signing key, so it installs as a
+   * new app and the old copy stops getting updates. The agent starts a new session (its notes stay in
+   * the folder). A shared app's -releases repo keeps its name (shareSlug). Then a build, so the new
+   * name reaches the phone.
+   */
+  async rename(id: string, req: Partial<RenameAppRequest>): Promise<App> {
+    const record = this.record(id);
+    this.writable(record);
+    const renameApp = this.builder.renameApp;
+    if (!renameApp) throw new HttpError(409, "This PC cannot rename apps.");
+    if (!record.ready || record.app.status === "creating") throw new HttpError(409, "This app is not ready yet.");
+    if (record.app.preset === "expo-exact") throw new HttpError(409, "Expo Exact apps cannot be renamed yet.");
+    const cleanName = String(req.name ?? "").trim().replace(/\s+/g, " ");
+    if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
+    const newPackage = req.newPackage === true;
+    const oldName = record.app.name;
+    if (cleanName === oldName && !newPackage) return record.app;
+    const rt = this.runtime(id);
+    const busy = rt.running || rt.held || rt.queue.length > 0 || this.busy(record) || (this.workers?.activeCount(id) ?? 0) > 0 || record.app.status === "building";
+    if (busy || this.renaming.has(id) || this.sharingBusy.has(id)) throw new HttpError(409, `${oldName} is busy. Rename it when it is done.`);
+    if (newPackage && record.app.sharing?.shared) {
+      throw new HttpError(409, `${oldName} is shared with others. Turn off Share with others first, then give it a new identity.`);
+    }
+    const oldSlug = record.app.slug;
+    const base = slugify(cleanName);
+    const taken = (slug: string) =>
+      slug !== oldSlug && (this.store.allRecords().some((r) => r !== record && r.app.slug === slug) || existsSync(join(this.config.appsDir, slug)));
+    let slug = base;
+    for (let n = 2; taken(slug); n++) slug = `${base}${n}`;
+    let packageName = record.app.packageName;
+    if (newPackage) {
+      const pkgTaken = (p: string) => p === record.app.packageName || this.store.allRecords().some((r) => r !== record && r.app.packageName === p);
+      // A new identity needs a new package id, so the slug moves on when the name keeps it.
+      for (let n = 2; pkgTaken(`com.anyapp.${slug}`) || taken(slug); n++) slug = `${base}${n}`;
+      packageName = `com.anyapp.${slug}`;
+    }
+    this.renaming.add(id);
+    try {
+      // A new session in the new folder: the agent picks up from its notes.
+      await rt.session?.stop();
+      rt.session = undefined;
+      await this.workers?.forget(id);
+      delete record.sessionId;
+      delete record.sessionEngine;
+      delete record.engineSessions;
+      delete (record as ReadyRecord).coordinatorPlaybook;
+      const oldDir = record.dir;
+      const result = await renameApp({ dir: oldDir, name: cleanName, slug, packageName, onLog: () => {} });
+      let dir = oldDir;
+      if (slug !== oldSlug) {
+        const next = join(this.config.appsDir, slug);
+        try {
+          renameSync(oldDir, next);
+          dir = next;
+        } catch (error) {
+          // The folder is in use: put the names back, nothing else changed yet.
+          await renameApp({ dir: oldDir, name: oldName, slug: oldSlug, packageName: record.app.packageName, onLog: () => {} }).catch(() => {});
+          throw new HttpError(409, `The app's folder could not be renamed (${firstLine((error as Error).message, 120)}). Close anything that has it open and try again.`);
+        }
+      }
+      record.dir = dir;
+      this.runtimes.delete(id);
+      if (record.app.sharing && !record.shareSlug && !newPackage) record.shareSlug = oldSlug;
+      if (newPackage) {
+        // A new identity: its old sharing (off now) stays on GitHub as it is, and it can be shared anew.
+        delete record.app.sharing;
+        delete record.shareSlug;
+        delete record.app.latestApk;
+        record.app.signing = "own";
+      }
+      record.app.name = cleanName;
+      record.app.slug = slug;
+      record.app.packageName = packageName;
+      record.app.iconVersion += 1;
+      record.iconStamp = this.iconStamp(record);
+      await git.commitAll(dir, `Rename to ${cleanName}`).catch((error: unknown) => this.log(`[${slug}] rename commit failed:`, (error as Error).message));
+      if (record.app.repoUrl && slug !== oldSlug) await this.renameCodeRepo(record, oldSlug);
+      (record as ReadyRecord).agentNote = renameNote(oldName, cleanName, dir, newPackage);
+      this.emitItem(record, { id: randomUUID(), kind: "assistant", text: `Renamed from ${oldName} to ${cleanName}${newPackage ? ", as a new app" : ""}.` });
+      this.log(`[${slug}] renamed from ${oldSlug}${result.packageChanged ? ` with the new package ${packageName}` : ""}`);
+      this.touch(record);
+      this.enqueue(record, { kind: "build" });
+      return record.app;
+    } finally {
+      this.renaming.delete(id);
+    }
+  }
+
+  /** Rename: the private code repo anyapp-<old slug> follows (never a -releases repo, never another name). */
+  private async renameCodeRepo(record: AppRecord, oldSlug: string): Promise<void> {
+    const full = record.app.repoUrl!.replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "");
+    const newName = `anyapp-${record.app.slug}`;
+    if (!this.config.github || full.split("/")[1] !== `anyapp-${oldSlug}` || !this.github.renameRepo) return;
+    try {
+      record.app.repoUrl = await this.github.renameRepo(full, newName);
+      await git.renameOrigin(record.dir, newName);
+    } catch (error) {
+      this.log(`[${record.app.slug}] GitHub rename failed:`, (error as Error).message);
+      this.errorItem(record, `GitHub did not rename the repo (${firstLine((error as Error).message, 160)}); it keeps its old name, which still works.`);
+    }
   }
 
   /** A new app's record: unique slug and package id, "creating". */

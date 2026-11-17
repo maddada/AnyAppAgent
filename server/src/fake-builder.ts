@@ -109,3 +109,16 @@ export async function adoptApp(args: { src: string; dir: string; name: string; s
   writeFileSync(join(args.dir, "app.json"), JSON.stringify(meta, null, 2));
   return { preset: "react-native" };
 }
+
+/** Rename: the new name, slug and package in app.json, in place (React Native shape only). */
+export async function renameApp(args: { dir: string; name: string; slug: string; packageName: string }): Promise<{ preset: "react-native"; packageChanged: boolean }> {
+  const path = join(args.dir, "app.json");
+  if (!existsSync(path)) throw new Error("This is not an app made with Kiwimake (no app.json or anyapp.json).");
+  const meta = JSON.parse(readFileSync(path, "utf8")) as { expo: { name: string; slug: string; android?: { package?: string } } };
+  const packageChanged = meta.expo.android?.package !== args.packageName;
+  meta.expo.name = args.name;
+  meta.expo.slug = args.slug;
+  meta.expo.android = { ...meta.expo.android, package: args.packageName };
+  writeFileSync(path, JSON.stringify(meta, null, 2));
+  return { preset: "react-native", packageChanged };
+}

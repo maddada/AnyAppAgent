@@ -209,3 +209,17 @@ export async function restoreTree(dir: string, commit: string, message: string, 
 export async function resetKeep(dir: string, commit: string): Promise<boolean> {
   return (await git(dir, ["reset", "--keep", commit])).code === 0;
 }
+
+/** Duplicate: the copy keeps the original's history but not its GitHub address (it gets its own repo). */
+export async function dropOrigin(dir: string): Promise<void> {
+  await git(dir, ["remote", "remove", "origin"]);
+}
+
+/** Rename: origin follows the code repo's new name (GitHub forwards the old one, but say it right). */
+export async function renameOrigin(dir: string, newName: string): Promise<void> {
+  const url = await git(dir, ["remote", "get-url", "origin"]);
+  if (url.code !== 0) return;
+  const next = url.stdout.trim().replace(/[^/:]+?(\.git)?$/, (_m, dotGit: string | undefined) => `${newName}${dotGit ?? ""}`);
+  const set = await git(dir, ["remote", "set-url", "origin", next]);
+  if (set.code !== 0) throw new Error(`git remote set-url failed: ${lastLine(set)}`);
+}

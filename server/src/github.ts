@@ -1,7 +1,8 @@
 // The GitHub calls sharing needs, through the `gh` CLI that onboarding signed in (docs/DISTRIBUTION.md,
 // "GitHub"). Only repos named anyapp-<slug>-releases are ever created, made public, made private or
 // written to here. The one deletion: deleteAppRepo, when the person deletes an app for good, and
-// only for anyapp-<slug> and anyapp-<slug>-releases.
+// only for anyapp-<slug> and anyapp-<slug>-releases. The one rename: renameAppRepo (Rename), only
+// a private code repo anyapp-<slug> to anyapp-<new slug>; a -releases repo is never renamed.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -164,4 +165,18 @@ export async function deleteAppRepo(full: string): Promise<void> {
   if (/could not resolve to a repository|not found|404/i.test(text)) return;
   if (/delete_repo/i.test(text)) throw new Error("GitHub needs one more permission to delete repositories (run: gh auth refresh -s delete_repo)");
   throw new Error(lastLine(result));
+}
+
+/**
+ * Rename (an app's options): the app's private code repo anyapp-<slug> becomes anyapp-<new slug>.
+ * GitHub forwards the old address. Never a -releases repo: every installed copy of a shared app
+ * checks that address for updates. Returns the repo's new web address.
+ */
+export async function renameAppRepo(full: string, newName: string): Promise<string> {
+  const [owner, name] = full.split("/");
+  const okName = (n: string | undefined) => !!n && APP_REPO_PATTERN.test(n) && !RELEASES_REPO_PATTERN.test(n);
+  if (!owner || !okName(name) || !okName(newName)) throw new Error(`Refusing to rename the repository ${full} to ${newName}`);
+  const result = await gh(["repo", "rename", newName, "--repo", full, "--yes"]);
+  if (result.code !== 0) throw new Error(lastLine(result));
+  return `https://github.com/${owner}/${newName}`;
 }

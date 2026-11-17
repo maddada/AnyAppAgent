@@ -123,6 +123,23 @@ anything in them.
   app, adapted to its names and look. Nothing flows between apps by itself, so copy only on request.`;
 }
 
+/** Told to a duplicate's agent with its first message (Duplicate, in the app's options). */
+export function duplicateNote(origin: { name: string; build?: number }, newName: string): string {
+  return `(From the PC, not from the person: this app, "${newName}", is a duplicate the person made of their
+app "${origin.name}"${origin.build ? ` (version ${origin.build})` : ""}, to take it another way. It is a separate app now: its own
+name, package, signing key and repository, installed next to the original; nothing flows between
+the two by itself. Its code, its Git history, ${MEMORY_FILE} and ${OVERVIEW_FILE} came with it: read them.
+Where the app shows its own name, show "${newName}", and update ${OVERVIEW_FILE} for this app as it changes.)`;
+}
+
+/** Told to the agent with the next message after the person renamed the app (Rename). */
+export function renameNote(oldName: string, newName: string, dir: string, newPackage: boolean): string {
+  return `(From the PC, not from the person: they renamed this app from "${oldName}" to "${newName}". Its folder
+is now ${dir}${newPackage ? ", and it has a new package id and signing key, so it installs as a new app on the phone" : ""}. This is a new
+session: read ${MEMORY_FILE} and ${OVERVIEW_FILE} to pick up where you were. Where the app shows its own
+name, show "${newName}", and put the new name in ${OVERVIEW_FILE}.)`;
+}
+
 /** The first message of an own version made from someone's shared app ("Make my own version"). */
 export function cloneNote(origin: { name: string; owner?: string; version?: string; repo?: string }, newName: string): string {
   return `(From the PC, not from the person: this app, "${newName}", is the person's own version of

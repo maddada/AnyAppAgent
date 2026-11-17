@@ -21,6 +21,12 @@ export interface AppRecord {
   purged?: boolean;
   /** The update the person dismissed (health.ts updateKey); a newer one shows again. */
   healthDismissed?: string;
+  /**
+   * The slug its sharing was set up with, when the app was renamed after that (Rename): its public
+   * anyapp-<slug>-releases repo, install link and update feed keep that name, because every installed
+   * copy checks that address. Absent: the app's own slug.
+   */
+  shareSlug?: string;
 }
 
 class Debounced {

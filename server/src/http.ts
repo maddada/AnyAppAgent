@@ -34,7 +34,7 @@ import type {
   ShareRequest,
   ServerEvent,
   UpdateTodoRequest,
-  HideRequest,
+  HideRequest, DuplicateAppRequest, RenameAppRequest,
   PinsRequest,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
@@ -427,6 +427,19 @@ export function startHttpServer(deps: {
     if (restoreDeleted) {
       if (method !== "POST") return sendError(res, 405, "Method not allowed.");
       return sendJson(res, 200, apps.restoreDeleted(decodeURIComponent(restoreDeleted[1]!)));
+    }
+    // Duplicate and Rename (an app's options; shared/protocol.ts).
+    const duplicate = /^\/api\/apps\/([^/]+)\/duplicate$/.exec(path);
+    if (duplicate) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      const body = await readBody<Partial<DuplicateAppRequest>>(req, 64 * 1024);
+      return sendJson(res, 201, apps.duplicate(decodeURIComponent(duplicate[1]!), body));
+    }
+    const rename = /^\/api\/apps\/([^/]+)\/rename$/.exec(path);
+    if (rename) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      const body = await readBody<Partial<RenameAppRequest>>(req, 4 * 1024);
+      return sendJson(res, 200, await apps.rename(decodeURIComponent(rename[1]!), body));
     }
     const hide = /^\/api\/apps\/([^/]+)\/hide$/.exec(path);
     if (hide) {

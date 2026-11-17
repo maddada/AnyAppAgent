@@ -29,6 +29,8 @@ export interface Builder {
   getIconPath(args: { dir: string }): string | null;
   /** "Make my own version" (docs/CHANGE-THIS-APP.md): a separate app from another app's code. */
   adoptApp?(args: { src: string; dir: string; name: string; slug: string; packageName: string; onLog?: (line: string) => void }): Promise<{ preset: AppPreset }>;
+  /** Rename: a new name and slug for the app in `dir`, in place, and a new package id (with its own key) when it differs. */
+  renameApp?(args: { dir: string; name: string; slug: string; packageName: string; onLog?: (line: string) => void }): Promise<{ preset: AppPreset; packageChanged: boolean }>;
   // Signing keys (docs/DISTRIBUTION.md): only the real builder has them.
   keys?: {
     list(): Promise<{ keys: { id: string; kind: "shared" | "own" | "moved"; certSha256: string }[]; lastBackupAt: string | null; notBackedUp: string[] }>;
@@ -76,6 +78,7 @@ export async function loadBuilder(choice: "auto" | "real" | "fake"): Promise<Bui
     buildApk: (args) => mod.buildApk(args),
     getIconPath: (args) => mod.getIconPath(args),
     ...(typeof mod.adoptApp === "function" ? { adoptApp: (args: Parameters<NonNullable<Builder["adoptApp"]>>[0]) => mod.adoptApp!(args) } : {}),
+    ...(typeof mod.renameApp === "function" ? { renameApp: (args: Parameters<NonNullable<Builder["renameApp"]>>[0]) => mod.renameApp!(args) } : {}),
     ...(mod.listSigningKeys && mod.backupSigningKeys && mod.restoreSigningKeys && mod.appSigningKind && mod.moveAppToOwnKey
       ? {
           keys: {

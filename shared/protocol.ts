@@ -485,6 +485,24 @@ export interface PinsRequest {
 export interface HideRequest {
   hidden: boolean;
 }
+// Duplicate and Rename (added; an app's options, next to Pin to top, Hide and Delete). Older PCs: 404.
+// POST /api/apps/:id/duplicate  DuplicateAppRequest -> App (201): a second, separate app from this
+//   one: its code with its Git history and the agent's notes, a new package id, its own signing key
+//   and its own private repo; versions start at 1 and its chat starts fresh. Data saved inside the
+//   app on a phone is never copied. With `change` its agent starts on it; without, the PC only builds it.
+export interface DuplicateAppRequest {
+  name: string; // the copy's name, up to 50 characters
+  change?: string; // "What should be different?"; empty: an exact copy, built as it is
+}
+// POST /api/apps/:id/rename  RenameAppRequest -> App: a new name, folder and private repo name
+//   (GitHub forwards the old address); the package id stays, so it updates in place. Its agent starts
+//   a new session (its notes stay). A shared app's -releases repo is never renamed.
+//   newPackage: also a new package id and signing key, so it installs as a new app and the old copy
+//   stops getting updates. Refused (409) while the app is shared or busy.
+export interface RenameAppRequest {
+  name: string;
+  newPackage?: boolean;
+}
 // GET /api/trash -> App[] (Recently deleted, newest first; each row has deletedAt)
 // POST /api/trash/:id/restore -> App (back in the list, not pinned, not hidden; reinstalls like any app)
 // DELETE /api/trash -> 204 (Empty: every app in it is deleted for good on this PC; GitHub keeps its code)

@@ -118,7 +118,11 @@ getIconPath({ dir }) -> string | null
     Absolute path of the app's launcher icon PNG, or null.
 adoptApp({ src, dir, name, slug, packageName, onLog? }) -> Promise<{ preset }>
     "Make my own version" (docs/CHANGE-THIS-APP.md): a separate app from another app's code, with
-    its own name, package id and signing key. React Native and Kotlin.
+    its own name, package id and signing key. React Native and Kotlin. Duplicate uses it too.
+renameApp({ dir, name, slug, packageName, onLog? }) -> Promise<{ preset, packageChanged }>
+    Rename, in place: the new name and slug in app.json / anyapp.json and strings.xml; a new
+    package id gets its own new key (and a React Native app's android/ is made again). The caller
+    moves the folder. React Native and Kotlin.
 ```
 
 buildApk also takes `changeOwner` and `changeOthers` (the "Change this app" values written into
@@ -422,3 +426,33 @@ toast after Save, a button to send to Kiwimake when it is their app, and Share f
   `anyappagent://?chat=<package>` opens an app's chat. No protocol change.
 - **Paste**: the chat shows "Paste the picture you copied" above the chat box while the clipboard
   holds a picture not pasted or turned down yet.
+
+## Duplicate and Rename (added 2026-11-18)
+
+The user picked, on the fork and rename page: Q40 A, Q41 B named "Duplicate", Q42 B with a toggle
+for C. Both sit in the small row of the app's sheet on the phone (Pin to top, Hide, Duplicate,
+Rename, Delete; the pencil next to the name also renames) and in the app row's menu on the desktop.
+PC apps only (cloud apps keep only Delete there).
+
+- **Duplicate** (`POST /api/apps/:id/duplicate`): `builder.adoptApp` from the app's own folder, plus
+  its `.git` (history kept, the GitHub remote dropped), so the copy has the code, its Git history,
+  `APP_MEMORY.md` and `overview.md`. A new slug and package id `com.anyapp.<slug>`, its own signing
+  key, its own private repo `anyapp-<slug>`; versions start at 1. Its chat starts with one line,
+  "Copied from Tea Timer, version 7." "What should be different?" filled in: that is its first
+  message and the agent starts on it; empty: the PC only builds it (no agent turn) and the agent
+  hears it is a duplicate with the person's first message. Data inside the app on a phone is never
+  copied. Expo Exact apps are refused.
+- **Rename** (`POST /api/apps/:id/rename`): the name, the folder (`~/aa/apps/<new slug>`) and the
+  private repo (`gh repo rename`, only `anyapp-<old slug>` to `anyapp-<new slug>`; GitHub forwards
+  the old address) change; the package id stays, so the phone updates in place with the next build
+  (a full build: Android's app name is native). The agent starts a new session in the new folder
+  (Claude and Codex keep sessions by folder) and is told about the rename with the next message; its
+  notes are in the folder. A shared app's `anyapp-<slug>-releases` repo is never renamed: the record
+  keeps `shareSlug`, and sharing, publishing and the install link keep using it. Refused while the
+  app or a helper is working.
+- **Make it a new app** (the toggle, off by default): also a new package id and signing key, so the
+  phone gets it as a new app and the old copy stops getting updates; what the old one saved stays
+  in it. Refused while the app is shared; an earlier, switched-off sharing is forgotten so it can be
+  shared anew.
+
+Protocol (additive): `DuplicateAppRequest`, `RenameAppRequest` and the two routes.

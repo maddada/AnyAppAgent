@@ -15,6 +15,8 @@ export interface GithubApi {
   putFile(full: string, path: string, content: Buffer, message: string): Promise<void>;
   /** Deleting an app for good (Pin, hide and delete): its own repos only. Optional for test doubles. */
   deleteRepo?(full: string): Promise<void>;
+  /** Rename: the app's private code repo only (owner/anyapp-<slug> to anyapp-<new slug>); returns its new address. */
+  renameRepo?(full: string, newName: string): Promise<string>;
 }
 
 export const realGithub: GithubApi = {
@@ -24,6 +26,7 @@ export const realGithub: GithubApi = {
   setVisibility: github.setVisibility,
   putFile: github.putFile,
   deleteRepo: github.deleteAppRepo,
+  renameRepo: github.renameAppRepo,
 };
 
 export interface ShareDeps {
