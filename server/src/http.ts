@@ -47,6 +47,7 @@ import { log } from "./fs-util.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
 import { workerApiRoute, workerToolsRoute } from "./worker-http.ts";
 import { sharedInNote } from "./playbook.ts";
+import { galleryRoute } from "./gallery.ts";
 
 const MAX_BODY = 1024 * 1024;
 /** A message can carry pictures (up to 6, each at most about 5 MB as base64) and long pasted text. */
@@ -466,6 +467,8 @@ export function startHttpServer(deps: {
       if (method === "GET") return sendJson(res, 200, { name: apps.ownerName() } satisfies OwnerInfo);
       return sendError(res, 405, "Method not allowed.");
     }
+    // Ready apps (docs/GALLERY.md): the list of official Kiwimake apps; Make it mine is /api/clones.
+    if (path === "/api/gallery") return galleryRoute(res, method, sendJson);
     if (path === "/api/clones") {
       if (method !== "POST") return sendError(res, 405, "Method not allowed.");
       return sendJson(res, 201, await apps.cloneFrom(await readBody<CloneRequest>(req, 64 * 1024)));

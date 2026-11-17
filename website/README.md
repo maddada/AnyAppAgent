@@ -93,3 +93,11 @@ Local evidence, excluded from Git, is in
 Provider references:
 [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)
 and [Porkbun nameserver propagation](https://kb.porkbun.com/article/35-how-long-will-it-take-to-switch-nameservers).
+
+## Ready apps list
+
+`public/gallery.json` is the gallery of official Kiwimake apps (`docs/GALLERY.md`), served at
+`https://kiwimake.ai/gallery.json` with `Access-Control-Allow-Origin: *` and a 5-minute cache
+(`public/_headers`). The phone and the companion read it there first, then from this file on
+GitHub's `main`. It ships with an empty list: an app goes in only after it is shared and its
+first version is published.
