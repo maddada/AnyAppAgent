@@ -27,12 +27,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Never `cmd | grep -q` here: with pipefail, grep leaving at the first match makes the writer fail
+# with SIGPIPE (exit 141) and the check fail although it matched. Read the output first.
 check_app() { # <Kiwimake.app> <arch> <where>
   local app="$1" arch="$2" where="$3"
   codesign --verify --deep --strict --verbose=2 "$app"
   local info
   info="$(codesign -dvv "$app" 2>&1)"
-  file "$app/Contents/MacOS/Kiwimake" | grep -q "$([ "$arch" = x64 ] && echo x86_64 || echo arm64)" || { echo "$where: not a $arch app" >&2; exit 1; }
+  local kind ents
+  kind="$(file "$app/Contents/MacOS/Kiwimake")"
+  grep -q "$([ "$arch" = x64 ] && echo x86_64 || echo arm64)" <<<"$kind" || { echo "$where: not a $arch app" >&2; exit 1; }
   if [ "$adhoc" = 1 ]; then
     echo "ok: $where is intact (ad-hoc signed, $arch)"
     return
@@ -42,7 +46,8 @@ check_app() { # <Kiwimake.app> <arch> <where>
   grep -Eq "flags=0x[0-9a-f]*\(runtime\)" <<<"$info" || { echo "$where: hardened runtime is off" >&2; exit 1; }
   grep -q "Timestamp=" <<<"$info" || { echo "$where: no secure timestamp" >&2; exit 1; }
   # The companion runs as Electron in Node mode and loads native modules: the entitlements must be there.
-  codesign -d --entitlements - --xml "$app" 2>/dev/null | grep -q "com.apple.security.cs.disable-library-validation" || { echo "$where: entitlements missing" >&2; exit 1; }
+  ents="$(codesign -d --entitlements - --xml "$app" 2>/dev/null)"
+  grep -q "com.apple.security.cs.disable-library-validation" <<<"$ents" || { echo "$where: entitlements missing" >&2; exit 1; }
   spctl --assess --type execute --verbose=2 "$app"
   xcrun stapler validate "$app"
   echo "ok: $where is Developer ID signed ($team), hardened, notarized and stapled ($arch)"
@@ -54,7 +59,8 @@ for arch in "${archs[@]}"; do
   [ -f "$dmg" ] && [ -f "$zip" ] || { echo "missing $dmg or $zip" >&2; exit 1; }
   if [ "$adhoc" = 0 ]; then
     codesign --verify --strict --verbose=2 "$dmg"
-    codesign -dvv "$dmg" 2>&1 | grep -qF "Authority=$authority" || { echo "$dmg: not signed by $authority" >&2; exit 1; }
+    dmg_info="$(codesign -dvv "$dmg" 2>&1)"
+    grep -qF "Authority=$authority" <<<"$dmg_info" || { echo "$dmg: not signed by $authority" >&2; exit 1; }
     spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
     xcrun stapler validate "$dmg"
     echo "ok: $dmg is Developer ID signed, notarized and stapled"
