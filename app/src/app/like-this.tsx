@@ -17,7 +17,6 @@ import type { App } from "@/lib/protocol";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
-import { DictationNote, MicButton } from "@/ui/MicButton";
 import { useKeyboardHeight } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
@@ -164,9 +163,9 @@ export default function LikeThis() {
             placeholder={listening ? "Listening..." : "Keep the big timer and the calm colours. Change the sounds, and let me set two timers."}
             multiline
             inputStyle={listening ? { borderWidth: border.focusWidth, borderColor: t.problem } : undefined}
-            trailing={<MicButton dictation={dictation} testID="like-this-mic" />}
+            dictation={dictation}
+            micTestID="like-this-mic"
           />
-          <DictationNote dictation={dictation} style={{ marginTop: -space.sm }} />
 
           <View style={{ gap: space.sm }}>
             {error ? <StateLine kind="problem" label={error} role="caption" lines={0} /> : null}

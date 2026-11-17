@@ -1,9 +1,12 @@
-// Dictation into a prompt box with Android's own speech recognition (modules/anyapp-dictation):
+// Dictation into a text box with Android's own speech recognition (modules/anyapp-dictation):
 // tap the mic, the words appear in the box as they are heard, tap again (or stop talking) to
 // stop. The text stays in the box to edit; nothing is ever sent by dictation.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AppState, Keyboard, Linking, PermissionsAndroid, Platform } from "react-native";
+// The words go in where the caret was (shared/chat/dictation.ts merges the running results), so
+// text already in the box and every earlier dictation stay.
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AppState, Keyboard, Linking, PermissionsAndroid, Platform, type TextInputFocusEvent, type TextInputSelectionChangeEvent } from "react-native";
 import { AnyAppDictation, type DictationErrorCode, type DictationEvent } from "anyapp-dictation";
+import { DictationText } from "@shared/chat/dictation";
 
 export type DictationPhase = "idle" | "asking" | "starting" | "listening";
 
@@ -21,6 +24,16 @@ export interface Dictation {
   cancel: () => void;
   dismiss: () => void;
   openSettings: () => void;
+  /** Props for the box's TextInput, so the words go in at its caret (merged with the box's own). */
+  track: InputTracking;
+}
+
+type FocusEvent = TextInputFocusEvent;
+type SelectionEvent = TextInputSelectionChangeEvent;
+export interface InputTracking {
+  onFocus: (e: FocusEvent) => void;
+  onBlur: (e: FocusEvent) => void;
+  onSelectionChange: (e: SelectionEvent) => void;
 }
 
 const MIC = PermissionsAndroid.PERMISSIONS.RECORD_AUDIO;
@@ -54,13 +67,6 @@ function isAvailable(): boolean {
   return availableCache;
 }
 
-/** `before` and the dictated words, with a space between them where needed. */
-export function joinDictation(before: string, words: string): string {
-  if (!words) return before;
-  if (!before) return words;
-  return /\s$/.test(before) ? before + words : `${before} ${words}`;
-}
-
 /** Only one box listens at a time: starting in another box drops the one before. */
 let owner: { token: object; drop: () => void } | null = null;
 
@@ -70,7 +76,10 @@ export function useDictation({ value, onChange }: { value: string; onChange: (te
   const [error, setError] = useState<string | null>(null);
   const [needsSettings, setNeedsSettings] = useState(false);
   const [token] = useState(() => ({}));
-  const live = useRef({ value, onChange, phase, base: "", heard: false });
+  const live = useRef({ value, onChange, phase, text: null as DictationText | null, heard: false });
+  // The box's caret, from its selection events while it has focus (null: the end of the text).
+  const caret = useRef<{ start: number; end: number } | null>(null);
+  const focused = useRef(false);
   useLayoutEffect(() => {
     live.current.value = value;
     live.current.onChange = onChange;
@@ -94,6 +103,20 @@ export function useDictation({ value, onChange }: { value: string; onChange: (te
     return () => clearTimeout(timer);
   }, [error, needsSettings]);
 
+  /** Merges a result into the box as it is now (a change made while listening stays). */
+  const put = useCallback((said: string, final: boolean) => {
+    const l = live.current;
+    if (!l.text) return;
+    l.text.sync(l.value);
+    const out = final ? l.text.final(said) : l.text.partial(said);
+    if (final) l.text = null;
+    caret.current = { start: out.caret, end: out.caret };
+    if (out.value === l.value) return;
+    // The next result may arrive before the box renders again: it merges into this one.
+    l.value = out.value;
+    l.onChange(out.value);
+  }, []);
+
   useEffect(() => {
     if (!AnyAppDictation) return;
     const sub = AnyAppDictation.addListener("onDictation", (e: DictationEvent) => {
@@ -108,15 +131,12 @@ export function useDictation({ value, onChange }: { value: string; onChange: (te
           break;
         case "partial":
           if (e.text) l.heard = true;
-          l.onChange(joinDictation(l.base, e.text));
+          put(e.text, false);
           break;
         case "final":
-          if (e.text) {
-            l.heard = true;
-            l.onChange(joinDictation(l.base, e.text));
-          } else if (!l.heard) {
-            fail(MESSAGES.silence);
-          }
+          if (e.text) l.heard = true;
+          else if (!l.heard) fail(MESSAGES.silence);
+          put(e.text, true);
           break;
         case "error":
           // Words already in the box stay; "nothing heard" after words is just the end.
@@ -129,7 +149,7 @@ export function useDictation({ value, onChange }: { value: string; onChange: (te
       }
     });
     return () => sub.remove();
-  }, [token, fail, reset]);
+  }, [token, fail, reset, put]);
 
   const cancel = useCallback(() => {
     if (owner?.token !== token) return;
@@ -162,7 +182,8 @@ export function useDictation({ value, onChange }: { value: string; onChange: (te
     owner?.drop();
     owner = { token, drop: reset };
     const l = live.current;
-    l.base = l.value;
+    const at = caret.current;
+    l.text = at ? new DictationText(l.value, at.start, at.end) : new DictationText(l.value);
     l.heard = false;
     setLevel(0);
     setPhase("starting");
@@ -178,7 +199,24 @@ export function useDictation({ value, onChange }: { value: string; onChange: (te
     if (owner?.token === token) AnyAppDictation?.stop();
   }, [start, token]);
 
+  const track = useMemo<InputTracking>(
+    () => ({
+      onFocus: () => {
+        focused.current = true;
+      },
+      onBlur: () => {
+        focused.current = false;
+      },
+      onSelectionChange: (e) => {
+        // Only the person's own caret: a box without focus also reports one when its text is set.
+        if (focused.current) caret.current = e.nativeEvent.selection;
+      },
+    }),
+    [],
+  );
+
   return {
+    track,
     available: isAvailable(),
     phase,
     level,

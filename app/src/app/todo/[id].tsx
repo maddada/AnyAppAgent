@@ -111,6 +111,7 @@ export default function TodoScreen() {
             placeholder="Add an idea"
             value={text}
             onChangeText={setText}
+            voice
             maxLength={500}
             returnKeyType="done"
             submitBehavior="submit"

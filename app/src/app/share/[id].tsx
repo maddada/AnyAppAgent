@@ -1,13 +1,14 @@
 // Sharing one app with other people and publishing versions to them (docs/DISTRIBUTION.md,
 // stage 6): the same controls as the desktop's Share dialog. The PC does the GitHub work.
 import { useEffect, useState } from "react";
-import { ScrollView, Share, Switch, TextInput, View } from "react-native";
+import { ScrollView, Share, Switch, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Send, Share2 } from "lucide-react-native";
 import type { PublishedRelease, ReleaseStats } from "@/lib/protocol";
 import { upsertApp, useStore } from "@/lib/store";
 import { Button, IconButton } from "@/ui/Button";
+import { Field } from "@/ui/Field";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
 import { border, size, space, useTheme } from "@/ui/theme";
@@ -145,15 +146,7 @@ export default function ShareScreen() {
             <T variant="caption" color="textSecondary">
               {newest ? `Build ${newest}, the one on this phone.` : "There is no finished build yet."} Leave the notes empty to use what changed since the last version.
             </T>
-            <TextInput
-              testID="publish-notes"
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="What's new (optional)"
-              placeholderTextColor={t.textTertiary}
-              multiline
-              style={{ minHeight: 72, padding: space.md, borderRadius: 14, borderWidth: border.width, borderColor: t.fieldBorder, backgroundColor: t.fieldBg, color: t.text, textAlignVertical: "top" }}
-            />
+            <Field testID="publish-notes" value={notes} onChangeText={setNotes} placeholder="What's new (optional)" multiline />
             <View style={{ flexDirection: "row", gap: space.sm }}>
               <Button testID="channel-stable" label="Everyone" small variant={channel === "stable" ? "primary" : "quiet"} onPress={() => setChannel("stable")} />
               <Button testID="channel-testing" label="Testers" small variant={channel === "testing" ? "primary" : "quiet"} onPress={() => setChannel("testing")} />

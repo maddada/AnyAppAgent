@@ -22,7 +22,6 @@ import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
 import { DuplicatePanel, RenamePanel } from "@/ui/DuplicateRename";
 import { Field } from "@/ui/Field";
-import { DictationNote, MicButton } from "@/ui/MicButton";
 import { Sheet } from "@/ui/Sheet";
 import { StateLine } from "@/ui/StateLine";
 import { T } from "@/ui/Text";
@@ -1027,9 +1026,9 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
         multiline
         containerStyle={{ marginTop: space.lg }}
         inputStyle={listening ? { borderWidth: border.focusWidth, borderColor: t.problem } : undefined}
-        trailing={<MicButton dictation={dictation} testID="new-app-mic" />}
+        dictation={dictation}
+        micTestID="new-app-mic"
       />
-      <DictationNote dictation={dictation} style={{ marginTop: space.sm }} />
       {both ? <MakeItOn place={place} onChange={setChosenPlace} pcOnline={pcOnline} /> : null}
       <AskMore value={askMore} onChange={setAskMore} />
       {place === "pc" ? <Advanced open={advanced} onToggle={() => setAdvanced(!advanced)} preset={preset} onPreset={setPreset} /> : null}

@@ -523,6 +523,7 @@ function Composer({ appId, app, bottomInset, onSent }: { appId: string; app: App
             ref={input}
             value={text}
             onChangeText={setText}
+            {...dictation.track}
             placeholder={listening ? "Listening..." : state.placeholder}
             placeholderTextColor={t.textTertiary}
             cursorColor={t.accent}

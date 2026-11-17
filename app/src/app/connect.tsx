@@ -265,6 +265,7 @@ function PasteSheet({ visible, onClose, onCode }: { visible: boolean; onClose: (
         autoCapitalize="characters"
         autoCorrect={false}
         multiline
+        voice={false}
         problem={hint}
         inputStyle={typeStyle("mono")}
       />
