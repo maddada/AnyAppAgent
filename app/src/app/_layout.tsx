@@ -62,6 +62,7 @@ export default function RootLayout() {
             <Stack.Screen name="share/[id]" />
             <Stack.Screen name="like-this" options={{ animation: "slide_from_bottom" }} />
             <Stack.Screen name="change" options={{ animation: "slide_from_bottom" }} />
+            <Stack.Screen name="gallery" options={{ animation: "slide_from_bottom" }} />
             <Stack.Screen name="suggestions/[id]" />
             <Stack.Screen name="settings" />
             <Stack.Screen name="pair" options={{ animation: "none" }} />

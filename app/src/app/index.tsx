@@ -31,6 +31,8 @@ import { ReminderBanner } from "@/ui/Trust";
 import { UpdateNotice } from "@/ui/Updates";
 import { LinkAskBanner } from "@/ui/LinkAsk";
 import { MoveButton, moveLine } from "@/ui/Move";
+import { GallerySection, GalleryTile } from "@/ui/Gallery";
+import { loadGallery, useGallery } from "@/lib/gallery";
 import { border, elevation, icon, look, radius, size, space, useTheme } from "@/ui/theme";
 
 /** COMPONENTS.md 3 and 4: the New app plus is 28, the sheet head icon 56 (no icon-size token for either). */
@@ -149,6 +151,12 @@ function AppGrid() {
   };
 
   const { pinned, rest } = useMemo(() => homeSections(apps), [apps]);
+  // Ready apps (docs/GALLERY.md): a tile next to Make a kiwi, and the apps themselves while Home is empty.
+  const galleryCount = useGallery((s) => s.list?.apps.length ?? 0);
+  const online = useStore((s) => s.connection === "online");
+  useEffect(() => {
+    void loadGallery();
+  }, [online]);
   const pinnedNow = pinned.map((a) => a.id);
   // While dragging, the dragged tile stays where it is (dimmed: the view under the finger must stay
   // mounted, or Android drops the rest of the touch) and a dashed slot shows where it would land.
@@ -359,7 +367,9 @@ function AppGrid() {
         <View testID="apps-section" style={{ flexDirection: "row", flexWrap: "wrap", gap: size.gridGap }}>
           {rest.map((app, i) => renderTile(app, "rest", i))}
           <NewTile width={tileWidth} onPress={() => setCreating(true)} />
+          {galleryCount > 0 ? <GalleryTile width={tileWidth} count={galleryCount} /> : null}
         </View>
+        {pinned.length + rest.length === 0 ? <GallerySection /> : null}
       </ScrollView>
       {drag ? (
         <Animated.View

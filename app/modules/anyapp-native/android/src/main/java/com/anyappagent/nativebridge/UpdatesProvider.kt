@@ -39,6 +39,7 @@ class UpdatesProvider : ContentProvider() {
     private const val PREFS = "anyapp_updates_host"
     private const val FOLLOWED = "followed"
     private const val OWN = "own"
+    private const val GALLERY = "gallery"
     const val READY_ACTION = "com.anyapp.updates.READY"
 
     /** Package -> (on screen, when it said so). Kept in memory: a restart forgets it (not on screen). */
@@ -70,7 +71,18 @@ class UpdatesProvider : ContentProvider() {
 
     fun owns(ctx: Context, pkg: String): Boolean = pkg in (prefs(ctx).getStringSet(OWN, emptySet()) ?: emptySet())
 
-    fun handles(ctx: Context, pkg: String): Boolean = installedByUs(ctx, pkg) || pkg in followed(ctx)
+    /**
+     * Apps installed from Ready apps, the gallery (docs/GALLERY.md). Their maker publishes their
+     * updates, so their own updater must show them: Kiwimake installed them but does not build them.
+     */
+    fun setGallery(ctx: Context, packages: Collection<String>) {
+      prefs(ctx).edit().putStringSet(GALLERY, packages.toSet()).apply()
+    }
+
+    private fun fromGallery(ctx: Context, pkg: String): Boolean =
+      pkg in (prefs(ctx).getStringSet(GALLERY, emptySet()) ?: emptySet()) && !owns(ctx, pkg)
+
+    fun handles(ctx: Context, pkg: String): Boolean = (installedByUs(ctx, pkg) && !fromGallery(ctx, pkg)) || pkg in followed(ctx)
 
     private fun installedByUs(ctx: Context, pkg: String): Boolean = try {
       if (Build.VERSION.SDK_INT >= 30) {

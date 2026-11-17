@@ -46,6 +46,8 @@ export type {
   DuplicateAppRequest,
   RenameAppRequest,
   OwnerInfo,
+  GalleryApp,
+  GalleryList,
   AppOrigin,
   CloudPlace,
   CreditEstimate,

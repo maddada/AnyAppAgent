@@ -25,6 +25,7 @@ import type {
   DuplicateAppRequest,
   RenameAppRequest,
   OwnerInfo,
+  GalleryList,
   AccountLinkInfo,
   AccountLinkRequest,
   AccountHandoff,
@@ -201,6 +202,8 @@ export class Client {
   linkPc = (body: AccountLinkRequest) => request<AccountLinkInfo>(this.baseUrl, "/api/account/link", { method: "POST", body, token: this.token, timeoutMs: 30000 });
   pcHandoff = () => request<AccountHandoff>(this.baseUrl, "/api/account/handoff", { method: "POST", body: {}, token: this.token, timeoutMs: 30000 });
   unlinkPc = () => request<AccountLinkInfo>(this.baseUrl, "/api/account/unlink", { method: "POST", body: {}, token: this.token, timeoutMs: 30000 });
+  /** Ready apps (docs/GALLERY.md): the gallery list, read by the PC. 404 on an older PC. */
+  gallery = () => this.call<GalleryList>("/api/gallery");
   clone = (body: CloneRequest) => request<App>(this.baseUrl, "/api/clones", { method: "POST", body, token: this.token, timeoutMs: 120000 });
 
   imageUrl = (id: string, imageId: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`;

@@ -95,6 +95,12 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   /** The person's own apps (this PC's list): their "Change this app" row always shows (docs/CHANGE-THIS-APP.md). */
   setOwnApps?(packageNames: string[]): void;
   handlesUpdatesOf?(packageName: string): boolean;
+  /** Ready apps (docs/GALLERY.md): apps installed from the gallery; their own updater keeps them current. */
+  setGalleryApps?(packageNames: string[]): void;
+  /** SHA-256 (lowercase hex) of the installed app's current signing certificate; null when not installed. */
+  signingCertSha256?(packageName: string): string | null;
+  /** SHA-256 (lowercase hex) of an APK file's signing certificate; null when unreadable. */
+  apkCertSha256?(path: string): string | null;
   installWithIntent(path: string): boolean;
 
   // The fast lane (docs/FAST-LANE.md). Optional: builds before it have none.

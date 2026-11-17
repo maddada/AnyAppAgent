@@ -206,6 +206,21 @@ class AnyAppNativeModule : Module() {
       UpdatesProvider.setFollowed(context, packageNames)
     }
 
+    // Ready apps, the gallery (docs/GALLERY.md): the certificate checks that earn the official mark.
+    Function("setGalleryApps") { packageNames: List<String> ->
+      UpdatesProvider.setGallery(context, packageNames)
+    }
+
+    /** SHA-256 (lowercase hex) of the certificate that signs the installed app now; null when not installed or unclear. */
+    Function("signingCertSha256") { packageName: String ->
+      installedCertSha256(packageName)
+    }
+
+    /** SHA-256 (lowercase hex) of the certificate that signs the APK at [path]; null when unreadable or several signers. */
+    Function("apkCertSha256") { path: String ->
+      apkCertSha256(toFile(path))
+    }
+
     Function("handlesUpdatesOf") { packageName: String ->
       UpdatesProvider.handles(context, packageName)
     }
@@ -674,6 +689,42 @@ class AnyAppNativeModule : Module() {
     } catch (_: Exception) {
       null
     }
+  }
+
+  private fun certDigest(cert: android.content.pm.Signature): String =
+    MessageDigest.getInstance("SHA-256").digest(cert.toByteArray()).joinToString("") { "%02x".format(it) }
+
+  /** The current signer: the newest in its rotation history (as the apps' own updater reads it). */
+  @Suppress("DEPRECATION")
+  private fun currentSigner(info: android.content.pm.PackageInfo?): String? {
+    info ?: return null
+    val cert = if (Build.VERSION.SDK_INT >= 28) {
+      val si = info.signingInfo ?: return null
+      if (si.hasMultipleSigners()) return null
+      si.signingCertificateHistory?.lastOrNull()
+    } else {
+      info.signatures?.singleOrNull()
+    } ?: return null
+    return certDigest(cert)
+  }
+
+  @Suppress("DEPRECATION")
+  private fun installedCertSha256(packageName: String): String? = try {
+    val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+    currentSigner(context.packageManager.getPackageInfo(packageName, flags))
+  } catch (_: Exception) {
+    null
+  }
+
+  @Suppress("DEPRECATION")
+  private fun apkCertSha256(file: File): String? = try {
+    if (!file.exists()) null
+    else {
+      val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+      currentSigner(context.packageManager.getPackageArchiveInfo(file.path, flags))
+    }
+  } catch (_: Exception) {
+    null
   }
 
   private fun packageInfo(packageName: String): Map<String, Any?>? {

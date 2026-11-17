@@ -30,7 +30,9 @@ export default function ChangeThisApp() {
   const appsLoaded = useStore((s) => s.appsLoaded);
   const mine = useStore((s) => (link ? Object.values(s.apps).find((a) => a.packageName === link.packageName) : undefined));
   const prefs = useStore((s) => s.prefs);
-  const [mode, setMode] = useState<Mode>("choose");
+  // Ready apps' Make it mine (docs/GALLERY.md) opens straight on the own-version form.
+  const startMode: Mode = params.start === "own" && link?.repo ? "own" : "choose";
+  const [mode, setMode] = useState<Mode>(startMode);
   const [yourName, setYourName] = useState(prefs.yourName ?? "");
   const [words, setWords] = useState("");
   const [name, setName] = useState("");
@@ -42,7 +44,7 @@ export default function ChangeThisApp() {
   const [lastLink, setLastLink] = useState(linkKey);
   if (linkKey !== lastLink) {
     setLastLink(linkKey);
-    setMode("choose");
+    setMode(startMode);
     setSent(false);
     setError(null);
     setWords("");
@@ -59,12 +61,12 @@ export default function ChangeThisApp() {
   // Back from a form goes back to the choices, not out.
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (mode === "choose") return false;
+      if (mode === startMode) return false;
       setMode("choose");
       return true;
     });
     return () => sub.remove();
-  }, [mode]);
+  }, [mode, startMode]);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace("/"));
   // Paired and the app list not here yet: wait for it before deciding whose app this is.
@@ -108,7 +110,7 @@ export default function ChangeThisApp() {
   return (
     <KeyboardAvoidingView behavior="height" style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: t.bg }}>
       <View style={{ flexDirection: "row", alignItems: "center", height: size.chatHeaderHeight, paddingLeft: space.xs, paddingRight: space.lg, gap: space.sm, borderBottomWidth: border.width, borderBottomColor: t.border }}>
-        <IconButton testID="change-back" icon={mode === "choose" ? X : ChevronLeft} label={mode === "choose" ? "Close" : "Back"} onPress={() => (mode === "choose" ? close() : setMode("choose"))} />
+        <IconButton testID="change-back" icon={mode === startMode ? X : ChevronLeft} label={mode === startMode ? "Close" : "Back"} onPress={() => (mode === startMode ? close() : setMode("choose"))} />
         <View style={{ flex: 1, marginLeft: space.xs }}>
           <T variant="heading" numberOfLines={1}>
             {mode === "suggest" ? "Suggest a change" : mode === "own" ? "Make my own version" : "Change this app"}
