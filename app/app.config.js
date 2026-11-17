@@ -19,7 +19,7 @@
 const { otaRuntimeVersion } = require("./scripts/ota-runtime-version");
 
 const OTA_SERVER = (process.env.KIWIMAKE_OTA_SERVER || "https://ota.kiwimake.ai").replace(/\/+$/, "");
-const RELEASE_FEED = process.env.KIWIMAKE_RELEASE_FEED || "https://api.github.com/repos/maddada/AnyAppAgent/releases/latest";
+const RELEASE_FEED = process.env.KIWIMAKE_RELEASE_FEED || "https://api.github.com/repos/maddada/Kiwimake/releases/latest";
 
 /** `0.3.3` -> 303 (docs/RELEASING.md: major * 10000 + minor * 100 + patch). */
 function versionCode(version) {
