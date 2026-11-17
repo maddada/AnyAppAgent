@@ -62,3 +62,48 @@ test('the Change this app build values are plain and only what differs from the 
   assert.deepEqual(changeValues({ changeOwner: "Mohamad <b>'x'", changeOthers: true }), { ORG_GRADLE_PROJECT_anyappChangeOwner: 'Mohamad bx' });
   assert.deepEqual(changeValues({ changeOthers: false }), { ORG_GRADLE_PROJECT_anyappChangeOthers: '0' });
 });
+
+// Rename (an app's options): the same app in place, a new name and slug, the package id only when asked.
+test('renameApp: a React Native app keeps its package and native project unless a new package is asked for', async () => {
+  const { renameApp } = await import('../index.mjs');
+  const dir = path.join(home, 'apps', 'rename-rn');
+  write(path.join(dir, 'app.json'), JSON.stringify({ expo: { name: 'Tea Timer', slug: 'teatimer', android: { package: 'com.anyapp.teatimer' } } }));
+  write(path.join(dir, 'package.json'), JSON.stringify({ name: 'teatimer' }));
+  write(path.join(dir, 'android', 'build.gradle'), 'generated');
+  const same = await renameApp({ dir, name: 'Brew Clock', slug: 'brewclock', packageName: 'com.anyapp.teatimer' });
+  assert.deepEqual(same, { preset: 'react-native', packageChanged: false });
+  let app = JSON.parse(fs.readFileSync(path.join(dir, 'app.json'), 'utf8'));
+  assert.equal(app.expo.name, 'Brew Clock');
+  assert.equal(app.expo.slug, 'brewclock');
+  assert.equal(app.expo.android.package, 'com.anyapp.teatimer');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).name, 'brewclock');
+  assert.ok(fs.existsSync(path.join(dir, 'android', 'build.gradle')), 'native project kept');
+  assert.ok(!fs.existsSync(path.join(KEYSTORE_DIR, 'apps', 'com.anyapp.brewclock')), 'no new key');
+
+  const moved = await renameApp({ dir, name: 'Brew Clock', slug: 'brewclock', packageName: 'com.anyapp.brewclock' });
+  assert.deepEqual(moved, { preset: 'react-native', packageChanged: true });
+  app = JSON.parse(fs.readFileSync(path.join(dir, 'app.json'), 'utf8'));
+  assert.equal(app.expo.android.package, 'com.anyapp.brewclock');
+  assert.ok(!fs.existsSync(path.join(dir, 'android')), 'native project made again on the next build');
+  assert.ok(fs.existsSync(path.join(KEYSTORE_DIR, 'apps', 'com.anyapp.brewclock', 'release.p12')), 'its own new key');
+});
+
+test('renameApp: a Kotlin app gets the new name and package in strings.xml and anyapp.json', async () => {
+  const { renameApp } = await import('../index.mjs');
+  const dir = path.join(home, 'apps', 'rename-kt');
+  write(path.join(dir, 'anyapp.json'), JSON.stringify({ preset: 'kotlin', slug: 'game', package: 'com.anyapp.game' }));
+  write(path.join(dir, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), '<resources>\n  <string name="app_name">Game</string>\n</resources>\n');
+  const r = await renameApp({ dir, name: 'Kiwi Games', slug: 'kiwigames', packageName: 'com.anyapp.game' });
+  assert.equal(r.packageChanged, false);
+  assert.ok(fs.readFileSync(path.join(dir, 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8').includes('>Kiwi Games<'));
+  const meta = JSON.parse(fs.readFileSync(path.join(dir, 'anyapp.json'), 'utf8'));
+  assert.equal(meta.slug, 'kiwigames');
+  assert.equal(meta.package, 'com.anyapp.game');
+});
+
+test('renameApp: not an app is refused', async () => {
+  const { renameApp } = await import('../index.mjs');
+  const dir = path.join(home, 'apps', 'rename-none');
+  write(path.join(dir, 'readme.txt'), 'hi');
+  await assert.rejects(renameApp({ dir, name: 'X', slug: 'x', packageName: 'com.anyapp.x' }), /not an app made with Kiwimake/);
+});

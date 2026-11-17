@@ -135,6 +135,47 @@ export async function adoptApp({ src, dir, name, slug, packageName, onLog = noop
   return { preset };
 }
 
+// ---------------------------------------------------------------------------------------------
+// renameApp: Rename (an app's options: name, folder and repo; or with a new package id too)
+
+/**
+ * Gives an existing app, in place, a new name and slug, and optionally a new package id (which then
+ * gets its own new signing key, so it installs as a new app). The folder itself is moved by the
+ * caller. React Native and Kotlin apps; Expo Exact apps cannot be renamed yet.
+ * Returns { preset, packageChanged }.
+ */
+export async function renameApp({ dir, name, slug, packageName, onLog = noop }) {
+  if (!dir || !path.isAbsolute(dir)) throw new Error('renameApp: dir must be an absolute path');
+  if (!name || !String(name).trim()) throw new Error('renameApp: name is required');
+  if (!SLUG_RE.test(slug ?? '')) throw new Error(`renameApp: slug "${slug}" must be lowercase letters, digits and dashes`);
+  if (!PACKAGE_RE.test(packageName ?? '')) throw new Error(`renameApp: packageName "${packageName}" is not a valid Android package id`);
+  dir = path.resolve(dir);
+  const preset = presetOf(dir);
+  if (!preset) throw new Error('This is not an app made with Kiwimake (no app.json or anyapp.json).');
+  if (preset === 'expo-exact') throw new Error('Expo Exact apps cannot be renamed yet.');
+  const before = currentPackage(dir, preset);
+  const packageChanged = before !== packageName;
+  if (packageChanged && !signExternalOn()) await ensureAppKey(androidEnv().javaHome, packageName, onLog);
+  const fields = { name: String(name).trim(), slug, packageName };
+  if (preset === 'kotlin') await renameKotlinApp(dir, fields);
+  else {
+    await fillPlaceholders(dir, fields);
+    // A new package id moves the generated native project's Java packages: make it again from scratch.
+    if (packageChanged) await fsp.rm(path.join(dir, 'android'), { recursive: true, force: true });
+  }
+  onLog(`Renamed ${dir} (${preset}) to "${fields.name}"${packageChanged ? ` as ${packageName}` : ''}.`);
+  return { preset, packageChanged };
+}
+
+function currentPackage(dir, preset) {
+  try {
+    if (preset === 'kotlin') return JSON.parse(fs.readFileSync(path.join(dir, KOTLIN_META), 'utf8')).package ?? null;
+    return JSON.parse(fs.readFileSync(path.join(dir, 'app.json'), 'utf8')).expo?.android?.package ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function renameKotlinApp(dir, { name, slug, packageName }) {
   const metaPath = path.join(dir, KOTLIN_META);
   const meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'));
