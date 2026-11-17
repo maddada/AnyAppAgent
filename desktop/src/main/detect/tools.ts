@@ -3,7 +3,7 @@
 // A toolchain already on the PC is used as is and never modified.
 import * as realFs from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import type { ToolPiece, ToolsCheck } from "../../shared/types.ts";
 import type { Runner } from "../exec.ts";
 
@@ -79,8 +79,8 @@ function javaOnPath(env: NodeJS.ProcessEnv, real: (p: string) => string): string
   for (const dir of (env.PATH ?? "").split(":")) {
     if (!dir) continue;
     try {
-      const target = real(join(dir, "java"));
-      if (/\/bin\/java$/.test(target)) return dirname(dirname(target));
+      const target = real(posix.join(dir, "java"));
+      if (/\/bin\/java$/.test(target)) return posix.dirname(posix.dirname(target));
     } catch {
       // not here
     }
@@ -129,31 +129,31 @@ export function toolchainCandidates(
     } else {
       // Distro JDKs (Arch, Fedora, Debian/Ubuntu), then Android Studio's own.
       for (const p of ["/usr/lib/jvm/java-21-openjdk", "/usr/lib/jvm/java-21-openjdk-amd64", "/usr/lib/jvm/default", "/usr/lib/jvm/default-java"]) add(jdk, p);
-      for (const name of newestFirst(list("/usr/lib/jvm"))) add(jdk, join("/usr/lib/jvm", name));
+      for (const name of newestFirst(list("/usr/lib/jvm"))) add(jdk, posix.join("/usr/lib/jvm", name));
       add(jdk, "/opt/android-studio/jbr");
-      add(jdk, join(home, ".local", "share", "android-studio", "jbr"));
+      add(jdk, posix.join(home, ".local", "share", "android-studio", "jbr"));
     }
     // JDKs that version managers install without setting JAVA_HOME (mise, asdf, SDKMAN, IntelliJ).
     // A Mac JDK may keep its files in Contents/Home.
     const managed = [
-      join(env.MISE_DATA_DIR || join(env.XDG_DATA_HOME || join(home, ".local", "share"), "mise"), "installs", "java"),
-      join(env.ASDF_DATA_DIR || join(home, ".asdf"), "installs", "java"),
-      join(env.SDKMAN_DIR || join(home, ".sdkman"), "candidates", "java"),
-      join(home, ".jdks"),
+      posix.join(env.MISE_DATA_DIR || posix.join(env.XDG_DATA_HOME || posix.join(home, ".local", "share"), "mise"), "installs", "java"),
+      posix.join(env.ASDF_DATA_DIR || posix.join(home, ".asdf"), "installs", "java"),
+      posix.join(env.SDKMAN_DIR || posix.join(home, ".sdkman"), "candidates", "java"),
+      posix.join(home, ".jdks"),
     ];
     for (const root of managed) {
       for (const name of newestFirst(list(root))) {
-        add(jdk, join(root, name));
-        if (platform === "darwin") add(jdk, join(root, name, "Contents", "Home"));
+        add(jdk, posix.join(root, name));
+        if (platform === "darwin") add(jdk, posix.join(root, name, "Contents", "Home"));
       }
     }
     if (platform === "darwin") {
       // Android Studio's SDK, then Homebrew's android-commandlinetools cask.
-      add(sdk, join(home, "Library", "Android", "sdk"));
+      add(sdk, posix.join(home, "Library", "Android", "sdk"));
       add(sdk, "/opt/homebrew/share/android-commandlinetools");
       add(sdk, "/usr/local/share/android-commandlinetools");
     } else {
-      add(sdk, join(home, "Android", "Sdk"));
+      add(sdk, posix.join(home, "Android", "Sdk"));
       add(sdk, "/opt/android-sdk");
     }
   }
@@ -169,11 +169,11 @@ export function macJdks(home: string, list: (dir: string) => string[] = safeList
     list(root)
       .filter((n) => n.endsWith(".jdk"))
       .sort((a, b) => (Number(b.match(/\d+/)?.[0] ?? 0) - Number(a.match(/\d+/)?.[0] ?? 0)) || b.localeCompare(a))
-      .map((n) => join(root, n, "Contents", "Home"));
-  const brew = (prefix: string) => ["openjdk@21", "openjdk", "openjdk@17"].map((f) => join(prefix, "opt", f, "libexec", "openjdk.jdk", "Contents", "Home"));
+      .map((n) => posix.join(root, n, "Contents", "Home"));
+  const brew = (prefix: string) => ["openjdk@21", "openjdk", "openjdk@17"].map((f) => posix.join(prefix, "opt", f, "libexec", "openjdk.jdk", "Contents", "Home"));
   return [
     ...vm("/Library/Java/JavaVirtualMachines"),
-    ...vm(join(home, "Library", "Java", "JavaVirtualMachines")),
+    ...vm(posix.join(home, "Library", "Java", "JavaVirtualMachines")),
     ...brew("/opt/homebrew"),
     ...brew("/usr/local"),
     "/Applications/Android Studio.app/Contents/jbr/Contents/Home",

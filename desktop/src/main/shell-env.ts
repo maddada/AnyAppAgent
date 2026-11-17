@@ -17,7 +17,10 @@
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join } from "node:path";
+import { posix } from "node:path";
+
+// Linux and macOS only: POSIX paths whatever system runs the code (the tests run on Windows too).
+const { basename, isAbsolute, join } = posix;
 
 type Env = Record<string, string | undefined>;
 
