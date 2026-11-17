@@ -315,6 +315,10 @@ export interface AnyAppBridge {
   /** The whole Pinned section in its new order; apps left out are unpinned. */
   setPins(ids: string[]): Promise<ActionResult>;
   hideApp(appId: string, hidden: boolean): Promise<ActionResult>;
+  /** Duplicate (the row's menu): a second, separate app; `change` empty means it is only built. */
+  duplicateApp(appId: string, name: string, change: string): Promise<ActionResult & { app?: App }>;
+  /** Rename (the row's menu): name, folder and repo; newPackage makes it a new app on the phone. */
+  renameApp(appId: string, name: string, newPackage: boolean): Promise<ActionResult>;
   /** Delete: to Recently deleted; uninstall: phones uninstall it; forGood: its PC files and GitHub repos go for good. */
   deleteApp(appId: string, opts: { uninstall?: boolean; forGood?: boolean }): Promise<ActionResult & { forGood?: boolean; problem?: string }>;
   restoreDeleted(appId: string): Promise<ActionResult>;

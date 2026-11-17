@@ -3,8 +3,9 @@
 // same chat as on the phone) or today's activity with the phone panels. New app works from here
 // too, with the same fields and words as the phone's New app sheet.
 import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { ChevronDown, CircleAlert, Cloud, Download, Ellipsis, EyeOff, FolderOpen, KeyRound, LayoutGrid, ListChecks, Pin, PinOff, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, Trash2, UserRound, Wrench } from "lucide-react";
+import { ChevronDown, CircleAlert, Cloud, Copy, Download, Ellipsis, EyeOff, FolderOpen, KeyRound, LayoutGrid, ListChecks, Pencil, Pin, PinOff, Plus, QrCode, RefreshCw, Settings as Gear, Smartphone, Trash2, UserRound, Wrench } from "lucide-react";
 import { DeleteAppDialog, HiddenAppsGroup, Menu, RecentlyDeletedGroup, type MenuItem } from "./AppActions.tsx";
+import { DuplicateAppDialog, RenameAppDialog } from "./DuplicateRename.tsx";
 import { appSections, dropIndex, placePin, samePins, unpin } from "./pins.ts";
 import { AccountPage } from "./Account.tsx";
 import { MoveButton, MoveDialog } from "./Move.tsx";
@@ -210,6 +211,9 @@ function AppsPage({
   // Pin, hide and delete: the row menu, the Delete dialog, and dragging rows in and out of Pinned.
   const [menu, setMenu] = useState<{ app: App; x: number; y: number } | null>(null);
   const [deleting, setDeleting] = useState<App | null>(null);
+  // Duplicate and Rename, from the same menu.
+  const [duplicating, setDuplicating] = useState<App | null>(null);
+  const [renaming, setRenaming] = useState<App | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const [target, setTarget] = useState<{ zone: "pinned"; index: number } | { zone: "rest" } | null>(null);
@@ -233,6 +237,8 @@ function AppsPage({
         ? { label: "Unpin", icon: PinOff, onSelect: () => void savePins(unpin(pinIds, a.id)) }
         : { label: "Pin to top", icon: Pin, onSelect: () => void savePins([...pinIds, a.id]) },
       { label: "Hide", icon: EyeOff, onSelect: () => void hide(a) },
+      { label: "Duplicate", icon: Copy, disabled: moving || a.status === "creating", onSelect: () => setDuplicating(a) },
+      { label: "Rename", icon: Pencil, disabled: moving, onSelect: () => setRenaming(a) },
       { label: "Delete", icon: Trash2, danger: true, separatorBefore: true, disabled: moving, title: moving ? "It is moving to the cloud. Delete it once the move is done." : undefined, onSelect: () => setDeleting(a) },
     ];
   };
@@ -395,6 +401,17 @@ function AppsPage({
         )}
         {menu && <Menu x={menu.x} y={menu.y} label={`${menu.app.name} actions`} items={menuItems(menu.app)} onClose={() => setMenu(null)} />}
         {deleting && <DeleteAppDialog app={deleting} onClose={() => setDeleting(null)} />}
+        {duplicating && (
+          <DuplicateAppDialog
+            app={duplicating}
+            onClose={() => setDuplicating(null)}
+            onMade={(id) => {
+              setDuplicating(null);
+              onOpen(id);
+            }}
+          />
+        )}
+        {renaming && <RenameAppDialog app={renaming} onClose={() => setRenaming(null)} />}
         {app && sharing === app.id && <ShareDialog app={app} onClose={() => setSharing(null)} />}
         {app && moving === app.id && <MoveDialog app={app} onClose={() => setMoving(null)} />}
         {app && others === app.id && (

@@ -902,6 +902,12 @@ function ipc(): void {
   // Pin, hide and delete (shared/protocol.ts "Pin, hide and delete").
   ipcMain.handle("apps:pins", (_e, ids: unknown) => chatAction((c) => c.setPins(Array.isArray(ids) ? ids.map(String) : []))());
   ipcMain.handle("apps:hide", (_e, appId: string, hidden: boolean) => chatAction((c) => c.hide(String(appId), Boolean(hidden)))());
+  ipcMain.handle("apps:duplicate", (_e, appId: string, name: string, change: string) =>
+    chatAction((c) => c.duplicate(String(appId), { name: String(name), ...(String(change ?? "").trim() ? { change: String(change) } : {}) }))(),
+  );
+  ipcMain.handle("apps:rename", (_e, appId: string, name: string, newPackage: boolean) =>
+    chatAction((c) => c.rename(String(appId), { name: String(name), ...(newPackage === true ? { newPackage: true } : {}) }))(),
+  );
   ipcMain.handle("apps:delete", async (_e, appId: string, opts?: { uninstall?: unknown; forGood?: unknown }) => {
     let result: { forGood: boolean; problem?: string } = { forGood: false };
     const r = await chatAction(async (c) => {

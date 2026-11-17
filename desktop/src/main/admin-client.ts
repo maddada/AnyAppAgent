@@ -27,6 +27,8 @@ import type {
   CareState,
   ChatItem,
   DeleteAppResult,
+  DuplicateAppRequest,
+  RenameAppRequest,
   ImageUpload,
   KeysBackupRequest,
   KeysBackupResult,
@@ -523,6 +525,20 @@ export class AdminClient extends EventEmitter {
 
   async hide(appId: string, hidden: boolean): Promise<App> {
     const app = await this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/hide`, { hidden });
+    this.upsert(app);
+    return app;
+  }
+
+  /** Duplicate (an app's options): a second, separate app; it shows in the list at once. */
+  async duplicate(appId: string, body: DuplicateAppRequest): Promise<App> {
+    const app = await this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/duplicate`, body, 60_000);
+    this.upsert(app);
+    return app;
+  }
+
+  /** Rename (an app's options): its folder and GitHub repo move too, so it may take a while. */
+  async rename(appId: string, body: RenameAppRequest): Promise<App> {
+    const app = await this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/rename`, body, 120_000);
     this.upsert(app);
     return app;
   }
