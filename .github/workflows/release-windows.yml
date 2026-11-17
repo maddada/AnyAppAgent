@@ -487,8 +487,9 @@ jobs:
 
   verify:
     # Every desktop file is on the draft and every update feed matches its files: only then may the
-    # release go public (docs/RELEASING.md, step 6).
-    if: ${{ !inputs.dry_run }}
+    # release go public (docs/RELEASING.md, step 6). In a dry run (no Windows job, no draft) it checks
+    # the Mac and Linux feeds against the kept workflow artifacts instead.
+    if: ${{ always() && needs.mac.result == 'success' && needs.linux.result == 'success' && (inputs.dry_run || needs.windows.result == 'success') }}
     needs: [windows, mac, linux]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -503,7 +504,27 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Download the dry-run packages
+        if: ${{ inputs.dry_run }}
+        uses: actions/download-artifact@v8
+        with:
+          pattern: "*-packages*${{ inputs.dry_run_version && format('-{0}', inputs.dry_run_version) || '' }}"
+          path: ${{ runner.temp }}/dry-run
+          merge-multiple: true
+      - name: Check the dry-run update feeds
+        if: ${{ inputs.dry_run }}
+        env:
+          DRY_RUN_VERSION: ${{ inputs.dry_run_version }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/dry-run"
+          ls -l "$dir"
+          for feed in latest-mac.yml latest-linux.yml; do
+            node desktop/dev/update-feed.mjs verify "$dir/$feed" "$dir" ${DRY_RUN_VERSION:+--version "$DRY_RUN_VERSION"}
+          done
+          echo "Dry run: the Mac and Linux update feeds match their $(ls "$dir" | wc -l) kept files (no Windows job, no draft)." >> "$GITHUB_STEP_SUMMARY"
       - name: Check every file on the draft
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
