@@ -22,6 +22,8 @@ import type {
   Suggestion,
   FileSuggestionResponse,
   CloneRequest,
+  DuplicateAppRequest,
+  RenameAppRequest,
   OwnerInfo,
   AccountLinkInfo,
   AccountLinkRequest,
@@ -123,6 +125,11 @@ export class Client {
   };
   setPins = (ids: string[]) => this.call<App[]>("/api/pins", "PUT", { ids });
   hideApp = (id: string, hidden: boolean) => this.call<App>(`/api/apps/${encodeURIComponent(id)}/hide`, "POST", { hidden });
+  /** Duplicate and Rename (an app's options). Renaming moves its folder and GitHub repo, so it may take a while. */
+  duplicateApp = (id: string, body: DuplicateAppRequest) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/duplicate`, { method: "POST", body, token: this.token, timeoutMs: 60000 });
+  renameApp = (id: string, body: RenameAppRequest) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/rename`, { method: "POST", body, token: this.token, timeoutMs: 120000 });
   trash = () => this.call<App[]>("/api/trash");
   restoreDeleted = (id: string) => this.call<App>(`/api/trash/${encodeURIComponent(id)}/restore`, "POST", {});
   emptyTrash = () => this.call<void>("/api/trash", "DELETE");

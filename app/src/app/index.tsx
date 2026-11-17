@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, RefreshControl, ScrollView, Switch, TextInput, View, useWindowDimensions, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, CircleUser, Download, EllipsisVertical, Inbox, ListTodo, MessageCircle, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
+import { ChevronDown, CircleUser, Download, EllipsisVertical, Inbox, ListTodo, MessageCircle, Pencil, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, hasOldCopyInTheWay, REMOVE_OLD_AND_INSTALL, tileState } from "@/lib/describe";
 import { installLabel, headsUp as bigJobHeadsUp } from "@shared/chat/index";
@@ -20,6 +20,7 @@ import { deleteApp, pinApp, setHidden, setPinned, unpinApp } from "@/lib/manage"
 import { AppCredits, AppSigning, credits, PlaceMark } from "@/ui/CloudBits";
 import { AppIcon } from "@/ui/AppIcon";
 import { Button, IconButton } from "@/ui/Button";
+import { DuplicatePanel, RenamePanel } from "@/ui/DuplicateRename";
 import { Field } from "@/ui/Field";
 import { DictationNote, MicButton } from "@/ui/MicButton";
 import { Sheet } from "@/ui/Sheet";
@@ -633,11 +634,14 @@ function NewTile({ width, onPress }: { width: number; onPress: () => void }) {
 // ---------- tap an app: Install / Open / Change it
 
 function AppSheet({ selection, onClose }: { selection: { id: string; manage: boolean } | null; onClose: () => void }) {
+  const t = useTheme();
   const app = useStore((s) => (selection ? s.apps[selection.id] : undefined));
   const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [sending, setSending] = useState(false);
+  // Duplicate and Rename (an app's options): a panel in place of the buttons.
+  const [panel, setPanel] = useState<"duplicate" | "rename" | null>(null);
   const [pinBusy, setPinBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const online = useStore((s) => s.connection === "online");
@@ -649,6 +653,7 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
     setLastSelection(selection);
     setConfirmRemove(!!selection?.manage);
     setSending(false);
+    setPanel(null);
     setProblem(null);
   }
   const shown = app ?? lastApp;
@@ -694,9 +699,14 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
           <View style={{ flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.xl }}>
             <AppIcon app={shown} size={SHEET_ICON} />
             <View style={{ flex: 1, gap: space.xs }}>
-              <T variant="titleSmall" numberOfLines={1}>
-                {shown.name}
-              </T>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}>
+                <T variant="titleSmall" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {shown.name}
+                </T>
+                {canPin(shown) && !panel && !confirmRemove && !sending ? (
+                  <IconButton testID="app-rename-pencil" icon={Pencil} label={`Rename ${shown.name}`} iconSize={icon.size.sm} color={t.textTertiary} onPress={() => setPanel("rename")} />
+                ) : null}
+              </View>
               {state ? <StateLine kind={state.kind} label={state.label} /> : null}
               {placeOf(shown) === "cloud" ? <AppCredits appId={shown.id} /> : null}
               {placeOf(shown) === "cloud" ? <AppSigning appId={shown.id} /> : null}
@@ -707,7 +717,11 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
               ) : null}
             </View>
           </View>
-          {sending && !confirmRemove ? (
+          {panel === "duplicate" && !confirmRemove ? (
+            <DuplicatePanel app={shown} onDone={onClose} onCancel={() => setPanel(null)} />
+          ) : panel === "rename" && !confirmRemove ? (
+            <RenamePanel app={shown} onDone={onClose} onCancel={() => setPanel(null)} />
+          ) : sending && !confirmRemove ? (
             <SendAppPanel app={shown} onDone={onClose} onCancel={() => setSending(false)} />
           ) : confirmRemove ? (
             <DeletePanel app={shown} installed={!!pkg} onDone={onClose} onCancel={() => (selection?.manage ? onClose() : setConfirmRemove(false))} />
@@ -758,8 +772,8 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                   {problem}
                 </T>
               ) : null}
-              {/* Pin, hide and delete: pins and hiding live on the PC, so cloud apps only get Delete. */}
-              <View style={{ flexDirection: "row", justifyContent: "center", gap: space.xl, marginTop: space.md }}>
+              {/* Pin, hide, Duplicate, Rename and Delete: these live on the PC, so cloud apps only get Delete. */}
+              <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", columnGap: space.xl, rowGap: space.md, marginTop: space.md }}>
                 {canPin(shown) ? (
                   <Button
                     testID="app-pin"
@@ -799,6 +813,10 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
                     }}
                   />
                 ) : null}
+                {canPin(shown) ? (
+                  <Button testID="app-duplicate" label="Duplicate" variant="text" small disabled={!online || shown.status === "creating"} onPress={() => setPanel("duplicate")} />
+                ) : null}
+                {canPin(shown) ? <Button testID="app-rename" label="Rename" variant="text" small disabled={!online} onPress={() => setPanel("rename")} /> : null}
                 <Button testID="app-remove" label="Delete" variant="text" small onPress={() => setConfirmRemove(true)} />
               </View>
             </View>

@@ -43,6 +43,8 @@ export type {
   Suggestion,
   FileSuggestionResponse,
   CloneRequest,
+  DuplicateAppRequest,
+  RenameAppRequest,
   OwnerInfo,
   AppOrigin,
   CloudPlace,

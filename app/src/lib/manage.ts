@@ -41,6 +41,24 @@ export async function setHidden(app: App, hidden: boolean): Promise<void> {
   upsertApp(await client.hideApp(app.id, hidden));
 }
 
+/** Duplicate (an app's options): a second, separate app on the PC; it builds and installs next to this one. */
+export async function duplicateApp(app: App, name: string, change: string): Promise<App> {
+  const client = getState().client;
+  if (!client) throw new Error("Your PC is not connected.");
+  const copy = await client.duplicateApp(app.id, { name: name.trim(), ...(change.trim() ? { change: change.trim() } : {}) });
+  upsertApp(copy);
+  return copy;
+}
+
+/** Rename (an app's options): a new name, folder and repo; newPackage makes it a new app on the phone. */
+export async function renameApp(app: App, name: string, newPackage: boolean): Promise<App> {
+  const client = getState().client;
+  if (!client) throw new Error("Your PC is not connected.");
+  const renamed = await client.renameApp(app.id, { name: name.trim(), ...(newPackage ? { newPackage: true } : {}) });
+  upsertApp(renamed);
+  return renamed;
+}
+
 /** Deletes this phone started, so their app.deleted (uninstall: true) doesn't ask Android twice. */
 const ownUninstalls = new Set<string>();
 
