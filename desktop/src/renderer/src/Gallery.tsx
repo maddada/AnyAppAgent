@@ -217,7 +217,7 @@ function MineDialog({ app, maker, onClose, onMade }: { app: GalleryApp; maker: s
         }}
       >
         <p className="callout secondary">
-          This PC gets the code of {app.name} and makes a separate app from it: its own name, its own place on this PC and on GitHub, installed next to {maker}'s. Nothing comes over from {maker}'s later by itself.
+          This PC gets the code of {app.name} and makes a separate app from it: its own name, its own place on this PC and on GitHub, installed next to the original. Nothing comes over from the original later by itself.
         </p>
         <label className="fld">
           <span className="label">Name of your version</span>

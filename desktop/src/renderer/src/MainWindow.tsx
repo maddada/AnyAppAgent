@@ -97,7 +97,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
       </aside>
       <main className="dm-main">
         {page === "apps" ? (
-          <AppsPage s={s} open={app?.id ?? null} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} onGetApp={() => setGetApp(true)} openSetup={openSetup} goSetup={() => setPage("setup")} goSettings={() => setPage("settings")} />
+          <AppsPage s={s} open={openApp === GALLERY_ID ? GALLERY_ID : (app?.id ?? null)} onOpen={setOpenApp} onNewApp={() => setNewApp(true)} onConnect={() => setConnect(true)} onGetApp={() => setGetApp(true)} openSetup={openSetup} goSetup={() => setPage("setup")} goSettings={() => setPage("settings")} />
         ) : (
           <div className="dm-scroll">
             {page === "phones" && <PhonesPage s={s} onConnect={() => setConnect(true)} />}

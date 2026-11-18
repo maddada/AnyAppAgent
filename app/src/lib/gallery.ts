@@ -43,15 +43,27 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function fetchJson(url: string): Promise<unknown> {
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
+async function fetchJson(url: string, timeoutMs = 15_000): Promise<unknown> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { headers: { Accept: "application/json" }, signal: abort.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Where the list comes from now: the paired PC while it is connected, else the internet. */
+function source(): "pc" | "web" {
+  const { client, connection } = appState();
+  return client && connection === "online" ? "pc" : "web";
 }
 
 async function readList(): Promise<GalleryList> {
-  const { client, connection } = appState();
-  if (client && connection === "online") {
+  const { client } = appState();
+  if (client && source() === "pc") {
     try {
       return readGallery(await client.gallery());
     } catch (error) {
@@ -71,6 +83,7 @@ async function readList(): Promise<GalleryList> {
 }
 
 let loading: Promise<void> | null = null;
+let loadingFrom: "pc" | "web" | null = null;
 
 /** Reads the list (again when it is older than KEEP_MS, or `force`), then what is on this phone. */
 export function loadGallery(force = false): Promise<void> {
@@ -79,13 +92,21 @@ export function loadGallery(force = false): Promise<void> {
     refreshInstalled();
     return Promise.resolve();
   }
+  // The PC connected while the list was being read from the internet: read it again through the PC.
+  if (loading && loadingFrom !== source()) {
+    const want = source();
+    return loading.then(() => (useGallery.getState().list && want === "web" ? undefined : loadGallery(true)));
+  }
+  loadingFrom = source();
   loading ??= (async () => {
     useGallery.setState({ loading: true });
     try {
       const list = await readList();
+      console.log(`gallery: ${list.apps.length} ready apps (from ${loadingFrom === "pc" ? "the PC" : "the internet"})`);
       useGallery.setState({ list, error: null, at: Date.now() });
       refreshInstalled();
     } catch (error) {
+      console.log(`gallery: no list (${errorMessage(error)})`);
       useGallery.setState({ error: errorMessage(error) });
     } finally {
       useGallery.setState({ loading: false });
