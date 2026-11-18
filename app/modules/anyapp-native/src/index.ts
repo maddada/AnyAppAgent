@@ -144,6 +144,16 @@ declare class AnyAppNativeModule extends NativeModule<Events> {
   keepAliveRunning?(): boolean;
   stopKeepAlive(): void;
 
+  // Web apps (docs/WEB-APPS.md): "Add to home screen". Missing on older native builds.
+  /** Whether the launcher can pin shortcuts at all. */
+  canPinShortcuts?(): boolean;
+  /**
+   * Asks the launcher to pin a shortcut (it asks the person) that opens `link` (an anyappagent://
+   * link) in Kiwimake. `iconPath`: a PNG (file:// or a path), else Kiwimake's own icon. False when
+   * the launcher cannot pin shortcuts.
+   */
+  pinWebShortcut?(id: string, label: string, link: string, iconPath: string | null): boolean;
+
   // Easy Connect (docs/EASY-CONNECT.md 4.2)
   easyConnectClientKey(): Promise<string>; // "nodekey:<64 hex>"
   /** Opens (or reuses after probing) the tunnel; blocks up to ~20 s on a cold start. */

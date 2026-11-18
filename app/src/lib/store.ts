@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { PackageInfo } from "anyapp-native";
-import { appAction as sharedAppAction, Drafts, mergeHelpers, mergeItems, replaceHistory } from "@shared/chat/index";
+import { appAction as sharedAppAction, Drafts, isWebOnly, mergeHelpers, mergeItems, replaceHistory } from "@shared/chat/index";
 import type { Attachment } from "@/chat/attachments";
 import { Client } from "./api";
 import { CloudClient, isCloudApp, isCloudId, type AppClient } from "./cloud";
@@ -250,5 +250,7 @@ export function setInstall(appId: string, progress: InstallProgress | null) {
 export type AppAction = "open" | "install" | "update" | "notReady";
 
 export function appAction(app: App, pkg: PackageInfo | null | undefined): AppAction {
+  // A web app (docs/WEB-APPS.md) is never installed: it opens once it has a version (online, or from the PC).
+  if (isWebOnly(app)) return app.web?.address || app.latestApk ? "open" : "notReady";
   return sharedAppAction(app, pkg?.versionCode ?? null);
 }

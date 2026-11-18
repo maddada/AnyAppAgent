@@ -31,6 +31,7 @@ import {
   Package,
   RotateCcw,
   Search,
+  Share2,
   Smartphone,
   Terminal,
   Trash,
@@ -42,12 +43,13 @@ import { installApp, launchApp, phoneAbis, removeOldAndInstall } from "@/lib/ins
 import type { App, ChatImage, ChatItem, PageInfo, PlanEntry, WorkerInfo } from "@/lib/protocol";
 import { useStore, useClientFor, useOnlineFor } from "@/lib/store";
 import { isCloudId } from "@/lib/cloud";
+import { isWebOnly, openWebApp, shareAddress, shortAddress } from "@/lib/web";
 import { PlanEstimate } from "@/ui/CloudBits";
 import { Button } from "@/ui/Button";
 import { Spinner } from "@/ui/Spinner";
 import { T } from "@/ui/Text";
 import { easing, elevation, fonts, icon, motion, radius, size, space, typeStyle, useTheme, border } from "@/ui/theme";
-import { crashCard, diaryLine, DIARY_PRIVACY, type ChangeLine , buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, answerLines, pageCard, type HelperIcon, type PageAnswers, type PageCardView, type Row } from "@shared/chat/index";
+import { crashCard, diaryLine, DIARY_PRIVACY, type ChangeLine , type WebCardPart, buildCard, installLabel, fitWithin, helperView, planCount, permissionView, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, answerLines, pageCard, type HelperIcon, type PageAnswers, type PageCardView, type Row } from "@shared/chat/index";
 
 import { StateLine } from "@/ui/StateLine";
 import { Markdown } from "./Markdown";
@@ -571,6 +573,17 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
     );
   }
 
+  // A web app (docs/WEB-APPS.md): nothing to install. The card says where it is online.
+  if (isWebOnly(app)) {
+    return (
+      <View testID="build-ready" style={box}>
+        {head(<Badge icon={Globe} fill={t.readySoft} color={t.ready} />)}
+        <WhatChanged lines={card.changes} />
+        {card.web ? <WebPart app={app} web={card.web} alone /> : null}
+      </View>
+    );
+  }
+
   const phase = install?.phase;
   const busy = phase === "waiting" || phase === "downloading" || phase === "checking" || phase === "installing" || phase === "confirm";
   const installed = card.installed || phase === "done";
@@ -596,6 +609,42 @@ function BuildCard({ item, app }: { item: ChatItem; app: App | undefined }) {
           onPress={() => void installApp(app)}
         />
       )}
+      {card.web ? <WebPart app={app} web={card.web} /> : null}
+    </View>
+  );
+}
+
+/**
+ * The web version on a build card (docs/WEB-APPS.md): online, its short address with Share and
+ * Open (the web screen); else one line (being put online, failed, or only on the PC). `alone`: a
+ * web app's card, where it is the whole card; else it sits under the Android part.
+ */
+function WebPart({ app, web, alone }: { app: App; web: WebCardPart; alone?: boolean }) {
+  const t = useTheme();
+  const rule = alone ? null : ({ borderTopWidth: border.width, borderTopColor: t.border, paddingTop: space.md } as const);
+  const address = web.state === "live" ? web.address : undefined;
+  return (
+    <View testID="build-web" style={{ gap: space.sm, ...rule }}>
+      {alone ? null : (
+        <T variant="eyebrow" color="textTertiary">
+          Web version
+        </T>
+      )}
+      {/* Design rule (AGENTS.md): the words keep the card's full width; the buttons sit below them, on the right. */}
+      {address ? (
+        <T testID="build-web-address" variant="callout" selectable>
+          {shortAddress(address)}
+        </T>
+      ) : null}
+      <T variant="row" color={web.state === "failed" ? "problem" : "textSecondary"} selectable={web.state === "failed"}>
+        {web.line}
+      </T>
+      {address ? (
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: space.sm }}>
+          <Button testID="build-web-share" label="Share" icon={Share2} variant="quiet" small onPress={() => shareAddress(address, app.name)} />
+          <Button testID="build-web-open" label="Open" icon={Globe} small onPress={() => openWebApp(app)} />
+        </View>
+      ) : null}
     </View>
   );
 }

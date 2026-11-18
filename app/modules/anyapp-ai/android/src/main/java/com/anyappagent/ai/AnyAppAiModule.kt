@@ -76,7 +76,9 @@ class AnyAppAiModule : Module() {
     Function("apps") {
       val ctx = context
       AiStore.apps(ctx).map {
-        val label = AiTrust.label(ctx, it.packageName)
+        // A web app ("web:<slug>") has no package: its label was saved with it.
+        val web = AiWebCalls.isWebKey(it.packageName)
+        val label = if (web) (it.label ?: it.packageName) else AiTrust.label(ctx, it.packageName)
         mapOf(
           "packageName" to it.packageName,
           "label" to (label ?: it.packageName),
@@ -94,5 +96,23 @@ class AnyAppAiModule : Module() {
     Function("setAppEnabled") { pkg: String, enabled: Boolean -> AiStore.setEnabled(context, pkg, enabled) }
 
     Function("forgetApp") { pkg: String -> AiStore.forgetApp(context, pkg) }
+
+    // AI for web apps (AiWebCalls.kt): Kiwimake's web screen answers window.kiwimake.ai with these.
+    // `key` is "web:<slug>", `label` "<App name> (web)" for Settings. Events: onWebAiEvent.
+    Events("onWebAiEvent")
+
+    Function("webStatus") { key: String, label: String -> AiWebCalls.status(context, key, label).toString() }
+
+    Function("webChat") { key: String, label: String, id: String, request: String ->
+      AiWebCalls.chat(context, key, label, id, request) { ev ->
+        try {
+          sendEvent("onWebAiEvent", mapOf("id" to id, "json" to ev.toString()))
+        } catch (_: Exception) {
+          AiWebCalls.cancel(key, id) // Kiwimake's JavaScript is gone
+        }
+      }
+    }
+
+    Function("webCancel") { key: String, id: String -> AiWebCalls.cancel(key, id) }
   }
 }

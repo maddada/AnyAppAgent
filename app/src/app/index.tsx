@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, RefreshControl, ScrollView, Switch, TextInput, View, useWindowDimensions, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown, CircleUser, Download, EllipsisVertical, Inbox, ListTodo, MessageCircle, Pencil, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
+import { ChevronDown, CircleUser, Download, EllipsisVertical, Globe, HousePlus, Inbox, ListTodo, MessageCircle, Pencil, Plus, Send, Settings, Share2, Smartphone } from "lucide-react-native";
 import { AnyAppNative } from "anyapp-native";
 import { actionLabel, describeApp, hasOldCopyInTheWay, REMOVE_OLD_AND_INSTALL, tileState } from "@/lib/describe";
 import { installLabel, headsUp as bigJobHeadsUp } from "@shared/chat/index";
@@ -32,6 +32,7 @@ import { LinkAskBanner } from "@/ui/LinkAsk";
 import { MoveButton, moveLine } from "@/ui/Move";
 import { GallerySection, GalleryTile } from "@/ui/Gallery";
 import { loadGallery, useGallery } from "@/lib/gallery";
+import { addToHomeScreen, canAddToHomeScreen, isWebOnly, openWebApp, shareAddress } from "@/lib/web";
 import { border, elevation, icon, look, radius, size, space, useTheme } from "@/ui/theme";
 
 /** COMPONENTS.md 3 and 4: the New app plus is 28, the sheet head icon 56 (no icon-size token for either). */
@@ -41,6 +42,9 @@ const SHEET_ICON = 56;
 const TILE_TEXT_MAX_SCALE = 1.6;
 /** The chat and options buttons on a tile: 48 dp, a bigger target than the 44 dp minimum. */
 const TILE_BUTTON = 48;
+/** A web app's globe mark on its icon, and the globe in it (no token this small). */
+const WEB_MARK = 22;
+const WEB_MARK_GLYPH = 13;
 
 export default function Home() {
   const pairing = useStore((s) => s.pairing);
@@ -256,6 +260,12 @@ function AppGrid() {
    * says why and what to do.
    */
   const tapApp = (app: App) => {
+    // A web app (docs/WEB-APPS.md): never installed; it opens in Kiwimake once it has a version.
+    if (isWebOnly(app)) {
+      if (appAction(app, undefined) === "open") openWebApp(app);
+      else setSelected({ id: app.id, manage: false });
+      return;
+    }
     const s = getState();
     const install = s.installs[app.id];
     const pkg = s.packages[app.packageName];
@@ -555,9 +565,13 @@ function AppTile({
   onChat: () => void;
 }) {
   const t = useTheme();
-  const pkg = useStore((s) => s.packages[app.packageName]);
+  const webOnly = isWebOnly(app);
+  const pkgOnPhone = useStore((s) => s.packages[app.packageName]);
+  const pkg = webOnly ? undefined : pkgOnPhone;
   const line = tileState(app, pkg, useStore((s) => s.installs[app.id]));
-  const label = pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
+  const label = webOnly
+    ? appAction(app, undefined) === "open" ? `Open ${app.name}, web app, ${line.label}` : `${app.name}, web app, ${line.label}`
+    : pkg ? `Open ${app.name}` : line.label === "Tap to install" ? `Install ${app.name}` : `${app.name}, ${line.label}`;
   // Where it is made shows only when the person has both places (docs/CLOUD.md, "One grid").
   const bothPlaces = useStore((s) => !!s.pairing && s.cloudAuth === "signedIn");
   const pcOnline = useStore((s) => s.connection === "online");
@@ -583,6 +597,7 @@ function AppTile({
     >
       <View>
         <AppIcon app={app} size={size.appIcon} />
+        {webOnly ? <WebMark /> : null}
       </View>
       <T
         variant="name"
@@ -604,6 +619,21 @@ function AppTile({
         <TileButton testID={`app-options-${app.slug}`} icon={EllipsisVertical} label={`${app.name} options`} onPress={onOptions} />
       </View>
     </PressScale>
+  );
+}
+
+/** A web app's small globe on the corner of its icon (docs/WEB-APPS.md). */
+function WebMark() {
+  const t = useTheme();
+  const d = WEB_MARK;
+  return (
+    <View
+      testID="app-web-mark"
+      pointerEvents="none"
+      style={{ position: "absolute", right: -d / 4, bottom: -d / 4, width: d, height: d, borderRadius: radius.full, backgroundColor: t.surface, borderWidth: border.width, borderColor: t.border, alignItems: "center", justifyContent: "center" }}
+    >
+      <Globe size={WEB_MARK_GLYPH} color={t.textSecondary} strokeWidth={icon.stroke} absoluteStrokeWidth />
+    </View>
   );
 }
 
@@ -645,7 +675,8 @@ function NewTile({ width, onPress }: { width: number; onPress: () => void }) {
 function AppSheet({ selection, onClose }: { selection: { id: string; manage: boolean } | null; onClose: () => void }) {
   const t = useTheme();
   const app = useStore((s) => (selection ? s.apps[selection.id] : undefined));
-  const pkg = useStore((s) => (app ? s.packages[app.packageName] : undefined));
+  // A web app (docs/WEB-APPS.md) is never on the phone as a package, whatever its name matches.
+  const pkg = useStore((s) => (app && !isWebOnly(app) ? s.packages[app.packageName] : undefined));
   const install = useStore((s) => (app ? s.installs[app.id] : undefined));
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [sending, setSending] = useState(false);
@@ -674,8 +705,21 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
   const doInstall = () => shown && void installApp(shown);
   const doOpen = () => {
     if (!shown) return;
-    if (!launchApp(shown)) AnyAppNative?.openAppSettings(shown.packageName);
     onClose();
+    if (isWebOnly(shown)) return openWebApp(shown);
+    if (!launchApp(shown)) AnyAppNative?.openAppSettings(shown.packageName);
+  };
+  const webOnly = !!shown && isWebOnly(shown);
+  const webAddress = shown?.web?.liveBuild ? shown.web.address : undefined;
+  const [pinning, setPinning] = useState(false);
+  const doAddToHome = async () => {
+    if (!shown) return;
+    setPinning(true);
+    setProblem(null);
+    const trouble = await addToHomeScreen(shown);
+    setPinning(false);
+    if (trouble) setProblem(trouble);
+    else onClose();
   };
   const doChange = () => {
     if (!shown) return;
@@ -736,8 +780,18 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
             <DeletePanel app={shown} installed={!!pkg} onDone={onClose} onCancel={() => (selection?.manage ? onClose() : setConfirmRemove(false))} />
           ) : (
             <View style={{ gap: space.sm }}>
-              {install?.phase === "failed" ? <InstallFailure message={install.message} /> : null}
-              {oldCopyInTheWay ? (
+              {install?.phase === "failed" && !webOnly ? <InstallFailure message={install.message} /> : null}
+              {webOnly ? (
+                // A web app: nothing to install; Open runs it in Kiwimake (docs/WEB-APPS.md).
+                action === "open" ? (
+                  <>
+                    <Button testID="app-primary" label="Open" icon={Globe} onPress={doOpen} />
+                    <Button testID="app-change" label="Change it" icon={MessageCircle} variant="quiet" onPress={doChange} />
+                  </>
+                ) : (
+                  <Button testID="app-change" label="Change it" icon={MessageCircle} onPress={doChange} />
+                )
+              ) : oldCopyInTheWay ? (
                 <>
                   {/* An old copy with another key in the way: Install would only fail again (describe.ts). */}
                   <Button testID="app-primary" label={REMOVE_OLD_AND_INSTALL} icon={Download} onPress={() => removeOldAndInstall(shown)} />
@@ -769,7 +823,24 @@ function AppSheet({ selection, onClose }: { selection: { id: string; manage: boo
               <Button testID="app-todo" label={todoLabel} icon={ListTodo} variant="quiet" onPress={doTodo} />
               <Button testID="app-others" label={othersLabel} icon={Inbox} variant="quiet" onPress={doOthers} />
               {pkg && AnyAppNative?.shareApk ? <Button testID="app-send" label="Send app" icon={Send} variant="quiet" onPress={() => setSending(true)} /> : null}
-              {shown.latestApk ? <Button testID="app-share" label={shown.sharing?.shared ? "Shared" : "Share"} icon={Share2} variant="quiet" onPress={doShare} /> : null}
+              {shown.latestApk && !webOnly ? <Button testID="app-share" label={shown.sharing?.shared ? "Shared" : "Share"} icon={Share2} variant="quiet" onPress={doShare} /> : null}
+              {/* Web apps (docs/WEB-APPS.md): its link, its own icon on the home screen; the web version of an app with both. */}
+              {webOnly && webAddress ? <Button testID="app-share-link" label="Share link" icon={Share2} variant="quiet" onPress={() => shareAddress(webAddress, shown.name)} /> : null}
+              {webOnly && action === "open" && canAddToHomeScreen() ? (
+                <Button testID="app-add-home" label="Add to home screen" icon={HousePlus} variant="quiet" busy={pinning} onPress={() => void doAddToHome()} />
+              ) : null}
+              {!webOnly && shown.web ? (
+                <Button
+                  testID="app-open-web"
+                  label="Open the web version"
+                  icon={Globe}
+                  variant="quiet"
+                  onPress={() => {
+                    onClose();
+                    openWebApp(shown);
+                  }}
+                />
+              ) : null}
               {pkg && action === "update" ? (
                 <T variant="caption" color="textSecondary" style={{ textAlign: "center", marginTop: space.xs }}>
                   {`Version ${pkg.versionCode} is on this phone.`}
@@ -871,14 +942,17 @@ function DeletePanel({ app, installed, onDone, onCancel }: { app: App; installed
           : "Choose where to delete it from. The app list and this phone can be restored from Recently deleted in Settings. PC and GitHub can't be undone."}
       </T>
       <DeleteToggle testID="delete-list" label="App list" sub={cloud ? "It leaves your app list." : "It moves to Recently deleted in Settings."} value disabled />
-      <DeleteToggle
-        testID="delete-phone"
-        label="This phone"
-        sub={installed ? "Uninstalls it. Android asks you first." : "It's not on this phone."}
-        value={uninstall && installed}
-        disabled={!installed || finished}
-        onChange={setUninstall}
-      />
+      {/* A web app (docs/WEB-APPS.md) is never installed: nothing to remove from the phone. */}
+      {isWebOnly(app) ? null : (
+        <DeleteToggle
+          testID="delete-phone"
+          label="This phone"
+          sub={installed ? "Uninstalls it. Android asks you first." : "It's not on this phone."}
+          value={uninstall && installed}
+          disabled={!installed || finished}
+          onChange={setUninstall}
+        />
+      )}
       {cloud ? null : (
         <DeleteToggle testID="delete-pc" label="PC and GitHub" sub="Deletes its chat, files and code for good." value={forGood} disabled={finished} onChange={setForGood} />
       )}

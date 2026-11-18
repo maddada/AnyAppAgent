@@ -116,6 +116,8 @@ object AiStore {
     val outputTokens: Long,
     val lastUsed: Long,
     val refused: Long,
+    /** A name to show for an entry with no installed package (a web app: "<App name> (web)"). */
+    val label: String? = null,
   )
 
   private fun appKey(pkg: String) = "app:$pkg"
@@ -131,6 +133,7 @@ object AiStore {
       j.optLong("out"),
       j.optLong("last"),
       j.optLong("refused"),
+      j.optString("label", "").ifEmpty { null },
     )
   }
 
@@ -142,6 +145,7 @@ object AiStore {
       .put("out", r.outputTokens)
       .put("last", r.lastUsed)
       .put("refused", r.refused)
+    if (r.label != null) j.put("label", r.label)
     prefs(ctx).edit().putString(appKey(r.packageName), j.toString()).apply()
   }
 
@@ -151,6 +155,12 @@ object AiStore {
   /** Makes sure the app shows in Settings (so it can be switched off) from its first contact. */
   fun touch(ctx: Context, pkg: String) = synchronized(lock) {
     if (!prefs(ctx).contains(appKey(pkg))) put(ctx, app(ctx, pkg))
+  }
+
+  /** touch() for an entry with no package (a web app, "web:<slug>"): keeps its label current. */
+  fun touchLabeled(ctx: Context, key: String, label: String) = synchronized(lock) {
+    val r = app(ctx, key)
+    if (!prefs(ctx).contains(appKey(key)) || r.label != label) put(ctx, r.copy(label = label))
   }
 
   fun setEnabled(ctx: Context, pkg: String, enabled: Boolean) = synchronized(lock) { put(ctx, app(ctx, pkg).copy(enabled = enabled)) }

@@ -541,6 +541,14 @@ class AnyAppNativeModule : Module() {
     Function("easyConnectAvailable") {
       easyConnectInitError == null
     }
+
+    // ---------- web apps: Add to home screen (WebShortcuts.kt)
+
+    Function("canPinShortcuts") { WebShortcuts.supported(context) }
+
+    Function("pinWebShortcut") { id: String, label: String, link: String, iconPath: String? ->
+      WebShortcuts.pin(context, id, label, link, iconPath)
+    }
   }
 
   private val mainHandler = Handler(Looper.getMainLooper())

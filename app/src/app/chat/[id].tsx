@@ -9,7 +9,8 @@ import { buildRows, composerState, COMPOSER_MAX_LINES, Follower, FOLLOW_WITHIN, 
 import { clipboardHasImage, clipboardHasNewPicture, dismissClipboardPicture, pastePicture, pickFromGallery, takePhoto, toUploads, type Attachment } from "@/chat/attachments";
 import { ChatRow } from "@/chat/ChatRows";
 import { describeApp, hasOldCopyInTheWay } from "@/lib/describe";
-import { installApp, launchApp } from "@/lib/installer";
+import { installApp } from "@/lib/installer";
+import { isWebOnly, openApp, shareAddress } from "@/lib/web";
 import type { App, ChatItem } from "@/lib/protocol";
 import { useDictation } from "@/lib/dictation";
 import { askForNotificationsOnce, loadChat } from "@/lib/session";
@@ -200,7 +201,7 @@ function Header({ app }: { app: App | undefined }) {
           label={action === "open" ? "Open" : "Install"}
           variant="quiet"
           small
-          onPress={() => (action === "open" ? launchApp(app) : void installApp(app))}
+          onPress={() => (action === "open" ? openApp(app) : void installApp(app))}
         />
       ) : null}
       {app && (pkg || app.latestApk) ? <MenuButton app={app} /> : null}
@@ -216,7 +217,7 @@ function MenuButton({ app }: { app: App }) {
   const t = useTheme();
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
-  const sendable = canSendApp(app);
+  const sendable = canSendApp(app) && !isWebOnly(app);
   const close = () => {
     setOpen(false);
     setSending(false);
@@ -248,7 +249,7 @@ function MenuButton({ app }: { app: App }) {
               />
             ) : null}
             {sendable ? <Button testID="chat-menu-send" label="Send app" icon={Send} variant="quiet" onPress={() => setSending(true)} /> : null}
-            {app.latestApk ? (
+            {app.latestApk && !isWebOnly(app) ? (
               <Button
                 testID="chat-menu-share"
                 label={app.sharing?.shared ? "Shared with others" : "Share with others"}
@@ -260,7 +261,25 @@ function MenuButton({ app }: { app: App }) {
                 }}
               />
             ) : null}
-            {!sendable && !app.latestApk ? (
+            {isWebOnly(app) ? (
+              // A web app (docs/WEB-APPS.md): its link is what goes to people, never a file.
+              app.web?.liveBuild ? (
+                <Button
+                  testID="chat-menu-share-link"
+                  label="Share link"
+                  icon={Globe}
+                  variant="quiet"
+                  onPress={() => {
+                    close();
+                    shareAddress(app.web!.address, app.name);
+                  }}
+                />
+              ) : (
+                <T variant="caption" color="textSecondary">
+                  It gets a link once a version is online.
+                </T>
+              )
+            ) : !sendable && !app.latestApk ? (
               <T variant="callout" color="textSecondary">
                 Nothing to send yet: the app is not built.
               </T>

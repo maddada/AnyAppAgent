@@ -13,6 +13,7 @@ import { authStorage, convex } from "@/lib/cloud";
 import { CloudBridge } from "@/lib/cloudSync";
 import { initAppUpdates } from "@/lib/appUpdate";
 import { initOverTheAirUpdates } from "@/lib/overTheAir";
+import { initWebApps } from "@/lib/web";
 
 /** With a cloud in this build, the whole app sits inside Convex Auth (sign-in, the account, cloud apps). */
 function WithCloud({ children }: { children: React.ReactNode }) {
@@ -38,6 +39,8 @@ export default function RootLayout() {
       // Kiwimake's own updates (release builds only): a newer APK, and over-the-air JavaScript.
       initOverTheAirUpdates();
       initAppUpdates();
+      // Web apps (docs/WEB-APPS.md): their addresses are kept, so a shortcut opens them while the PC is off.
+      initWebApps();
     }
   }, []);
 
@@ -57,6 +60,7 @@ export default function RootLayout() {
             <Stack.Screen name="chat/[id]" />
             <Stack.Screen name="helper/[appId]/[workerId]" />
             <Stack.Screen name="page/[appId]/[pageId]" options={{ animation: "slide_from_bottom" }} />
+            <Stack.Screen name="web/index" options={{ animation: "fade" }} />
             <Stack.Screen name="todo/[id]" />
             <Stack.Screen name="versions/[id]" />
             <Stack.Screen name="share/[id]" />

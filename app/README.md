@@ -24,6 +24,10 @@ Build from PowerShell after `. C:\dev\AnyAppAgent\scripts\android-env.ps1` (see 
 - `src/app/` screens (Expo Router): `connect`, `index` (home grid + sheets), `chat/[id]`, `settings`.
 - `src/lib/` state and talking to the PC: `api.ts` (HTTP), `session.ts` (pairing, WebSocket with
   reconnect, resync), `installer.ts` (download, sha256, install, notifications), `store.ts`.
+- Web apps (docs/WEB-APPS.md): `src/app/web/index.tsx` runs one full screen in a WebView (its
+  address, or the PC's copy while it is not online), `src/lib/webBridge.ts` is the injected
+  `window.kiwimake` bridge, `src/lib/web.ts` opening, sharing and Add to home screen. Open one by
+  hand: `adb shell am start -a android.intent.action.VIEW -d "anyappagent://web?app=<id>" com.anyappagent`.
 - `src/chat/` the chat timeline in bb's look (`Markdown.tsx`, `ChatRows.tsx`, `timeline.ts`).
 - `modules/anyapp-native/` the Kotlin Expo module: PackageInstaller sessions (+ system-intent
   fallback through a FileProvider), package info, launch, settings pages, notifications and the

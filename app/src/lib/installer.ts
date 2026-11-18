@@ -2,7 +2,7 @@ import { AppState } from "react-native";
 import { Directory, DownloadTask, File, Paths } from "expo-file-system";
 import { AnyAppNative, type InstallResult } from "anyapp-native";
 import { theme } from "@shared/theme/tokens";
-import { apkFor } from "@shared/chat/index";
+import { apkFor, isWebOnly } from "@shared/chat/index";
 import type { App, BuildInfo } from "./protocol";
 import { clientFor, getState, setInstall, setState, type InstallProgress } from "./store";
 import { loadPrefs, savePrefs, type Prefs } from "./storage";
@@ -75,7 +75,8 @@ export async function onApkReady(app: App) {
  */
 export async function autoInstallIfNew(app: App) {
   const build = app.latestApk;
-  if (!build || !AnyAppNative) return;
+  // A web app (docs/WEB-APPS.md) has no APK: nothing to download or install, ever.
+  if (!build || !AnyAppNative || isWebOnly(app)) return;
   const installed = installedVersion(app);
   if (installed == null || installed >= build.number) return;
   const prefs = getState().prefs;
@@ -296,7 +297,7 @@ export function installApp(app: App, options: InstallOptions = {}): Promise<void
   const now = getState().installs[app.id];
   if (now && BUSY.has(now.phase)) return queue;
   const build = app.latestApk;
-  if (!build) return Promise.resolve();
+  if (!build || isWebOnly(app)) return Promise.resolve(); // a web app has no APK (docs/WEB-APPS.md)
   const ahead = current && current !== app.id ? getState().apps[current]?.name : undefined;
   setInstall(app.id, { buildNumber: build.number, phase: "waiting", ...(ahead ? { waitingFor: ahead } : {}) });
   updateKeepAlive();
@@ -341,7 +342,7 @@ function dropOtherDownloads(app: App, keep: string) {
 async function installOne(appId: string, options: InstallOptions = {}) {
   const app = getState().apps[appId];
   const build = app?.latestApk;
-  if (!clientFor(appId) || !app || !build || !AnyAppNative) {
+  if (!clientFor(appId) || !app || !build || !AnyAppNative || isWebOnly(app)) {
     setInstall(appId, null);
     return;
   }

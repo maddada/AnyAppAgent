@@ -31,6 +31,7 @@ import type {
   AccountHandoff,
   DeleteAppResult,
 } from "./protocol";
+import type { WebOpenResponse } from "@shared/protocol";
 
 /** An error with a sentence that can be shown to the user as is. */
 export class ApiError extends Error {
@@ -159,6 +160,8 @@ export class Client {
   // Pages: a fresh signed address for one page (served without a token; the ticket is the grant).
   openPage = (id: string, pageId: string) =>
     this.call<PageOpenResponse>(`/api/apps/${encodeURIComponent(id)}/pages/${encodeURIComponent(pageId)}/open`, "POST", {});
+  // Web apps (docs/WEB-APPS.md): the newest web build from this PC, at a signed path served without a token. 404 on older PCs.
+  openWeb = (id: string) => this.call<WebOpenResponse>(`/api/apps/${encodeURIComponent(id)}/web/open`, "POST", {});
   // The person's own to-do list for an app (the agent never sees it).
   todos = (id: string) => this.call<TodoItem[]>(`/api/apps/${encodeURIComponent(id)}/todos`);
   addTodo = (id: string, text: string) => this.call<TodoItem>(`/api/apps/${encodeURIComponent(id)}/todos`, "POST", { text });
