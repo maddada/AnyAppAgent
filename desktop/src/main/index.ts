@@ -930,6 +930,7 @@ function ipc(): void {
   ipcMain.handle("trash:empty", () => chatAction((c) => c.emptyTrash())());
   // Sharing and publishing (docs/DISTRIBUTION.md).
   ipcMain.handle("apps:share", (_e, appId: string, shared: boolean) => chatAction((c) => c.share(String(appId), Boolean(shared)))());
+  ipcMain.handle("apps:public-code", (_e, appId: string, on: boolean) => chatAction((c) => c.setPublicCode(String(appId), Boolean(on)))());
   ipcMain.handle("apps:publish", (_e, appId: string, notes: string, channel: string) =>
     chatAction((c) => c.publish(String(appId), { ...(String(notes ?? "").trim() ? { notes: String(notes).trim() } : {}), channel: channel === "testing" ? "testing" : "stable" }))(),
   );

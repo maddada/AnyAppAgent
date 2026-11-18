@@ -992,3 +992,19 @@ export interface GalleryList {
   maker?: string; // who made them, as the cards say it ("Kiwimake")
   apps: GalleryApp[];
 }
+
+// Public code (added, docs/GALLERY.md "Public code"): "Publish the code too" in the Share step. A
+// shared app can also have a public <owner>/anyapp-<slug>-source repo, separate from its private
+// anyapp-<slug> (which keeps its history and stays private). It starts with one commit, the code of
+// the next stable version published, and each later stable Publish adds one commit with that
+// version's code (the files of its <slug>-source.zip), made with the GitHub noreply address.
+// POST /api/apps/:id/share with { shared: true, publicCode } turns it on or off (the app must be
+// shared; nothing is made until the next Publish). These declarations merge into the ones above.
+export interface ShareRequest {
+  publicCode?: boolean;
+}
+export interface AppSharing {
+  publicCode?: boolean; // "Publish the code too" is on
+  codeRepoUrl?: string; // https://github.com/<owner>/anyapp-<slug>-source, once it exists
+  codeProblem?: string; // the last Publish could not put the code there (a plain sentence); retried at the next Publish
+}

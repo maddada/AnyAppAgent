@@ -237,3 +237,22 @@ export function formatGallerySize(bytes: number): string {
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
 }
+
+// ---------- "Publish the code too" in the Share step (docs/GALLERY.md, "Public code")
+
+/** `https://github.com/maddada/anyapp-waterglass-releases` -> `anyapp-waterglass-source`. */
+export function publicCodeRepoFor(releasesRepoUrl: string): string {
+  const slug = /\/anyapp-([a-z0-9-]+)-releases$/.exec(releasesRepoUrl)?.[1];
+  return slug ? `anyapp-${slug}-source` : "anyapp-<name>-source";
+}
+
+/** The switch's line, the same on the phone and the PC. */
+export function publicCodeWords(on: boolean, releasesRepoUrl: string, published: boolean): string {
+  const repo = publicCodeRepoFor(releasesRepoUrl);
+  if (on) {
+    return published
+      ? `Each version you publish also goes to ${repo} on GitHub as one new change: its code only, never your chat, the app's notes about you, keys or .env files.`
+      : `${repo} is made with your next Publish, with that version's code as its only change. Each later version adds one more.`;
+  }
+  return `A public page with the app's code, ${repo}, separate from its private one. It starts at your next Publish with one change; the app's own history stays private.`;
+}

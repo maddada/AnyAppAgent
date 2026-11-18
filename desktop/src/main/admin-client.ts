@@ -352,6 +352,11 @@ export class AdminClient extends EventEmitter {
     return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/share`, { shared }, 5 * 60_000);
   }
 
+  /** "Publish the code too" (docs/GALLERY.md): the public anyapp-<slug>-source repo. */
+  setPublicCode(appId: string, on: boolean): Promise<App> {
+    return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/share`, { shared: true, publicCode: on }, 5 * 60_000);
+  }
+
   publish(appId: string, body: PublishRequest): Promise<App> {
     return this.request<App>("POST", `/api/apps/${encodeURIComponent(appId)}/publish`, body, 30 * 60_000);
   }

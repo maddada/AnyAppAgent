@@ -90,6 +90,7 @@ const bridge: AnyAppBridge = {
   cancelTurn: (appId) => ipcRenderer.invoke("apps:cancel", appId),
   rebuild: (appId) => ipcRenderer.invoke("apps:rebuild", appId),
   shareApp: (appId, shared) => ipcRenderer.invoke("apps:share", appId, shared),
+  setPublicCode: (appId, on) => ipcRenderer.invoke("apps:public-code", appId, on),
   publishApp: (appId, notes, channel) => ipcRenderer.invoke("apps:publish", appId, notes, channel),
   pullBack: (appId, build) => ipcRenderer.invoke("apps:pullback", appId, build),
   releaseStats: (appId) => ipcRenderer.invoke("apps:releases", appId),

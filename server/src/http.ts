@@ -649,6 +649,12 @@ export function startHttpServer(deps: {
     } else if (method === "POST" && action === "share") {
       const body = await readBody<Partial<ShareRequest>>(req);
       if (typeof body.shared !== "boolean") throw new HttpError(400, '"shared" must be true or false.');
+      // "Publish the code too" (docs/GALLERY.md): only with sharing on.
+      if (typeof body.publicCode === "boolean") {
+        if (!body.shared) throw new HttpError(400, '"publicCode" goes with "shared": true.');
+        await apps.setShared(id, true);
+        return sendJson(res, 200, apps.setPublicCode(id, body.publicCode));
+      }
       return sendJson(res, 200, await apps.setShared(id, body.shared));
     } else if (method === "POST" && action === "change") {
       const body = await readBody<ChangeSettingsRequest>(req);

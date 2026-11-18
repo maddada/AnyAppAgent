@@ -4,7 +4,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Share2 } from "lucide-react";
 import type { App, PublishedRelease, ReleaseStats } from "../../../../shared/protocol.ts";
-import { Dialog, Icon, QrPlate, Spinner, timeAgo } from "./ui.tsx";
+import { Dialog, Icon, QrPlate, Spinner, StateLine, timeAgo } from "./ui.tsx";
+import { publicCodeWords } from "../../../../shared/chat/gallery.ts";
 import { VoiceTextarea } from "./Voice.tsx";
 
 const api = window.anyapp;
@@ -85,6 +86,35 @@ export function ShareDialog({ app, onClose }: { app: App; onClose: () => void })
           </div>
           {busy === "share" ? <Spinner /> : <SwitchRow on={shared} busy={busy !== null} onChange={() => void run("share", () => api.shareApp(app.id, !shared), shared ? "Not shared any more. People who have it keep it, but get no new versions." : undefined)} />}
         </div>
+        {shared && sharing && (
+          <div className="srow">
+            <div className="srow-main">
+              <span className="body">Publish the code too</span>
+              <span className="sub">{publicCodeWords(Boolean(sharing.publicCode), sharing.releasesRepoUrl, Boolean(sharing.codeRepoUrl))}</span>
+              {sharing.codeRepoUrl && (
+                <div className="row wrap">
+                  <button className="btn btn-quiet btn-sm" onClick={() => void api.openExternal(sharing.codeRepoUrl!)}>
+                    Open the code on GitHub
+                  </button>
+                </div>
+              )}
+              {sharing.codeProblem && <StateLine state="problem" text={sharing.codeProblem} />}
+            </div>
+            {busy === "code" ? (
+              <Spinner />
+            ) : (
+              <button
+                className={`switch${sharing.publicCode ? " on" : ""}`}
+                role="switch"
+                aria-checked={Boolean(sharing.publicCode)}
+                aria-label="Publish the code too"
+                disabled={busy !== null}
+                onClick={() => void run("code", () => api.setPublicCode(app.id, !sharing.publicCode))}
+                data-testid="public-code-switch"
+              />
+            )}
+          </div>
+        )}
         {shared && sharing && (
           <div className="srow">
             <div className="srow-main">

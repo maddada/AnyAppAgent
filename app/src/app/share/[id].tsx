@@ -10,6 +10,7 @@ import { upsertApp, useStore } from "@/lib/store";
 import { Button, IconButton } from "@/ui/Button";
 import { Field } from "@/ui/Field";
 import { StateLine } from "@/ui/StateLine";
+import { publicCodeWords } from "@shared/chat/gallery";
 import { T } from "@/ui/Text";
 import { border, size, space, useTheme } from "@/ui/theme";
 
@@ -101,6 +102,29 @@ export default function ShareScreen() {
           />
         </View>
         {busy === "share" ? <StateLine kind="working" label="Setting it up on GitHub..." role="caption" /> : null}
+
+        {shared && sharing ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+            <View style={{ flex: 1, gap: space.xs }}>
+              <T variant="body">Publish the code too</T>
+              <T variant="caption" color="textSecondary">
+                {publicCodeWords(Boolean(sharing.publicCode), sharing.releasesRepoUrl, Boolean(sharing.codeRepoUrl))}
+              </T>
+              {sharing.codeProblem ? <StateLine kind="problem" label={sharing.codeProblem} role="caption" lines={0} /> : null}
+            </View>
+            <Switch
+              testID="public-code-switch"
+              accessibilityLabel="Publish the code too"
+              value={Boolean(sharing.publicCode)}
+              disabled={disabled}
+              onValueChange={(on) => {
+                if (client) void run("code", () => client.setPublicCode(appId, on));
+              }}
+              trackColor={{ false: t.borderStrong, true: t.accent }}
+              thumbColor={t.dark ? t.text : t.surface}
+            />
+          </View>
+        ) : null}
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
           <View style={{ flex: 1, gap: space.xs }}>

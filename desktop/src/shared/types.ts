@@ -338,6 +338,8 @@ export interface AnyAppBridge {
   rebuild(appId: string): Promise<ActionResult>;
   /** "Share with others" on or off (docs/DISTRIBUTION.md): a public releases-only repo. */
   shareApp(appId: string, shared: boolean): Promise<ActionResult & { app?: App }>;
+  /** "Publish the code too" (docs/GALLERY.md): each stable Publish also goes to the public anyapp-<slug>-source repo. */
+  setPublicCode(appId: string, on: boolean): Promise<ActionResult & { app?: App }>;
   /** Publishes the newest build as a version for the people the app is shared with. */
   publishApp(appId: string, notes: string, channel: "stable" | "testing"): Promise<ActionResult & { app?: App }>;
   /** Stops offering a published version. */

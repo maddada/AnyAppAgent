@@ -25,6 +25,7 @@ import { placeholderIconPng } from "./icon.ts";
 import { realGithub, shareApp, testingFeedUrl, unshareApp, type GithubApi } from "./sharing.ts";
 import * as githubCli from "./github.ts";
 import { publishVersion, pullBack, StaleSignerError, parseUpdateJson, repoOf, type ApkFile, type ReleaseApi } from "./publish.ts";
+import { pcPathHits, publicCodeRepoName, publicCodeRepoUrl, pushPublicCode, realCodeRepoApi, type CodeRepoApi } from "./public-code.ts";
 import { appPlaybook, buildFixPrompt, firstPrompt, sharedInNote } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
 import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
@@ -214,6 +215,7 @@ export class AppManager {
   readonly web: WebApps;
   /** Downloads of shared apps' code (Make my own version); tests pass a fake. */
   private readonly fetchImpl: typeof fetch;
+  private readonly codeRepo: CodeRepoApi;
   private careTimer: NodeJS.Timeout | undefined;
   private healthTimer: NodeJS.Timeout | undefined;
   private lastCare = "";
@@ -231,12 +233,15 @@ export class AppManager {
     /** Where template/ and template-kotlin/ are (health.ts); default: this repository. */
     repoDir?: string;
     fetch?: typeof fetch;
+    /** "Publish the code too" (public-code.ts): the public anyapp-<slug>-source repos; tests give a local one. */
+    codeRepo?: CodeRepoApi;
     /** Where web apps go online (web-host.ts); null or absent: they open only from this PC. */
     webHost?: WebHost | null;
   }) {
     this.fetchImpl = deps.fetch ?? fetch;
     this.phonesConnected = deps.phonesConnected ?? (() => 0);
     this.github = deps.github ?? realGithub;
+    this.codeRepo = deps.codeRepo ?? realCodeRepoApi({ visibility: (full) => this.github.visibility(full), createPublic: (full, description) => this.github.createPublic(full, description) });
     this.store = deps.store;
     this.builder = deps.builder;
     this.config = deps.config;
@@ -1028,6 +1033,23 @@ export class AppManager {
   }
 
   /**
+   * "Publish the code too" (docs/GALLERY.md, "Public code"): on, each stable Publish also puts that
+   * version's code into the public anyapp-<slug>-source repo as one commit (the first makes the repo).
+   * Only the switch changes here: nothing is made on GitHub until the next Publish.
+   */
+  setPublicCode(id: string, on: boolean): App {
+    const record = this.record(id);
+    if (!record.app.sharing?.shared) throw new HttpError(409, "Share this app first: turn on Share with others.");
+    if (this.sharingBusy.has(id)) throw new HttpError(409, "This app is being published or shared. Try again when it is done.");
+    if (Boolean(record.app.sharing.publicCode) === on) return record.app;
+    record.app.sharing = { ...record.app.sharing, publicCode: on };
+    if (!on) delete record.app.sharing.codeProblem;
+    this.log(`[${record.app.slug}] publish the code too: ${on ? "on" : "off"}`);
+    this.touch(record);
+    return record.app;
+  }
+
+  /**
    * Publishes the newest build of a shared app as a GitHub release (docs/DISTRIBUTION.md, stage 3).
    * A build signed before the app got its own key is built again instead (409).
    */
@@ -1038,6 +1060,7 @@ export class AppManager {
     this.sharingBusy.add(id);
     try {
       const build = record.app.latestApk;
+      let versionCode: Buffer | null = null;
       const apks: ApkFile[] = [];
       if (build?.sha256) {
         const dir = this.store.apkDir(id);
@@ -1059,11 +1082,15 @@ export class AppManager {
             if (!existsSync(join(record.dir, ".git"))) return null;
             const commit = (await this.history.versions(record.app.id, record.dir)).find((v) => v.build === build?.number)?.commit ?? "HEAD";
             const { hits } = await makeSourceZip(record.dir, commit, out);
+            // Nothing that names this PC's folders goes public (the zip is public on every release).
+            versionCode = readFileSync(out);
+            hits.push(...pcPathHits(versionCode, [this.config.appsDir, this.store.stateDir]));
             return { path: out, hits };
           },
           log: this.log,
         });
         record.app.sharing = { ...record.app.sharing!, releases };
+        if (record.app.sharing.publicCode && releases[0]?.channel === "stable" && versionCode) await this.publishCode(record, releases[0].version, releases[0].build, versionCode);
         this.touch(record);
         return record.app;
       } catch (error) {
@@ -1072,6 +1099,26 @@ export class AppManager {
       }
     } finally {
       this.sharingBusy.delete(id);
+    }
+  }
+
+  /**
+   * One commit in the public code repo with this version's code. The release is already out, so a
+   * failure here does not undo it: it is kept as codeProblem and the next Publish tries again.
+   */
+  private async publishCode(record: AppRecord, version: string, build: number, zip: Buffer): Promise<void> {
+    const sharing = record.app.sharing!;
+    const owner = sharing.releasesRepoUrl.replace(/^https:\/\/github\.com\//, "").split("/")[0]!;
+    const slug = sharing.releasesRepoUrl.match(/\/anyapp-([a-z0-9-]+)-releases$/)?.[1] ?? record.app.slug;
+    try {
+      const done = await pushPublicCode({ full: `${owner}/${publicCodeRepoName(slug)}`, appName: record.app.name, version, build, zip }, this.codeRepo);
+      record.app.sharing = { ...sharing, codeRepoUrl: publicCodeRepoUrl(owner, slug) };
+      delete record.app.sharing.codeProblem;
+      this.log(`[${record.app.slug}] public code: ${done} ${owner}/${publicCodeRepoName(slug)} for ${version}`);
+    } catch (error) {
+      const why = (error as Error).message.split(/\r?\n/)[0]!.slice(0, 200);
+      record.app.sharing = { ...sharing, codeProblem: `Version ${version} is published, but its code did not reach the public code repo (${why}). It goes there with your next Publish.` };
+      this.log(`[${record.app.slug}] public code failed: ${why}`);
     }
   }
 

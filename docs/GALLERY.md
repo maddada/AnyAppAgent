@@ -18,6 +18,19 @@ The user answered the gallery options page (Q43 to Q48, 2026-11-18):
   every app, `docs/DISTRIBUTION.md`).
 - **Q48, which apps:** Water Glass, Prayer Alarm, Alarm Up, and Game renamed to **Kiwi Games**.
 
+Then (the second round, Q49 to Q53):
+
+- **Q49, public code: fresh repos, one commit.** The private `anyapp-<slug>` repos stay private with
+  their history. The public code goes in new repos, `anyapp-<slug>-source`, that start with one
+  commit of the current code (no `APP_MEMORY.md`, no PC paths, the GitHub noreply address). Built
+  into the Share step as "Publish the code too" (below).
+- **Q50:** Prayer Alarm's city becomes a setting first, so Ajman is not in its code, and the
+  personal lines leave its notes.
+- **Q51:** MIT licence on all four.
+- **Q52:** Alarm Up: only "Wake-up check" becomes "Still awake?". Its `overview.md` still names
+  Alarmy, and `overview.md` is public (it is in every version's code).
+- **Q53:** the gallery goes in the next Kiwimake release.
+
 ## The list: gallery.json
 
 ```json
@@ -83,9 +96,35 @@ existing "Make my own version" form directly (`/change?...&start=own`). Desktop:
 version's name (default "Water Glass (Ahmad's)") and an optional first change. Both send
 `POST /api/clones` with the gallery app's releases repo. Not built for cloud apps.
 
+## Public code: "Publish the code too"
+
+A switch in the Share dialog (desktop) and the Share screen (phone), under Share with others, shown
+once the app is shared. On, each **stable** Publish also puts that version's code into the public
+`<owner>/anyapp-<slug>-source` repo (`server/src/public-code.ts`):
+
+- The first Publish after the switch went on makes the repo, with that version's code as its only
+  commit. Each later stable Publish adds exactly one commit, "Water Glass 1.3 (build 12)", tagged
+  `v1.3-b12`. Testing versions do not go there. The same code again adds nothing.
+- Each commit holds exactly the files of that version's `<slug>-source.zip` (files the version no
+  longer has are removed): never `APP_MEMORY.md`, `.env` files, keys, the chat or the private repo's
+  history, and the whole zip is scanned for secrets first, as for every release.
+- Author and committer are the GitHub account with its noreply address
+  (`<id>+<login>@users.noreply.github.com`, from `gh api user`); no Git name or email of this PC
+  can slip in (every identity setting is given, and `GIT_AUTHOR_*` / `GIT_COMMITTER_*` are removed
+  from that git's environment).
+- **No PC folder paths:** every Publish (with or without the switch, since the code zip is public on
+  every release) is refused when a text file of the code names this PC's home folder, its apps or
+  state folder, or any `/home/<name>/`, `/Users/<name>/` or `C:\Users\<name>` path, with the file and
+  line. (The four gallery apps have none outside `APP_MEMORY.md`, which never goes.)
+- The release is out before the code commit: if GitHub refuses the commit, the app keeps
+  `sharing.codeProblem` (shown under the switch) and the next Publish tries again with its own code.
+- The private repo, its history and the app's folder are never touched: the commit is made in a
+  temporary clone of the public repo.
+
 ## Protocol (additive)
 
-`GalleryApp`, `GalleryList`, and the route `GET /api/gallery`. Native module (phone): `setGalleryApps`,
+`GalleryApp`, `GalleryList`, and the route `GET /api/gallery`. Public code: `ShareRequest.publicCode`
+(with `shared: true`), `AppSharing.publicCode`, `AppSharing.codeRepoUrl`, `AppSharing.codeProblem`. Native module (phone): `setGalleryApps`,
 `signingCertSha256`, `apkCertSha256` (a new phone APK is needed).
 
 ## Proof (2026-11-18)

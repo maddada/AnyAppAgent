@@ -1,7 +1,7 @@
 // Run: node --test shared/chat/test/
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { feedProblem, galleryFeedUrl, galleryInstallUrl, gallerySlug, galleryState, galleryStateLine, OFFICIAL_BADGE, pickFeedApk, readFeed, readGallery, showsBadge } from "../index.ts";
+import { publicCodeRepoFor, publicCodeWords, feedProblem, galleryFeedUrl, galleryInstallUrl, gallerySlug, galleryState, galleryStateLine, OFFICIAL_BADGE, pickFeedApk, readFeed, readGallery, showsBadge } from "../index.ts";
 
 const CERT = "a".repeat(64);
 const entry = {
@@ -108,4 +108,12 @@ test("what a card shows: the mark is earned by the installed copy's certificate"
   assert.match(galleryStateLine(app, "notOfficial")!.text, /not the official one/);
   assert.equal(galleryStateLine(app, "update")!.text, "Version 1.2 is ready");
   assert.equal(galleryStateLine(app, "install"), null);
+});
+
+test("the public code switch names the separate -source repo", () => {
+  const url = "https://github.com/maddada/anyapp-waterglass-releases";
+  assert.equal(publicCodeRepoFor(url), "anyapp-waterglass-source");
+  assert.match(publicCodeWords(false, url, false), /anyapp-waterglass-source.*private/);
+  assert.match(publicCodeWords(true, url, false), /made with your next Publish/);
+  assert.match(publicCodeWords(true, url, true), /never your chat/);
 });

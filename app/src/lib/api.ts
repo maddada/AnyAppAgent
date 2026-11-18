@@ -180,6 +180,9 @@ export class Client {
   // calls on the PC: they can take minutes (a publish uploads the APKs).
   share = (id: string, shared: boolean) =>
     request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/share`, { method: "POST", body: { shared }, token: this.token, timeoutMs: 300000 });
+  /** "Publish the code too" (docs/GALLERY.md): the public anyapp-<slug>-source repo. Older PCs ignore it. */
+  setPublicCode = (id: string, on: boolean) =>
+    request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/share`, { method: "POST", body: { shared: true, publicCode: on }, token: this.token, timeoutMs: 300000 });
   publish = (id: string, body: PublishRequest) =>
     request<App>(this.baseUrl, `/api/apps/${encodeURIComponent(id)}/publish`, { method: "POST", body, token: this.token, timeoutMs: 1800000 });
   pullBack = (id: string, build: number) =>
