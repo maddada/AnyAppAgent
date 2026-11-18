@@ -749,6 +749,9 @@ function ipc(): void {
   ipcMain.handle("page:insert", (_e, page: string, text: string) => insertIntoPage(String(page), String(text ?? "")));
   ipcMain.handle("page:voice-state", (_e, page: string, phase: "idle" | "recording" | "transcribing") => pageVoiceState(String(page), phase));
   ipcMain.handle("hex:transcribe", async (_e, wav: ArrayBuffer) => {
+    // Dev and proofs only: ANYAPP_DESKTOP_TRANSCRIPT stands in for Hex or Superwhisper (each
+    // recording is "heard" as that text), so a proof can drive dictation without a voice.
+    if (env.ANYAPP_DESKTOP_TRANSCRIPT !== undefined) return { ok: true, text: env.ANYAPP_DESKTOP_TRANSCRIPT };
     try {
       const bytes = new Uint8Array(wav);
       const started = Date.now();
