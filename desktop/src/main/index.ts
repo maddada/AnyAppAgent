@@ -13,7 +13,7 @@ import { ensurePhone, phoneCachePath, pinnedPhoneUrl, universalPhoneUrl } from "
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
 import { AdminClient, lanAddresses } from "./admin-client.ts";
-import { openPageWindow, pageAnswered } from "./page-window.ts";
+import { insertIntoPage, onPageVoiceKeys, openPageWindow, pageAnswered, pageVoiceState } from "./page-window.ts";
 import { Companion } from "./companion.ts";
 import { findEngine, engineName, isEngine } from "../../../shared/engines.mts";
 import { detectEngine } from "./detect/engine.ts";
@@ -741,6 +741,13 @@ function ipc(): void {
       return { ok: false, error: error instanceof HexFailure ? error.message : `Hex couldn't be opened. Open it from ${where}, or get it from ${HEX_SITE}` };
     }
   });
+  // Dictation in a page window: its keys go to the main window, which records and transcribes as
+  // in a chat; the finished words go back into the page (page-window.ts).
+  onPageVoiceKeys((page, key) => {
+    if (win && !win.isDestroyed()) win.webContents.send("page:voice-key", page, key);
+  });
+  ipcMain.handle("page:insert", (_e, page: string, text: string) => insertIntoPage(String(page), String(text ?? "")));
+  ipcMain.handle("page:voice-state", (_e, page: string, phase: "idle" | "recording" | "transcribing") => pageVoiceState(String(page), phase));
   ipcMain.handle("hex:transcribe", async (_e, wav: ArrayBuffer) => {
     try {
       const bytes = new Uint8Array(wav);

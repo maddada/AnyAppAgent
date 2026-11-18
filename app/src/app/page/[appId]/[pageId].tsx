@@ -2,7 +2,9 @@
 // with the title and a close button, and the page in a web view. The page is served by the PC at a
 // signed address (POST /api/apps/:id/pages/:pageId/open), so it loads, reloads and sends its
 // answers without the phone's token. It is sandboxed: no bridge to the app (no onMessage, nothing
-// injected), no cookies or storage, and any link it holds opens in the browser instead.
+// injected at load), no cookies or storage, and any link it holds opens in the browser instead.
+// Voice: the mic in the bar listens here, in the app, and only the finished words go into the
+// page's text box (shared/chat/page-voice.ts); the page never talks to the app.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler, Linking, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -11,6 +13,9 @@ import { WebView } from "react-native-webview";
 import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 import { X } from "lucide-react-native";
 import { pageCard, pageUrl, staysInPage } from "@shared/chat/index";
+import { pageInsertScript } from "@shared/chat/page-voice";
+import { useDictation } from "@/lib/dictation";
+import { DictationNote, MicButton } from "@/ui/MicButton";
 import { ApiError } from "@/lib/api";
 import { useStore, useClientFor } from "@/lib/store";
 import { Button, IconButton } from "@/ui/Button";
@@ -106,6 +111,21 @@ export default function PageScreen() {
     [inPage, openOutside],
   );
 
+  // Voice into the page's box: heard here, then typed into the page when listening ends.
+  const [heard, setHeard] = useState("");
+  const dictation = useDictation({ value: heard, onChange: setHeard });
+  const listened = useRef(false);
+  useEffect(() => {
+    const on = dictation.phase !== "idle";
+    if (listened.current && !on && heard.trim()) {
+      webview.current?.injectJavaScript(pageInsertScript(heard.trim()));
+      setHeard("");
+    }
+    listened.current = on;
+    // Only the end of listening matters here; `heard` is read as it is then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dictation.phase]);
+
   const title = page ? pageCard(page).title : "Page";
   return (
     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: t.bg }}>
@@ -118,8 +138,23 @@ export default function PageScreen() {
             {page ? pageCard(page).status : "Page from the agent"}
           </T>
         </View>
+        {address && !failure && !loading ? <MicButton dictation={dictation} testID="page-mic" /> : null}
         <IconButton testID="page-close" icon={X} label="Close the page" onPress={close} />
       </View>
+      {dictation.phase !== "idle" || dictation.error || heard ? (
+        <View testID="page-voice" style={{ paddingHorizontal: space.lg, paddingVertical: space.sm, gap: space.xs, borderBottomWidth: border.width, borderBottomColor: t.border }}>
+          <DictationNote dictation={dictation} />
+          {heard ? (
+            <T variant="callout" color="textSecondary" numberOfLines={3}>
+              {heard}
+            </T>
+          ) : dictation.phase !== "idle" ? (
+            <T variant="caption" color="textTertiary">
+              The words go into the box you were in, or the last one on the page.
+            </T>
+          ) : null}
+        </View>
+      ) : null}
       <View style={{ flex: 1 }}>
         {address && !failure ? (
           <WebView<object>

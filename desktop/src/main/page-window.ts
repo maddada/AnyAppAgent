@@ -3,8 +3,12 @@
 // the app), its own session partition (no cookies or storage shared with the app), and the
 // companion serves it with a sandbox content policy (opaque origin). Links it holds open in the
 // browser; the window itself never leaves the page.
+// Voice: Ctrl+Alt+Space in a page window (real key presses, which a page cannot make) is handed to
+// the main window, which records and transcribes as in a chat; only the finished words go into the
+// page's text box (shared/chat/page-voice.ts). The page never talks to the app.
 import { BrowserWindow, nativeTheme, session, shell } from "electron";
 import { pageUrl, staysInPage } from "../../../shared/chat/pages.ts";
+import { pageInsertScript } from "../../../shared/chat/page-voice.ts";
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
 
 /** The partition every page window shares: in memory, nothing from the app's own session. */
@@ -25,6 +29,37 @@ function pageSession(): Electron.Session {
     ses.setPermissionCheckHandler(() => false);
   }
   return ses;
+}
+
+/** What a page window's dictation keys do: "down" and "up" of Ctrl+Alt+Space, or Escape. */
+export type PageVoiceKey = "down" | "up" | "escape";
+let voiceKeys: ((page: string, key: PageVoiceKey) => void) | undefined;
+const recording = new Set<string>();
+const titles = new Map<string, string>();
+/** Who hears a page window's dictation keys (the main window, through the main process). */
+export function onPageVoiceKeys(handler: (page: string, key: PageVoiceKey) => void): void {
+  voiceKeys = handler;
+}
+
+/** Puts dictated words into the page's text box. */
+export async function insertIntoPage(page: string, text: string): Promise<boolean> {
+  const win = windows.get(page);
+  if (!win || win.isDestroyed() || !text.trim()) return false;
+  try {
+    return (await win.webContents.executeJavaScript(pageInsertScript(text.trim()))) !== false;
+  } catch {
+    return false;
+  }
+}
+
+/** The page window's title says while it listens or writes it down. */
+export function pageVoiceState(page: string, phase: "idle" | "recording" | "transcribing"): void {
+  const win = windows.get(page);
+  if (!win || win.isDestroyed()) return;
+  const title = titles.get(page) ?? "Page";
+  if (phase === "recording") recording.add(page);
+  else recording.delete(page);
+  win.setTitle(phase === "recording" ? `Listening (Ctrl+Alt+Space to stop, Esc cancels): ${title}` : phase === "transcribing" ? `Writing it down: ${title}` : title);
 }
 
 export interface OpenPageArgs {
@@ -78,8 +113,24 @@ export function openPageWindow(args: OpenPageArgs): void {
   });
   win.setMenuBarVisibility(false);
   windows.set(key, win);
+  titles.set(key, args.title || "Page");
   win.on("closed", () => {
     if (windows.get(key) === win) windows.delete(key);
+    recording.delete(key);
+  });
+  // Ctrl+Alt+Space dictates into the page (hold and let go, or tap twice); Escape cancels.
+  win.webContents.on("before-input-event", (event, input) => {
+    if (!voiceKeys) return;
+    const hotkey = input.control && input.alt && !input.shift && !input.meta && input.code === "Space";
+    if (input.type === "keyDown" && hotkey) {
+      event.preventDefault();
+      if (!input.isAutoRepeat) voiceKeys(key, "down");
+    } else if (input.type === "keyUp" && (input.code === "Space" || input.key === "Control" || input.key === "Alt")) {
+      voiceKeys(key, "up");
+    } else if (input.type === "keyDown" && input.key === "Escape" && recording.has(key)) {
+      event.preventDefault();
+      voiceKeys(key, "escape");
+    }
   });
   // Keep the window named after the page, not after whatever the page's <title> says.
   win.on("page-title-updated", (event) => event.preventDefault());

@@ -114,6 +114,13 @@ const bridge: AnyAppBridge = {
   sendTodo: (appId, todoId) => ipcRenderer.invoke("todos:send", appId, todoId),
   createApp: (name, prompt, preset, askMore) => ipcRenderer.invoke("apps:create", name, prompt, preset, askMore),
   openPage: (appId, pageId, title) => ipcRenderer.invoke("pages:open", appId, pageId, title),
+  onPageVoiceKey: (listener) => {
+    const fn = (_e: unknown, page: string, key: "down" | "up" | "escape") => listener(page, key);
+    ipcRenderer.on("page:voice-key", fn);
+    return () => ipcRenderer.removeListener("page:voice-key", fn);
+  },
+  pageInsert: (page, text) => ipcRenderer.invoke("page:insert", page, text),
+  pageVoiceState: (page, phase) => ipcRenderer.invoke("page:voice-state", page, phase),
   setSetting: (key, value) => ipcRenderer.invoke("settings:set", key, value),
   restartCompanion: () => ipcRenderer.invoke("companion:restart"),
   quit: () => ipcRenderer.invoke("app:quit"),

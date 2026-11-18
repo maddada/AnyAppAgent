@@ -381,6 +381,12 @@ export interface AnyAppBridge {
   createApp(name: string, prompt: string, preset?: AppPreset, askMore?: boolean): Promise<ActionResult & { app?: App }>;
   /** Opens a page an app's agent published, in its own window over the app. */
   openPage(appId: string, pageId: string, title?: string): Promise<ActionResult>;
+  /** Ctrl+Alt+Space (or Escape) in a page window; `page` is "<appId>/<pageId>". */
+  onPageVoiceKey(listener: (page: string, key: "down" | "up" | "escape") => void): () => void;
+  /** Types dictated words into a page window's text box. */
+  pageInsert(page: string, text: string): Promise<boolean>;
+  /** The page window's title says while it listens or writes it down. */
+  pageVoiceState(page: string, phase: "idle" | "recording" | "transcribing"): Promise<void>;
 
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void>;
   restartCompanion(): Promise<void>;

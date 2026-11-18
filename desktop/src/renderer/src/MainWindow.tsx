@@ -14,7 +14,7 @@ import type { App, AppPreset, CheckState, Snapshot } from "../../shared/types.ts
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
 import { ChatView } from "./Chat.tsx";
 import { HexCard } from "./Hex.tsx";
-import { useVoiceSetupFrom, VoiceTextarea } from "./Voice.tsx";
+import { PageVoice, useVoiceSetupFrom, VoiceTextarea } from "./Voice.tsx";
 import { EngineChoice, type StepId } from "./Onboarding.tsx";
 import { PairingDialog } from "./Pairing.tsx";
 import { ShareButton, ShareDialog } from "./Share.tsx";
@@ -139,6 +139,7 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
         />
       )}
       {getApp && <GetPhoneAppDialog onClose={() => setGetApp(false)} />}
+      <PageVoice />
     </div>
   );
 }

@@ -238,3 +238,45 @@ export function VoiceTextarea({
     </>
   );
 }
+
+/**
+ * Dictation in a page window (an agent's plan or questions): Ctrl+Alt+Space there comes here, the
+ * recording and transcribing happen here as in a chat, and the finished words go into the page's
+ * text box (main/page-window.ts). Mounted once, in the main window.
+ */
+export function PageVoice() {
+  const hex = useHexCheck();
+  const target = useRef<string | null>(null);
+  const dictation = useDictation({
+    engine: engineName(hex),
+    platform: hex?.platform,
+    onText: (said) => {
+      if (target.current) void window.anyapp.pageInsert(target.current, said);
+    },
+  });
+  const now = useRef({ dictation, ready: hex?.state === "ready" });
+  now.current = { dictation, ready: hex?.state === "ready" };
+  const { phase } = dictation;
+  useEffect(() => {
+    if (target.current) void window.anyapp.pageVoiceState(target.current, phase === "starting" ? "recording" : phase);
+  }, [phase]);
+  useEffect(() => {
+    let press: { at: number; started: boolean } | null = null;
+    return window.anyapp.onPageVoiceKey((page, key) => {
+      const { dictation: d, ready } = now.current;
+      if (key === "escape") return d.cancel();
+      if (key === "up") {
+        const p = press;
+        press = null;
+        if (p?.started && Date.now() - p.at >= HOLD_MS) d.stop();
+        return;
+      }
+      if (d.phase === "recording") return d.stop();
+      if (d.phase !== "idle" || !ready) return;
+      target.current = page;
+      press = { at: Date.now(), started: true };
+      void d.start();
+    });
+  }, []);
+  return null;
+}
