@@ -1,0 +1,10 @@
+{
+  "_note": "Which apps go in Ready apps and their words (docs/GALLERY.md). node website/gallery-refresh.mjs fills public/gallery.json from each repo's published update.json. A draft until each app is shared and published; the repo names follow the apps' slugs at that time.",
+  "maker": "Kiwimake",
+  "apps": [
+    { "package": "com.anyapp.waterglass", "name": "Water Glass", "line": "Tap once per glass and watch the day's goal fill up.", "repo": "maddada/anyapp-waterglass-releases", "code": "maddada/anyapp-waterglass" },
+    { "package": "com.anyapp.prayeralarm", "name": "Prayer Alarm", "line": "Prayer times with alarms before each prayer.", "repo": "maddada/anyapp-prayeralarm-releases", "code": "maddada/anyapp-prayeralarm" },
+    { "package": "com.anyapp.alarmup", "name": "Alarm Up", "line": "An alarm clock that makes sure you get up: missions to turn it off, and sleep reports.", "repo": "maddada/anyapp-alarmup-releases", "code": "maddada/anyapp-alarmup" },
+    { "package": "com.anyapp.game", "name": "Kiwi Games", "line": "Nine kiwi sports for two on one phone, against the phone, or together over Bluetooth.", "repo": "maddada/anyapp-kiwigames-releases", "code": "maddada/anyapp-kiwigames" }
+  ]
+}

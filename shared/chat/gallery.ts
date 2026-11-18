@@ -45,7 +45,7 @@ function allowedIcon(text: unknown): text is string {
 
 /** One line of plain text: no line breaks, no em dashes (the user's rule), at most `max` characters. */
 function plain(value: unknown, max: number): string {
-  return typeof value === "string" ? value.replace(/\s*—\s*/g, ", ").replace(/\s+/g, " ").trim().slice(0, max) : "";
+  return typeof value === "string" ? value.replace(/\s*\u2014\s*/g, ", ").replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
 function readApp(value: unknown): GalleryApp | null {

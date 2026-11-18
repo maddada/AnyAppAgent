@@ -472,3 +472,13 @@ plan: `docs/WEB-APPS.md`, section W19.
   app uses its own storage names (all of a person's apps share `<login>.github.io`).
 - **Inside Kiwimake** on the phone: a tile opens it full screen, Add to home screen, offline after
   the first open, AI through Kiwimake's AI proxy, and "Version N is ready, Reload" in the app.
+
+## Ready apps, the gallery of official apps (added 2026-11-18)
+
+The user picked, on the gallery page (Q43 to Q48): the gallery on the empty Home and as a tile once
+the person has apps (and a row in the desktop's app list); a line plus the badge "Official Kiwimake
+App"; both Install (the signed APK, no PC) and Make it mine (`POST /api/clones`); the apps in their
+public releases repos, the list as `website/public/gallery.json` served by kiwimake.ai, and the code
+repos public; updates when the owner publishes; Water Glass, Prayer Alarm, Alarm Up and Kiwi Games
+(Game renamed). The badge is earned by the signing certificate: Install checks the APK's, and a copy
+on the phone shows it only when its certificate is the list's. Details and the proof: `docs/GALLERY.md`.

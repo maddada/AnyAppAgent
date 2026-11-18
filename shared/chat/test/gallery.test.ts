@@ -48,7 +48,7 @@ test("addresses: https only, plain http only to this PC; no em dashes in the wor
   const list = readGallery({
     format: 1,
     apps: [
-      { ...entry, line: "Drink water — every hour", icon: "http://evil.example/icon.png", feed: "http://evil.example/update.json" },
+      { ...entry, line: "Drink water \u2014 every hour", icon: "http://evil.example/icon.png", feed: "http://evil.example/update.json" },
       { ...entry, package: "com.anyapp.testglass", feed: "http://10.0.2.2:8899/feed/update.json", installUrl: "http://10.0.2.2:8899/feed/testglass.apk", icon: "data:image/png;base64,iVBORw0KGgo=" },
     ],
   });
