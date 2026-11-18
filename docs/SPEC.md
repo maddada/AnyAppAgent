@@ -26,6 +26,7 @@ and installs over the previous version. It must be dead simple for a regular, no
 | `template/` | The React Native (Expo) starter every new app is copied from.                    |
 | `template-kotlin/` | The native Android starter (Kotlin, Compose) for the "Kotlin" preset.     |
 | `template-exact/` | Kiwimake's files for the "Expo Exact" preset (alpha; apps come from `exact new`). |
+| `template-web/` | The web app starter (Vite, React, TypeScript) for web apps and the web half of "Both" (docs/WEB-APPS.md). |
 | `builder/`  | Creates an app from the template and builds its signed APK.                      |
 | `app/`      | The Kiwimake Android app itself (React Native, Expo).                         |
 | `docs/`     | This file and `ENVIRONMENT.md` (Android toolchain and emulator on this PC).       |
@@ -122,14 +123,27 @@ adoptApp({ src, dir, name, slug, packageName, onLog? }) -> Promise<{ preset }>
 renameApp({ dir, name, slug, packageName, onLog? }) -> Promise<{ preset, packageChanged }>
     Rename, in place: the new name and slug in app.json / anyapp.json and strings.xml; a new
     package id gets its own new key (and a React Native app's android/ is made again). The caller
-    moves the folder. React Native and Kotlin.
+    moves the folder. React Native, Kotlin and web.
+addWebVersion({ dir, name, slug, onLog? }) -> Promise<{ webDir }>
+    "Both" (docs/WEB-APPS.md): template-web into <dir>/web (refuses when it exists); the Android
+    project's tsconfig.json and eslint.config.js are told to leave web/ alone.
+buildWeb({ dir, buildNumber, onLog? }) -> Promise<{ distDir, files: [{ path, size, sha256 }], sizeBytes, build, slug, durationMs, timings, logPath }>
+    A web app (preset "web", or the web/ of a "Both" app) into <dir>/dist: the TypeScript check and
+    vite build, then no source maps, icon-192/512.png, manifest.webmanifest, version.json
+    {"build": N} and sw.js (cache kiwi-<slug>-<N>). Paths in `files` use "/". Rejects like
+    buildApk, with the useful part of the output.
 ```
+
+createApp also takes preset "web" (template-web/: Vite, React, TypeScript; no signing key; anyapp.json
+`{ preset: "web", slug, package, name }`); presetOf(dir) says "web", getIconPath returns its
+assets/icon.png, buildApk refuses it.
 
 buildApk also takes `changeOwner` and `changeOthers` (the "Change this app" values written into
 the build).
 
 and a CLI for humans and tests: `node builder/cli.mjs create <dir> --name "<name>"` and
-`node builder/cli.mjs build <dir> --build-number <n>`.
+`node builder/cli.mjs build <dir> --build-number <n>` (web: `create ... --preset web`,
+`build-web <dir> --build-number <n>`, `add-web <dir> --name "<name>"`).
 
 ## The contract between `server/` and `app/`
 

@@ -1,0 +1,9 @@
+# Same line endings on every machine, so Windows never shows untouched files as changed.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.m4a binary
+*.ttf binary

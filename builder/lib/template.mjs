@@ -1,5 +1,5 @@
-// The templates, the React Native template's installed dependencies (cached once per lockfile),
-// and making a full app tree for either preset.
+// The templates, the installed dependencies of the React Native and web templates (cached once
+// per lockfile), and making a full app tree for any preset.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -58,21 +58,23 @@ export function depsHash(dir) {
 
 /**
  * node_modules for the template's lockfile, installed once with `npm ci` into
- * %USERPROFILE%\.anyappagent\cache\deps-<hash> and reused for every new app.
+ * %USERPROFILE%\.anyappagent\cache\deps-<hash> (the web template: deps-web-<hash>) and reused
+ * for every new app.
  */
-export async function ensureDepsCache(log = () => {}) {
-  const hash = depsHash(TEMPLATE_DIR);
-  const dir = path.join(CACHE_DIR, `deps-${hash}`);
+export async function ensureDepsCache(log = () => {}, preset = 'react-native') {
+  const root = templateDirFor(preset);
+  const hash = depsHash(root);
+  const dir = path.join(CACHE_DIR, checkPreset(preset) === 'react-native' ? `deps-${hash}` : `deps-${preset}-${hash}`);
   const ready = path.join(dir, '.ready');
   if (fs.existsSync(ready)) return { dir, hash };
   await fsp.mkdir(CACHE_DIR, { recursive: true });
-  return withFileLock(path.join(CACHE_DIR, `deps-${hash}.lock`), async () => {
+  return withFileLock(`${dir}.lock`, async () => {
     if (fs.existsSync(ready)) return { dir, hash };
     const tmp = `${dir}.tmp-${process.pid}`;
     await fsp.rm(tmp, { recursive: true, force: true });
     await fsp.mkdir(tmp, { recursive: true });
     for (const f of ['package.json', 'package-lock.json']) {
-      if (fs.existsSync(path.join(TEMPLATE_DIR, f))) await fsp.copyFile(path.join(TEMPLATE_DIR, f), path.join(tmp, f));
+      if (fs.existsSync(path.join(root, f))) await fsp.copyFile(path.join(root, f), path.join(tmp, f));
     }
     log(`Installing template dependencies into ${dir} (once per lockfile)…`);
     const npm = npmCommand();
@@ -115,21 +117,16 @@ async function copyTemplateFiles(dest, preset) {
 }
 
 /**
- * Writes a complete app tree into dest: for react-native the template sources + node_modules,
- * for kotlin the template sources (Gradle downloads into its own shared, locked cache).
+ * Writes a complete app tree into dest: for react-native and web the template sources +
+ * node_modules, for kotlin the template sources (Gradle downloads into its own shared, locked cache).
  */
 export async function makeAppTree(dest, log = () => {}, preset = 'react-native') {
   if (checkPreset(preset) === 'kotlin') {
     await copyTemplateFiles(dest, preset);
     return;
   }
-  const deps = await ensureDepsCache(log);
-  await fsp.mkdir(dest, { recursive: true });
-  for (const f of listTemplateFiles()) {
-    const to = path.join(dest, f);
-    await fsp.mkdir(path.dirname(to), { recursive: true });
-    await fsp.copyFile(path.join(TEMPLATE_DIR, f), to);
-  }
+  const deps = await ensureDepsCache(log, preset);
+  await copyTemplateFiles(dest, preset);
   await copyTree(path.join(deps.dir, 'node_modules'), path.join(dest, 'node_modules'));
   // Apps must own their files: an agent patching node_modules or running npm install in one app
   // must never reach the shared cache (test/isolation.test.mjs proves it end to end).

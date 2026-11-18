@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# Build output: the built site (dist/, made by the builder on every build) and logs (build/).
+# After a build, `git status` must show only what was changed by hand.
+dist/
+build/
+*.tsbuildinfo
+
+# logs and local env
+*.log
+npm-debug.*
+.env*.local
+.DS_Store
+
+# Signing material and keys never live in the app
+*.jks
+*.keystore
+*.p12
+*.key
+*.pem

@@ -21,6 +21,9 @@ CLI:
 node builder/cli.mjs create C:\aa\t\sample --name "Sample"     [--slug sample] [--package com.anyapp.sample]
 node builder/cli.mjs build  C:\aa\t\sample --build-number 1     [--quiet]
 node builder/cli.mjs icon   C:\aa\t\sample
+node builder/cli.mjs create C:\aa\t\notes --name "Notes" --preset web    # a web app (template-web/)
+node builder/cli.mjs build-web C:\aa\t\notes --build-number 1          # its site in notes\dist
+node builder/cli.mjs add-web C:\aa\t\sample --name "Sample"            # "Both": a web version in sample\web
 node builder/cli.mjs warm                                       # deps cache + a spare app folder
 node builder/cli.mjs keys list | backup <file> | restore <file> | move <app dir>   # signing keys
 ```
@@ -107,6 +110,51 @@ Measured on this PC (24 cores, Expo SDK 58, two ABIs):
 | Failing build, Metro or Kotlin error | ~29 s |
 
 `ANYAPP_GRADLE_ARGS` adds Gradle arguments (e.g. `--profile`).
+
+## The web preset
+
+`createApp({ ..., preset: 'web' })` makes a web app from `../template-web` (Vite 8, React 19,
+TypeScript; override: `ANYAPP_WEB_TEMPLATE_DIR`): the template sources plus `node_modules` copied
+from its own dependency cache (`cache\deps-web-<hash>`, `npm ci` of template-web's lockfile, once
+per lockfile; the React Native cache keeps its `deps-<hash>` name and hash), the name, slug and
+package id in `anyapp.json` (`{ "preset": "web", "slug", "package", "name" }`) and `package.json`.
+No signing key and no spare: about a second (0.1 s once the cache is warm, 1 s with the first
+`npm ci` from npm's cache). `presetOf` says `web`, `getIconPath` returns `assets/icon.png`,
+`buildApk` refuses it. `adoptApp` and `renameApp` handle web apps too (and the `web/` of a "Both"
+app).
+
+```js
+import { addWebVersion, buildWeb } from './builder/index.mjs';
+const { webDir } = await addWebVersion({ dir, name, slug, onLog });      // "Both": <dir>/web (refuses when it exists)
+const { distDir, files, sizeBytes } = await buildWeb({ dir: webDir, buildNumber: 9, onLog });
+// files: [{ path: 'assets/index-abc.js', size, sha256 }] ("/" separators); also build, slug,
+// durationMs, timings, logPath
+```
+
+`buildWeb({ dir, buildNumber, onLog })` (a web app's root, or the `web/` of a "Both" app), lock
+`build/.web-build.lock`, log `build/logs/web-<n>.log`:
+
+1. `npm install` only when `package.json`/`package-lock.json` changed since the last install.
+2. `tsc --noEmit` and `vite build --base ./ --sourcemap false` in parallel (a type error stops Vite
+   and wins), with `VITE_KIWI_BUILD`, `VITE_KIWI_SLUG` and `VITE_KIWI_NAME` set.
+3. In `dist/`: every `*.map` deleted and every `sourceMappingURL` comment removed; `icon-192.png`
+   and `icon-512.png` from `assets/icon.png` (`lib/png.mjs`; the template's icon when missing);
+   `manifest.webmanifest` (name, `start_url`/`scope` `./`, standalone, the page's `theme-color`);
+   `version.json` (`{"build": N}`); `sw.js`: cache `kiwi-<slug>-<N>`, precaches every file but
+   `sw.js` and `version.json`, waits until the page posts `{type: "skipWaiting"}`, deletes only
+   `kiwi-<slug>-<digits>` caches on activate (the person's other apps share the origin), cache
+   first for its files, network first for pages (the cached `index.html` offline), `version.json`
+   always from the network.
+
+Failures reject with `Web build #N failed.` and the useful part: `TypeScript errors (n):` with
+`file(line,col): error TSxxxx`, `The web build failed (vite build):` with Vite's message and code
+frame, or the npm or icon problem (`err.logPath` is the full log). Measured on Linux (24 cores):
+build 1.1 s, a failing TypeScript build 1 s.
+
+`test/web.test.mjs` creates a web app, builds it, checks dist/ (no maps, the file list, manifest,
+icons, version.json, sw.js run in a sandbox), both kinds of failure, `addWebVersion`, and, when
+Chromium is installed, opens the site under a sub-path: service worker, storage prefixes, "Version
+N is ready" with Reload, offline (`ANYAPP_SKIP_BROWSER_TESTS=1` skips that part; about 11 s in all).
 
 ## The Kotlin preset
 

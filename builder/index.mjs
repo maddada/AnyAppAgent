@@ -6,6 +6,9 @@
 //   (fast lane, docs/FAST-LANE.md: a JavaScript-only change of a React Native app skips Gradle and
 //   also gives a signed quick update, `ota`; fast: false or ANYAPP_FAST_LANE=0 always runs Gradle)
 //   getIconPath({ dir }) -> string | null
+//   Web apps (preset 'web', template-web/, lib/web.mjs):
+//   addWebVersion({ dir, name, slug, onLog? }) -> Promise<{ webDir }>
+//   buildWeb({ dir, buildNumber, onLog? }) -> Promise<{ distDir, files: [{ path, size, sha256 }], sizeBytes, ... }>
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -22,9 +25,11 @@ import { createExactApp, ensureExact, exactDirFor, exactEnv, extractExactError, 
 import { checkPreset, KOTLIN_META, presetOf, readAppMeta, readKotlinMeta, skipFor } from './lib/presets.mjs';
 import { claimSpare, refillSparesInBackground } from './lib/spare.mjs';
 import { DEPS_STAMP, depsHash, makeAppTree, templateHash } from './lib/template.mjs';
+import { createWebApp, fillWebPlaceholders, webIconPath } from './lib/web.mjs';
 import { GRADLE_JS_RES, assetsHash, exportBundle, fastLaneOn, makeOtaPackage, nativeFingerprint, readLast, swapBundle, writeLast } from './lib/fastlane.mjs';
 
 export { PRESETS, DEFAULT_PRESET, presetOf } from './lib/presets.mjs';
+export { addWebVersion, buildWeb } from './lib/web.mjs';
 export { listSigningKeys, moveAppToOwnKey, backupSigningKeys, restoreSigningKeys, appSigningKind, exportSigningKeys, importSigningKeys, markSigningKeysBackedUp } from './lib/keys-api.mjs';
 
 const PACKAGE_RE = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
@@ -52,6 +57,8 @@ export async function createApp({ dir, name, slug, packageName, preset, onLog = 
   dir = path.resolve(dir);
   if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) throw new Error(`createApp: ${dir} already exists and is not empty`);
   await fsp.mkdir(path.dirname(dir), { recursive: true });
+  // A web app is a static site: no signing key, no spare (lib/web.mjs).
+  if (preset === 'web') return createWebApp({ dir, name: String(name).trim(), slug, packageName, onLog });
   // Every new app gets its own signing key (kept outside the app; the same package id always gets
   // the same key). Made first, so a failure here leaves no half-made app folder. In the cloud
   // (ANYAPP_SIGN_EXTERNAL=1) the key is made and kept outside the builder's reach.
@@ -112,7 +119,7 @@ export async function adoptApp({ src, dir, name, slug, packageName, onLog = noop
   if (!preset) throw new Error('This is not an app made with Kiwimake (no app.json or anyapp.json).');
   if (preset === 'expo-exact') throw new Error('Expo Exact apps cannot be copied into an own version yet.');
   if (fs.existsSync(dir) && fs.readdirSync(dir).length > 0) throw new Error(`adoptApp: ${dir} already exists and is not empty`);
-  await ensureAppKey(androidEnv().javaHome, packageName, onLog);
+  if (preset !== 'web') await ensureAppKey(androidEnv().javaHome, packageName, onLog);
   const skip = skipFor(preset);
   const tmp = `${dir}.tmp-${process.pid}`;
   await fsp.rm(tmp, { recursive: true, force: true });
@@ -128,7 +135,9 @@ export async function adoptApp({ src, dir, name, slug, packageName, onLog = noop
   });
   const fields = { name: String(name).trim(), slug, packageName };
   if (preset === 'kotlin') await renameKotlinApp(tmp, fields);
+  else if (preset === 'web') await fillWebPlaceholders(tmp, fields);
   else await fillPlaceholders(tmp, fields);
+  if (preset !== 'web' && presetOf(path.join(tmp, 'web')) === 'web') await fillWebPlaceholders(path.join(tmp, 'web'), fields);
   if (fs.existsSync(dir)) await fsp.rmdir(dir);
   await renameWithRetry(tmp, dir);
   onLog(`Made ${dir} (${preset}) from ${src} as ${packageName}.`);
@@ -153,11 +162,13 @@ export async function renameApp({ dir, name, slug, packageName, onLog = noop }) 
   const preset = presetOf(dir);
   if (!preset) throw new Error('This is not an app made with Kiwimake (no app.json or anyapp.json).');
   if (preset === 'expo-exact') throw new Error('Expo Exact apps cannot be renamed yet.');
-  const before = currentPackage(dir, preset);
+  const before = preset === 'web' ? readAppMeta(dir)?.package ?? null : currentPackage(dir, preset);
   const packageChanged = before !== packageName;
-  if (packageChanged && !signExternalOn()) await ensureAppKey(androidEnv().javaHome, packageName, onLog);
+  if (packageChanged && !signExternalOn() && preset !== 'web') await ensureAppKey(androidEnv().javaHome, packageName, onLog);
   const fields = { name: String(name).trim(), slug, packageName };
+  if (preset !== 'web' && presetOf(path.join(dir, 'web')) === 'web') await fillWebPlaceholders(path.join(dir, 'web'), fields);
   if (preset === 'kotlin') await renameKotlinApp(dir, fields);
+  else if (preset === 'web') await fillWebPlaceholders(dir, fields);
   else {
     await fillPlaceholders(dir, fields);
     // A new package id moves the generated native project's Java packages: make it again from scratch.
@@ -215,6 +226,7 @@ async function fillPlaceholders(dir, { name, slug, packageName }) {
 // getIconPath
 
 export function getIconPath({ dir }) {
+  if (presetOf(dir) === 'web') return webIconPath(dir);
   // Kotlin and Expo Exact apps: icon.png at the project root (an Exact app has none yet: null).
   if (readAppMeta(dir)) {
     const p = path.resolve(dir, KOTLIN_ICON);
@@ -245,6 +257,7 @@ export async function buildApk({ dir, buildNumber, onLog = noop, updateFeed, upd
   if (!Number.isInteger(n) || n < 1 || n > 2_100_000_000) throw new Error('buildApk: buildNumber must be a positive integer');
   const preset = presetOf(dir);
   if (!preset) throw new Error(`buildApk: ${dir} has neither app.json (React Native) nor anyapp.json (Kotlin)`);
+  if (preset === 'web') throw new Error('buildApk: a web app has no APK; build it with buildWeb');
   // A shared app's update feeds (docs/DISTRIBUTION.md): written into the build for its updater.
   const feeds = {};
   for (const [name, url] of [['anyappUpdateFeed', updateFeed], ['anyappUpdateTestingFeed', updateTestingFeed]]) {

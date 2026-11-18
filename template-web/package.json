@@ -1,0 +1,25 @@
+{
+  "name": "my-web-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "check": "tsc --noEmit && vite build",
+    "icon": "node scripts/make-icon.mjs"
+  },
+  "dependencies": {
+    "@mdi/js": "7.4.47",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@mdi/font": "7.4.47",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "6.0.3",
+    "vite": "8.3.5"
+  }
+}

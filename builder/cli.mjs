@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 // CLI for humans and tests.
-//   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact]
+//   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact|web]
 //   node builder/cli.mjs build <dir> --build-number <n> [--quiet] [--update-feed <url>] [--update-testing-feed <url>]
+//   node builder/cli.mjs build-web <dir> --build-number <n> [--quiet]      (a web app, or an app's web/ folder)
+//   node builder/cli.mjs add-web <dir> --name "<name>" [--slug <slug>]     ("Both": a web version in <dir>/web)
 //   node builder/cli.mjs icon <dir>
-//   node builder/cli.mjs warm [<spareRootDir>] [--preset react-native|kotlin|expo-exact]
+//   node builder/cli.mjs warm [<spareRootDir>] [--preset react-native|kotlin|expo-exact|web]
 //        (react-native: the deps cache and a spare; kotlin: a spare and one warm-up build for Gradle's caches)
 //   node builder/cli.mjs keys list | backup <file> | restore <file> | move <app dir>
 //        (signing keys, docs/DISTRIBUTION.md; the password comes from ANYAPP_KEYS_PASSWORD or is asked for)
 import path from 'node:path';
 import os from 'node:os';
 
-import { appSigningKind, backupSigningKeys, buildApk, createApp, getIconPath, listSigningKeys, moveAppToOwnKey, restoreSigningKeys } from './index.mjs';
+import { addWebVersion, appSigningKind, backupSigningKeys, buildApk, buildWeb, createApp, getIconPath, listSigningKeys, moveAppToOwnKey, restoreSigningKeys } from './index.mjs';
 import { readAppMeta } from './lib/presets.mjs';
 import { ensureDepsCache } from './lib/template.mjs';
 import { refillSpares, spareRootFor } from './lib/spare.mjs';
@@ -21,10 +23,12 @@ const DEFAULT_PROBE = process.platform === 'win32' ? 'C:\\aa\\apps\\x' : path.jo
 function usage(msg) {
   if (msg) console.error(`error: ${msg}\n`);
   console.error(`usage:
-  node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact]
+  node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact|web]
   node builder/cli.mjs build <dir> --build-number <n> [--quiet]
+  node builder/cli.mjs build-web <dir> --build-number <n> [--quiet]
+  node builder/cli.mjs add-web <dir> --name "<name>" [--slug <slug>]
   node builder/cli.mjs icon <dir>
-  node builder/cli.mjs warm [<dir-on-the-apps-volume>] [--preset react-native|kotlin|expo-exact]
+  node builder/cli.mjs warm [<dir-on-the-apps-volume>] [--preset react-native|kotlin|expo-exact|web]
   node builder/cli.mjs keys list | backup <file> | restore <file> | move <app dir>`);
   process.exit(2);
 }
@@ -92,17 +96,28 @@ try {
       onLog: flags.quiet ? undefined : log,
     });
     console.log(JSON.stringify(result, null, 2));
+  } else if (cmd === 'build-web') {
+    if (!dirArg || !flags['build-number']) usage('build-web needs <dir> and --build-number');
+    const result = await buildWeb({ dir: path.resolve(dirArg), buildNumber: Number(flags['build-number']), onLog: flags.quiet ? undefined : log });
+    console.log(JSON.stringify(result, null, 2));
+  } else if (cmd === 'add-web') {
+    if (!dirArg || !flags.name) usage('add-web needs <dir> and --name');
+    const t0 = Date.now();
+    const result = await addWebVersion({ dir: path.resolve(dirArg), name: flags.name, slug: flags.slug ?? slugify(flags.name), onLog: log });
+    console.log(JSON.stringify({ ...result, ms: Date.now() - t0 }, null, 2));
   } else if (cmd === 'icon') {
     if (!dirArg) usage('icon needs <dir>');
     console.log(getIconPath({ dir: path.resolve(dirArg) }) ?? 'null');
   } else if (cmd === 'warm') {
     const t0 = Date.now();
     const preset = flags.preset ?? 'react-native';
-    if (preset === 'react-native') {
-      const deps = await ensureDepsCache(log);
+    if (preset === 'react-native' || preset === 'web') {
+      const deps = await ensureDepsCache(log, preset);
       log(`Deps cache: ${deps.dir}`);
     }
-    if (preset === 'expo-exact') {
+    if (preset === 'web') {
+      // No spare: a web app is copied from the deps cache in a second or two.
+    } else if (preset === 'expo-exact') {
       // No spare: the pinned, patched Exact checkout and its one-time setup (lib/exact.mjs).
       const { ensureExact, exactEnv, exactDirFor } = await import('./lib/exact.mjs');
       const { androidEnv } = await import('./lib/env.mjs');
