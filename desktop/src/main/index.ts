@@ -958,6 +958,44 @@ function ipc(): void {
       }),
     )(),
   );
+  // Ready apps (docs/GALLERY.md).
+  const galleryIcons = new Map<string, string | null>();
+  const galleryIcon = async (url: string): Promise<string | null> => {
+    if (galleryIcons.has(url)) return galleryIcons.get(url) ?? null;
+    let data: string | null = null;
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const type = r.headers.get("content-type") ?? "";
+      const body = Buffer.from(await r.arrayBuffer());
+      if (r.ok && /^image\/(png|webp|jpeg)/.test(type) && body.length <= 512 * 1024) data = `data:${type.split(";")[0]};base64,${body.toString("base64")}`;
+    } catch {
+      // no icon: the card shows the app's first letter
+    }
+    galleryIcons.set(url, data);
+    return data;
+  };
+  ipcMain.handle("gallery:list", async () => {
+    try {
+      if (!admin) throw new Error("Kiwimake is still starting.");
+      const list = await admin.gallery();
+      // The window's CSP allows only data: images: icons come over as data URLs.
+      const apps = await Promise.all(list.apps.map(async (app) => (app.icon && /^https?:/.test(app.icon) ? { ...app, icon: (await galleryIcon(app.icon)) ?? undefined } : app)));
+      return { ok: true, list: { ...list, apps } };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  });
+  ipcMain.handle("gallery:mine", (_e, body: { repo?: unknown; name?: unknown; firstChange?: unknown; originalName?: unknown; owner?: unknown }) =>
+    chatAction((c) =>
+      c.clone({
+        repo: String(body?.repo ?? ""),
+        name: String(body?.name ?? ""),
+        ...(typeof body?.firstChange === "string" && body.firstChange.trim() ? { firstChange: body.firstChange } : {}),
+        ...(typeof body?.originalName === "string" ? { originalName: body.originalName } : {}),
+        ...(typeof body?.owner === "string" ? { owner: body.owner } : {}),
+      }),
+    )(),
+  );
   ipcMain.handle("owner:name", async () => {
     try {
       return (await admin?.ownerName())?.name ?? "";

@@ -1,6 +1,6 @@
 // Types shared by the Electron main process, the preload bridge and the renderer.
 // The companion's own wire types come from ../../../shared/protocol.ts (types only).
-import type { AdminState, App, AppPreset, AppVersion, BackupRestoreResult, BackupState, CareState, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, Suggestion, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
+import type { AdminState, App, GalleryList, AppPreset, AppVersion, BackupRestoreResult, BackupState, CareState, ChatImage, ChatItem, ImageUpload, KeysRestoreResult, PageInfo, ReleaseStats, Suggestion, TodoItem, WorkerInfo } from "../../../shared/protocol.ts";
 
 export type { AdminState, App, AppPreset, AppVersion, ChatImage, ChatItem, ImageUpload, PageInfo, TodoItem, WorkerInfo };
 
@@ -354,6 +354,10 @@ export interface AnyAppBridge {
   /** "Show Change this app to others", and the name every app shows for its owner. */
   setChange(appId: string, body: { showToOthers?: boolean; ownerName?: string }): Promise<ActionResult & { app?: App }>;
   getOwnerName(): Promise<string>;
+  /** Ready apps (docs/GALLERY.md): the gallery list, through the companion. */
+  galleryList(): Promise<ActionResult & { list?: GalleryList }>;
+  /** Make it mine: the companion makes an own version from the gallery app's published code. */
+  makeItMine(body: { repo: string; name: string; firstChange?: string; originalName?: string; owner?: string }): Promise<ActionResult & { app?: App }>;
   /** A QR code (SVG) for a link. */
   qr(text: string): Promise<string>;
   answerPermission(appId: string, requestId: string, optionId: string): Promise<ActionResult>;

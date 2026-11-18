@@ -23,6 +23,7 @@ import { AppIcon, Dialog, Icon, Spinner, StateLine, Switch, appState, timeAgo, W
 import { BackupGroup, ReminderCard, UsageGroup } from "./Trust.tsx";
 import { UpdateNotice, UpdatesGroup } from "./Update.tsx";
 import { headsUp } from "../../../../shared/chat/index.ts";
+import { GALLERY_ID, GalleryPage, GalleryRow, useGalleryList } from "./Gallery.tsx";
 
 const api = window.anyapp;
 type Page = "apps" | "phones" | "setup" | "account" | "settings";
@@ -203,6 +204,9 @@ function AppsPage({
   // Hidden apps are not in the list, so a hidden app's chat closes.
   const app = s.apps.find((a) => a.id === open && !a.hidden);
   const online = s.companion.phase === "running";
+  // Ready apps (docs/GALLERY.md): a row at the end of the list opens the gallery in the chat's place.
+  const gallery = useGalleryList(online);
+  const galleryCount = gallery.list?.apps.length ?? 0;
   // A helper's chat is open beside the main chat: in a narrow window the app list folds to icons.
   const [helperOpen, setHelperOpen] = useState(false);
   const [sharing, setSharing] = useState<string | null>(null);
@@ -377,9 +381,12 @@ function AppsPage({
             )}
           </div>
         )}
+        {galleryCount > 0 && <GalleryRow count={galleryCount} selected={open === GALLERY_ID} onOpen={() => onOpen(GALLERY_ID)} />}
       </section>
       <section className="apps-detail">
-        {app ? (
+        {open === GALLERY_ID ? (
+          <GalleryPage apps={s.apps} online={online} gallery={gallery} onOpenApp={(id) => onOpen(id)} />
+        ) : app ? (
           <ChatView
             app={app}
             icon={s.icons[app.id]}

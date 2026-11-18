@@ -666,3 +666,16 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .meter > span { background: var(--aa-ready); }
 .meter.near > span { background: var(--aa-attention); }
 .body.problem-text { color: var(--aa-problem); }
+
+/* Ready apps, the gallery (docs/GALLERY.md). Cards: words full width, buttons below on the right. */
+.gallery-row-wrap { margin-top: var(--aa-space-sm); border-top: var(--aa-border-width) solid var(--aa-border); padding-top: var(--aa-space-sm); }
+.gallery-row-icon { color: var(--aa-ready); background: var(--aa-ready-soft); }
+.gallery-list { display: flex; flex-direction: column; gap: var(--aa-space-md); max-width: 720px; }
+.gallery-card { padding: var(--aa-space-lg); display: flex; flex-direction: column; gap: var(--aa-space-md); }
+.gallery-head { display: flex; align-items: flex-start; gap: var(--aa-space-md); }
+.gallery-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--aa-space-xs); }
+.gallery-badge { display: inline-flex; align-items: center; gap: var(--aa-space-xs); color: var(--aa-ready); }
+.gallery-icon { color: var(--aa-on-accent); background: var(--aa-accent); }
+.gallery-letter { font-family: var(--aa-type-heading-family); font-size: var(--aa-type-heading-size); font-weight: var(--aa-type-heading-weight); }
+.gallery-install { display: flex; flex-direction: column; gap: var(--aa-space-md); }
+.gallery-install code { overflow-wrap: anywhere; }

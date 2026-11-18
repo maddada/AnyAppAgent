@@ -16,6 +16,8 @@ import type {
   ChangeSettingsRequest,
   FileSuggestionResponse,
   OwnerInfo,
+  GalleryList,
+  CloneRequest,
   Suggestion,
   AdminState,
   App,
@@ -385,6 +387,15 @@ export class AdminClient extends EventEmitter {
 
   ownerName(): Promise<OwnerInfo> {
     return this.request<OwnerInfo>("GET", "/api/owner");
+  }
+
+  // Ready apps (docs/GALLERY.md): the gallery list, and Make it mine (an own version from its code).
+  gallery(): Promise<GalleryList> {
+    return this.request<GalleryList>("GET", "/api/gallery", undefined, 30_000);
+  }
+
+  clone(body: CloneRequest): Promise<App> {
+    return this.request<App>("POST", "/api/clones", body, 120_000);
   }
 
   /** "Update it" on an app that is behind: the companion sends its agent the update message. */
