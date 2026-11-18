@@ -107,7 +107,7 @@ export function RenamePanel({ app, onDone, onCancel }: { app: App; onDone: () =>
             Make it a new app
           </T>
           <T variant="caption" color="textSecondary">
-            {shared ? "Not while it's shared with others." : "Off: it stays the same app and keeps updating."}
+            {shared ? "Not while it's shared with others." : newApp ? "On: it becomes a new app." : "Off: it stays the same app and keeps updating."}
           </T>
         </View>
         <Switch

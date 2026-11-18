@@ -113,7 +113,7 @@ export function RenameAppDialog({ app, onClose }: { app: App; onClose: () => voi
           <div className="toggle-row" data-testid="rename-new-app">
             <span className="toggle-text">
               <span className="label">Make it a new app</span>
-              <span className="caption secondary">{shared ? "Not while it's shared with others." : "Off: it stays the same app and keeps updating."}</span>
+              <span className="caption secondary">{shared ? "Not while it's shared with others." : newApp ? "On: it becomes a new app." : "Off: it stays the same app and keeps updating."}</span>
             </span>
             <Switch on={newApp} disabled={shared || busy} onChange={() => setNewApp(!newApp)} label="Make it a new app" />
           </div>

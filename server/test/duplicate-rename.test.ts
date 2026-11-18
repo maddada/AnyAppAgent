@@ -140,6 +140,19 @@ describe("Duplicate", () => {
     expect(record.sessionId).toBeUndefined();
   });
 
+  it("a duplicate renamed before anyone wrote to it keeps both notes for its agent; the kind comes along", async () => {
+    const { apps, store, appsDir, builds } = setup();
+    addApp(store, appFolder(appsDir), { targets: ["android", "web"] } as Partial<App>);
+    const copy = apps.duplicate("app-1", { name: "Prayer Times 2" });
+    expect((copy as App & { targets?: string[] }).targets).toEqual(["android", "web"]);
+    await until(() => builds.length > 0);
+    await until(() => store.find(copy.id)!.app.status !== "building" && !store.find(copy.id)!.app.status.match(/creating|working/));
+    await apps.rename(copy.id, { name: "Night Prayers" });
+    const note = (store.find(copy.id) as AppRecord & { agentNote?: string }).agentNote!;
+    expect(note).toContain("is a duplicate the person made");
+    expect(note).toContain('renamed this app from "Prayer Times 2" to "Night Prayers"');
+  });
+
   it("with something to change, the change is the first message; names are checked", () => {
     const { apps, store, appsDir } = setup();
     addApp(store, appFolder(appsDir));

@@ -623,6 +623,12 @@ export class AppManager {
       if (!existsSync(join(dir, OVERVIEW_FILE))) writeFileSync(join(dir, OVERVIEW_FILE), firstOverview(app.name, prompt));
       await git.initRepo(dir, `Create ${app.name}`);
       record.iconStamp = this.iconStamp(record);
+      // The tile asked for the icon while the folder was still being made (a duplicate's icon is
+      // there at once): a new iconVersion makes phones and the desktop fetch the real one.
+      if (record.iconStamp !== "none") {
+        app.iconVersion += 1;
+        this.broadcast({ type: "app.updated", app });
+      }
       record.ready = true;
       this.store.save();
     } catch (error) {
@@ -1475,6 +1481,7 @@ export class AppManager {
     if (!adopt) throw new HttpError(409, "This PC cannot duplicate apps.");
     if (!source.ready || source.app.status === "creating") throw new HttpError(409, "This app is not ready yet.");
     if (source.app.preset === "expo-exact") throw new HttpError(409, "Expo Exact apps cannot be duplicated yet.");
+    if ((source.app.preset as string) === "web") throw new HttpError(409, "Web apps cannot be duplicated yet.");
     const cleanName = String(req.name ?? "").trim().replace(/\s+/g, " ");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the copy a name of up to 50 characters.");
     const change = typeof req.change === "string" ? req.change.trim().slice(0, 4000) : "";
@@ -1482,6 +1489,8 @@ export class AppManager {
     const from = `Copied from ${source.app.name}${build ? `, version ${build}` : ""}.`;
     const app = this.newRecordApp(cleanName, change || from);
     app.preset = source.app.preset ?? "react-native";
+    // Web, Android or Both: the copy is the same kind (it gets its own web address on its first build).
+    if (source.app.targets) app.targets = [...source.app.targets];
     const record: ReadyRecord = { app, dir: join(this.config.appsDir, app.slug) };
     this.store.add(record);
     this.runtime(app.id).held = true;
@@ -1535,6 +1544,7 @@ export class AppManager {
     if (!renameApp) throw new HttpError(409, "This PC cannot rename apps.");
     if (!record.ready || record.app.status === "creating") throw new HttpError(409, "This app is not ready yet.");
     if (record.app.preset === "expo-exact") throw new HttpError(409, "Expo Exact apps cannot be renamed yet.");
+    if ((record.app.preset as string) === "web") throw new HttpError(409, "Web apps cannot be renamed yet.");
     const cleanName = String(req.name ?? "").trim().replace(/\s+/g, " ");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
     const newPackage = req.newPackage === true;
@@ -1600,7 +1610,9 @@ export class AppManager {
       record.iconStamp = this.iconStamp(record);
       await git.commitAll(dir, `Rename to ${cleanName}`).catch((error: unknown) => this.log(`[${slug}] rename commit failed:`, (error as Error).message));
       if (record.app.repoUrl && slug !== oldSlug) await this.renameCodeRepo(record, oldSlug);
-      (record as ReadyRecord).agentNote = renameNote(oldName, cleanName, dir, newPackage);
+      // Kept with a note still waiting (a duplicate nobody has written to yet).
+      const waiting = (record as ReadyRecord).agentNote;
+      (record as ReadyRecord).agentNote = `${waiting ? `${waiting}\n\n` : ""}${renameNote(oldName, cleanName, dir, newPackage)}`;
       this.emitItem(record, { id: randomUUID(), kind: "assistant", text: `Renamed from ${oldName} to ${cleanName}${newPackage ? ", as a new app" : ""}.` });
       this.log(`[${slug}] renamed from ${oldSlug}${result.packageChanged ? ` with the new package ${packageName}` : ""}`);
       this.touch(record);
