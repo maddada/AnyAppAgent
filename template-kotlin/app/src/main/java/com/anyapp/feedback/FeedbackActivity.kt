@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -35,8 +36,8 @@ import java.util.Date
 import kotlin.concurrent.thread
 
 /**
- * The feedback screen: the screenshot, numbered arrows drawn by dragging, a notes box, and what to
- * do with the picture (one picture: the screenshot, the arrows and the notes):
+ * The feedback screen: the screenshot, numbered arrows drawn by dragging, a notes box (typed, or
+ * spoken with the mic in it: [FeedbackVoice]), and what to do with the picture (one picture: the screenshot, the arrows and the notes):
  * - Send to Kiwimake (only on the phone of the person who made the app, see [KiwimakeLink]): it
  *   lands in this app's chat on their PC; the screen says so and closes.
  * - Save: copies it to the clipboard and keeps it in the gallery's "Feedback" album.
@@ -48,6 +49,9 @@ class FeedbackActivity : Activity() {
   private lateinit var shot: Bitmap
   private lateinit var canvasView: AnnotateView
   private lateinit var notes: EditText
+  private lateinit var voice: FeedbackVoice
+  private lateinit var mic: ImageView
+  private lateinit var micIcon: LucideIcon
   private lateinit var undo: LinearLayout
   private lateinit var save: TextView
   private lateinit var share: TextView
@@ -79,6 +83,12 @@ class FeedbackActivity : Activity() {
     if (Build.VERSION.SDK_INT >= 33) {
       onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { close() }
     }
+  }
+
+  override fun onPause() {
+    super.onPause()
+    // Leaving the screen (or the phone locking) ends the listening; the words heard stay.
+    if (::voice.isInitialized) voice.cancel()
   }
 
   override fun onDestroy() {
@@ -148,7 +158,7 @@ class FeedbackActivity : Activity() {
       setPadding(px(16), px(10), px(16), px(12))
     }
     notes = EditText(this).apply {
-      hint = "What should change? Write #1, #2 for the arrows."
+      hint = NOTES_HINT
       typeface = fonts.text
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
       setTextColor(palette.text)
@@ -167,7 +177,28 @@ class FeedbackActivity : Activity() {
       }
       contentDescription = "Notes"
     }
-    bottom.addView(notes, LinearLayout.LayoutParams(MATCH, WRAP))
+    // The notes with the mic at their bottom right, as in Kiwimake's own boxes.
+    val notesBox = FrameLayout(this)
+    notesBox.addView(notes, FrameLayout.LayoutParams(MATCH, WRAP))
+    voice = FeedbackVoice(this, notes) { state -> onVoiceState(state) }
+    voice.onProblem = { message -> flash(message) }
+    notes.setOnFocusChangeListener { _, has -> if (has) voice.useCaret = true }
+    micIcon = LucideIcon(LucideIcon.Kind.MIC, palette.textSecondary)
+    mic = ImageView(this).apply {
+      setImageDrawable(micIcon)
+      setPadding(px(10), px(10), px(10), px(10))
+      background = ripple(Color.TRANSPARENT, px(20).toFloat())
+      contentDescription = "Speak your notes"
+      setOnClickListener {
+        hideKeyboard()
+        voice.toggle()
+      }
+    }
+    if (voice.available) {
+      notes.setPadding(px(14), px(12), px(14 + 44), px(12))
+      notesBox.addView(mic, FrameLayout.LayoutParams(px(40), px(40), Gravity.BOTTOM or Gravity.END).apply { rightMargin = px(4); bottomMargin = px(4) })
+    }
+    bottom.addView(notesBox, LinearLayout.LayoutParams(MATCH, WRAP))
     // Send to Kiwimake: the main button, shown only on the owner's phone (showSend).
     send = button("Send to Kiwimake", primary = true, description = "Send to Kiwimake: put the picture and notes in this app's chat") { onSend() }
     send.visibility = View.GONE
@@ -263,6 +294,7 @@ class FeedbackActivity : Activity() {
 
   private fun onArrowsChanged() {
     val count = canvasView.arrows.size
+    if (::voice.isInitialized && count != arrowCount) voice.useCaret = false
     if (count > arrowCount) {
       val tag = "#$count"
       val current = notes.text.toString()
@@ -331,6 +363,16 @@ class FeedbackActivity : Activity() {
     @Suppress("DEPRECATION")
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     if (requestCode == 41) doSave()
+    if (requestCode == FeedbackVoice.PERMISSION_REQUEST) voice.onPermission(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+  }
+
+  /** The mic fills with the accent while it listens, and the notes say so. */
+  private fun onVoiceState(state: FeedbackVoice.State) {
+    val listening = state != FeedbackVoice.State.IDLE
+    micIcon.setColor(if (listening) palette.onAccent else palette.textSecondary)
+    mic.background = ripple(if (listening) palette.accent else Color.TRANSPARENT, px(20).toFloat())
+    mic.contentDescription = if (listening) "Stop speaking" else "Speak your notes"
+    notes.hint = if (listening) "Listening. Tap the mic when you are done." else NOTES_HINT
   }
 
   /** Makes the one picture off the main thread, then runs [then] there with it (null: it failed). */
@@ -522,6 +564,7 @@ class FeedbackActivity : Activity() {
   }
 
   private companion object {
+    const val NOTES_HINT = "What should change? Write or say it; #1, #2 for the arrows."
     const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
     const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
   }

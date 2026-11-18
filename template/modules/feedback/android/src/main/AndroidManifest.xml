@@ -2,6 +2,13 @@
   <!-- "Point at it" feedback (shake the phone): built into every app, keep it.
        Saving to the gallery needs no permission from Android 10 on; older phones ask once. -->
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+  <!-- The mic in the notes: Android's own speech recognition, asked for only when it is tapped. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <queries>
+    <intent>
+      <action android:name="android.speech.RecognitionService" />
+    </intent>
+  </queries>
 
   <application>
     <!-- Starts the shake watcher when the app starts, and serves saved pictures for pasting. -->

@@ -344,7 +344,7 @@ so anyone can tell them what to change. It needs no code and works on its own:
 - Shaking the phone (a firm shake, back and forth a few times; walking or a bump never does it)
   opens a feedback screen over a screenshot of the current screen.
 - Dragging draws an arrow with a number at its start (`#1`, `#2`, ...). Undo takes back the last
-  one. Below is a notes box; each new arrow adds its `#n ` line there to fill in.
+  one. Below is a notes box (typed, or spoken with its mic); each new arrow adds its `#n ` line there to fill in.
 - The buttons make one picture (the screenshot, the arrows and the notes):
   - **Send to Kiwimake** (only on the phone of the person who made the app): the picture and the
     notes arrive in this app's chat, so they reach you as a message and you start on it. If

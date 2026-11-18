@@ -84,7 +84,7 @@ internal class FeedbackFonts(context: Context) {
 
 /** Lucide icons (stroke 1.75 on a 24 grid), drawn as paths so no resources are needed. */
 internal class LucideIcon(private val kind: Kind, private var color: Int) : Drawable() {
-  enum class Kind { X, UNDO, CHECK }
+  enum class Kind { X, UNDO, CHECK, MIC }
 
   private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     style = Paint.Style.STROKE
@@ -114,6 +114,14 @@ internal class LucideIcon(private val kind: Kind, private var color: Int) : Draw
         m(4f, 9f); l(14.5f, 9f)
         p.arcTo(RectF(b.left + 9f * s, b.top + 9f * s, b.left + 20f * s, b.top + 20f * s), -90f, 180f, false)
         l(11f, 20f)
+      }
+      Kind.MIC -> {
+        // lucide "mic": rect 9,2 6x13 r3; M19 10v2a7 7 0 0 1-14 0v-2; M12 19v3
+        p.addRoundRect(RectF(b.left + 9f * s, b.top + 2f * s, b.left + 15f * s, b.top + 15f * s), 3f * s, 3f * s, Path.Direction.CW)
+        m(19f, 10f); l(19f, 12f)
+        p.arcTo(RectF(b.left + 5f * s, b.top + 5f * s, b.left + 19f * s, b.top + 19f * s), 0f, 180f, false)
+        l(5f, 10f)
+        m(12f, 19f); l(12f, 22f)
       }
     }
     canvas.drawPath(p, paint)
