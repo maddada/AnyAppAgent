@@ -2,19 +2,20 @@
 // Ghostex coordinator playbook (the user's own ghostex-orchestrator skill), cut down for one person
 // who is not technical and talks to one app from their phone. See docs/APP-COORDINATOR.md.
 import type { AppPreset } from "../../shared/protocol.ts";
-import { checkCommand, deliveryRules, feedbackPicturesLine, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
+import { appKindSection, checkCommand, deliveryRules, feedbackPicturesLine, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
 
 type AppInfo = { name: string; packageName: string; dir: string; preset?: AppPreset };
 
 /** Which stack the app is (the preset chosen when it was made). */
 function stack(preset: AppPreset | undefined): string {
+  if (preset === "web") return "It is a web app (Vite, React and TypeScript): it opens from a link, with no install, in Kiwimake on the phone or in any browser.";
   return preset === "kotlin" ? "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native." : "It is a React Native (Expo) app.";
 }
 
 /** The MCP server name the coordinator's worker tools live under (tools show as mcp__workers__*). */
 export const WORKER_TOOLS_SERVER = "workers";
 /** Bump when the coordinator playbook changes enough that resumed sessions must get it again. */
-export const COORDINATOR_PLAYBOOK_VERSION = 6; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures; 5: quick update or new install; 6: versions, crashes, the diary
+export const COORDINATOR_PLAYBOOK_VERSION = 7; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures; 5: quick update or new install; 6: versions, crashes, the diary; 7: Web, Android or Both
 /** The first line of a message that carries worker reports to the coordinator (not from the person). */
 export const REPORT_HEADER = "[Worker report]";
 
@@ -63,7 +64,7 @@ export function coordinatorPlaybook(app: AppInfo, opts: { cloud?: boolean } = {}
 }
 
 function coordinatorPlaybookText(app: AppInfo): string {
-  return `You are the main chat for the Android app "${app.name}" (package ${app.packageName}).
+  return `You are the main chat for the ${app.preset === "web" ? "web" : "Android"} app "${app.name}"${app.preset === "web" ? "" : ` (package ${app.packageName})`}.
 ${stack(app.preset)}
 The project is this folder: ${app.dir}. Its AGENTS.md (loaded through CLAUDE.md) explains how the
 app is built; your workers read it and follow it.
@@ -141,6 +142,8 @@ talk, not work:
   new plan page and ask again.
 Small changes (a colour, a word, a fix, a bug) need no plan: start the worker at once.
 
+${appKindSection()} You call set_app_kind yourself (it is quick), then start the worker.
+
 The first message for a new app describes what the app should do: plan it as above (unless the PC
 says otherwise in that message). Once confirmed, start one worker that builds the first version, and
 tell it to give the app an icon of its own that matches what it does.
@@ -176,7 +179,7 @@ as the next message: fix the cause, never remove the feature to make the error g
 ${deliveryRules(app.preset, "worker")}
 Say in your report which it will be.`
     : `Your task is to look into something and report: do not change any of the app's files.`;
-  return `You are a worker on the Android app "${app.name}" (package ${app.packageName}). ${stack(app.preset)} Your task:
+  return `You are a worker on the ${app.preset === "web" ? "web" : "Android"} app "${app.name}"${app.preset === "web" ? "" : ` (package ${app.packageName})`}. ${stack(app.preset)} Your task:
 "${worker.title}". The project is this folder: ${app.dir}. Its AGENTS.md (loaded through
 CLAUDE.md) explains how the app is built, what is already installed and what you must never change:
 read it first and follow it.

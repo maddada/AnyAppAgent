@@ -46,6 +46,27 @@ feature, a redesign), show the plan and wait for a yes:
 Small changes (a colour, a word, a fix, a bug) need no plan: just do them.`;
 }
 
+/**
+ * Web, Android or Both (docs/WEB-APPS.md, the person's decision of 18 Nov 2026): the plan picks,
+ * says why, and the plan page has the switch. set_app_kind records the pick.
+ */
+export function appKindSection(): string {
+  return `Web, Android or Both: an app is an Android app (installed on the phone), a web app (it opens
+from a link, no install, also on iPhones and computers; Kiwimake shows it full screen like an app),
+or Both (the Android app plus a web version kept beside it in web/). For a new app the plan decides
+and says why in one line:
+- Android when it needs what only an installed app can do: alarms or reminders that ring while it is
+  closed, notifications, work in the background, home screen widgets, SMS, call log or contacts,
+  Bluetooth or NFC. A web app cannot do these (say so plainly when it matters).
+- Web otherwise (a tea timer, a shopping list, a calculator, a tracker): nothing to install, it works
+  offline after the first open, and sharing it is sending its link.
+- Both when they want the phone powers and also a link for other people or devices.
+The plan page has the switch "Web, Android or Both" with your pick recommended ("The plan page" in
+the page guide). When they confirm the plan, call set_app_kind with the kind they picked before any
+building starts, then read the AGENTS.md it names. Later, "put it on the web too" is set_app_kind
+"both"; a web app never becomes an Android app (offer a new app instead).`;
+}
+
 /** The first message of a new app as the agent gets it (the chat shows only the person's words). */
 /**
  * "Like this, but mine" (shared into Kiwimake from another app's share sheet): the note the agent
@@ -163,6 +184,7 @@ mention this note to the person.)`;
 
 /** The command an app's agent runs to check its work before ending a turn (from its AGENTS.md). */
 export function checkCommand(preset: AppPreset | undefined): string {
+  if (preset === "web") return "npm run check";
   if (preset === "kotlin") return "./gradlew --console=plain -q :app:compileReleaseKotlin";
   if (preset === "expo-exact") return "bun exact.mjs contract build app.contract --json";
   return "npm run check";
@@ -174,6 +196,7 @@ function aiFile(preset: AppPreset | undefined): string {
 }
 
 function stackLine(preset: AppPreset | undefined): string {
+  if (preset === "web") return "It is a web app (Vite, React and TypeScript): it opens from a link, with no install, in Kiwimake on the phone or in any browser.";
   if (preset === "kotlin") return "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native.";
   if (preset === "expo-exact") return "It is an Expo Exact app (Contract view, TypeScript data; very new, alpha), not React Native.";
   return "It is a React Native (Expo) app.";
@@ -186,6 +209,13 @@ function stackLine(preset: AppPreset | undefined): string {
  */
 export function deliveryRules(preset: AppPreset | undefined, who: "you" | "worker" = "you"): string {
   const subject = who === "you" ? "your turn" : "a worker's change";
+  if (preset === "web") {
+    return `How the new version reaches people: after ${subject} the PC builds the web app (seconds)
+and puts it online at its address (the person's own GitHub Pages; only the built files are public,
+the code stays private). Every open copy shows "Version N is ready" with a Reload button, and the
+next open gets it by itself. Say so in your last sentence: "It is live: tap Reload in the app if it
+is open." Never talk about installing.`;
+  }
   if (preset === "kotlin" || preset === "expo-exact") {
     return `How the new version reaches the phone: after ${subject} the PC builds a new APK (a few
 minutes) and the phone downloads it; the person installs it when it arrives. Tell them to install
@@ -219,7 +249,7 @@ function iconAndAiLines(preset: AppPreset | undefined): string {
 }
 
 export function appPlaybook(app: { name: string; packageName: string; dir: string; preset?: AppPreset }): string {
-  return `You are the one and only agent for the Android app "${app.name}" (package ${app.packageName}).
+  return `You are the one and only agent for the ${app.preset === "web" ? "web" : "Android"} app "${app.name}"${app.preset === "web" ? "" : ` (package ${app.packageName})`}.
 ${stackLine(app.preset)}
 The project is this folder: ${app.dir}. Its AGENTS.md (loaded through CLAUDE.md) explains how the
 app is built, what is already installed and what you must never change: read it first and follow it.
@@ -250,6 +280,8 @@ Taste (the person's rules for every app you make):
 ${iconAndAiLines(app.preset)}
 
 ${planFirstSection()}
+
+${appKindSection()}
 
 ${pagesSection()}
 

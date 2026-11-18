@@ -79,6 +79,9 @@ export async function ensureHelperCopy(appDir: string, copyDir: string, helperId
       if (existsSync(path) && statSync(path).nlink > 1) throw new Error(`${path} is a hard link; a helper's copy must be independent`);
     }
   }
+  // An app with both targets keeps its web version in web/ (docs/WEB-APPS.md), with its own node_modules.
+  const webModules = join(appDir, "web", "node_modules");
+  if (existsSync(webModules) && existsSync(join(copyDir, "web"))) await copyTree(webModules, join(copyDir, "web", "node_modules"));
   log(`helper copy ${copyDir} ready in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   return Date.now() - started;
 }

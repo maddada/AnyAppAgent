@@ -305,3 +305,26 @@ test("permissionView orders the buttons and words the answer", () => {
   assert.deepEqual(permissionView({ ...p, selectedOptionId: "no" }), { answered: true, allowed: false, line: "Not allowed: Run rm -rf build" });
   assert.equal(permissionView({ ...p, selectedOptionId: "cancelled" }).answered, true);
 });
+
+test("buildCard: a web app's card says where it is online, never Install", async () => {
+  const { buildCard, isWebOnly, appTargets, shortAddress } = await import("../index.ts");
+  const app = { id: "a", name: "Tea Timer", slug: "teatimer", packageName: "com.anyapp.teatimer", preset: "web", status: "idle", iconVersion: 1, createdAt: "", updatedAt: "" } as never;
+  const build = { number: 8, status: "succeeded", startedAt: "", finishedAt: "", sizeBytes: 90000, changes: { changed: "Bigger button for green tea." }, web: { sizeBytes: 90000, files: 6, state: "live", address: "https://maddada.github.io/anyapp-teatimer-web/" } } as never;
+  const item = { id: "i", appId: "a", seq: 1, kind: "build", build, createdAt: "", updatedAt: "" } as never;
+  const card = buildCard(item, { ...(app as object), latestApk: build, latestBuild: build } as never, "pc");
+  assert.equal(card?.state, "ready");
+  if (card?.state !== "ready") return;
+  assert.equal(card.title, "Version 8 is live");
+  assert.equal(card.web?.address, "https://maddada.github.io/anyapp-teatimer-web/");
+  assert.equal(card.changes[0]?.text, "Bigger button for green tea.");
+  assert.equal(isWebOnly(app), true);
+  assert.deepEqual(appTargets({ preset: "react-native" }), ["android"]);
+  assert.deepEqual(appTargets({ preset: "react-native", targets: ["android", "web"] }), ["android", "web"]);
+  assert.equal(shortAddress("https://maddada.github.io/anyapp-teatimer-web/"), "maddada.github.io/anyapp-teatimer-web");
+  const publishing = buildCard({ ...(item as object), build: { ...(build as object), web: { sizeBytes: 1, files: 1, state: "publishing" } } } as never, { ...(app as object), latestApk: build } as never, "phone");
+  assert.equal(publishing?.title, "Version 8 is going online");
+  // An Android app with both targets keeps its Android card, with the web part under it.
+  const both = buildCard(item, { ...(app as object), preset: "react-native", targets: ["android", "web"], latestApk: build } as never, "pc");
+  assert.equal(both?.title, "Your app is ready");
+  assert.equal(both?.state === "ready" ? both.web?.state : undefined, "live");
+});

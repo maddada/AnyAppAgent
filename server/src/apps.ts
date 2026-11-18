@@ -43,6 +43,9 @@ import { parseSuggestion } from "../../shared/chat/suggestions.ts";
 import { KEEP_HEALTHY_TEXT } from "../../shared/chat/trust.ts";
 import { downloadSource, extractZip, findReleaseSource, makeSourceZip, repoFromText, SourceError } from "./release-source.ts";
 import { cloneNote, duplicateNote, renameNote } from "./playbook.ts";
+import { appTargets, isWebOnly } from "../../shared/chat/build.ts";
+import { targetsFromKind, WebApps } from "./web-apps.ts";
+import type { WebHost } from "./web-host.ts";
 
 export { HttpError } from "./http-error.ts";
 import { HttpError } from "./http-error.ts";
@@ -104,7 +107,7 @@ interface ReadyRecord extends AppRecord {
 }
 
 /** The presets the phone may ask for (shared/protocol.ts AppPreset). */
-export const PRESETS: readonly AppPreset[] = ["react-native", "kotlin", "expo-exact"];
+export const PRESETS: readonly AppPreset[] = ["react-native", "kotlin", "expo-exact", "web"];
 
 const JAVA_KEYWORDS = new Set(
   "abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null var record yield".split(
@@ -207,6 +210,8 @@ export class AppManager {
   readonly backups: Backups;
   /** "Change this app": suggestions from other people, per app (docs/CHANGE-THIS-APP.md). */
   readonly suggestions: Suggestions;
+  /** Web apps: the web half of builds, going live, Web / Android / Both (web-apps.ts). */
+  readonly web: WebApps;
   /** Downloads of shared apps' code (Make my own version); tests pass a fake. */
   private readonly fetchImpl: typeof fetch;
   private careTimer: NodeJS.Timeout | undefined;
@@ -226,6 +231,8 @@ export class AppManager {
     /** Where template/ and template-kotlin/ are (health.ts); default: this repository. */
     repoDir?: string;
     fetch?: typeof fetch;
+    /** Where web apps go online (web-host.ts); null or absent: they open only from this PC. */
+    webHost?: WebHost | null;
   }) {
     this.fetchImpl = deps.fetch ?? fetch;
     this.phonesConnected = deps.phonesConnected ?? (() => 0);
@@ -266,7 +273,33 @@ export class AppManager {
         const record = this.store.find(appId);
         if (record) this.emitItem(record, { id: randomUUID(), kind: "diary", diary: info });
       },
+      setKind: async (appId, kind) => {
+        const { note } = await this.setTargets(appId, targetsFromKind(kind));
+        return note;
+      },
     });
+    this.web = new WebApps(
+      {
+        stateDir: this.store.stateDir,
+        builder: this.builder,
+        log: this.log,
+        buildsDir: (appId) => this.store.apkDir(appId),
+        touch: (appId) => {
+          const record = this.store.find(appId);
+          if (record) this.touch(record);
+        },
+        updateBuildCard: (appId, rowId, build) => {
+          const record = this.store.find(appId);
+          if (record) this.emitItem(record, { id: rowId, kind: "build", build });
+        },
+        alive: (appId) => {
+          const record = this.store.find(appId);
+          return Boolean(record && !record.deleted && !record.purged);
+        },
+      },
+      deps.webHost ?? null,
+      deps.fetch,
+    );
     this.usage = new UsageMeter(this.store.stateDir);
     this.usage.engine = selectedEngine(this.config);
     this.usage.onChange = () => this.careChanged();
@@ -425,7 +458,7 @@ export class AppManager {
   apkFile(id: string, abi?: string): { path: string; app: App; build: BuildInfo; abi?: string; sha256?: string } | { missing: true } | null {
     const record = this.record(id);
     const apk = record.app.latestApk;
-    if (!apk) return null;
+    if (!apk || isWebOnly(record.app)) return null;
     const variant = abi ? apk.variants?.find((v) => v.abi === abi) : undefined;
     if (variant) {
       const path = join(this.store.apkDir(id), apkFileName(apk.number, variant.abi));
@@ -1688,6 +1721,10 @@ export class AppManager {
     drop(this.store.chatPath(id), "its chat");
     drop(this.store.apkDir(id), "its versions");
     drop(join(this.store.stateDir, "todos", `${id}.json`), "its to-do list");
+    if (github) {
+      const webProblem = await this.web.remove(record.app);
+      if (webProblem) problems.push(webProblem);
+    } else this.web.publisher.forget(id);
     if (github && this.github.deleteRepo) {
       const repos = [record.app.repoUrl, record.app.sharing?.releasesRepoUrl]
         .filter((url): url is string => !!url)
@@ -1736,6 +1773,35 @@ export class AppManager {
   /** Closes the gaps after a pinned app left the section. */
   private renumberPins(): void {
     this.setPins(this.pinned().map((app) => app.id));
+  }
+
+  // ---------- web apps (docs/WEB-APPS.md)
+
+  /** Web, Android or Both: POST /api/apps/:id/targets, and the agent's set_app_kind tool. */
+  async setTargets(id: string, targets: unknown): Promise<{ app: App; note: string }> {
+    const record = this.record(id) as ReadyRecord;
+    if (!record.ready) throw new HttpError(409, "The app is still being set up. Try again in a moment.");
+    if (record.app.status === "building") throw new HttpError(409, "The app is building right now. Try again when the build is done.");
+    if (record.app.move?.to === "cloud" && record.app.move.state === "done") throw new HttpError(409, "This app moved to the cloud; change it there.");
+    const result = await this.web.setTargets(record, targets as never);
+    this.log(`[${record.app.slug}] kind: ${JSON.stringify(appTargets(record.app))}`);
+    this.checkIcon(record);
+    this.refreshHealth(record, false);
+    this.touch(record);
+    return result;
+  }
+
+  /** POST /api/apps/:id/web/open: the newest web build, from this PC. */
+  webOpen(id: string) {
+    return this.web.open(this.record(id));
+  }
+
+  /** GET /web/<appId>/<ticket>/... (no Bearer token; the ticket is the grant). */
+  webRoute(req: Parameters<WebApps["route"]>[0], res: Parameters<WebApps["route"]>[1], path: string): boolean {
+    return this.web.route(req, res, path, (appId) => {
+      const record = this.store.find(appId);
+      return record && !record.deleted ? record : undefined;
+    });
   }
 
   hide(id: string, hidden: boolean): App {
@@ -1999,7 +2065,7 @@ ${overviewNudge()}` : note;
     const fixTurn = opts.fix ?? ((prompt: string) => this.agentTurn(record, prompt));
     const max = this.config.maxBuildFixes;
     const rowId = randomUUID();
-    const toolchainProblem = this.checkToolchain();
+    const toolchainProblem = isWebOnly(record.app) ? null : this.checkToolchain();
     if (toolchainProblem) {
       const build: BuildInfo = { number: (record.app.latestBuild?.number ?? 0) + 1, status: "failed", startedAt: nowIso(), finishedAt: nowIso(), error: toolchainProblem };
       this.emitItem(record, { id: rowId, kind: "build", build, text: "" });
@@ -2066,7 +2132,9 @@ ${overviewNudge()}` : note;
       this.refreshHealth(record, false);
       this.backups.changed();
       this.setStatus(record, "idle");
-      this.broadcast({ type: "apk.ready", app: record.app });
+      // A web app has no APK: it goes online instead (web-apps.ts); phones hear of it through app.updated.
+      if (build.web) await this.web.goLive(record, build, rowId);
+      if (!isWebOnly(record.app)) this.broadcast({ type: "apk.ready", app: record.app });
       this.log(`[${record.app.slug}] APK ${build.number} ready (${build.sizeBytes} bytes)`);
       return { ok: true, number: build.number, ...(build.delivery ? { delivery: build.delivery } : {}) };
     }
@@ -2115,7 +2183,18 @@ ${overviewNudge()}` : note;
       const feeds = app.sharing ? { updateFeed: app.sharing.feedUrl, updateTestingFeed: testingFeedUrl(app.sharing.releasesRepoUrl) } : {};
       // "Change this app": the owner's name for the app's explanation sheet, and who sees the row.
       const change = { changeOwner: ownerName(this.store.stateDir), ...(app.change?.showToOthers === false ? { changeOthers: false } : {}) };
+      // A web app (docs/WEB-APPS.md): only the web build, no APK.
+      if (!appTargets(app).includes("android")) {
+        const web = await this.web.build(record, number, onLog);
+        build = { ...build, status: "succeeded", finishedAt: nowIso(), sizeBytes: web.sizeBytes, web };
+        app.latestBuild = build;
+        this.log(`[${app.slug}] web build ${number} took ${Math.round((Date.now() - started) / 1000)} s`);
+        this.emitItem(record, { id: rowId, kind: "build", build, text: "The new version is ready" });
+        return { ok: true, result: { build } };
+      }
       const result: BuildResult = await this.builder.buildApk({ dir: record.dir, buildNumber: number, onLog, ...feeds, ...change });
+      // Both: the web version beside the Android app, built after it.
+      const web = appTargets(app).includes("web") ? await this.web.build(record, number, onLog) : undefined;
       const apkDir = this.store.apkDir(app.id);
       mkdirSync(apkDir, { recursive: true });
       const target = join(apkDir, apkFileName(number));
@@ -2140,6 +2219,7 @@ ${overviewNudge()}` : note;
         ...(result.delivery ? { delivery: result.delivery } : {}),
         ...(result.runtime ? { runtime: result.runtime } : {}),
         ...(ota ? { ota: { sizeBytes: ota.sizeBytes, sha256: ota.sha256, runtime: ota.runtime } } : {}),
+        ...(web ? { web } : {}),
       };
       app.latestBuild = build;
       this.log(`[${app.slug}] build ${number} (${build.delivery ?? "full"}) took ${Math.round((Date.now() - started) / 1000)} s`);

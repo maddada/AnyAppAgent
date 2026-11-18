@@ -43,6 +43,38 @@ export interface BuildInfo {
   // the PC with GET /apk and GET /ota as before).
   fileUrls?: { abi: string; url: string; sizeBytes: number; sha256: string }[];
   otaUrl?: string;
+  // Added with web apps (docs/WEB-APPS.md): set on a build that made a web version (a web app, or
+  // the web half of an app with both targets). Absent on Android-only builds and from older PCs.
+  web?: WebBuildInfo;
+}
+
+// ---------- Web apps (added, docs/WEB-APPS.md). A web app opens from a link: no APK, no install.
+// It is made from template-web/ (Vite and React), and every successful build goes online in the
+// person's own GitHub Pages: the PC pushes only the built files (no source maps, after the secrets
+// scan) to a public repo <login>/anyapp-<slug>-web; the code stays in the private repo.
+export type AppTarget = "android" | "web";
+
+// The web version of one build.
+export interface WebBuildInfo {
+  sizeBytes: number; // all its files together
+  files: number; // how many files
+  // "publishing": being put online; "live": online at `address`; "failed": built, but putting it
+  // online failed (`error` says why); "local": built, and this PC does not put web apps online
+  // (no GitHub): it opens only from the PC (POST /api/apps/:id/web/open).
+  state: "publishing" | "live" | "failed" | "local";
+  address?: string; // where this version is online (the site's address), once live
+  error?: string; // plain sentence, when failed
+}
+
+// Where an app's web version is online (App.web).
+export interface WebSite {
+  address: string; // https://<login>.github.io/anyapp-<slug>-web/ (always ends with "/")
+  repo: string; // <login>/anyapp-<slug>-web: the public repo that holds only the built files
+  repoUrl: string; // https://github.com/<login>/anyapp-<slug>-web
+  liveBuild?: number; // the version online now; absent until the first one is live
+  publishing?: number; // a version being put online now
+  error?: string; // plain sentence: the last publish failed (the version before stays online)
+  since: string; // when the site was made
 }
 
 // "What changed" (docs/VERSIONS.md): up to three short plain lines, never code words.
@@ -71,7 +103,10 @@ export interface ApkVariant {
 //   "react-native": Expo / React Native (the default; can come to iPhone later)
 //   "kotlin": native Android (Kotlin, Jetpack Compose; smaller, faster, Android only)
 //   "expo-exact": Expo Exact, alpha (Contract + TypeScript; one app for Android, iPhone, Mac, web)
-export type AppPreset = "react-native" | "kotlin" | "expo-exact";
+//   "web" (added): a web app from template-web/ (Vite and React): no APK, it opens from a link
+//     (docs/WEB-APPS.md). Not one of the New app sheet's choices: the plan picks it. Older phones
+//     do not know it.
+export type AppPreset = "react-native" | "kotlin" | "expo-exact" | "web";
 
 export interface App {
   /** The PC engine most recently used for this app. Absent on older companions. */
@@ -123,6 +158,14 @@ export interface App {
   hidden?: boolean;
   // Added: set only on the rows of GET /api/trash (Recently deleted): when it was deleted.
   deletedAt?: string;
+  // Added with web apps (docs/WEB-APPS.md): what each build makes. Absent: ["android"] (every app
+  // made before), or ["web"] when preset is "web". ["android", "web"] is "Both": the Android app
+  // plus a web version kept beside it in the same project (its web/ folder), built after each change.
+  targets?: AppTarget[];
+  // Added with web apps: where its web version is online. Absent until it first goes online, and on
+  // a PC that does not put web apps online. For a web app (preset "web") latestApk is its newest
+  // successful build, which has no APK: GET /apk answers 404 and apk.ready is not sent for it.
+  web?: WebSite;
   createdAt: string;
   updatedAt: string;
 }
@@ -557,6 +600,21 @@ export interface ChatImage {
 
 // POST /api/apps/:id/cancel -> 202 (stops the agent's current turn)
 // POST /api/apps/:id/build -> 202 (builds again without a new prompt)
+// Web apps (added, docs/WEB-APPS.md). Older PCs: 404.
+// POST /api/apps/:id/targets TargetsRequest -> App: Web, Android or Both (the plan page's switch; the
+//   app's agent does it with its set_app_kind tool after the person picks). 409 + ErrorBody when the
+//   change would throw away work (a web app with versions cannot become an Android app: a rewrite).
+// POST /api/apps/:id/web/open -> WebOpenResponse: the newest web build from this PC (for a web app
+//   that is not online, or offline from GitHub). Served without a Bearer token at the path it
+//   returns, like pages: the ticket in it is the grant, valid for a day.
+export interface TargetsRequest {
+  targets: AppTarget[]; // ["web"], ["android"] or ["android", "web"]
+}
+export interface WebOpenResponse {
+  path: string; // "/web/<appId>/<ticket>/": the web app's index.html; its files are under it
+  build: number;
+  expiresAt: string;
+}
 // POST /api/apps/:id/permission -> 202
 export interface PermissionAnswerRequest {
   requestId: string;

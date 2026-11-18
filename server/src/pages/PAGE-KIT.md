@@ -167,15 +167,30 @@ publish the plan page and end your turn:
 - A mockup of the main screen in a phone frame (`.gx-frame`, about 360px wide), drawn in the
   colours you will use, with the real words the app will show.
 - "What it does" as a short list, "What I chose for you" as a short list (so they can change it).
-- It is a question page: the whole page goes in `<gx-questions submit="Send">`, and it ends with one
-  question:
+- It is a question page: the whole page goes in `<gx-questions submit="Send">`. For a new app (and
+  when a change would add a web version), it first asks Web, Android or Both, with your pick
+  recommended and, in its lede, one plain line why (for example "This will be a web app: it opens
+  from a link, no install. Pick Android if it must ring while closed."):
 
 ```html
-<gx-question tag="P1" name="Build it?" title="Shall I build it like this?">
-  <gx-choice value="Build it" recommended>Build it<small>I start now; the app arrives on your phone when it is ready.</small></gx-choice>
+<gx-question tag="P1" name="Web, Android or Both?" title="Where should it run?">
+  <gx-choice value="Web" recommended>Web<small>Opens from a link, no install. Works offline after the first open.</small></gx-choice>
+  <gx-choice value="Android">Android<small>Installed on the phone: alarms and notifications while it is closed.</small></gx-choice>
+  <gx-choice value="Both">Both<small>The Android app, plus a web version kept beside it for a link.</small></gx-choice>
+</gx-question>
+```
+
+  Put `recommended` on the one you picked. A web app cannot ring alarms or show notifications while
+  it is closed, has no widgets and no background work: when the app needs one of these, recommend
+  Android and say so in the lede. Then it ends with one question:
+
+```html
+<gx-question tag="P2" name="Build it?" title="Shall I build it like this?">
+  <gx-choice value="Build it" recommended>Build it<small>I start now; it is ready in a few minutes.</small></gx-choice>
   <gx-choice value="Change something">Change something first<small>Say what in the note.</small></gx-choice>
 </gx-question>
 ```
 
-Then wait. "Build it" (or a reply such as "yes", "go", "looks good") means start. "Change something"
-means change the plan with their note, publish a new plan page, and ask again.
+Then wait. "Build it" (or a reply such as "yes", "go", "looks good") means start: first call
+set_app_kind with what they picked ("web", "android" or "both"). "Change something" means change the
+plan with their note, publish a new plan page, and ask again.

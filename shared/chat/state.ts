@@ -2,6 +2,7 @@
 // four states the theme allows (working, ready, problem, idle). The phone passes what it knows
 // about the app on itself (installed version, an install in progress); the PC passes nothing.
 import type { App } from "../protocol.ts";
+import { isWebOnly } from "./build.ts";
 
 export type StateKind = "working" | "ready" | "problem" | "idle";
 export interface StateText {
@@ -112,6 +113,18 @@ export function describeApp(app: App, device?: OnDevice, now = Date.now()): Stat
   if (built?.status === "succeeded" && !fromCloud && built.number > (apk?.number ?? 0)) return { kind: "working", label: `Saving version ${built.number}` };
   // A plan or question page waits for the person (an update or install to tap still comes first).
   const waiting: StateText | null = app.waitingForAnswer ? { kind: "ready", label: WAITING_FOR_ANSWER } : null;
+  // A web app (docs/WEB-APPS.md): nothing to install; it says whether and which version is online.
+  if (isWebOnly(app)) {
+    if (waiting) return waiting;
+    const web = app.web;
+    if (web?.publishing) return { kind: "working", label: `Putting version ${web.publishing} online` };
+    if (web?.liveBuild) {
+      const fresh = apk?.number === web.liveBuild && !!apk.finishedAt && now - Date.parse(apk.finishedAt) < 60 * 60_000;
+      return { kind: fresh ? "ready" : "idle", label: `Live on the web, version ${web.liveBuild}` };
+    }
+    if (web?.error) return { kind: "problem", label: "Web app, not online" };
+    return { kind: "idle", label: apk ? `Web app, version ${apk.number}` : "Web app, no version yet" };
+  }
   if (!apk) return waiting ?? { kind: "idle", label: "Waiting for the first version" };
   if (device) {
     const action = appAction(app, device.installedVersion);

@@ -79,7 +79,7 @@ describe("app presets", () => {
   });
 
   it("points each app's agent at its own check command", () => {
-    expect(PRESETS).toEqual(["react-native", "kotlin", "expo-exact"]);
+    expect(PRESETS).toEqual(["react-native", "kotlin", "expo-exact", "web"]);
     const exact = appPlaybook({ name: "T", packageName: "com.anyapp.t", dir: "d", preset: "expo-exact" });
     expect(exact).toContain("bun exact.mjs contract build app.contract --json");
     expect(exact).toContain("no AI through Kiwimake yet");

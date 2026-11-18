@@ -25,9 +25,11 @@ const STEPS: { key: string; test: RegExp; text: (firstBuild: boolean) => string 
   { key: "package", test: /> Task :app:(package|assemble)Release/i, text: () => "Packaging the new version" },
   { key: "verify", test: /APK ready/i, text: () => "Checking the new version" },
   { key: "retry", test: /Retrying Gradle/i, text: () => "Trying that step once more" },
+  // Web apps (docs/WEB-APPS.md): seconds, no Gradle. Last, so an app with both shows it after its APK.
+  { key: "web", test: /^Building the web version$/, text: () => "Building the web version" },
 ];
 
-const ORDER = ["start", "install", "prebuild", "gradle", "native", "bundle", "package", "verify"];
+const ORDER = ["start", "install", "prebuild", "gradle", "native", "bundle", "package", "verify", "web"];
 
 export class BuildProgress {
   private current: ProgressStep;

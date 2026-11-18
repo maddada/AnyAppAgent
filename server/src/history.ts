@@ -30,6 +30,8 @@ export interface HistoryHost {
   askPhoneForDiary(appId: string, requestId: string): boolean;
   /** The quiet "read the diary" line in the app's main chat. */
   diaryRead(appId: string, info: { ok: boolean; entries: number; problem?: string }): void;
+  /** Web, Android or Both (docs/WEB-APPS.md): the set_app_kind tool. Resolves with what the agent is told. */
+  setKind?(appId: string, kind: string): Promise<string>;
 }
 
 const MAX_TEXT = 300;
@@ -277,6 +279,16 @@ export class History {
         },
       },
       {
+        name: "set_app_kind",
+        description:
+          'Web, Android or Both (the plan page\'s switch). Call it once the person has picked or confirmed the kind on the plan page (or in a message), before you or a helper start building: "web" makes this a web app (Vite and React; it opens from a link, no install), "android" an Android app, "both" the Android app plus a web version kept beside it in web/. A new app can become any kind; later an Android app can only add or drop its web version (a web app never becomes an Android app: that is a new app). It answers with what changed in the project: read the AGENTS.md it names before you change code.',
+        inputSchema: {
+          type: "object",
+          properties: { kind: { type: "string", enum: ["web", "android", "both"] } },
+          required: ["kind"],
+        },
+      },
+      {
         name: "read_diary",
         description:
           "Reads the app's diary from the person's phone: the notes the app wrote about what it did (alarms set and rung, reminders, errors, crashes), oldest first, newest 300. Use it when something did not work as expected (\"why didn't it ring?\") before you guess. It stays on the phone and this PC: never copy it into the app, a page or GitHub. Takes up to 25 seconds.",
@@ -293,6 +305,10 @@ export class History {
       return "Saved. It shows on the new version's card when the build is ready. Now end your turn as usual.";
     }
     if (name === "read_diary") return this.readDiary(appId);
+    if (name === "set_app_kind") {
+      if (!this.host.setKind) throw new Error("This PC cannot change the kind of an app.");
+      return this.host.setKind(appId, String(args["kind"] ?? ""));
+    }
     throw new Error(`Unknown tool ${name}`);
   }
 
@@ -347,6 +363,11 @@ export class History {
 }
 
 type Rpc = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };
+
+/** An ACP tool call of set_app_kind (hidden: the plan page's answer stands for it). */
+export function isSetAppKindCall(update: Record<string, unknown>): boolean {
+  return JSON.stringify([update["title"], update["name"], update["_meta"]]).includes(`mcp__${APP_TOOLS_SERVER}__set_app_kind`);
+}
 
 /** An ACP tool call of describe_change (hidden: the version's card stands for it). */
 export function isDescribeChangeCall(update: Record<string, unknown>): boolean {

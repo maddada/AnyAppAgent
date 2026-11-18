@@ -22,11 +22,22 @@ export interface BuildResult {
   ota?: { path: string; sizeBytes: number; sha256: string; runtime: string };
 }
 
+/** A web build (docs/WEB-APPS.md): the site in distDir, every file with "/" separators. */
+export interface WebBuildResult {
+  distDir: string;
+  files: { path: string; size: number; sha256: string }[];
+  sizeBytes: number;
+}
+
 export interface Builder {
   kind: "real" | "fake";
   createApp(args: { dir: string; name: string; slug: string; packageName: string; preset?: AppPreset; onLog?: (line: string) => void }): Promise<void>;
   buildApk(args: { dir: string; buildNumber: number; onLog?: (line: string) => void; updateFeed?: string; updateTestingFeed?: string; changeOwner?: string; changeOthers?: boolean; fast?: boolean }): Promise<BuildResult>;
   getIconPath(args: { dir: string }): string | null;
+  /** Web apps (docs/WEB-APPS.md): builds the web project in `dir` (a web app's folder, or <app>/web for Both). */
+  buildWeb?(args: { dir: string; buildNumber: number; onLog?: (line: string) => void }): Promise<WebBuildResult>;
+  /** "Both": a web version from template-web in <dir>/web, beside the Android app. */
+  addWebVersion?(args: { dir: string; name: string; slug: string; onLog?: (line: string) => void }): Promise<{ webDir: string }>;
   /** "Make my own version" (docs/CHANGE-THIS-APP.md): a separate app from another app's code. */
   adoptApp?(args: { src: string; dir: string; name: string; slug: string; packageName: string; onLog?: (line: string) => void }): Promise<{ preset: AppPreset }>;
   /** Rename: a new name and slug for the app in `dir`, in place, and a new package id (with its own key) when it differs. */
@@ -77,6 +88,8 @@ export async function loadBuilder(choice: "auto" | "real" | "fake"): Promise<Bui
     createApp: (args) => mod.createApp(args),
     buildApk: (args) => mod.buildApk(args),
     getIconPath: (args) => mod.getIconPath(args),
+    ...(typeof mod.buildWeb === "function" ? { buildWeb: (args: Parameters<NonNullable<Builder["buildWeb"]>>[0]) => mod.buildWeb!(args) } : {}),
+    ...(typeof mod.addWebVersion === "function" ? { addWebVersion: (args: Parameters<NonNullable<Builder["addWebVersion"]>>[0]) => mod.addWebVersion!(args) } : {}),
     ...(typeof mod.adoptApp === "function" ? { adoptApp: (args: Parameters<NonNullable<Builder["adoptApp"]>>[0]) => mod.adoptApp!(args) } : {}),
     ...(typeof mod.renameApp === "function" ? { renameApp: (args: Parameters<NonNullable<Builder["renameApp"]>>[0]) => mod.renameApp!(args) } : {}),
     ...(mod.listSigningKeys && mod.backupSigningKeys && mod.restoreSigningKeys && mod.appSigningKind && mod.moveAppToOwnKey

@@ -18,6 +18,7 @@ import { SigningKeys } from "./signing-keys.ts";
 import { Store } from "./store.ts";
 import { loadToolchain, TOOLCHAIN_MISSING } from "./toolchain.ts";
 import { warmBuilder } from "./warm.ts";
+import { webHostFromEnv } from "./web-host.ts";
 
 export { pairingUri };
 
@@ -49,6 +50,8 @@ export async function main(): Promise<void> {
     phonesConnected: () => phonesConnected(),
     log,
     checkToolchain: () => (builder.kind === "real" && !toolchain ? TOOLCHAIN_MISSING : null),
+    // Web apps go online in the person's GitHub Pages (docs/WEB-APPS.md); ANYAPP_WEB_HOST picks a stand-in.
+    webHost: webHostFromEnv(process.env, config.github),
   });
   apps.recover();
   const signing = new SigningKeys(builder, () => new Map(apps.list().map((app) => [app.packageName, app.name])), log);

@@ -36,6 +36,8 @@ import type {
   UpdateTodoRequest,
   HideRequest, DuplicateAppRequest, RenameAppRequest,
   PinsRequest,
+  TargetsRequest,
+  WebOpenResponse,
 } from "../../shared/protocol.ts";
 import { HttpError, type AppManager } from "./apps.ts";
 import type { SigningKeys } from "./signing-keys.ts";
@@ -357,6 +359,11 @@ export function startHttpServer(deps: {
     if (path.startsWith("/page/") || path.startsWith("/page-kit/")) {
       if (await apps.pages.route(req, res, path, url)) return;
     }
+    // A web app's newest build from this PC (docs/WEB-APPS.md): the ticket is the grant. The raw path
+    // keeps its last "/" (index.html's relative files resolve against it).
+    if (path.startsWith("/web/")) {
+      if (apps.webRoute(req, res, url.pathname)) return;
+    }
     if (path.startsWith("/mcp/app/")) {
       if (await apps.history.mcpRoute(req, res, path, url)) return;
     }
@@ -441,6 +448,18 @@ export function startHttpServer(deps: {
       if (method !== "POST") return sendError(res, 405, "Method not allowed.");
       const body = await readBody<Partial<RenameAppRequest>>(req, 4 * 1024);
       return sendJson(res, 200, await apps.rename(decodeURIComponent(rename[1]!), body));
+    }
+    // Web apps (docs/WEB-APPS.md): Web, Android or Both; open the newest web build from this PC.
+    const targets = /^\/api\/apps\/([^/]+)\/targets$/.exec(path);
+    if (targets) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      const body = await readBody<Partial<TargetsRequest>>(req, 4 * 1024);
+      return sendJson(res, 200, (await apps.setTargets(decodeURIComponent(targets[1]!), body.targets)).app);
+    }
+    const webOpen = /^\/api\/apps\/([^/]+)\/web\/open$/.exec(path);
+    if (webOpen) {
+      if (method !== "POST") return sendError(res, 405, "Method not allowed.");
+      return sendJson(res, 200, apps.webOpen(decodeURIComponent(webOpen[1]!)) satisfies WebOpenResponse);
     }
     const hide = /^\/api\/apps\/([^/]+)\/hide$/.exec(path);
     if (hide) {

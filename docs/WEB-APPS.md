@@ -1,4 +1,4 @@
-# Web apps: the plan
+# Web apps
 
 The user (12 Nov 2026): "We need to also add web app building, which we host for the user and keep
 in Appwin. Those would still work without needing to install an APK."
@@ -7,11 +7,113 @@ Today Kiwimake makes only Android apps: the
 React Native and Kotlin templates, APKs, and the fast lane. This file plans a second kind of app: a
 **web app** that Kiwimake builds, hosts at its own address, and opens on the phone without an install.
 
-Status: **the agreed plan** (decisions of 12 Nov 2026, section 7), nothing built, no account made,
-nothing spent. Facts were checked on the web
-on **12 Nov 2026**; each has its source. It builds on `docs/CLOUD.md` (the agreed cloud plan),
-`docs/DISTRIBUTION.md`, `docs/CHANGE-THIS-APP.md`, `docs/FAST-LANE.md`, `docs/VERSIONS.md` and the
-Family circle page (`C:\aa\ideas\family-circle.html`).
+Status: **built in PC mode** (W19, 18 Nov 2026) with the decisions below, which **replace the
+12 Nov ones** where they differ (template, hosting, "Both"). Sections 0 to 7 are the 12 Nov plan,
+kept for the reasoning and the costs; read them with section W19 in mind. Facts in them were checked
+on the web on **12 Nov 2026**; each has its source.
+
+## W19. The decisions of 18 Nov 2026, and what was built
+
+The user answered the options page (Q35 to Q39). These replace sections 0 to 7 where they differ.
+
+| # | Question | Decision | Replaces |
+| --- | --- | --- | --- |
+| Q35 | What a web app is | **A. Per app: Web, Android or Both.** The plan says which and why, with a Web / Android / Both switch on the plan page. Web cannot ring alarms while closed, has no notifications, widgets or background work | Same as decision 9 |
+| Q36 | How it is built | **B. A plain web template: Vite and React** (`template-web/`), not Expo web | Decision 1 (Expo web) |
+| Q37 | Where it is hosted | **A. The person's own GitHub Pages.** The PC pushes only the built files (no source maps, after the secrets scan) to a public repo `<login>/anyapp-<slug>-web`; the code stays in the private repo. Address: `https://<login>.github.io/anyapp-<slug>-web/` | Decision 2 and section 2 (Cloudflare Worker and R2 on an apps domain, publishing through Convex) |
+| Q38 | When a change goes live | **A. Every successful build goes live.** Go back puts the last version online again. The PC's build card shows the address, a QR code, Copy link and Open | Same as decision 5 |
+| Q39 | On the phone | **A. Inside Kiwimake**: a tile opens it full screen, Add to home screen pins its own icon, offline after the first open (service worker, manifest), AI through Kiwimake's AI proxy, a "Version N is ready, Reload" notice | Same as section 1 "How it opens" |
+
+What no longer applies from the 12 Nov plan: Expo's web target and the module web stand-ins
+(section 1), the apps domain, the Worker, R2 and content addressing, Convex publishing and the
+Kiwimake account for publishing (section 2 and 4, PC mode step 2), the cost table (GitHub Pages is
+free). Still later, as planned: shared data in Convex, private sites, web push, a hosted AI proxy
+for plain browsers, crash reports from every visitor, suggestions from a browser.
+
+### What "Both" means now
+
+With a plain web template, web and Android are two codebases. **Both is kept, as one app with two
+parts**: the Android app (React Native) at the project's root, as today, plus a web version kept
+beside it in `<app>/web/` (made from `template-web/`). One tile, one chat, one version history; every
+change the person asks for goes into both (as far as the web can do it), and each build makes the
+APK and the web version. Why this and not "Both dropped": the switch on the plan page stays true to
+its words, a person can still get the phone powers and a link to share, and "Put it on the web too"
+for an existing Android app is one call (`set_app_kind both`) instead of a second app with a second
+chat. The cost: the agent writes each change twice (the playbook and the tool's answer tell it to
+keep them in step), builds take a few seconds longer, and data does not move between the APK and
+the web version. A web app never becomes an Android app later (a rewrite: a new app); a new app with
+at most one version (the template, before the plan was confirmed) can become any kind.
+
+### How it works
+
+- **Template**: `template-web/` (Vite, React, TypeScript), base `./` so the same files work at any
+  path. Its AGENTS.md tells the agent what a web app cannot do, the storage rules and hash routes.
+  `src/lib/storage.ts` prefixes every key `<slug>:` (all of a person's apps share the origin
+  `<login>.github.io`, so plain keys would clash); IndexedDB names and service worker caches carry
+  the slug too. `src/lib/ai.ts` uses Kiwimake's bridge (below) and says "Open this in Kiwimake to use
+  AI" in a plain browser. The "Version N is ready" card checks `version.json` on start, when shown
+  again, every 5 minutes and when Kiwimake says a new version is live.
+- **Builder**: `buildWeb({ dir, buildNumber })` (`builder/lib/web.mjs`): npm install when needed,
+  the TypeScript check, `vite build`, then no source maps, `manifest.webmanifest`, icons, `sw.js`
+  (precaches every file of the build in `kiwi-<slug>-<build>`, deletes only its own older caches,
+  waits for Reload before it takes over) and `version.json`. A failed build goes back to the agent
+  (up to 3 times) as for APKs. `createApp({ preset: "web" })` and `addWebVersion` (Both).
+- **Companion** (`server/src/web-apps.ts`, `server/src/web-host.ts`): after each successful build
+  the web version is kept with the app's builds (the last 3), then goes live: every file is
+  scanned for secrets and source maps (a hit refuses it and names the file; the version before stays
+  online), the PC makes the public repo once (`gh repo create --public`), replaces its files with the
+  build's plus `version.json` (`{ build, changed }`) and `.nojekyll`, commits "Version N" in its own
+  copy (`<state>/web/<appId>/site`) and pushes to `main` with a token that reaches git only through
+  one child process's environment, then turns Pages on (main, root; once). It then waits until the
+  address serves that version (GitHub Pages takes about a minute) and the card says "Version N is
+  live". Go back and Undo build the old code as a new version, which goes live the same way. A web
+  app gets no `apk.ready` and GET /apk answers 404. Deleting an app for good deletes its `-web` repo.
+  A renamed app keeps its site (`App.web.repo`), so its address and the copies people saved keep
+  working. Without GitHub (or with `ANYAPP_WEB_HOST=off`) web apps still build and open from the PC
+  (`POST /api/apps/:id/web/open`, a ticket like pages), and the card says so.
+- **Web, Android or Both**: the playbooks' "Web, Android or Both" section and the plan page guide
+  (`server/src/pages/PAGE-KIT.md`, "The plan page"): the plan page asks it with the agent's pick
+  recommended and one line why; on "Build it" the agent calls its `set_app_kind` tool (`web`,
+  `android`, `both`), which is also `POST /api/apps/:id/targets`.
+- **Phone**: a web app's tile has a globe mark and opens the app full screen in a WebView at its
+  address (only that address loads inside; other links open in the browser). Add to home screen
+  pins an Android shortcut with the app's icon that opens Kiwimake on it, also with the PC off. The
+  bridge `window.kiwimake` (AI through the same proxy, limits, per-app switch and usage line as
+  Android apps, keyed `web:<slug>`; close; open the app's chat) is injected only into the owner's own
+  app at its own address. The chat's card shows the address, Open and Share; never Install.
+- **PC**: the build card shows the short address, a QR code, Copy link and Open; the app list says
+  "Live on the web, version N".
+
+### GitHub Pages: what to know
+
+- **Public**: Pages on GitHub Free needs a public repo, so the `-web` repo is public; it holds only
+  built files (no source maps, scanned for secrets). The site itself is public to anyone with the
+  address, and GitHub Pages sites are not private on any plan the person is likely to have.
+- **Rules**: GitHub Pages is not for business or SaaS hosting; about 1 GB a site, a soft 100 GB a
+  month and 10 builds an hour (https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits).
+  At 10 builds an hour a very busy chat can wait for GitHub; the newest version wins.
+- **One origin per person**: every app of a person is at `<login>.github.io`, so apps share cookies
+  and storage space; the template's prefixed storage names keep them apart, and the service worker
+  of each app only touches its own caches.
+- **Cloud apps** (later, `docs/CLOUD.md`): the Kiwimake GitHub App needs one more permission,
+  **Pages (read and write)**, plus repository creation for the `-web` repo, so people approve it
+  once more. The GitHub App was not changed in W19.
+
+### Protocol (additive, W19)
+
+`AppPreset` gains `"web"`; `AppTarget`; `App.targets?`; `App.web?: WebSite`; `BuildInfo.web?:
+WebBuildInfo`; `POST /api/apps/:id/targets` (`TargetsRequest`); `POST /api/apps/:id/web/open`
+(`WebOpenResponse`) and `GET /web/<appId>/<ticket>/...`. Older phones do not know web apps: they
+list them, and a download of one fails with a plain 404.
+
+### Testing it without GitHub
+
+`ANYAPP_WEB_HOST=local ANYAPP_WEB_LOCAL_DIR=<dir> ANYAPP_WEB_LOCAL_URL=http://localhost:<port>`
+makes the companion push to bare repos in `<dir>/you/anyapp-<slug>-web.git`, and
+`node server/scripts/fake-pages.mjs <dir> <port>` serves their `main` branch the way GitHub Pages
+does. Service workers need a secure context: on the emulator use `adb reverse tcp:<port>
+tcp:<port>` so the site is at `http://localhost:<port>/`. Tests: `server/test/web-apps.test.ts`,
+`builder/test/web.test.mjs`, `shared/chat/test/chat.test.ts`, `desktop/test/web-apps.test.ts`.
 
 ## 0. The recommendation in short
 
@@ -399,7 +501,7 @@ the free Cloudflare account the Family circle plan already needs; turn on R2 the
 for, the free tier covers this). Nothing else beyond the cloud accounts already listed in
 `docs/CLOUD.md` section 11.
 
-## 7. Decisions (12 Nov 2026)
+## 7. Decisions (12 Nov 2026; replaced in part by W19 above)
 
 The user took every recommendation (Q360).
 

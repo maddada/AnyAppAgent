@@ -18,9 +18,11 @@ export async function createApp(args: {
   name: string;
   slug: string;
   packageName: string;
+  preset?: string;
   onLog?: (line: string) => void;
 }): Promise<void> {
   if (existsSync(join(args.dir, "package.json"))) throw new Error(`${args.dir} already has a project`);
+  if (args.preset === "web") return createWebProject(args.dir, args.name, args.slug, args.packageName);
   mkdirSync(join(args.dir, "assets"), { recursive: true });
   const files: Record<string, string> = {
     "package.json": JSON.stringify({ name: args.slug, version: "1.0.0", main: "index.js", private: true }, null, 2),
@@ -121,4 +123,50 @@ export async function renameApp(args: { dir: string; name: string; slug: string;
   meta.expo.android = { ...meta.expo.android, package: args.packageName };
   writeFileSync(path, JSON.stringify(meta, null, 2));
   return { preset: "react-native", packageChanged };
+}
+
+// ---------- web apps (docs/WEB-APPS.md): a tiny web project and a site in dist/, no npm or Vite.
+
+function createWebProject(dir: string, name: string, slug: string, packageName?: string): void {
+  mkdirSync(join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "assets"), { recursive: true });
+  const files: Record<string, string> = {
+    "package.json": JSON.stringify({ name: slug, version: "1.0.0", private: true, type: "module" }, null, 2),
+    "index.html": `<!doctype html><html><head><meta charset="utf-8"><title>${name}</title><link rel="manifest" href="manifest.webmanifest"></head><body><div id="root">${name}</div><script type="module" src="./assets/app.js"></script></body></html>\n`,
+    "src/App.tsx": `export const name = ${JSON.stringify(name)};\n`,
+    ...(packageName ? { "anyapp.json": JSON.stringify({ preset: "web", slug, package: packageName }, null, 2) } : {}),
+  };
+  for (const [file, content] of Object.entries(files)) writeFileSync(join(dir, file), content);
+}
+
+export async function addWebVersion(args: { dir: string; name: string; slug: string }): Promise<{ webDir: string }> {
+  const webDir = join(args.dir, "web");
+  if (existsSync(webDir)) throw new Error(`${webDir} already exists`);
+  createWebProject(webDir, args.name, args.slug);
+  return { webDir };
+}
+
+export async function buildWeb(args: { dir: string; buildNumber: number; onLog?: (line: string) => void }): Promise<{ distDir: string; files: { path: string; size: number; sha256: string }[]; sizeBytes: number }> {
+  const delay = Number(process.env.ANYAPP_FAKE_BUILD_MS ?? 1500) / 3;
+  args.onLog?.(`fake builder: building the web version ${args.buildNumber}`);
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  const marker = join(args.dir, "FAKE_BUILD_FAIL");
+  if (existsSync(marker)) throw new Error(readFileSync(marker, "utf8").trim() || "Fake web build failed because FAKE_BUILD_FAIL exists.");
+  const { rmSync } = await import("node:fs");
+  const distDir = join(args.dir, "dist");
+  rmSync(distDir, { recursive: true, force: true });
+  mkdirSync(join(distDir, "assets"), { recursive: true });
+  const source = existsSync(join(args.dir, "src", "App.tsx")) ? readFileSync(join(args.dir, "src", "App.tsx"), "utf8") : "";
+  const site: Record<string, string> = {
+    "index.html": existsSync(join(args.dir, "index.html")) ? readFileSync(join(args.dir, "index.html"), "utf8") : "<!doctype html><title>app</title>\n",
+    "assets/app.js": `/* build ${args.buildNumber} */\nconsole.log(${JSON.stringify(source)});\n`,
+    "manifest.webmanifest": JSON.stringify({ name: basename(args.dir), start_url: "./", scope: "./", display: "standalone" }),
+    "sw.js": `const CACHE = "kiwi-fake-${args.buildNumber}";\n`,
+    "version.json": JSON.stringify({ build: args.buildNumber }),
+  };
+  const files = Object.entries(site).map(([path, content]) => {
+    writeFileSync(join(distDir, path), content);
+    return { path, size: Buffer.byteLength(content), sha256: createHash("sha256").update(content).digest("hex") };
+  });
+  return { distDir, files, sizeBytes: files.reduce((n, f) => n + f.size, 0) };
 }

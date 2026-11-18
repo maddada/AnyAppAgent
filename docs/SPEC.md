@@ -456,3 +456,19 @@ PC apps only (cloud apps keep only Delete there).
   shared anew.
 
 Protocol (additive): `DuplicateAppRequest`, `RenameAppRequest` and the two routes.
+
+## Web apps (added 2026-11-18)
+
+The user answered the web apps page (Q35 to Q39). Details, the reasons and what replaced the 12 Nov
+plan: `docs/WEB-APPS.md`, section W19.
+
+- **Per app: Web, Android or Both.** The plan says which and why, with the switch on the plan page;
+  the agent records it with its `set_app_kind` tool. Both is one app: the Android app at the root
+  plus a web version in `web/`, both built after every change.
+- **A plain web template**, `template-web/` (Vite and React), the preset `"web"`; the builder's
+  `buildWeb` makes the site (no source maps, a service worker, a manifest).
+- **The person's own GitHub Pages**: every successful build goes live; the PC pushes only the built
+  files (after the secrets scan) to a public repo `anyapp-<slug>-web`, the code stays private. Each
+  app uses its own storage names (all of a person's apps share `<login>.github.io`).
+- **Inside Kiwimake** on the phone: a tile opens it full screen, Add to home screen, offline after
+  the first open, AI through Kiwimake's AI proxy, and "Version N is ready, Reload" in the app.
