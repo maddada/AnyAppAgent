@@ -97,7 +97,12 @@ export function useAiStatus(): { status: AiStatus | null; refresh: () => void } 
     refresh();
     const onVisible = () => document.visibilityState === 'visible' && refresh();
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    // Kiwimake can add its bridge after the app has started: check again when it says it is there.
+    window.addEventListener('kiwimake:ready', refresh);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('kiwimake:ready', refresh);
+    };
   }, [refresh]);
   return { status, refresh };
 }

@@ -53,6 +53,8 @@ export function webBuildDir(buildsDir: string, number: number): string {
 export class WebApps {
   readonly publisher: WebPublisher;
   private readonly host: WebAppsHost;
+  /** One publish at a time per app (they share the site's folder); the newest build goes last. */
+  private readonly publishing = new Map<string, Promise<void>>();
 
   constructor(host: WebAppsHost, webHost: WebHost | null, fetchImpl?: typeof fetch) {
     this.host = host;
@@ -94,8 +96,19 @@ export class WebApps {
    * Pages then takes about a minute, which is waited for in the background: the card says
    * "going online" until the address serves this version, then "live".
    */
-  async goLive(record: WebAppRecord, build: BuildInfo, rowId: string): Promise<void> {
-    if (!build.web || !this.online) return;
+  goLive(record: WebAppRecord, build: BuildInfo, rowId: string): Promise<void> {
+    const id = record.app.id;
+    const next = (this.publishing.get(id) ?? Promise.resolve()).then(() => this.goLiveNow(record, build, rowId));
+    const tail = next.catch(() => {});
+    this.publishing.set(id, tail);
+    void tail.then(() => {
+      if (this.publishing.get(id) === tail) this.publishing.delete(id);
+    });
+    return next;
+  }
+
+  private async goLiveNow(record: WebAppRecord, build: BuildInfo, rowId: string): Promise<void> {
+    if (!build.web || !this.online || !this.host.alive(record.app.id)) return;
     const app = record.app;
     const distDir = webBuildDir(this.host.buildsDir(app.id), build.number);
     const update = (web: WebBuildInfo) => {

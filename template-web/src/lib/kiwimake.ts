@@ -1,5 +1,7 @@
 // The bridge Kiwimake adds when this app is opened inside Kiwimake on the phone. In a plain
 // browser `window.kiwimake` is undefined: everything here then does nothing (or says so).
+// Kiwimake may add it a moment after the app started: read it when you need it (never keep it from
+// the start), and listen for the window event "kiwimake:ready", which it sends once it is there.
 
 export interface KiwimakeBridge {
   version: 1;

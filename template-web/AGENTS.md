@@ -196,7 +196,7 @@ import { useAiStatus, ask, chat, runAgent, imagePart, imagePartFromFile, AiError
 import { AiSetupNotice } from '@/components/AiSetupNotice';
 
 // 1. Show the card while AI is not ready (plain browser, no key yet, or switched off).
-const { status } = useAiStatus();                 // refreshes when the app comes back to the front
+const { status } = useAiStatus();                 // refreshes when the app comes back to the front and when Kiwimake's bridge arrives
 <AiSetupNotice status={status} />                  // renders nothing when AI is ready
 
 // 2. One question

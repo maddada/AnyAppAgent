@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ApkVariant, App, AppMove, DeleteAppResult, AppPreset, ChangeSettingsRequest, CloneRequest, DuplicateAppRequest, RenameAppRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
-import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, type VersionRecord } from "./history.ts";
+import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, isSetAppKindCall, type VersionRecord } from "./history.ts";
 import { MEMORY_FILE } from "./playbook.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import { answersPreview, parsePageAnswers } from "../../shared/chat/pages.ts";
@@ -26,7 +26,7 @@ import { realGithub, shareApp, testingFeedUrl, unshareApp, type GithubApi } from
 import * as githubCli from "./github.ts";
 import { publishVersion, pullBack, StaleSignerError, parseUpdateJson, repoOf, type ApkFile, type ReleaseApi } from "./publish.ts";
 import { pcPathHits, publicCodeRepoName, publicCodeRepoUrl, pushPublicCode, realCodeRepoApi, type CodeRepoApi } from "./public-code.ts";
-import { appPlaybook, buildFixPrompt, firstPrompt, sharedInNote } from "./playbook.ts";
+import { appPlaybook, buildFixPrompt, deliveryRules, firstPrompt, sharedInNote } from "./playbook.ts";
 import type { AppRecord, Store } from "./store.ts";
 import { COORDINATOR_PLAYBOOK_VERSION, coordinatorPlaybook, reportPrompt } from "./coordinator-playbook.ts";
 import { isWorkerToolCall, workerToolsMcpServer } from "./worker-http.ts";
@@ -279,8 +279,12 @@ export class AppManager {
         if (record) this.emitItem(record, { id: randomUUID(), kind: "diary", diary: info });
       },
       setKind: async (appId, kind) => {
-        const { note } = await this.setTargets(appId, targetsFromKind(kind));
-        return note;
+        const { app, note } = await this.setTargets(appId, targetsFromKind(kind));
+        // The session's playbook was written for the kind the app had when it started: say how new
+        // versions reach people now, so its last sentences stay right (no "install it" for a web app).
+        const web = appTargets(app).includes("web");
+        const both = web && appTargets(app).includes("android");
+        return `${note}\n\nThis replaces what your instructions said about how new versions reach the person:\n${deliveryRules(app.preset)}${both ? "\nThe web version also goes live at its address after every build; the build card shows it." : ""}${web ? "\nTell your helpers this in their briefs too." : ""}`;
       },
     });
     this.web = new WebApps(
@@ -337,7 +341,7 @@ export class AppManager {
           activityChanged: (record) => this.activityChanged(record),
           pageTools: (appId, from) => this.pages.mcpServer(this.config.port, appId, from),
           appTools: (appId, workerId) => this.history.mcpServer(this.config.port, appId, workerId),
-          hiddenTool: (update) => isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update),
+          hiddenTool: (update) => isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update) || isSetAppKindCall(update),
           usageItem: (appId) => this.runtimes.get(appId)?.usageItem,
           countUsage: (appId, itemId, usage) => {
             const record = this.store.find(appId);
@@ -2025,7 +2029,7 @@ ${overviewNudge()}` : note;
           const toolCallId = String(update["toolCallId"] ?? "");
           if (rt.hiddenTools.has(toolCallId)) return;
           // The page tools are never shown (the page's card stands for them); with helpers, neither are the worker tools.
-          if (isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update) || (coordinated && isWorkerToolCall(update))) {
+          if (isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update) || isSetAppKindCall(update) || (coordinated && isWorkerToolCall(update))) {
             // Not shown (the worker row stands for it), but it ends the text before it, like any tool call.
             rt.hiddenTools.add(toolCallId);
             for (const draft of rt.translator.closeStreams()) this.emitItem(record, draft);
@@ -2194,7 +2198,7 @@ ${overviewNudge()}` : note;
       // A web app has no APK: it goes online instead (web-apps.ts); phones hear of it through app.updated.
       if (build.web) await this.web.goLive(record, build, rowId);
       if (!isWebOnly(record.app)) this.broadcast({ type: "apk.ready", app: record.app });
-      this.log(`[${record.app.slug}] APK ${build.number} ready (${build.sizeBytes} bytes)`);
+      this.log(`[${record.app.slug}] ${isWebOnly(record.app) ? "web version" : "APK"} ${build.number} ready (${build.sizeBytes} bytes)`);
       return { ok: true, number: build.number, ...(build.delivery ? { delivery: build.delivery } : {}) };
     }
     const failed = record.app.latestBuild!;

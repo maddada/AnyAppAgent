@@ -6,6 +6,8 @@
 // Like GitHub Pages: a folder serves its index.html, a folder without the slash redirects to it,
 // files are served with Cache-Control max-age=600, and anything missing is a 404. It reads the
 // pushed commit itself (git cat-file), so it proves exactly what was pushed is what is served.
+// FAKE_PAGES_NO_STORE=1 sends Cache-Control no-store instead, so only a service worker can keep the
+// files for offline (the proof that offline is the service worker, not the browser's HTTP cache).
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import http from 'node:http';
@@ -34,7 +36,7 @@ const server = http.createServer(async (req, res) => {
   const parts = decodeURIComponent(url.pathname).split('/').filter(Boolean);
   const repo = parts.shift();
   const send = (status, body, headers = {}) => {
-    res.writeHead(status, { 'Cache-Control': 'max-age=600', 'Access-Control-Allow-Origin': '*', ...headers });
+    res.writeHead(status, { 'Cache-Control': process.env.FAKE_PAGES_NO_STORE === '1' ? 'no-store' : 'max-age=600', 'Access-Control-Allow-Origin': '*', ...headers });
     res.end(req.method === 'HEAD' ? undefined : body);
   };
   if (!repo || !/^anyapp-[a-z0-9-]+-web$/.test(repo) || parts.some((p) => p === '..')) return send(404, 'Not found');

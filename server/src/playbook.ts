@@ -59,7 +59,8 @@ and says why in one line:
   closed, notifications, work in the background, home screen widgets, SMS, call log or contacts,
   Bluetooth or NFC. A web app cannot do these (say so plainly when it matters).
 - Web otherwise (a tea timer, a shopping list, a calculator, a tracker): nothing to install, it works
-  offline after the first open, and sharing it is sending its link.
+  offline after the first open, and sharing it is sending its link. AI through Kiwimake works in a
+  web app too (when it is opened in Kiwimake), so AI alone is no reason for Android.
 - Both when they want the phone powers and also a link for other people or devices.
 The plan page has the switch "Web, Android or Both" with your pick recommended ("The plan page" in
 the page guide). When they confirm the plan, call set_app_kind with the kind they picked before any
