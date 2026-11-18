@@ -23,7 +23,7 @@ import { GetPhoneAppDialog } from "./PhoneApp.tsx";
 import { AppIcon, Dialog, Icon, Spinner, StateLine, Switch, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
 import { BackupGroup, ReminderCard, UsageGroup } from "./Trust.tsx";
 import { UpdateNotice, UpdatesGroup } from "./Update.tsx";
-import { headsUp } from "../../../../shared/chat/index.ts";
+import { headsUp, isWebOnly } from "../../../../shared/chat/index.ts";
 import { GALLERY_ID, GalleryPage, GalleryRow, useGalleryList } from "./Gallery.tsx";
 
 const api = window.anyapp;
@@ -175,7 +175,11 @@ function activity(s: Snapshot): { time: string; text: string }[] {
       const st = appState(a);
       const what =
         a.status === "idle" && a.latestApk
-          ? `version ${a.latestApk.number} built and sent to your phone`
+          ? isWebOnly(a)
+            ? a.web?.liveBuild === a.latestApk.number
+              ? `version ${a.latestApk.number} is live on the web`
+              : `version ${a.latestApk.number} built`
+            : `version ${a.latestApk.number} built and sent to your phone`
           : a.status === "error"
             ? `version ${a.latestBuild?.number ?? ""} didn't build`.replace("  ", " ")
             : st.text.toLowerCase();

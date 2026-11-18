@@ -648,6 +648,18 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .changes-line dd { color: var(--aa-text); overflow-wrap: anywhere; }
 .trow .older-change { font-family: inherit; font-size: inherit; }
 
+/* The web version on a build card (docs/WEB-APPS.md): address and line full width, then the QR on
+   the left and Copy link, Open below the text on the right. */
+.web-part { display: flex; flex-direction: column; gap: var(--aa-space-sm); }
+.web-part.is-both { padding-top: var(--aa-space-md); border-top: var(--aa-border-width) solid var(--aa-border); }
+.web-text { display: flex; flex-direction: column; gap: var(--aa-space-xs); min-width: 0; }
+.web-address { color: var(--aa-text); overflow-wrap: anywhere; user-select: text; }
+.web-foot { display: flex; align-items: flex-end; gap: var(--aa-space-md); padding-top: var(--aa-space-xs); }
+.web-foot > .notice-actions { flex: 1; width: auto; }
+.web-part .state { align-items: flex-start; }
+.web-part .state > span:last-child { white-space: normal; }
+.web-part .state > .state-dot, .web-part .state > .spin, .web-part .state > .ic { margin-top: var(--aa-space-xs); }
+
 .crash { padding: var(--aa-space-lg); display: flex; flex-direction: column; gap: var(--aa-space-md); box-shadow: inset 0 0 0 var(--aa-border-width) var(--aa-problem), var(--aa-shadow-1); }
 .crash-detail { background: var(--aa-code-bg); border-radius: var(--aa-radius-badge); padding: var(--aa-space-sm) var(--aa-space-md); color: var(--aa-text-secondary); overflow-wrap: anywhere; white-space: pre-wrap; }
 .crash .notice-actions .state > span:last-child { white-space: normal; }

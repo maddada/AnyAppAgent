@@ -9,6 +9,7 @@ import wordmarkUrl from "../../../../shared/theme/mark/wordmark.svg";
 import wordmarkDarkUrl from "../../../../shared/theme/mark/wordmark-dark.svg";
 import type { App } from "../../shared/types.ts";
 import { describeApp, type StateKind } from "../../../../shared/chat/index.ts";
+import { webAppState } from "./web.ts";
 
 type IconSize = keyof typeof iconTokens.size;
 
@@ -73,11 +74,14 @@ export function timeAgo(iso?: string): string {
   return d.toLocaleDateString();
 }
 
-/** An app's state in the four words the theme allows: the shared wording (shared/chat/state.ts), as on the phone. */
+/** An app's state in the four words the theme allows: the shared wording (shared/chat/state.ts), as on the phone; a web app's from web.ts. */
 export function appState(app: App): { state: UiState; text: string } {
   if (app.status === "error" && app.error?.startsWith("Claude usage limit reached.")) {
     return { state: "problem", text: "Claude usage limit reached" };
   }
+  // A web app: "Live on the web, version 8" where an Android app says how its version stands.
+  const web = webAppState(app);
+  if (web) return web;
   const st = describeApp(app);
   return { state: st.kind, text: st.label };
 }

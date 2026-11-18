@@ -6,7 +6,8 @@
 //
 // Extra env: ANYAPP_STATE_DIR (writes pairing-code.txt there), FAKE_EASY_CONNECT=off|ready|error,
 // FAKE_SEED=1 (a few example apps), FAKE_HISTORY=1 (a Tea Timer app with versions, What changed, a crash
-// card and a diary line: docs/VERSIONS.md). Dev-only hooks: POST /__fake/pair-phone {name},
+// card and a diary line: docs/VERSIONS.md), FAKE_WEB=1 (web apps and their build cards: docs/WEB-APPS.md).
+// Dev-only hooks: POST /__fake/pair-phone {name},
 // POST /__fake/disconnect-all.
 import { createServer } from "node:http";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
@@ -297,6 +298,34 @@ if (process.env.FAKE_SEED === "1") {
       fakePages.set(pageId, page.title);
       fakePages.set(second.id, second.title);
     }
+    seqs.set(app.id, seq);
+  }
+}
+
+// Web apps (docs/WEB-APPS.md): "Tip Splitter" is a web app live at version 8; "Habit Tracker" makes
+// both (the Android card with the web part under it); "Flash Cards" is a web app going online and
+// "Bus Times" one whose newest version could not go online.
+if (process.env.FAKE_WEB === "1") {
+  const login = "sara";
+  const site = (slug, extra) => ({ address: `https://${login}.github.io/anyapp-${slug}-web/`, repo: `${login}/anyapp-${slug}-web`, repoUrl: `https://github.com/${login}/anyapp-${slug}-web`, since: now(), ...extra });
+  const web = (slug, state, extra = {}) => ({ sizeBytes: 412_000, files: 9, state, ...(state === "live" ? { address: `https://${login}.github.io/anyapp-${slug}-web/` } : {}), ...extra });
+  const seeds = [
+    { name: "Tip Splitter", preset: "web", targets: undefined, number: 8, web: "live", site: { liveBuild: 8 }, changes: { changed: "Round the tip up to a whole number", tryIt: "Split 47.30 between 3 people", goodToKnow: "Your last split is kept" } },
+    { name: "Habit Tracker", preset: "react-native", targets: ["android", "web"], number: 5, web: "live", site: { liveBuild: 5 }, changes: { changed: "A weekly view with a dot for each day" }, sizeBytes: 31_000_000 },
+    { name: "Flash Cards", preset: "web", targets: undefined, number: 3, web: "publishing", site: { liveBuild: 2, publishing: 3 }, changes: { changed: "Cards flip when you tap them" } },
+    { name: "Bus Times", preset: "web", targets: undefined, number: 4, web: "failed", site: { liveBuild: 3, error: "GitHub did not answer. The version before stays online." }, changes: { changed: "The next three buses at the top" }, error: "GitHub did not answer. The version before stays online." },
+  ];
+  for (const seed of seeds) {
+    const app = makeApp(seed.name, "idle");
+    const slug = app.slug;
+    const ok = { number: seed.number, status: "succeeded", startedAt: now(), finishedAt: now(), changes: seed.changes, ...(seed.sizeBytes ? { sizeBytes: seed.sizeBytes } : {}), web: web(slug, seed.web, seed.error ? { error: seed.error } : {}) };
+    Object.assign(app, { preset: seed.preset, ...(seed.targets ? { targets: seed.targets } : {}), web: site(slug, seed.site), latestBuild: ok, latestApk: ok, lastMessagePreview: "Done. It is on the web." });
+    const list = chats.get(app.id);
+    let seq = 0;
+    const push = (item) => list.push({ id: randomUUID(), appId: app.id, seq: ++seq, createdAt: now(), updatedAt: now(), ...item });
+    push({ kind: "user", text: `Make me a ${seed.name.toLowerCase()} app.` });
+    push({ kind: "assistant", text: "Done. It is on the web." });
+    push({ kind: "build", build: ok, text: "The new version is ready" });
     seqs.set(app.id, seq);
   }
 }

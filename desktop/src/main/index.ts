@@ -30,6 +30,7 @@ import { loadSettings, saveSettings } from "./settings.ts";
 import { ClaudeSignIn, GitHubSignIn } from "./signin.ts";
 import { runScreenshots } from "./shots.ts";
 import { adoptShellEnv } from "./shell-env.ts";
+import { isOpenableUrl } from "../shared/links.ts";
 import { DesktopUpdates, updateKind } from "./updates.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -1042,8 +1043,9 @@ function ipc(): void {
   ipcMain.handle("companion:restart", () => companion.restart());
   ipcMain.handle("app:quit", () => app.quit());
   ipcMain.handle("copy", (_e, text: string) => clipboard.writeText(String(text)));
+  // https anywhere, http only on this PC (a web app's address, src/shared/links.ts).
   ipcMain.handle("open-external", (_e, url: string) => {
-    if (/^https:\/\//.test(String(url))) return shell.openExternal(String(url));
+    if (isOpenableUrl(url)) return shell.openExternal(url);
   });
   ipcMain.handle("open-folder", (_e, which: "tools" | "state" | "apps") => {
     const dir = which === "tools" ? paths.toolsDir : which === "state" ? paths.stateDir : paths.appsDir;

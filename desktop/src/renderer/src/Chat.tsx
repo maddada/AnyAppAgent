@@ -5,19 +5,20 @@
 import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FileCheck, FilePen, FileQuestion, FileText, Folder, GitMerge, Globe, Hand, History, NotebookText, TriangleAlert, Wrench, ImagePlus, ListTodo, Lock, MessageSquare, Mic, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
+  ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, Copy, ExternalLink, FileCheck, FilePen, FileQuestion, FileText, Folder, GitMerge, Globe, Hand, History, NotebookText, TriangleAlert, Wrench, ImagePlus, ListTodo, Lock, MessageSquare, Mic, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
 } from "lucide-react";
 import type { App, ChatImage, ChatItem, HexCheck, PageInfo, WorkerInfo } from "../../shared/types.ts";
 import { DICTATE_HOTKEY } from "./dictation.ts";
 import { useVoice, VoiceMic, VoiceNote, voicePlaceholder } from "./Voice.tsx";
 import {
-  answerLines, buildCard, crashCard, DIARY_PRIVACY, diaryLine, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
+  answerLines, buildCard, crashCard, isWebOnly, type WebCardPart, DIARY_PRIVACY, diaryLine, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
 } from "../../../../shared/chat/index.ts";
 import { drafts, draftSet, useChat } from "./chatStore.ts";
 import { useHelperChat, useHelpers } from "./helperStore.ts";
 import { Markdown } from "./Markdown.tsx";
 import { imageFiles, prepare, sentPicture, type Attachment } from "./pictures.ts";
-import { AppIcon, Icon, Spinner, StateLine } from "./ui.tsx";
+import { AppIcon, appState, Icon, QrPlate, Spinner, StateLine } from "./ui.tsx";
+import { webPartView } from "./web.ts";
 import { TodoPanel } from "./Todo.tsx";
 import { VersionsPanel } from "./Versions.tsx";
 import type { CareState } from "../../../../shared/protocol.ts";
@@ -135,7 +136,8 @@ export function ChatView({ app, icon, online, headerExtra, onHelperOpen, hex, on
 function MainChat({ app, icon, online, headerExtra, hex, onSetupHex, care }: { app: App; icon?: string; online: boolean; headerExtra?: ReactNode; hex?: HexCheck; onSetupHex?: () => void; care: CareState | null }) {
   const chat = useChat(app.id, online);
   const rows = useMemo(() => buildRows(chat.items, app), [chat.items, app]);
-  const st = describeApp(app);
+  // The same state line as the app list (a web app says where it is online).
+  const st = appState(app);
 
   // Stay on the newest item while the agent works, unless the reader scrolled up (shared Follower).
   const scroller = useRef<HTMLDivElement>(null);
@@ -187,7 +189,7 @@ function MainChat({ app, icon, online, headerExtra, hex, onSetupHex, care }: { a
         <AppIcon icon={icon} small />
         <div className="chat-id">
           <div className="heading">{app.name}</div>
-          <StateLine state={st.kind} text={st.label} />
+          <StateLine state={st.state} text={st.text} />
         </div>
         {headerExtra}
       </header>
@@ -213,7 +215,7 @@ function MainChat({ app, icon, online, headerExtra, hex, onSetupHex, care }: { a
             {chat.loaded && rows.length === 0 ? (
               <div className="chat-empty" data-testid="chat-empty">
                 <span className="heading">No messages yet</span>
-                <span className="label">Ask for a change below, and the new version goes to your phone.</span>
+                <span className="label">{isWebOnly(app) ? "Ask for a change below, and the new version goes online." : "Ask for a change below, and the new version goes to your phone."}</span>
               </div>
             ) : null}
           </div>
@@ -724,18 +726,23 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
       </div>
     );
   }
-  const badge = card.state === "ready" ? " ready" : card.state === "failed" ? " problem" : "";
+  // A web app's card is about its address (no phone, no install); an app with both targets shows
+  // the web part under the Android card.
+  const webOnly = isWebOnly(app);
+  const web = card.state === "ready" ? card.web : undefined;
+  const badge = card.state === "failed" || (webOnly && web?.state === "failed") ? " problem" : card.state === "ready" ? " ready" : "";
   return (
     <div className="card build" data-testid={`build-${card.state}`}>
       <div className="build-top">
         <span className={`badge${badge}`}>
-          <Icon of={card.state === "failed" ? CircleAlert : Package} size="md" />
+          <Icon of={card.state === "failed" ? CircleAlert : webOnly ? Globe : Package} size="md" />
         </span>
         <div className="grow">
           <div className="heading">{card.title}</div>
           <div className="build-sub row-type">{card.sub}</div>
         </div>
       </div>
+      {web && webOnly && <WebPart part={web} both={false} />}
       {card.state === "ready" && card.changes.length > 0 && (
         <div className="changes" data-testid="what-changed">
           <div className="caption changes-head">What changed</div>
@@ -749,6 +756,7 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
           </dl>
         </div>
       )}
+      {web && !webOnly && <WebPart part={web} both />}
       {card.state === "running" && (
         <div className="progress indeterminate">
           <span />
@@ -769,6 +777,58 @@ function BuildCard({ item, app }: { item: ChatItem; app: App }) {
             {retrying ? <Spinner /> : <Icon of={RotateCcw} size="sm" />} {retrying ? "Building" : "Try again"}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The web version on a build card (docs/WEB-APPS.md). Online: the short address, a QR code of the
+ * full address, Copy link and Open (the default browser). Otherwise its one line, no buttons.
+ */
+function WebPart({ part, both }: { part: WebCardPart; both: boolean }) {
+  const view = webPartView(part, both);
+  const address = view.live?.address;
+  const [qr, setQr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!address) return setQr(null);
+    let on = true;
+    void api.qr(address).then((svg) => on && setQr(svg));
+    return () => {
+      on = false;
+    };
+  }, [address]);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <div className={`web-part${both ? " is-both" : ""}`} data-testid={`web-${part.state}`}>
+      {view.heading ? <div className="caption changes-head">{view.heading}</div> : null}
+      {view.live ? (
+        <>
+          <div className="web-text">
+            <div className="web-address mono" title={view.live.address} data-testid="web-address">
+              {view.live.short}
+            </div>
+            <div className="label secondary">{view.line}</div>
+          </div>
+          <div className="web-foot">
+            {qr ? <QrPlate svg={qr} size={104} label={`QR code for ${view.live.short}`} /> : <span />}
+            <div className="notice-actions">
+              <button className="btn btn-quiet btn-sm" data-testid="web-copy" onClick={() => void api.copyText(view.live!.address).then(() => setCopied(true))}>
+                <Icon of={copied ? Check : Copy} size="sm" /> {copied ? "Copied" : "Copy link"}
+              </button>
+              <button className="btn btn-primary btn-sm" data-testid="web-open" onClick={() => void api.openExternal(view.live!.address)}>
+                <Icon of={ExternalLink} size="sm" /> Open
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <StateLine state={view.state} text={view.line} />
       )}
     </div>
   );
