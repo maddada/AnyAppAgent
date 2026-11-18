@@ -1,10 +1,11 @@
 // Sharing an app with other people and publishing versions to them (docs/DISTRIBUTION.md, stage 6):
 // the Share button in the app's chat header and its dialog. The work happens in the companion
 // (POST /api/apps/:id/share, /publish, /pullback; GET /releases), which talks to GitHub.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Share2 } from "lucide-react";
 import type { App, PublishedRelease, ReleaseStats } from "../../../../shared/protocol.ts";
 import { Dialog, Icon, QrPlate, Spinner, timeAgo } from "./ui.tsx";
+import { VoiceTextarea } from "./Voice.tsx";
 
 const api = window.anyapp;
 
@@ -29,6 +30,7 @@ export function ShareDialog({ app, onClose }: { app: App; onClose: () => void })
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
+  const notesBox = useRef<HTMLTextAreaElement>(null);
   const [channel, setChannel] = useState<"stable" | "testing">("stable");
   const [qr, setQr] = useState<string | null>(null);
   const [stats, setStats] = useState<ReleaseStats[] | null>(null);
@@ -172,7 +174,7 @@ export function ShareDialog({ app, onClose }: { app: App; onClose: () => void })
               <span className="sub">
                 {newest ? `Build ${newest}, the one on your phone now.` : "There is no finished build yet."} Leave the notes empty to use what changed since the last version.
               </span>
-              <textarea className="field" rows={3} style={{ height: "auto", paddingTop: "var(--aa-space-sm)", paddingBottom: "var(--aa-space-sm)" }} placeholder="What's new (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="publish-notes" />
+              <VoiceTextarea box={notesBox} className="field" rows={3} style={{ height: "auto", paddingTop: "var(--aa-space-sm)", paddingBottom: "var(--aa-space-sm)" }} placeholder="What's new (optional)" value={notes} setValue={setNotes} testId="publish-notes" />
               <div className="row wrap">
                 <span className="sub">Who gets it:</span>
                 <button className={`btn btn-sm ${channel === "stable" ? "btn-primary" : "btn-quiet"}`} aria-pressed={channel === "stable"} onClick={() => setChannel("stable")}>

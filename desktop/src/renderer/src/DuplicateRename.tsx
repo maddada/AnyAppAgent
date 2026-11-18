@@ -1,8 +1,9 @@
 // Duplicate and Rename (an app's options; the app row's menu, next to Pin to top, Hide and Delete).
 // The same words as the phone's sheet (app/src/ui/DuplicateRename.tsx).
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { App } from "../../shared/types.ts";
 import { Dialog, Spinner, Switch } from "./ui.tsx";
+import { VoiceTextarea } from "./Voice.tsx";
 
 const api = window.anyapp;
 
@@ -14,6 +15,7 @@ export function copyName(name: string): string {
 export function DuplicateAppDialog({ app, onClose, onMade }: { app: App; onClose: () => void; onMade: (id: string) => void }) {
   const [name, setName] = useState(() => copyName(app.name));
   const [change, setChange] = useState("");
+  const changeBox = useRef<HTMLTextAreaElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ready = name.trim().length > 0 && name.trim().length <= 50;
@@ -55,7 +57,7 @@ export function DuplicateAppDialog({ app, onClose, onMade }: { app: App; onClose
         </label>
         <label className="fld">
           <span className="label">What should be different? (optional)</span>
-          <textarea className="field field-multi" data-testid="duplicate-change" value={change} rows={3} maxLength={4000} placeholder="Leave empty for an exact copy" onChange={(e) => setChange(e.target.value)} />
+          <VoiceTextarea box={changeBox} className="field field-multi" testId="duplicate-change" value={change} setValue={setChange} rows={3} maxLength={4000} placeholder="Leave empty for an exact copy" />
         </label>
         {error && <p className="label problem-text">{error}</p>}
       </form>

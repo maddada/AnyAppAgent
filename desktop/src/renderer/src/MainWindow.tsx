@@ -14,6 +14,7 @@ import type { App, AppPreset, CheckState, Snapshot } from "../../shared/types.ts
 import { DEFAULT_PRESET, PRESET_CHOICES } from "../../../../shared/presets.ts";
 import { ChatView } from "./Chat.tsx";
 import { HexCard } from "./Hex.tsx";
+import { useVoiceSetupFrom, VoiceTextarea } from "./Voice.tsx";
 import { EngineChoice, type StepId } from "./Onboarding.tsx";
 import { PairingDialog } from "./Pairing.tsx";
 import { ShareButton, ShareDialog } from "./Share.tsx";
@@ -51,6 +52,11 @@ export function MainWindow({ s, openSetup, connectRequest }: { s: Snapshot; open
       getApp: (v: boolean) => setGetApp(v),
       newApp: (v: boolean) => setNewApp(v),
     };
+  });
+  // Every box with voice knows where dictation stands, and its note's button opens Settings.
+  useVoiceSetupFrom(s.checks.hex, () => {
+    setOpenApp(null);
+    setPage("settings");
   });
   const app = s.apps.find((a) => a.id === openApp);
   const attention = setupRows(s).filter((r) => r.needsYou && r.blocks).length;
@@ -483,6 +489,7 @@ function Overview({ s, hasApps, onConnect, onGetApp }: { s: Snapshot; hasApps: b
 function NewAppDialog({ s, onClose, onMade }: { s: Snapshot; onClose: () => void; onMade: (appId: string) => void }) {
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
+  const promptBox = useRef<HTMLTextAreaElement>(null);
   const [advanced, setAdvanced] = useState(false);
   const [preset, setPreset] = useState<AppPreset>(DEFAULT_PRESET);
   const [askMore, setAskMore] = useState(false);
@@ -523,13 +530,14 @@ function NewAppDialog({ s, onClose, onMade }: { s: Snapshot; onClose: () => void
         </label>
         <label className="fld">
           <span className="label">What should it do?</span>
-          <textarea
+          <VoiceTextarea
+            box={promptBox}
             className="field field-multi"
-            data-testid="new-app-prompt"
+            testId="new-app-prompt"
             value={prompt}
+            setValue={setPrompt}
             rows={4}
             placeholder="Wake me up for each prayer in Ajman, with a reminder before it."
-            onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();

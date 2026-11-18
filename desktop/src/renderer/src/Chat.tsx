@@ -8,8 +8,8 @@ import {
   ArrowDown, ArrowUp, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleCheck, CircleDashed, CircleDot, Clock, FileCheck, FilePen, FileQuestion, FileText, Folder, GitMerge, Globe, Hand, History, NotebookText, TriangleAlert, Wrench, ImagePlus, ListTodo, Lock, MessageSquare, Mic, Package, Pen, RotateCcw, Search, Square, Terminal, Trash, X,
 } from "lucide-react";
 import type { App, ChatImage, ChatItem, HexCheck, PageInfo, WorkerInfo } from "../../shared/types.ts";
-import { DICTATE_HOTKEY, HOLD_MS, insertAt, isDictateHotkey, useDictation } from "./dictation.ts";
-import { engineName } from "./Hex.tsx";
+import { DICTATE_HOTKEY } from "./dictation.ts";
+import { useVoice, VoiceMic, VoiceNote, voicePlaceholder } from "./Voice.tsx";
 import {
   answerLines, buildCard, crashCard, DIARY_PRIVACY, diaryLine, buildRows, pageCard, type PageAnswers, type PageCardView, composerState, COMPOSER_MAX_LINES, describeApp, enterSends, fitWithin, Follower, HELPER_CHAT_FOOTER, helperChatRows, helperView, IMAGE_TYPES, mainChatReplying, MAX_IMAGES, permissionView, planCount, plainToolTitle, REBUILD_SETTLE_MS, thoughtLabel, toolDetail, userNote, type HelperIcon, type Row,
 } from "../../../../shared/chat/index.ts";
@@ -333,70 +333,8 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
       setError(r.error ?? "Couldn't stop it.");
     }
   };
-  // Dictation with Hex (dictation.ts): the transcript goes in at the caret.
-  const textNow = useRef(text);
-  textNow.current = text;
-  const dictateWith = engineName(hex);
-  const dictation = useDictation({
-    engine: dictateWith,
-    platform: hex?.platform,
-    onText: (said) => {
-      const el = box.current;
-      const value = textNow.current;
-      const focused = !!el && document.activeElement === el;
-      const next = insertAt(value, focused ? el.selectionStart : value.length, focused ? el.selectionEnd : value.length, said);
-      setText(next.value);
-      requestAnimationFrame(() => {
-        el?.focus();
-        el?.setSelectionRange(next.caret, next.caret);
-      });
-    },
-  });
-  const hexState = hex?.state ?? "checking";
-  const hexReady = hexState === "ready";
-  const dictate = () => {
-    if (dictation.phase === "recording") return dictation.stop();
-    if (dictation.phase !== "idle") return;
-    if (!hexReady) {
-      dictation.setError(hexState === "checking" ? "Looking for Hex on this PC..." : hexProblem(hex!));
-      return;
-    }
-    void dictation.start();
-  };
-  // Ctrl+Alt+Space anywhere in this chat: tap to start and tap to stop, or hold and let go.
-  // Escape cancels a recording.
-  const press = useRef<{ at: number; started: boolean } | null>(null);
-  const dictateNow = useRef(dictate);
-  dictateNow.current = dictate;
-  const phaseNow = useRef(dictation.phase);
-  phaseNow.current = dictation.phase;
-  const { cancel: cancelDictation, stop: stopDictation } = dictation;
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && (phaseNow.current === "recording" || phaseNow.current === "starting")) {
-        e.preventDefault();
-        cancelDictation();
-        return;
-      }
-      if (!isDictateHotkey(e)) return;
-      e.preventDefault();
-      if (e.repeat) return;
-      press.current = { at: Date.now(), started: phaseNow.current === "idle" };
-      dictateNow.current();
-    };
-    const up = (e: KeyboardEvent) => {
-      if (!press.current || (e.code !== "Space" && e.key !== "Control" && e.key !== "Alt")) return;
-      const p = press.current;
-      press.current = null;
-      if (p.started && Date.now() - p.at >= HOLD_MS) stopDictation();
-    };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-    };
-  }, [cancelDictation, stopDictation]);
+  // Voice (Voice.tsx): the words go in at the caret.
+  const voice = useVoice({ box, value: text, setValue: setText, hex });
   const isStop = state.button === "stop";
   const hasContent = text.trim().length > 0 || attached.length > 0;
   return (
@@ -409,20 +347,8 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
     >
       {error && <p className="label composer-note">{error}</p>}
       {headsUp && headsUp.text === text.trim() && <HeadsUpCard h={headsUp.h} busy={sending} onSend={() => void send(true)} onCancel={() => setHeadsUp(null)} />}
-      {dictation.error && (
-        <div className="label composer-note dictate-note">
-          <span>{dictation.error}</span>
-          {!hexReady && onSetupHex && (
-            <button type="button" className="btn btn-text label" onClick={onSetupHex}>
-              Set up Hex
-            </button>
-          )}
-          <button type="button" className="btn btn-icon" aria-label="Dismiss" onClick={() => dictation.setError(null)}>
-            <Icon of={X} size="sm" />
-          </button>
-        </div>
-      )}
-      <div className={`composer-box${dictation.phase === "recording" ? " is-recording" : ""}`}>
+      <VoiceNote voice={voice} onSetup={onSetupHex} />
+      <div className={`composer-box${voice.phase === "recording" ? " is-recording" : ""}`}>
         {(attached.length > 0 || adding > 0) && (
           <div className="composer-thumbs">
             {attached.map((a) => (
@@ -466,7 +392,7 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
           <textarea
             ref={box}
             data-testid="composer-input"
-            placeholder={dictation.phase === "recording" ? "Listening. Stop when you're done." : dictation.phase === "transcribing" ? `${dictateWith} is writing it down...` : state.placeholder}
+            placeholder={voicePlaceholder(voice, state.placeholder)}
             value={text}
             rows={1}
             onChange={(e) => setText(e.target.value)}
@@ -484,23 +410,7 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
               }
             }}
           />
-          {dictation.phase === "recording" && (
-            <span className="dictate-meter mono" aria-hidden>
-              <span className="dictate-dot" style={{ transform: `scale(${1 + dictation.level * 0.9})` }} />
-              {`${Math.floor(dictation.seconds / 60)}:${String(dictation.seconds % 60).padStart(2, "0")}`}
-            </span>
-          )}
-          <button
-            type="button"
-            className={`mic${dictation.phase === "recording" ? " is-recording" : ""}${!hexReady && hexState !== "checking" ? " is-off" : ""}`}
-            data-testid="composer-mic"
-            onClick={dictate}
-            disabled={dictation.phase === "starting" || dictation.phase === "transcribing"}
-            aria-label={dictation.phase === "recording" ? "Stop and write it down" : `Dictate with ${dictateWith}`}
-            title={dictation.phase === "recording" ? `Stop (${DICTATE_HOTKEY}). Esc cancels.` : hexReady ? `Dictate with ${dictateWith} (${DICTATE_HOTKEY}). Tap to start and tap to stop, or hold and let go.` : hex ? hexProblem(hex) : `Dictate with ${dictateWith}`}
-          >
-            {dictation.phase === "transcribing" || dictation.phase === "starting" ? <Spinner /> : <Icon of={dictation.phase === "recording" ? Square : Mic} size="md" />}
-          </button>
+          <VoiceMic voice={voice} testId="composer-mic" />
           <button
             className={`send${isStop ? " stop" : hasContent ? " on" : ""}`}
             data-testid={isStop ? "composer-stop" : "composer-send"}
@@ -515,18 +425,10 @@ function Composer({ app, online, onSent, registerDrop, hex, onSetupHex, care }: 
       </div>
       <p className="caption composer-hint">
         {state.button === "queue" ? <span className="keep">The agent is busy: this waits its turn. </span> : ""}
-        <span className="keep">Enter to send, Shift+Enter for a new line.</span> <span className="keep">Paste or drop pictures to add them.</span>{hexReady ? <> <span className="keep">{DICTATE_HOTKEY} to dictate.</span></> : null}
+        <span className="keep">Enter to send, Shift+Enter for a new line.</span> <span className="keep">Paste or drop pictures to add them.</span>{voice.ready ? <> <span className="keep">{DICTATE_HOTKEY} to dictate.</span></> : null}
       </p>
     </form>
   );
-}
-
-/** Why dictation can't start, in plain words. */
-function hexProblem(hex: HexCheck): string {
-  if (hex.state === "notInstalled") return "Dictation uses Hex, a free app that turns your voice into text on this PC. It isn't installed yet.";
-  if (hex.state === "notRunning") return "Dictation needs Hex open. Open Hex, then try again.";
-  if (hex.state === "noModels") return "Hex has no speech model yet. Open Hex and download one in its settings.";
-  return hex.summary;
 }
 
 // ------------------------------------------------------------------ rows

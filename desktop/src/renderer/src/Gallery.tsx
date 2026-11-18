@@ -3,12 +3,13 @@
 // app's latest APK, the same link Share makes) and Make it mine (this PC makes a separate own version
 // from its published code). Design rule (AGENTS.md): the card's words take its full width; its
 // buttons go below them, on the right.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BadgeCheck, Copy, LayoutGrid, MessageCircle, QrCode } from "lucide-react";
 import type { App, GalleryApp, GalleryList } from "../../../../shared/protocol.ts";
 import { galleryInstallUrl, galleryReleasesUrl, OFFICIAL_BADGE } from "../../../../shared/chat/gallery.ts";
 import { ownVersionName } from "../../../../shared/chat/suggestions.ts";
 import { Dialog, Icon, QrPlate, Spinner, StateLine } from "./ui.tsx";
+import { VoiceTextarea } from "./Voice.tsx";
 
 const api = window.anyapp;
 
@@ -178,6 +179,7 @@ function MineDialog({ app, maker, onClose, onMade }: { app: GalleryApp; maker: s
   const [owner, setOwner] = useState("");
   const [name, setName] = useState("");
   const [change, setChange] = useState("");
+  const changeBox = useRef<HTMLTextAreaElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -223,7 +225,7 @@ function MineDialog({ app, maker, onClose, onMade }: { app: GalleryApp; maker: s
         </label>
         <label className="fld">
           <span className="label">First change (optional)</span>
-          <textarea className="field field-multi" rows={3} value={change} placeholder="Bigger numbers, and a dark mode" onChange={(e) => setChange(e.target.value)} />
+          <VoiceTextarea box={changeBox} className="field field-multi" testId="gallery-mine-change" rows={3} value={change} setValue={setChange} placeholder="Bigger numbers, and a dark mode" />
         </label>
         {error && <StateLine state="problem" text={error} />}
       </form>

@@ -602,8 +602,15 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .composer-box.is-recording { box-shadow: inset 0 0 0 var(--aa-focus-width) var(--aa-problem), var(--aa-shadow-1); }
 .dictate-meter { align-self: center; display: inline-flex; align-items: center; gap: var(--aa-space-sm); color: var(--aa-problem); font-size: var(--aa-type-label-size); padding: 0 var(--aa-space-xs); }
 .dictate-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--aa-problem); transition: transform 80ms linear; }
-.dictate-note { display: flex; align-items: center; gap: var(--aa-space-sm); color: var(--aa-text-secondary); }
-.dictate-note > span { flex: 1; }
+/* The note: its text full width, its buttons below it on the right. */
+.dictate-note { display: flex; flex-direction: column; gap: var(--aa-space-xs); color: var(--aa-text-secondary); }
+.dictate-note-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--aa-space-sm); }
+/* A long text box with voice (Voice.tsx VoiceTextarea): the mic at its bottom right. */
+.voice-box { position: relative; display: block; }
+.voice-box > textarea { width: 100%; padding-right: calc(var(--aa-size-send-button) + var(--aa-space-md)); }
+.voice-box-mic { position: absolute; right: var(--aa-space-xs); bottom: var(--aa-space-xs); display: flex; align-items: center; gap: var(--aa-space-xs); }
+.voice-box-mic .dictate-meter { background: var(--aa-field-bg); border-radius: var(--aa-radius-send); }
+.voice-box.is-recording > textarea { border-color: var(--aa-problem); box-shadow: inset 0 0 0 var(--aa-focus-width) var(--aa-problem); }
 .settings-group { display: flex; flex-direction: column; gap: var(--aa-space-sm); }
 .settings-group .check-card { margin-top: var(--aa-space-sm); }
 .hex-model { gap: var(--aa-space-md); align-items: center; }

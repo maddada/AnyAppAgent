@@ -1,4 +1,4 @@
-// Dictation into the chat box with Hex (like Ghostex's Dictate): the microphone is recorded here,
+// Dictation into a text box with Hex (like Ghostex's Dictate; Voice.tsx puts it in each box): the microphone is recorded here,
 // turned into a 16 kHz mono WAV, and the main process asks Hex on this PC to transcribe it
 // (src/main/hex.ts), or on Linux Superwhisper when it is installed (src/main/superwhisper.ts).
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
@@ -53,15 +53,8 @@ async function toWav(blob: Blob): Promise<ArrayBuffer> {
   return encodeWav(mono, rate);
 }
 
-/** Puts `text` in `value` at the caret, with a space where the neighbours need one. */
-export function insertAt(value: string, start: number, end: number, text: string): { value: string; caret: number } {
-  const before = value.slice(0, start);
-  const after = value.slice(end);
-  const lead = before && !/\s$/.test(before) ? " " : "";
-  const trail = after && !/^[\s.,!?;:]/.test(after) ? " " : "";
-  const piece = `${lead}${text}${trail}`;
-  return { value: before + piece + after, caret: before.length + lead.length + text.length };
-}
+/** Puts `text` in `value` at the caret, with a space where the neighbours need one (shared with the phone). */
+export { insertAt } from "../../../../shared/chat/dictation.ts";
 
 /** `engine` names the app that transcribes (Hex, or Superwhisper on Linux); `platform` is the PC's system. */
 export function useDictation({ onText, engine = "Hex", platform }: { onText: (text: string) => void; engine?: string; platform?: string }) {
