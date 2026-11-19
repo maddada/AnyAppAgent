@@ -378,7 +378,7 @@ export interface AnyAppBridge {
   removeTodo(appId: string, todoId: string): Promise<ActionResult>;
   /** Sends the item's text to the app's chat as a message, then ticks it off. */
   sendTodo(appId: string, todoId: string): Promise<ActionResult>;
-  /** New app from this PC: the same as the phone's New app sheet (preset: Advanced, default React Native). */
+  /** New app from this PC: the same as the phone's New app sheet (preset: Advanced; none: the agent picks the kind). */
   /** askMore: "Ask me more", the agent asks the person questions about the app before it plans it. */
   createApp(name: string, prompt: string, preset?: AppPreset, askMore?: boolean): Promise<ActionResult & { app?: App }>;
   /** Opens a page an app's agent published, in its own window over the app. */

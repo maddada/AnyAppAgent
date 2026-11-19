@@ -72,6 +72,7 @@ export const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App 
   if (row.type === "task") return <TaskCard label={row.label} text={row.text} />;
   if (row.type === "page") return <PageCard page={row.page} />;
   if (row.type === "answers") return <AnswersCard answers={row.answers} />;
+  if (row.type === "choices") return <ChoicesRow item={row.item} question={row.question} choices={row.choices} open={row.open} />;
   const item = row.item;
   switch (item.kind) {
     case "user":
@@ -216,6 +217,47 @@ function AssistantMessage({ item }: { item: ChatItem }) {
   return (
     <View style={{ paddingHorizontal: space.xs }}>
       <Markdown text={item.text} />
+    </View>
+  );
+}
+
+/**
+ * A short question from the agent with answers to tap (its ask_choice tool). While no message of the
+ * person's came after it, the answers are buttons below the text, aligned right; a tap sends that
+ * answer as their message. Afterwards only the question stays (their answer is the next bubble).
+ */
+function ChoicesRow({ item, question, choices, open }: { item: ChatItem; question: string; choices: string[]; open: boolean }) {
+  const client = useClientFor(item.appId);
+  const online = useOnlineFor(item.appId);
+  const [sent, setSent] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  return (
+    <View testID="choices-row" style={{ paddingHorizontal: space.xs, gap: space.md }}>
+      <Markdown text={question} />
+      {open && client ? (
+        <View accessibilityLabel="Quick replies" style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: space.sm }}>
+          {choices.map((choice) => (
+            <Button
+              key={choice}
+              testID="choice"
+              small
+              variant="quiet"
+              label={choice}
+              busy={sent === choice}
+              disabled={!online || sent !== null}
+              onPress={() => {
+                setSent(choice);
+                setProblem(null);
+                client.send(item.appId, { text: choice }).catch((e: unknown) => {
+                  setSent(null);
+                  setProblem(e instanceof Error ? e.message : "That didn't send. Try again.");
+                });
+              }}
+            />
+          ))}
+        </View>
+      ) : null}
+      {problem ? <StateLine kind="problem" label={problem} role="caption" lines={0} /> : null}
     </View>
   );
 }

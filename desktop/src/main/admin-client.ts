@@ -509,8 +509,9 @@ export class AdminClient extends EventEmitter {
 
   /** A new app, made from this PC: the same route and fields as the phone's New app sheet. */
   async createApp(name: string, prompt: string, preset?: AppPreset, askMore?: boolean): Promise<App> {
-    // The defaults are left out, so an older companion still accepts the request.
-    const app = await this.request<App>("POST", "/api/apps", { name, prompt, ...(preset && preset !== "react-native" ? { preset } : {}), ...(askMore ? { askMore: true } : {}) });
+    // No preset is "Let the agent decide" (it picks the kind from the words); a picked one is sent,
+    // React Native too, so the agent keeps it. askMore is left out when off.
+    const app = await this.request<App>("POST", "/api/apps", { name, prompt, ...(preset ? { preset } : {}), ...(askMore ? { askMore: true } : {}) });
     if (!this.apps.some((a) => a.id === app.id)) {
       this.apps.push(app);
       this.emit("apps", this.apps);

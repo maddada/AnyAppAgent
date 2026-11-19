@@ -698,3 +698,7 @@ details.adv > .kv { margin-top: var(--aa-space-xs); }
 .gallery-letter { font-family: var(--aa-type-heading-family); font-size: var(--aa-type-heading-size); font-weight: var(--aa-type-heading-weight); }
 .gallery-install { display: flex; flex-direction: column; gap: var(--aa-space-md); }
 .gallery-install code { overflow-wrap: anywhere; }
+
+/* A question from the agent with answers to click (ask_choice): text full width, answers below it, aligned right. */
+.choices-row { display: flex; flex-direction: column; gap: var(--aa-space-sm); }
+.choices { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--aa-space-sm); }

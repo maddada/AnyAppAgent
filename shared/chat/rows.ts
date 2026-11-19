@@ -19,7 +19,12 @@ export type Row =
   /** A page the agent published (pages.ts pageCard says how it reads); tapping opens it. */
   | { type: "page"; key: string; page: PageInfo }
   /** The person's answers from a page (pages.ts answerLines), drawn as a card instead of the raw message. */
-  | { type: "answers"; key: string; item: ChatItem; answers: PageAnswers };
+  | { type: "answers"; key: string; item: ChatItem; answers: PageAnswers }
+  /**
+   * A short question from the agent with answers to tap (ChatItem.choices, its ask_choice tool).
+   * open: no message of the person's came after it yet, so the answers show as buttons.
+   */
+  | { type: "choices"; key: string; item: ChatItem; question: string; choices: string[]; open: boolean };
 
 /** How long the "No new version this time" line waits after the turn ends (a build may still be on its way). */
 export const REBUILD_SETTLE_MS = 5000;
@@ -63,6 +68,7 @@ export function buildRows(items: readonly ChatItem[], app: App | undefined): Row
     if (item.kind === "worker" && item.worker) rows.push({ type: "helper", key: item.id, worker: item.worker });
     else if (item.kind === "stopped") rows.push({ type: "stopped", key: item.id, label: item.text || "Stopped" });
     else if (item.kind === "user" && parsePageAnswers(item.text)) rows.push({ type: "answers", key: item.id, item, answers: parsePageAnswers(item.text)! });
+    else if (item.kind === "assistant" && (item.choices?.length ?? 0) > 0) rows.push({ type: "choices", key: item.id, item, question: choiceQuestion(item), choices: item.choices!, open: !answeredAfter(items, item) });
     else if (item.kind !== "worker") rows.push({ type: "item", key: item.id, item });
   }
   flush();
@@ -72,6 +78,18 @@ export function buildRows(items: readonly ChatItem[], app: App | undefined): Row
   if (label) rows.push({ type: "working", key: "working", label });
   else if (turnEndedWithoutBuild(items, app)) rows.push({ type: "rebuild", key: "rebuild" });
   return rows;
+}
+
+/** The question of an item with choices: its text without the list of answers the PC added for older apps. */
+export function choiceQuestion(item: Pick<ChatItem, "text" | "choices">): string {
+  const text = item.text ?? "";
+  const list = (item.choices ?? []).map((c) => `- ${c}`).join("\n");
+  return list && text.endsWith(`\n\n${list}`) ? text.slice(0, -(list.length + 2)) : text;
+}
+
+/** True when a message of the person's (not one Stop dropped) came after this item. */
+function answeredAfter(items: readonly ChatItem[], item: ChatItem): boolean {
+  return items.some((i) => i.kind === "user" && !i.dropped && i.seq > item.seq);
 }
 
 /**

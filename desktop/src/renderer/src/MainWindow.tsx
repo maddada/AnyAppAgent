@@ -496,7 +496,7 @@ function NewAppDialog({ s, onClose, onMade }: { s: Snapshot; onClose: () => void
   const [prompt, setPrompt] = useState("");
   const promptBox = useRef<HTMLTextAreaElement>(null);
   const [advanced, setAdvanced] = useState(false);
-  const [preset, setPreset] = useState<AppPreset>(DEFAULT_PRESET);
+  const [preset, setPreset] = useState<AppPreset | null>(DEFAULT_PRESET);
   const [askMore, setAskMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -506,7 +506,7 @@ function NewAppDialog({ s, onClose, onMade }: { s: Snapshot; onClose: () => void
     if (!ready || busy) return;
     setBusy(true);
     setError(null);
-    const r = await api.createApp(name.trim(), prompt.trim(), preset, askMore);
+    const r = await api.createApp(name.trim(), prompt.trim(), preset ?? undefined, askMore);
     setBusy(false);
     if (!r.ok || !r.app) return setError(r.error ?? "That didn't work. Try again.");
     onMade(r.app.id);
@@ -569,8 +569,8 @@ function NewAppDialog({ s, onClose, onMade }: { s: Snapshot; onClose: () => void
           {advanced && (
             <div className="preset-choices" role="radiogroup" aria-label="What to make it with">
               {PRESET_CHOICES.map((p) => (
-                <label key={p.id} className={p.id === preset ? "preset-choice selected" : "preset-choice"} data-testid={`new-app-preset-${p.id}`}>
-                  <input type="radio" name="preset" value={p.id} checked={p.id === preset} onChange={() => setPreset(p.id)} />
+                <label key={p.id ?? "auto"} className={p.id === preset ? "preset-choice selected" : "preset-choice"} data-testid={`new-app-preset-${p.id ?? "auto"}`}>
+                  <input type="radio" name="preset" value={p.id ?? "auto"} checked={p.id === preset} onChange={() => setPreset(p.id)} />
                   <span className="preset-text">
                     <span className="preset-title">
                       <span className="row-type">{p.title}</span>

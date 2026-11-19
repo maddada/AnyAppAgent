@@ -444,6 +444,7 @@ const ChatRow = memo(function ChatRow({ row, app }: { row: Row; app: App }) {
   if (row.type === "task") return <TaskCard label={row.label} text={row.text} />;
   if (row.type === "page") return <PageCard page={row.page} />;
   if (row.type === "answers") return <AnswersCard item={row.item} answers={row.answers} />;
+  if (row.type === "choices") return <ChoicesRow item={row.item} question={row.question} choices={row.choices} open={row.open} />;
   const item = row.item;
   // A row of a change made in the cloud while this PC was off, pulled back (docs/CLOUD.md section 3).
   if (item.madeInCloud && (item.kind === "user" || item.kind === "assistant")) {
@@ -522,6 +523,45 @@ function UserMessage({ item }: { item: ChatItem }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A short question from the agent with answers to click (its ask_choice tool). While no message of
+ * the person's came after it, the answers are buttons below the text, aligned right; a click sends
+ * that answer as their message. Afterwards only the question stays (their answer is the next bubble).
+ */
+function ChoicesRow({ item, question, choices, open }: { item: ChatItem; question: string; choices: string[]; open: boolean }) {
+  const [sent, setSent] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  return (
+    <div className="choices-row" data-testid="choices-row">
+      <Markdown text={question} />
+      {open && (
+        <div className="choices" role="group" aria-label="Quick replies">
+          {choices.map((choice) => (
+            <button
+              key={choice}
+              className="btn btn-quiet btn-sm"
+              data-testid="choice"
+              disabled={sent !== null}
+              onClick={async () => {
+                setSent(choice);
+                setProblem(null);
+                const r = await api.sendMessage(item.appId, choice);
+                if (!r.ok) {
+                  setSent(null);
+                  setProblem(r.error ?? "That didn't send. Try again.");
+                }
+              }}
+            >
+              {sent === choice && <Spinner />} {choice}
+            </button>
+          ))}
+        </div>
+      )}
+      {problem && <p className="caption problem-text">{problem}</p>}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   appAction,
   buildCard,
   buildRows,
+  choiceQuestion,
   composerState,
   describeApp,
   enterSends,
@@ -327,4 +328,24 @@ test("buildCard: a web app's card says where it is online, never Install", async
   const both = buildCard(item, { ...(app as object), preset: "react-native", targets: ["android", "web"], latestApk: build } as never, "pc");
   assert.equal(both?.title, "Your app is ready");
   assert.equal(both?.state === "ready" ? both.web?.state : undefined, "live");
+});
+
+test("buildRows: a question with answers to tap is open until the person sends a message", () => {
+  const u = item("user", { text: "something for my mom" });
+  const said = item("assistant", { text: "Happy to help." });
+  const ask = item("assistant", { text: "What should it be?\n\n- A game to play\n- A page she opens", choices: ["A game to play", "A page she opens"] });
+  const open = buildRows([u, said, ask], app()).find((r) => r.type === "choices");
+  assert.ok(open && open.type === "choices");
+  assert.equal(open.question, "What should it be?");
+  assert.deepEqual(open.choices, ["A game to play", "A page she opens"]);
+  assert.equal(open.open, true);
+  // A message Stop dropped does not answer it; a sent one does.
+  const dropped = item("user", { text: "hm", dropped: true });
+  const stillOpen = buildRows([u, said, ask, dropped], app()).find((r) => r.type === "choices");
+  assert.ok(stillOpen && stillOpen.type === "choices" && stillOpen.open);
+  const answer = item("user", { text: "A game to play" });
+  const closed = buildRows([u, said, ask, dropped, answer], app()).find((r) => r.type === "choices");
+  assert.ok(closed && closed.type === "choices" && !closed.open);
+  // Text the PC did not shape that way is kept whole.
+  assert.equal(choiceQuestion({ text: "Which one?", choices: ["A", "B"] }), "Which one?");
 });

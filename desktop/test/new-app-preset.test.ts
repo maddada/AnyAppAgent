@@ -4,8 +4,8 @@ import type { AddressInfo } from "node:net";
 import { AdminClient } from "../src/main/admin-client.ts";
 import { PRESET_CHOICES } from "../../shared/presets.ts";
 
-// What the PC's New app sheet sends: the preset only when it is not the default, so an older
-// companion keeps accepting the request.
+// What the PC's New app sheet sends: no preset for "Let the agent decide" (the default), and any
+// preset the person picked under Advanced, React Native too (the agent then keeps it).
 describe("New app preset from the PC", () => {
   const bodies: Record<string, unknown>[] = [];
   let server: Server;
@@ -27,7 +27,7 @@ describe("New app preset from the PC", () => {
   });
   afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
-  it("sends preset kotlin, and leaves the default out", async () => {
+  it("sends a picked preset, React Native too, and leaves it out when the agent decides", async () => {
     const client = new AdminClient(base, "t", "C:\\nowhere", 0, () => {});
     await client.createApp("Tea", "A tea timer", "kotlin");
     await client.createApp("Water", "Count glasses");
@@ -36,14 +36,15 @@ describe("New app preset from the PC", () => {
     expect(bodies).toEqual([
       { name: "Tea", prompt: "A tea timer", preset: "kotlin" },
       { name: "Water", prompt: "Count glasses" },
-      { name: "Plain", prompt: "Default said out loud" },
+      { name: "Plain", prompt: "Default said out loud", preset: "react-native" },
       { name: "Catch", prompt: "A catching game", preset: "game" },
     ]);
   });
 
-  it("shows the same choices as the phone, React Native first and default, Game before Expo Exact, Expo Exact last as Alpha", () => {
+  it("shows the same choices as the phone, Let the agent decide first and default, Game before Expo Exact, Expo Exact last as Alpha", () => {
     expect(PRESET_CHOICES.map((p) => [p.id, p.title, p.tag ?? null])).toEqual([
-      ["react-native", "React Native", "Default"],
+      [null, "Let the agent decide", "Default"],
+      ["react-native", "React Native", null],
       ["kotlin", "Kotlin", null],
       ["game", "Game", null],
       ["expo-exact", "Expo Exact", "Alpha"],

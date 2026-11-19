@@ -1041,7 +1041,7 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
   const care = useStore((s) => s.care);
   const [prompt, setPrompt] = useState("");
   const [advanced, setAdvanced] = useState(false);
-  const [preset, setPreset] = useState<AppPreset>("react-native");
+  const [preset, setPreset] = useState<AppPreset | null>(null);
   const [askMore, setAskMore] = useState(false);
   const promptRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   // Dictation into "What should it do?" (src/lib/dictation.ts); it never makes the app by itself.
@@ -1061,18 +1061,18 @@ function NewAppSheet({ visible, onClose }: { visible: boolean; onClose: () => vo
     setBusy(true);
     setError(null);
     try {
-      // The default is left out of the request, so an older PC companion still accepts it.
+      // "Let the agent decide" (the default) leaves preset out; a pick is sent, React Native too.
       if (needsGithub) {
         onClose();
         router.push("/github");
         return;
       }
-      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim(), ...(preset !== "react-native" && place === "pc" ? { preset } : {}), ...(askMore ? { askMore: true } : {}) });
+      const app = await client.createApp({ name: name.trim(), prompt: prompt.trim(), ...(preset && place === "pc" ? { preset } : {}), ...(askMore ? { askMore: true } : {}) });
       useStore.setState((s) => ({ apps: { ...s.apps, [app.id]: app } }));
       setName("");
       setPrompt("");
       setAdvanced(false);
-      setPreset("react-native");
+      setPreset(null);
       setAskMore(false);
       onClose();
       void askForNotificationsOnce();
@@ -1193,8 +1193,8 @@ function AskMore({ value, onChange }: { value: boolean; onChange: (v: boolean) =
   );
 }
 
-/** "Advanced", closed by default: which kind of app to make. */
-function Advanced({ open, onToggle, preset, onPreset }: { open: boolean; onToggle: () => void; preset: AppPreset; onPreset: (p: AppPreset) => void }) {
+/** "Advanced", closed by default: which kind of app to make ("Let the agent decide" unless picked). */
+function Advanced({ open, onToggle, preset, onPreset }: { open: boolean; onToggle: () => void; preset: AppPreset | null; onPreset: (p: AppPreset | null) => void }) {
   const t = useTheme();
   const chosen = PRESETS.find((p) => p.id === preset);
   return (
@@ -1209,7 +1209,7 @@ function Advanced({ open, onToggle, preset, onPreset }: { open: boolean; onToggl
         <T variant="label" style={{ flex: 1 }}>
           Advanced
         </T>
-        {!open && preset !== "react-native" ? (
+        {!open && preset !== null ? (
           <T variant="caption" color="textSecondary">
             {chosen?.title}
           </T>
@@ -1221,7 +1221,7 @@ function Advanced({ open, onToggle, preset, onPreset }: { open: boolean; onToggl
       {open ? (
         <View accessibilityRole="radiogroup" style={{ gap: space.sm, marginTop: space.xs }}>
           {PRESETS.map((p) => (
-            <PresetCard key={p.id} preset={p} selected={p.id === preset} onPress={() => onPreset(p.id)} />
+            <PresetCard key={p.id ?? "auto"} preset={p} selected={p.id === preset} onPress={() => onPreset(p.id)} />
           ))}
         </View>
       ) : null}
@@ -1234,7 +1234,7 @@ function PresetCard({ preset, selected, onPress }: { preset: PresetChoice; selec
   const dot = 20;
   return (
     <Pressable
-      testID={`new-app-preset-${preset.id}`}
+      testID={`new-app-preset-${preset.id ?? "auto"}`}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       accessibilityLabel={`${preset.title}. ${preset.line}`}
