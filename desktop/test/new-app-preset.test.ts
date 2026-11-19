@@ -32,17 +32,20 @@ describe("New app preset from the PC", () => {
     await client.createApp("Tea", "A tea timer", "kotlin");
     await client.createApp("Water", "Count glasses");
     await client.createApp("Plain", "Default said out loud", "react-native");
+    await client.createApp("Catch", "A catching game", "game");
     expect(bodies).toEqual([
       { name: "Tea", prompt: "A tea timer", preset: "kotlin" },
       { name: "Water", prompt: "Count glasses" },
       { name: "Plain", prompt: "Default said out loud" },
+      { name: "Catch", prompt: "A catching game", preset: "game" },
     ]);
   });
 
-  it("shows the same choices as the phone, React Native first and default, Expo Exact last as Alpha", () => {
+  it("shows the same choices as the phone, React Native first and default, Game before Expo Exact, Expo Exact last as Alpha", () => {
     expect(PRESET_CHOICES.map((p) => [p.id, p.title, p.tag ?? null])).toEqual([
       ["react-native", "React Native", "Default"],
       ["kotlin", "Kotlin", null],
+      ["game", "Game", null],
       ["expo-exact", "Expo Exact", "Alpha"],
     ]);
     for (const p of PRESET_CHOICES) expect(p.line).not.toMatch(/\u2014/);

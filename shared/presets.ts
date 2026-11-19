@@ -24,6 +24,11 @@ export const PRESET_CHOICES: readonly PresetChoice[] = [
     line: "Fully native Android, smaller and faster apps (a few MB). Android only.",
   },
   {
+    id: "game",
+    title: "Game",
+    line: "A game in Kotlin, small and fast (a few MB), with touch buttons, sound and a pause menu built in. Android today, made ready for iPhone and the web later.",
+  },
+  {
     id: "expo-exact",
     title: "Expo Exact",
     tag: "Alpha",

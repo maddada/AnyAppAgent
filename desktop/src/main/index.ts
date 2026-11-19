@@ -1033,7 +1033,7 @@ function ipc(): void {
   ipcMain.handle("todos:send", (_e, appId: string, todoId: string) => chatAction((c) => c.sendTodo(String(appId), String(todoId)))());
     ipcMain.handle("apps:create", (_e, name: string, prompt: string, preset?: string, askMore?: boolean) =>
     // Only a known preset passes; anything else is the default (React Native).
-    chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" || preset === "expo-exact" ? preset : undefined, askMore === true))(),
+    chatAction((c) => c.createApp(String(name), String(prompt), preset === "kotlin" || preset === "game" || preset === "expo-exact" ? preset : undefined, askMore === true))(),
   );
   // A page an agent published: a fresh ticket from the companion, then its own window over the app.
   ipcMain.handle("pages:open", async (_e, appId: string, pageId: string, title?: string) => {
