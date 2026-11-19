@@ -68,6 +68,8 @@ private class World {
   var score = 0
   var lives = 3
   var hurt = 0f
+  /** How close to the side the kiwi may go (a share of the width): set by drawing, from its size. */
+  var edge = 0.1f
   /** Goes up every frame: drawing reads it, so the canvas redraws. */
   var frame by mutableIntStateOf(0)
 
@@ -120,7 +122,7 @@ fun KiwiCatch() {
     val speed = 0.75f
     if (buttons.isDown("left")) world.kiwiX -= speed * dt
     if (buttons.isDown("right")) world.kiwiX += speed * dt
-    world.kiwiX = world.kiwiX.coerceIn(0.05f, 0.95f)
+    world.kiwiX = world.kiwiX.coerceIn(world.edge, 1f - world.edge)
     world.hurt = (world.hurt - dt).coerceAtLeast(0f)
 
     world.nextDrop -= dt
@@ -168,7 +170,7 @@ fun KiwiCatch() {
         .pointerInput(phase) {
           if (phase == Phase.Playing) detectDragGestures { change, drag ->
             change.consume()
-            world.kiwiX = (world.kiwiX + drag.x / width).coerceIn(0.05f, 0.95f)
+            world.kiwiX = (world.kiwiX + drag.x / width).coerceIn(world.edge, 1f - world.edge)
           }
         },
     ) {
@@ -259,6 +261,7 @@ private fun DrawScope.drawScene(world: World) {
   // The kiwi: body, head, beak and legs. It blinks red for a moment when a stone hits.
   val body = Offset(world.kiwiX * w, h * KIWI_Y)
   val r = unit * 0.06f
+  world.edge = r * 2.0f / w // the beak reaches about 1.9 r to the right of the body's centre
   val tint = if (world.hurt > 0f) GameColors.danger else KIWI_BODY
   drawLine(KIWI_DARK, body + Offset(-r * 0.3f, r * 0.7f), body + Offset(-r * 0.4f, r * 1.1f), strokeWidth = r * 0.12f)
   drawLine(KIWI_DARK, body + Offset(r * 0.3f, r * 0.7f), body + Offset(r * 0.4f, r * 1.1f), strokeWidth = r * 0.12f)

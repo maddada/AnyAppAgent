@@ -27,6 +27,7 @@ and installs over the previous version. It must be dead simple for a regular, no
 | `template-kotlin/` | The native Android starter (Kotlin, Compose) for the "Kotlin" preset.     |
 | `template-exact/` | Kiwimake's files for the "Expo Exact" preset (alpha; apps come from `exact new`). |
 | `template-web/` | The web app starter (Vite, React, TypeScript) for web apps and the web half of "Both" (docs/WEB-APPS.md). |
+| `template-game/` | The game starter, laid over `template-kotlin/` for the "Game" preset: `game/` (Kotlin and Compose Multiplatform) and the Android `app/`. |
 | `builder/`  | Creates an app from the template and builds its signed APK.                      |
 | `app/`      | The Kiwimake Android app itself (React Native, Expo).                         |
 | `docs/`     | This file and `ENVIRONMENT.md` (Android toolchain and emulator on this PC).       |
@@ -133,6 +134,10 @@ buildWeb({ dir, buildNumber, onLog? }) -> Promise<{ distDir, files: [{ path, siz
     {"build": N} and sw.js (cache kiwi-<slug>-<N>). Paths in `files` use "/". Rejects like
     buildApk, with the useful part of the output.
 ```
+
+createApp also takes preset "game" (template-kotlin/ with template-game/ on top; anyapp.json
+`{ preset: "game", slug, package }`): buildApk, getIconPath, renameApp and adoptApp treat it as a
+Kotlin app (builder/README.md, "The game preset").
 
 createApp also takes preset "web" (template-web/: Vite, React, TypeScript; no signing key; anyapp.json
 `{ preset: "web", slug, package, name }`); presetOf(dir) says "web", getIconPath returns its
@@ -496,3 +501,43 @@ public releases repos, the list as `website/public/gallery.json` served by kiwim
 repos public; updates when the owner publishes; Water Glass, Prayer Alarm, Alarm Up and Kiwi Games
 (Game renamed). The badge is earned by the signing certificate: Install checks the APK's, and a copy
 on the phone shows it only when its certificate is the list's. Details and the proof: `docs/GALLERY.md`.
+
+## Games (added 2026-11-19)
+
+The user answered the game templates page (`~/aa/ideas/game-templates.html`): Q63 B, Kotlin and
+Compose, built multiplatform-ready; Q64 A, one template; Q67 C, instructions only; Q68 A, Kiwi
+Games stays as it is; Q66 A, the template and the game kit in 0.3.5.
+
+- **The preset "game"** (`template-game/`, laid over `template-kotlin/`): the game in `game/`, a
+  Kotlin Multiplatform module with Compose Multiplatform, built for Android today; the Android app
+  around it in `app/` (the Kotlin starter's: feedback, updates, Change this app, AI, the diary).
+  Built like a Kotlin app (full builds, no quick updates), about 1.3 MB.
+- **Ready for iPhone and the web later**: the game's `AGENTS.md` says so first and gives the rules
+  (only multiplatform libraries in `game/`, pictures and sounds in `composeResources`, phone
+  abilities through the `GameHost` interface, no `android.*`, `java.*` or OpenGL in game code).
+  Nothing in the build checks them (Q67: instructions only). Kiwimake builds Android games only.
+- **The game kit** (`game/.../kit/`): `GameHost` (sound, vibrate, saves, AI, Settings), the frame
+  loop, touch buttons that can be held, pressed and moved by the player, sounds, a pause menu, the
+  game's look. The starter game is Kiwi Catch.
+- **How a game is made**: the plan says it is a game (no "Web, Android or Both" question) and the
+  agent calls `set_app_kind "game"`, which makes a new app (at most one version) again from the
+  game template; or "Game" under Advanced in the New app sheet. A game never gets a web version
+  yet, cannot move to or be kept ready in the cloud, and Duplicate and Rename work as for Kotlin
+  apps.
+- Kiwi Games stays a plain Kotlin app.
+
+Proof (2026-11-19): a private companion (port 8851, its own state and apps folders, GitHub off,
+the real builder) and a private emulator (AVD `gamesproof`, Android 15, port 5570). Asked for "a
+little space game" with preset Game, the agent wrote a plan page with no Web/Android/Both question
+("an Android game today, made ready for iPhone and the web later"), called set_app_kind "game",
+and its helper made Star Rocket in `game/` (no Android or Java imports, its own sounds and icon,
+portrait). Build 1: 42 s, 1.3 MB. Installed and played on the emulator: the rocket moves with the
+arrow buttons, FIRE shoots, asteroids score, a hit costs a life, the best score is kept. The starter
+(Kiwi Catch) was played too: touch buttons held and moved (their places kept across an update), the
+pause menu, Settings over the game and back. Fixed from the run: the kiwi could leave the screen at
+the edge; Settings got a "Back to the game" button (the game is full screen); the agent's per-button
+colours and smaller word labels ("FIRE") went into the kit.
+
+Protocol (additive): `AppPreset` gains `"game"`; the set_app_kind tool takes `"game"`. Older phones
+and desktops show a game as an Android app; picking Game in the New app sheet needs the new phone
+and desktop.

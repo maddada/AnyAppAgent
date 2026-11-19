@@ -10,17 +10,22 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.anyapp.app.game.AndroidGameHost
+import com.anyapp.app.ui.PrimaryButton
 import com.anyapp.app.ui.SettingsScreen
 import com.anyapp.app.ui.theme.AppTheme
+import com.anyapp.app.ui.theme.Spacing
 import com.anyapp.game.Game
 import com.anyapp.game.GameInfo
 import com.anyapp.game.GameOrientation
@@ -79,7 +84,15 @@ fun App(host: AndroidGameHost, events: GameEvents, settingsOpen: Boolean, onClos
     Game(host, events)
     // Every app keeps a Settings screen with the "This app" group (Change this app): see ANDROID.md.
     if (settingsOpen) {
-      Box(Modifier.fillMaxSize().background(AppTheme.colors.background)) { SettingsScreen() }
+      Box(Modifier.fillMaxSize().background(AppTheme.colors.background)) {
+        SettingsScreen()
+        // The game is full screen, so the way back is a button too (the back gesture also works).
+        PrimaryButton(
+          "Back to the game",
+          onClick = onCloseSettings,
+          modifier = Modifier.align(Alignment.BottomEnd).safeDrawingPadding().padding(Spacing.lg),
+        )
+      }
     }
   }
 }

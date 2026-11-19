@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -29,8 +30,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
-/** One on-screen button. x and y: where its centre sits, as a share of the play area (0 to 1). */
-data class ButtonSpec(val id: String, val label: String, val x: Float, val y: Float, val size: Dp = 76.dp)
+/**
+ * One on-screen button. x and y: where its centre sits, as a share of the play area (0 to 1).
+ * fill, fillDown and labelColor give a button its own colours (null: the kit's light buttons).
+ */
+data class ButtonSpec(
+  val id: String,
+  val label: String,
+  val x: Float,
+  val y: Float,
+  val size: Dp = 76.dp,
+  val fill: Color? = null,
+  val fillDown: Color? = null,
+  val labelColor: Color? = null,
+)
 
 /**
  * Touch buttons the player can hold (several at once) and move where their thumbs like them (the
@@ -126,7 +139,10 @@ fun TouchButtonsLayer(buttons: TouchButtons, modifier: Modifier = Modifier.fillM
         Modifier
           .offset { IntOffset((at.x * w - r).roundToInt(), (at.y * h - r).roundToInt()) }
           .size(spec.size)
-          .background(if (held || buttons.moving) GameColors.buttonDown else GameColors.buttonFill, CircleShape)
+          .background(
+            if (held || buttons.moving) spec.fillDown ?: GameColors.buttonDown else spec.fill ?: GameColors.buttonFill,
+            CircleShape,
+          )
           .border(2.dp, GameColors.buttonEdge, CircleShape)
           .pointerInput(spec.id, buttons.moving, w, h) {
             if (buttons.moving) {
@@ -148,7 +164,7 @@ fun TouchButtonsLayer(buttons: TouchButtons, modifier: Modifier = Modifier.fillM
           },
         contentAlignment = Alignment.Center,
       ) {
-        BasicText(spec.label, style = GameText.button.copy(color = GameColors.paper, fontSize = (spec.size.value * 0.36f).sp))
+        BasicText(spec.label, style = GameText.button.copy(color = spec.labelColor ?: GameColors.paper, fontSize = (spec.size.value * if (spec.label.length > 2) 0.22f else 0.36f).sp))
       }
     }
   }
