@@ -21,6 +21,10 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     notify("item/completed", { threadId: "codex-thread", item: { id: "msg", type: "agentMessage", text: "Made it." } });
     notify("item/started", { threadId: "codex-thread", item: { id: "tool", type: "mcpToolCall", server: "pages", tool: "show_page", arguments: {} } });
     notify("item/completed", { threadId: "codex-thread", item: { id: "tool", type: "mcpToolCall", server: "pages", tool: "show_page", status: "completed" } });
+    // Two messages in a row (one streamed, one only completed): the second starts a new paragraph.
+    notify("item/agentMessage/delta", { threadId: "codex-thread", itemId: "msg2", delta: "First." });
+    notify("item/completed", { threadId: "codex-thread", item: { id: "msg2", type: "agentMessage", text: "First." } });
+    notify("item/completed", { threadId: "codex-thread", item: { id: "msg3", type: "agentMessage", text: "Second." } });
     notify("account/rateLimits/updated", { rateLimits: { primary: { usedPercent: 100, resetsAt: 1900000000 } } });
     notify("thread/tokenUsage/updated", { threadId: "codex-thread", tokenUsage: { last: { inputTokens: 100, cachedInputTokens: 40, outputTokens: 8 } } });
     notify("turn/completed", { threadId: "codex-thread", turn: { id: "turn", status: p.input[0].text === "limit" ? "failed" : "completed", error: { message: "Usage limit reached. Try again at 16:30." } } });

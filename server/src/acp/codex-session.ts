@@ -47,6 +47,8 @@ export class CodexSession {
   private cancelPending = false;
   private stopping = false;
   private streamed = new Set<string>();
+  /** The agent message that wrote last, while nothing else came after it: the next one starts a new paragraph. */
+  private lastMessage: string | undefined;
   private lastUsage: Obj | undefined;
   private readonly options: ClaudeSessionOptions;
 
@@ -115,7 +117,7 @@ export class CodexSession {
 
   async prompt(text: string, images: PromptImage[] = []): Promise<string> {
     if (this.turn) throw new Error("Codex already has an active turn");
-    this.streamed.clear(); this.lastUsage = undefined; this.cancelPending = false;
+    this.streamed.clear(); this.lastMessage = undefined; this.lastUsage = undefined; this.cancelPending = false;
     const done = new Promise<string>((resolve, reject) => { this.turn = { resolve, reject }; });
     // Attach before turn/start so a fast completion or exit cannot become an unhandled rejection.
     void done.catch(() => {});
@@ -173,7 +175,8 @@ export class CodexSession {
       case "item/reasoning/summaryTextDelta":
       case "item/reasoning/textDelta": {
         this.streamed.add(p.itemId);
-        this.options.onUpdate({ sessionUpdate: message.method === "item/agentMessage/delta" ? "agent_message_chunk" : "agent_thought_chunk", content: { type: "text", text: p.delta ?? "" } });
+        if (message.method === "item/agentMessage/delta") this.agentText(p.itemId, p.delta ?? "");
+        else { this.lastMessage = undefined; this.options.onUpdate({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text: p.delta ?? "" } }); }
         break;
       }
       case "item/started": case "item/completed": this.item(obj(p.item), message.method === "item/completed"); break;
@@ -197,10 +200,12 @@ export class CodexSession {
     if (item.type === "agentMessage" || item.type === "reasoning") {
       if (done && !this.streamed.has(item.id)) {
         const text = item.text ?? (item.summary ?? []).join("\n");
-        if (text) this.options.onUpdate({ sessionUpdate: item.type === "agentMessage" ? "agent_message_chunk" : "agent_thought_chunk", content: { type: "text", text } });
+        if (text && item.type === "agentMessage") this.agentText(item.id, text);
+        else if (text) { this.lastMessage = undefined; this.options.onUpdate({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text } }); }
       }
       return;
     }
+    this.lastMessage = undefined;
     if (!["commandExecution", "fileChange", "mcpToolCall", "webSearch", "dynamicToolCall"].includes(item.type)) return;
     const name = item.type === "mcpToolCall" ? `mcp__${item.server}__${item.tool}` : item.type;
     this.options.onUpdate({ sessionUpdate: done ? "tool_call_update" : "tool_call", toolCallId: item.id, name,
@@ -210,6 +215,17 @@ export class CodexSession {
       rawInput: item.arguments ?? (item.command ? { command: item.command } : {}),
       ...(done ? { rawOutput: item.aggregatedOutput ?? item.result ?? item.error } : {}),
     });
+  }
+
+  /**
+   * Codex writes each message as its own item. Two in a row with nothing between them would run
+   * together in one chat bubble ("later.- **What"), so the second starts a new paragraph.
+   */
+  private agentText(itemId: string, text: string): void {
+    if (!text) return;
+    const gap = this.lastMessage !== undefined && this.lastMessage !== itemId ? "\n\n" : "";
+    this.lastMessage = itemId;
+    this.options.onUpdate({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: gap + text } });
   }
 
   private permission(message: Obj): void {

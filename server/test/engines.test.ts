@@ -30,7 +30,8 @@ describe("both engines", () => {
     try {
       await session.start(); expect(session.resumed).toBe(true);
       expect(await session.prompt("build")).toBe("end_turn");
-      expect(updates.filter((u) => u.sessionUpdate === "agent_message_chunk")).toHaveLength(1);
+      // The first message after a tool starts fresh; one right after another gets a paragraph break.
+      expect(updates.filter((u) => u.sessionUpdate === "agent_message_chunk").map((u) => u.content.text)).toEqual(["Made it.", "First.", "\n\nSecond."]);
       expect(updates.find((u) => u.name === "mcp__pages__show_page")).toBeTruthy();
       expect(usage[0]).toEqual({ inputTokens: 60, cacheReadTokens: 40, cacheWriteTokens: 0, outputTokens: 8 });
       expect(limits[0]).toMatchObject({ engine: "codex", status: "rejected" });
