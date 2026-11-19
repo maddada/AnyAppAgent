@@ -541,3 +541,36 @@ colours and smaller word labels ("FIRE") went into the kit.
 Protocol (additive): `AppPreset` gains `"game"`; the set_app_kind tool takes `"game"`. Older phones
 and desktops show a game as an Android app; picking Game in the New app sheet needs the new phone
 and desktop.
+
+## Picking the kind in the conversation (added 2026-11-20)
+
+The user: "Make picking the template a conversation with the agent based on the description I give
+in the beginning about that game or app."
+
+- **The person only describes it.** The New app sheet's Advanced (phone and PC) starts on "Let the
+  agent decide" (the default, `shared/presets.ts`); the manual picks (React Native, Kotlin, Game,
+  Expo Exact) stay there. "Let the agent decide" sends no `preset`; a manual pick is sent, React
+  Native too, and the agent keeps it without asking.
+- **The agent's first reply** starts with one friendly sentence on which kind it makes and why
+  ("This sounds like a game, so I'll make it a game for Android that can move to iPhone and the web
+  later."). Clear from the words: it calls `set_app_kind` (`android`, `web`, `both` or `game`) in
+  that same turn and goes on (the plan, as before). Unclear ("something for my mom"): one short,
+  never technical question with 2 to 4 answers to tap (the `ask_choice` tool), and it waits; the
+  plan comes after the answer. With "Ask me more", an unclear kind is the first question on the
+  question page instead. React Native or Kotlin is not asked: Android means React Native.
+- **Changing it**: the person says so in the chat while the app is new; the agent calls
+  `set_app_kind` again (the same limits as before: once an app has versions most switches are
+  refused, and a game, a web app or an Expo Exact app stays what it is).
+- **The plan page** no longer asks "Web, Android or Both" for a new app; its lede names the kind.
+  A change to an app with versions that would add a web version asks "Also as a web page?".
+- **Quick replies**: `ask_choice` puts one assistant item in the main chat with `choices`; phone and
+  desktop draw the answers as buttons under the question, aligned right, while no message of the
+  person's followed it; a tap sends the answer as their message. Helpers cannot use it.
+- Server: `server/src/playbook.ts` (`appKindSection`, `kindNote`, `firstPrompt`), the coordinator
+  playbook (version 9), `server/src/history.ts` (`ask_choice`), `server/src/pages/PAGE-KIT.md`.
+  Clients: `shared/chat/rows.ts` (the `choices` row), `app/src/chat/ChatRows.tsx`,
+  `desktop/src/renderer/src/Chat.tsx`, both New app sheets.
+
+Protocol (additive): `ChatItem.choices`; `CreateAppRequest.preset` absent now means "Let the agent
+decide" (the app still starts as React Native, as before). Older phones and desktops read the
+question's answers as a list in its text, and their default (no preset) gets the agent's pick.

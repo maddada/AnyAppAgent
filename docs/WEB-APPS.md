@@ -71,10 +71,12 @@ at most one version (the template, before the plan was confirmed) can become any
   A renamed app keeps its site (`App.web.repo`), so its address and the copies people saved keep
   working. Without GitHub (or with `ANYAPP_WEB_HOST=off`) web apps still build and open from the PC
   (`POST /api/apps/:id/web/open`, a ticket like pages), and the card says so.
-- **Web, Android or Both**: the playbooks' "Web, Android or Both" section and the plan page guide
-  (`server/src/pages/PAGE-KIT.md`, "The plan page"): the plan page asks it with the agent's pick
-  recommended and one line why; on "Build it" the agent calls its `set_app_kind` tool (`web`,
-  `android`, `both`), which is also `POST /api/apps/:id/targets`.
+- **Web, Android or Both**: the playbooks' "The kind of app" section. Since 20 Nov 2026 the kind is
+  settled in the conversation, not on the plan page (docs/SPEC.md, "Picking the kind in the
+  conversation"): the agent's first reply says which kind and why in one sentence and calls its
+  `set_app_kind` tool (`web`, `android`, `both`, `game`; also `POST /api/apps/:id/targets`), or asks
+  one plain question with answers to tap when the description is unclear. The plan page's lede only
+  names the kind.
 - **Phone**: a web app's tile has a globe mark and opens the app full screen in a WebView at its
   address (only that address loads inside; other links open in the browser). Add to home screen
   pins an Android shortcut with the app's icon that opens Kiwimake on it, also with the PC off. The
