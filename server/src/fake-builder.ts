@@ -23,6 +23,16 @@ export async function createApp(args: {
 }): Promise<void> {
   if (existsSync(join(args.dir, "package.json"))) throw new Error(`${args.dir} already has a project`);
   if (args.preset === "web") return createWebProject(args.dir, args.name, args.slug, args.packageName);
+  if (args.preset === "game") {
+    // A game's shape (template-game/): anyapp.json, the game module and the Android app module.
+    mkdirSync(join(args.dir, "game", "src", "commonMain", "kotlin"), { recursive: true });
+    mkdirSync(join(args.dir, "app"), { recursive: true });
+    writeFileSync(join(args.dir, "anyapp.json"), JSON.stringify({ preset: "game", slug: args.slug, package: args.packageName, name: args.name }, null, 2));
+    writeFileSync(join(args.dir, "AGENTS.md"), "# Working on this game\n\nGames are meant to move to iPhone and the web later.\n");
+    writeFileSync(join(args.dir, "settings.gradle.kts"), 'include(":game", ":app")\n');
+    args.onLog?.("fake builder: game created");
+    return;
+  }
   mkdirSync(join(args.dir, "assets"), { recursive: true });
   const files: Record<string, string> = {
     "package.json": JSON.stringify({ name: args.slug, version: "1.0.0", main: "index.js", private: true }, null, 2),

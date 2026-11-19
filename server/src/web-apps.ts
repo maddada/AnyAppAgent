@@ -186,6 +186,10 @@ export class WebApps {
     const app = record.app;
     const current = appTargets(app);
     if (same(current, targets)) return { app, note: `It already is ${kindWords(targets)}. Nothing changed.` };
+    if (app.preset === "game") {
+      if (targets.length === 1 && targets[0] === "android") return { app, note: "It is a game, an Android app. Nothing changed." };
+      throw new HttpError(409, "Games are Android apps for now. They are made ready for iPhone and the web, but Kiwimake cannot build those versions yet.");
+    }
     if (app.preset === "kotlin" || app.preset === "expo-exact") {
       throw new HttpError(409, `${app.preset === "kotlin" ? "Kotlin" : "Expo Exact"} apps stay Android apps; a web version is made for React Native apps. Make a new app for the web.`);
     }
@@ -228,8 +232,27 @@ export class WebApps {
     return { app, note: "This app is now Both: the Android app at the root as before, and a web version in web/ (Vite and React). Read web/AGENTS.md before you change it, and keep the two in step: every change the person asks for goes into both, as far as the web can do it. Both are built after every change." };
   }
 
+  /**
+   * set_app_kind "game": a new app (at most one version) is made again from the game template
+   * (template-game/: Kotlin and Compose Multiplatform), keeping its Git history and notes.
+   */
+  async makeGame(record: WebAppRecord): Promise<{ app: App; note: string }> {
+    const app = record.app;
+    if (app.preset === "game") return { app, note: "It already is a game. Nothing changed." };
+    if ((app.latestApk?.number ?? 0) > 1) throw new HttpError(409, "This app already has versions, and a game is a separate codebase. Make a new app for the game.");
+    if (app.preset === "expo-exact") throw new HttpError(409, "An Expo Exact app cannot become a game. Make a new app for the game.");
+    await this.rescaffold(record, "game", false);
+    app.preset = "game";
+    delete app.targets;
+    await git.commitAll(record.dir, "Made it a game");
+    return {
+      app,
+      note: "This is now a game: Kotlin and Compose Multiplatform, the game in game/ (kept free of Android, so it can move to iPhone and the web later) and the Android app around it in app/. Read AGENTS.md again before you change anything: it replaced the starter's, and its rules on what may go in game/ hold for every change. ANDROID.md is the guide to the Android app around the game.",
+    };
+  }
+
   /** Makes the app's folder again from a template, keeping its Git history and notes. */
-  private async rescaffold(record: WebAppRecord, preset: "web" | "react-native", withWeb: boolean): Promise<void> {
+  private async rescaffold(record: WebAppRecord, preset: "web" | "react-native" | "game", withWeb: boolean): Promise<void> {
     const { builder } = this.host;
     const app = record.app;
     const tmp = `${record.dir}.kind-${randomUUID().slice(0, 8)}`;
@@ -319,7 +342,7 @@ export function kindWords(targets: AppTarget[]): string {
   return targets.length === 2 ? "Both (an Android app and a web version)" : targets[0] === "web" ? "a web app" : "an Android app";
 }
 
-/** The set_app_kind tool's argument: "web", "android" or "both". */
+/** The set_app_kind tool's argument: "web", "android" or "both" ("game" is WebApps.makeGame). */
 export function targetsFromKind(kind: unknown): AppTarget[] {
   if (kind === "web") return ["web"];
   if (kind === "android") return ["android"];

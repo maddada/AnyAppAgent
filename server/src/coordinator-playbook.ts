@@ -2,20 +2,21 @@
 // Ghostex coordinator playbook (the user's own ghostex-orchestrator skill), cut down for one person
 // who is not technical and talks to one app from their phone. See docs/APP-COORDINATOR.md.
 import type { AppPreset } from "../../shared/protocol.ts";
-import { appKindSection, checkCommand, deliveryRules, feedbackPicturesLine, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
+import { appKindSection, checkCommand, deliveryRules, feedbackPicturesLine, GAME_STACK, MEMORY_FILE, OVERVIEW_FILE, otherAppsRules, overviewRules, PAGE_KIT_GUIDE, pagesSection } from "./playbook.ts";
 
 type AppInfo = { name: string; packageName: string; dir: string; preset?: AppPreset };
 
 /** Which stack the app is (the preset chosen when it was made). */
 function stack(preset: AppPreset | undefined): string {
   if (preset === "web") return "It is a web app (Vite, React and TypeScript): it opens from a link, with no install, in Kiwimake on the phone or in any browser.";
+  if (preset === "game") return GAME_STACK;
   return preset === "kotlin" ? "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native." : "It is a React Native (Expo) app.";
 }
 
 /** The MCP server name the coordinator's worker tools live under (tools show as mcp__workers__*). */
 export const WORKER_TOOLS_SERVER = "workers";
 /** Bump when the coordinator playbook changes enough that resumed sessions must get it again. */
-export const COORDINATOR_PLAYBOOK_VERSION = 7; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures; 5: quick update or new install; 6: versions, crashes, the diary; 7: Web, Android or Both
+export const COORDINATOR_PLAYBOOK_VERSION = 8; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures; 5: quick update or new install; 6: versions, crashes, the diary; 7: Web, Android or Both; 8: games
 /** The first line of a message that carries worker reports to the coordinator (not from the person). */
 export const REPORT_HEADER = "[Worker report]";
 

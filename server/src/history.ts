@@ -281,10 +281,10 @@ export class History {
       {
         name: "set_app_kind",
         description:
-          'Web, Android or Both (the plan page\'s switch). Call it once the person has picked or confirmed the kind on the plan page (or in a message), before you or a helper start building: "web" makes this a web app (Vite and React; it opens from a link, no install), "android" an Android app, "both" the Android app plus a web version kept beside it in web/. A new app can become any kind; later an Android app can only add or drop its web version (a web app never becomes an Android app: that is a new app). It answers with what changed in the project: read the AGENTS.md it names before you change code.',
+          'Web, Android, Both or Game (the plan page\'s switch; a game has no switch). Call it once the person has picked or confirmed the kind on the plan page (or in a message), before you or a helper start building: "web" makes this a web app (Vite and React; it opens from a link, no install), "android" an Android app, "both" the Android app plus a web version kept beside it in web/, "game" a game (Kotlin and Compose Multiplatform: the game in game/, ready for iPhone and the web later, inside an Android app). A new app can become any kind; later an Android app can only add or drop its web version (a web app never becomes an Android app: that is a new app). It answers with what changed in the project: read the AGENTS.md it names before you change code.',
         inputSchema: {
           type: "object",
-          properties: { kind: { type: "string", enum: ["web", "android", "both"] } },
+          properties: { kind: { type: "string", enum: ["web", "android", "both", "game"] } },
           required: ["kind"],
         },
       },

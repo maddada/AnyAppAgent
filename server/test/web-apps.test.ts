@@ -262,6 +262,37 @@ describe("web apps", () => {
     }
   });
 
+  it("Game: a new app becomes a game; a game stays a game; an app with versions cannot become one", async () => {
+    const fresh = await setup({ preset: "react-native" });
+    try {
+      const { app, note } = await fresh.apps.makeGame("app-1");
+      expect(app.preset).toBe("game");
+      expect(app.targets).toBeUndefined();
+      expect(note).toMatch(/This is now a game/);
+      expect(note).toMatch(/iPhone and the web/);
+      expect(JSON.parse(readFileSync(join(fresh.dir, "anyapp.json"), "utf8")).preset).toBe("game");
+      expect(existsSync(join(fresh.dir, "game"))).toBe(true);
+      expect(existsSync(join(fresh.dir, "app.json"))).toBe(false);
+      expect(readFileSync(join(fresh.dir, "overview.md"), "utf8")).toBe("A tea timer.\n");
+      expect(gitIn(fresh.dir, "log", "--format=%s")).toMatch(/Made it a game\nCreate Tea Timer/);
+      // Again: nothing changes. A web version or Both: refused; Android: it already is one.
+      expect((await fresh.apps.makeGame("app-1")).note).toMatch(/already is a game/);
+      await expect(fresh.apps.setTargets("app-1", ["android", "web"])).rejects.toThrow(/Games are Android apps for now/);
+      await expect(fresh.apps.setTargets("app-1", ["web"])).rejects.toThrow(HttpError);
+      expect((await fresh.apps.setTargets("app-1", ["android"])).note).toMatch(/Nothing changed/);
+      expect(appPlaybook({ name: "Tea Timer", packageName: "com.anyapp.teatimer", dir: fresh.dir, preset: "game" })).toMatch(/It is a game: Kotlin and Compose Multiplatform/);
+    } finally {
+      fresh.done();
+    }
+    const grown = await setup({ preset: "react-native", latest: 4 });
+    try {
+      await expect(grown.apps.makeGame("app-1")).rejects.toThrow(/already has versions/);
+      expect(grown.apps.get("app-1").preset).toBe("react-native");
+    } finally {
+      grown.done();
+    }
+  });
+
   it("the site check finds secrets and source maps; the playbook speaks of a web app", () => {
     const dir = mkdtempSync(join(tmpdir(), "anyapp-site-"));
     try {

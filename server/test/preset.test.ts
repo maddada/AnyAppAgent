@@ -79,7 +79,7 @@ describe("app presets", () => {
   });
 
   it("points each app's agent at its own check command", () => {
-    expect(PRESETS).toEqual(["react-native", "kotlin", "expo-exact", "web"]);
+    expect(PRESETS).toEqual(["react-native", "kotlin", "expo-exact", "web", "game"]);
     const exact = appPlaybook({ name: "T", packageName: "com.anyapp.t", dir: "d", preset: "expo-exact" });
     expect(exact).toContain("bun exact.mjs contract build app.contract --json");
     expect(exact).toContain("no AI through Kiwimake yet");
@@ -93,5 +93,12 @@ describe("app presets", () => {
     expect(kotlin).not.toContain("src/lib/ai.ts");
     expect(appPlaybook({ name: "T", packageName: "com.anyapp.t", dir: "d" })).toContain("npm run check");
     expect(buildFixPrompt({ buildNumber: 2, attempt: 1, maxAttempts: 3, error: "e", preset: "kotlin" })).toContain(":app:compileReleaseKotlin");
+    const game = appPlaybook({ name: "T", packageName: "com.anyapp.t", dir: "d", preset: "game" });
+    expect(game).toContain("It is a game: Kotlin and Compose Multiplatform");
+    expect(game).toContain("move to iPhone and the web later");
+    expect(game).toContain(":app:compileReleaseKotlin");
+    expect(game).toContain("host.askAi in the game (GameHost)");
+    expect(game).toContain("never to \"tap Reload\"");
+    expect(buildFixPrompt({ buildNumber: 2, attempt: 1, maxAttempts: 3, error: "e", preset: "game" })).toContain(":app:compileReleaseKotlin");
   });
 });

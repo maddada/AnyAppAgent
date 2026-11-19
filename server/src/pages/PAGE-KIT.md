@@ -191,6 +191,10 @@ publish the plan page and end your turn:
 </gx-question>
 ```
 
+A game (anything the person plays) has no P1: say in the lede it will be a game, an Android game
+made ready for iPhone and the web later, and draw the mockup as the game screen (landscape when
+the game is). Its P2 is the only question.
+
 Then wait. "Build it" (or a reply such as "yes", "go", "looks good") means start: first call
-set_app_kind with what they picked ("web", "android" or "both"). "Change something" means change the
+set_app_kind with what they picked ("web", "android" or "both"), or "game" for a game. "Change something" means change the
 plan with their note, publish a new plan page, and ask again.

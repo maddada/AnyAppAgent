@@ -62,10 +62,15 @@ and says why in one line:
   offline after the first open, and sharing it is sending its link. AI through Kiwimake works in a
   web app too (when it is opened in Kiwimake), so AI alone is no reason for Android.
 - Both when they want the phone powers and also a link for other people or devices.
+- Game when they want a game (anything they play: arcade, puzzle, board, cards, a quiz with a
+  score). A game is its own kind: Kotlin and Compose Multiplatform, an Android app today, made so
+  it can move to iPhone and the web later. The plan page then has no "Web, Android or Both"
+  question; it says it will be a game. On "Build it" call set_app_kind "game".
 The plan page has the switch "Web, Android or Both" with your pick recommended ("The plan page" in
 the page guide). When they confirm the plan, call set_app_kind with the kind they picked before any
 building starts, then read the AGENTS.md it names. Later, "put it on the web too" is set_app_kind
-"both"; a web app never becomes an Android app (offer a new app instead).`;
+"both"; a web app never becomes an Android app (offer a new app instead). A game stays a game (no
+web version yet: say iPhone and web versions are planned and the game is ready for them).`;
 }
 
 /** The first message of a new app as the agent gets it (the chat shows only the person's words). */
@@ -186,19 +191,25 @@ mention this note to the person.)`;
 /** The command an app's agent runs to check its work before ending a turn (from its AGENTS.md). */
 export function checkCommand(preset: AppPreset | undefined): string {
   if (preset === "web") return "npm run check";
-  if (preset === "kotlin") return "./gradlew --console=plain -q :app:compileReleaseKotlin";
+  if (preset === "kotlin" || preset === "game") return "./gradlew --console=plain -q :app:compileReleaseKotlin";
   if (preset === "expo-exact") return "bun exact.mjs contract build app.contract --json";
   return "npm run check";
 }
 
 /** Where an app's AI client lives (AGENTS.md, "AI"). */
 function aiFile(preset: AppPreset | undefined): string {
+  if (preset === "game") return "host.askAi in the game (GameHost)";
   return preset === "kotlin" ? "the Ai object in ai/Ai.kt" : "src/lib/ai.ts";
 }
+
+/** What a game is, for its agent (template-game/AGENTS.md has the rules). */
+export const GAME_STACK =
+  "It is a game: Kotlin and Compose Multiplatform. The game itself lives in game/ and is kept free of Android (only multiplatform code there), because games are meant to move to iPhone and the web later; the Android app around it is in app/. Not React Native.";
 
 function stackLine(preset: AppPreset | undefined): string {
   if (preset === "web") return "It is a web app (Vite, React and TypeScript): it opens from a link, with no install, in Kiwimake on the phone or in any browser.";
   if (preset === "kotlin") return "It is a native Android app (Kotlin, Jetpack Compose, Material 3), not React Native.";
+  if (preset === "game") return GAME_STACK;
   if (preset === "expo-exact") return "It is an Expo Exact app (Contract view, TypeScript data; very new, alpha), not React Native.";
   return "It is a React Native (Expo) app.";
 }
@@ -217,7 +228,7 @@ the code stays private). Every open copy shows "Version N is ready" with a Reloa
 next open gets it by itself. Say so in your last sentence: "It is live: tap Reload in the app if it
 is open." Never talk about installing.`;
   }
-  if (preset === "kotlin" || preset === "expo-exact") {
+  if (preset === "kotlin" || preset === "game" || preset === "expo-exact") {
     return `How the new version reaches the phone: after ${subject} the PC builds a new APK (a few
 minutes) and the phone downloads it; the person installs it when it arrives. Tell them to install
 it when it arrives on their phone, never to "tap Reload" (that is only for quick updates, which

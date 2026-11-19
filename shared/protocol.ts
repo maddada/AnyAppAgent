@@ -106,7 +106,11 @@ export interface ApkVariant {
 //   "web" (added): a web app from template-web/ (Vite and React): no APK, it opens from a link
 //     (docs/WEB-APPS.md). Not one of the New app sheet's choices: the plan picks it. Older phones
 //     do not know it.
-export type AppPreset = "react-native" | "kotlin" | "expo-exact" | "web";
+//   "game" (added 2026-11-19): a game from template-game/ (Kotlin and Compose Multiplatform: the game
+//     in game/, kept ready for iPhone and the web later, plus the Android app in app/). Built and
+//     installed like "kotlin" (full builds, no quick updates). PC apps only. Older phones and
+//     desktops do not know it (they show it as an Android app).
+export type AppPreset = "react-native" | "kotlin" | "expo-exact" | "web" | "game";
 
 export interface App {
   /** The PC engine most recently used for this app. Absent on older companions. */

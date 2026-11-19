@@ -47,7 +47,8 @@ export class KeepReady {
   }
 
   private canKeep(app: App): boolean {
-    return Boolean(app.latestApk) && (!app.signing || app.signing === "own") && !app.move;
+    // Games are built on the PC only (the cloud has no game builder yet).
+    return Boolean(app.latestApk) && (!app.signing || app.signing === "own") && !app.move && app.preset !== "game";
   }
 
   /** After a new version (or at start): push the code and the key once. One run per app at a time. */

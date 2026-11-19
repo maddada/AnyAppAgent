@@ -69,6 +69,7 @@ export class CloudMover {
     if (this.running.has(appId)) return app;
     if (app.status === "working" || app.status === "building" || app.status === "creating") throw new HttpError(409, "This app is busy. Move it when it is done.");
     if (!app.latestApk) throw new HttpError(409, "This app has no version yet. Move it once it has one.");
+    if (app.preset === "game") throw new HttpError(409, "Games stay on this PC for now: the cloud cannot build them yet.");
     if (app.signing && app.signing !== "own") throw new HttpError(409, "This app is signed with this PC's older shared key, so it cannot move yet. It needs its own key first.");
     this.running.add(appId);
     this.set(appId, { to: "cloud", state: "running", step: "Getting ready", at: new Date().toISOString() });

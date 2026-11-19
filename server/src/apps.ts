@@ -108,7 +108,7 @@ interface ReadyRecord extends AppRecord {
 }
 
 /** The presets the phone may ask for (shared/protocol.ts AppPreset). */
-export const PRESETS: readonly AppPreset[] = ["react-native", "kotlin", "expo-exact", "web"];
+export const PRESETS: readonly AppPreset[] = ["react-native", "kotlin", "expo-exact", "web", "game"];
 
 const JAVA_KEYWORDS = new Set(
   "abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null var record yield".split(
@@ -279,7 +279,7 @@ export class AppManager {
         if (record) this.emitItem(record, { id: randomUUID(), kind: "diary", diary: info });
       },
       setKind: async (appId, kind) => {
-        const { app, note } = await this.setTargets(appId, targetsFromKind(kind));
+        const { app, note } = kind === "game" ? await this.makeGame(appId) : await this.setTargets(appId, targetsFromKind(kind));
         // The session's playbook was written for the kind the app had when it started: say how new
         // versions reach people now, so its last sentences stay right (no "install it" for a web app).
         const web = appTargets(app).includes("web");
@@ -579,7 +579,7 @@ export class AppManager {
   /** fixed: the cloud names the app's slug and package itself (docs/CLOUD.md, "Package names"). */
   create(name: string, prompt: string, preset: unknown = "react-native", askMore = false, uploads: ImageUpload[] = [], sharedIn = false, fixed?: { slug: string; packageName: string }): App {
     const cleanName = name.trim().replace(/\s+/g, " ");
-    if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native, Kotlin or Expo Exact.");
+    if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native, Kotlin, Game or Expo Exact.");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
     if (prompt.trim() === "") throw new HttpError(400, "Say what the app should do.");
     const problem = checkImages(uploads.map((u) => ({ mimeType: String(u?.mimeType ?? ""), data: String(u?.data ?? "") })));
@@ -1848,6 +1848,20 @@ export class AppManager {
     if (record.app.move?.to === "cloud" && record.app.move.state === "done") throw new HttpError(409, "This app moved to the cloud; change it there.");
     const result = await this.web.setTargets(record, targets as never);
     this.log(`[${record.app.slug}] kind: ${JSON.stringify(appTargets(record.app))}`);
+    this.checkIcon(record);
+    this.refreshHealth(record, false);
+    this.touch(record);
+    return result;
+  }
+
+  /** set_app_kind "game": a new app becomes a game (template-game/). */
+  async makeGame(id: string): Promise<{ app: App; note: string }> {
+    const record = this.record(id) as ReadyRecord;
+    if (!record.ready) throw new HttpError(409, "The app is still being set up. Try again in a moment.");
+    if (record.app.status === "building") throw new HttpError(409, "The app is building right now. Try again when the build is done.");
+    if (record.app.move?.to === "cloud" && record.app.move.state === "done") throw new HttpError(409, "This app moved to the cloud; change it there.");
+    const result = await this.web.makeGame(record);
+    this.log(`[${record.app.slug}] kind: game`);
     this.checkIcon(record);
     this.refreshHealth(record, false);
     this.touch(record);

@@ -5,7 +5,8 @@
 //   React Native: an older Expo SDK than the template (package.json "expo"), or a built-in part
 //     the template carries and says to keep as it is (modules/updates, modules/feedback, modules/ai)
 //     missing or older (its files differ from the template's).
-//   Kotlin: a lower targetSdk or compileSdk than template-kotlin (app/build.gradle.kts).
+//   Kotlin (and games, whose app/ is the Kotlin one): a lower targetSdk or compileSdk than
+//   template-kotlin (app/build.gradle.kts).
 //   Expo Exact (alpha): not checked.
 // The reminder's state is <state>/health.json.
 import { createHash } from "node:crypto";
@@ -75,10 +76,12 @@ export class Templates {
   private stamp = "";
   readonly reactNativeDir: string;
   readonly kotlinDir: string;
+  readonly gameDir: string;
 
   constructor(repoDir: string) {
     this.reactNativeDir = join(repoDir, "template");
     this.kotlinDir = join(repoDir, "template-kotlin");
+    this.gameDir = join(repoDir, "template-game");
   }
 
   private currentStamp(): string {
@@ -134,7 +137,7 @@ export function behindReasons(dir: string, preset: AppPreset | undefined, templa
       }
     }
     if (older.length > 0) reasons.push(`Missing or older built-in parts: ${listWords(older)}.`);
-  } else if (preset === "kotlin") {
+  } else if (preset === "kotlin" || preset === "game") {
     const mine = gradleSdk(dir);
     const { target, compile } = t.kotlin;
     if (mine.target !== null && target !== null && mine.target < target) {
@@ -169,8 +172,8 @@ export function updateKey(health: AppHealth, templates: Templates): string {
  * docs/FAST-LANE.md, whichever the change needs).
  */
 export function keepHealthyMessage(health: AppHealth, preset: AppPreset | undefined, templates: Templates): string {
-  const kotlin = preset === "kotlin";
-  const templateDir = kotlin ? templates.kotlinDir : templates.reactNativeDir;
+  const kotlin = preset === "kotlin" || preset === "game";
+  const templateDir = preset === "game" ? `${templates.gameDir} (laid over ${templates.kotlinDir})` : kotlin ? templates.kotlinDir : templates.reactNativeDir;
   const how = kotlin
     ? `Move it to the Android versions in its app/build.gradle.kts and gradle/libs.versions.toml.`
     : `Copy the missing or older built-in parts from its modules folder exactly as they are, wire them in the way its AGENTS.md says (also the Change this app row: src/components/ChangeThisApp.tsx, kept last in the app's Settings, with a way to reach Settings), and move to the Expo SDK and the dependency versions in its package.json (npx expo install --fix after changing expo).`;
