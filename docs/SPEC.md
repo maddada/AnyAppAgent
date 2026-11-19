@@ -563,7 +563,8 @@ in the beginning about that game or app."
   refused, and a game, a web app or an Expo Exact app stays what it is).
 - **The plan page** no longer asks "Web, Android or Both" for a new app; its lede names the kind.
   A change to an app with versions that would add a web version asks "Also as a web page?".
-- **Quick replies**: `ask_choice` puts one assistant item in the main chat with `choices`; phone and
+- **Quick replies**: `ask_choice` puts one assistant item in the main chat with `choices` (held until
+  the agent's turn ends, so it is the last thing in the chat, under one short line); phone and
   desktop draw the answers as buttons under the question, aligned right, while no message of the
   person's followed it; a tap sends the answer as their message. Helpers cannot use it.
 - Server: `server/src/playbook.ts` (`appKindSection`, `kindNote`, `firstPrompt`), the coordinator
@@ -574,3 +575,15 @@ in the beginning about that game or app."
 Protocol (additive): `ChatItem.choices`; `CreateAppRequest.preset` absent now means "Let the agent
 decide" (the app still starts as React Native, as before). Older phones and desktops read the
 question's answers as a list in its text, and their default (no preset) gets the agent's pick.
+
+Proof (2026-11-20): a private companion (port 8861, its own state and apps folders, GitHub off,
+Claude). "a little space shooter" became a game ("This sounds like a game, so I'll make it a game
+for Android that can move to iPhone and the web later."); "a page for my bakery's menu" a web app
+("I'll make your menu a web page: customers just open a link or scan a code in the shop, with
+nothing to install."), and "Actually, make it an app I install on my phone instead." switched it to
+Android; "a water reminder" an Android app ("Reminders need to arrive even when the app is closed,
+so I'll make this an app you install on your phone."); "something for my mom" asked "What would your
+mom enjoy most?" with three answers to tap, and "A page she opens from a link" made it a web app.
+A manual Kotlin pick was kept with no question. No plan page asked the kind. Fixed from the run:
+the kind sentence now comes before anything else, and the question is held to the end of the turn
+(the agent had greeted before and after it). Codex was not tried live (not signed in on this PC).

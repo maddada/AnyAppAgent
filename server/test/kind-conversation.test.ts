@@ -97,13 +97,21 @@ describe("picking the kind in the conversation", () => {
       };
       const ok = await call({ question: "What should it be?", choices: ["A game to play", "An app on her phone", "A page she opens from a link"] });
       expect(ok.isError).toBeFalsy();
-      expect(ok.content[0]!.text).toMatch(/end your turn/);
+      expect(ok.content[0]!.text).toMatch(/End your turn with at most one short, friendly line/);
       const shown = items.filter((i) => i.choices);
       expect(shown).toHaveLength(1);
       expect(shown[0]!.kind).toBe("assistant");
       expect(shown[0]!.choices).toEqual(["A game to play", "An app on her phone", "A page she opens from a link"]);
       // Older phones and desktops read the answers in the text.
       expect(shown[0]!.text).toBe("What should it be?\n\n- A game to play\n- An app on her phone\n- A page she opens from a link");
+      // During the agent's turn it waits for the turn's end, so it comes under the agent's last words.
+      const rt = (apps as unknown as { runtime(id: string): { turnActive: boolean; pendingChoice?: unknown } }).runtime(app.id);
+      rt.turnActive = true;
+      await call({ question: "Which one?", choices: ["This", "That"] });
+      expect(items.filter((i) => i.choices)).toHaveLength(1);
+      expect(rt.pendingChoice).toEqual({ question: "Which one?", choices: ["This", "That"] });
+      rt.turnActive = false;
+      delete rt.pendingChoice;
       const fromHelper = await call({ question: "Which?", choices: ["A", "B"] }, "w1");
       expect(fromHelper.isError).toBe(true);
       expect(items.filter((i) => i.choices)).toHaveLength(1);

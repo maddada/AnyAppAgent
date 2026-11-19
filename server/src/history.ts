@@ -293,7 +293,7 @@ export class History {
       {
         name: "ask_choice",
         description:
-          'Asks the person one short question in the chat with 2 to 4 answers they can tap (quick replies), for example when a new app\'s description does not make clear what kind of app it should be. Plain words only, never technical ones (no "React Native", "Kotlin", "framework"). It shows the question and the answers as one message, so do not write the question again yourself; end your turn after it and wait: the answer they tap (or type) comes as their next message. Only for the main chat.',
+          'Asks the person one short question in the chat with 2 to 4 answers they can tap (quick replies), for example when a new app\'s description does not make clear what kind of app it should be. Plain words only, never technical ones (no "React Native", "Kotlin", "framework"). The PC shows the question and the answers as one message at the end of your turn, so never write the question or the answers yourself. Call it before you write anything in the turn, then end the turn with at most one short, friendly line (it shows above the question), and wait: the answer they tap (or type) comes as their next message. Only for the main chat.',
         inputSchema: {
           type: "object",
           properties: {
@@ -325,7 +325,7 @@ export class History {
       if (!this.host.askChoice) throw new Error("This PC cannot show quick replies.");
       const { question, choices } = choiceFrom(args);
       this.host.askChoice(appId, question, choices);
-      return "Shown in the chat with the answers to tap. Now end your turn and wait for their answer.";
+      return "Done: the question and its answers show at the very end of your turn, under what you write now. End your turn with at most one short, friendly line, and never the question or its answers again. Their answer comes as their next message.";
     }
     if (name === "set_app_kind") {
       if (!this.host.setKind) throw new Error("This PC cannot change the kind of an app.");

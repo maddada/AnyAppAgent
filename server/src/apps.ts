@@ -90,6 +90,8 @@ interface Runtime {
   hiddenTools: Set<string>;
   /** True while a prompt to the app's own session runs. */
   turnActive: boolean;
+  /** An ask_choice question asked during the turn: shown when the turn ends, so it is the last thing in the chat. */
+  pendingChoice?: { question: string; choices: string[] };
   /** The usage meter: the person's message the current job works for (its chat item), if any. */
   usageItem?: string;
   /**
@@ -281,8 +283,10 @@ export class AppManager {
       askChoice: (appId, question, choices) => {
         const record = this.store.find(appId);
         if (!record) return;
-        // The answers also go in the text as a list, so an older phone or desktop still shows them.
-        this.emitItem(record, { id: randomUUID(), kind: "assistant", text: `${question}\n\n${choices.map((c) => `- ${c}`).join("\n")}`, choices });
+        const rt = this.runtime(appId);
+        // During a turn it waits for the turn's end, so the answers sit under the agent's last words.
+        if (rt.turnActive) rt.pendingChoice = { question, choices };
+        else this.emitChoice(record, question, choices);
       },
       setKind: async (appId, kind) => {
         const { app, note } = kind === "game" ? await this.makeGame(appId) : await this.setTargets(appId, targetsFromKind(kind));
@@ -535,6 +539,11 @@ export class AppManager {
   private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo; page?: PageInfo; crash?: CrashInfo; diary?: DiaryReadInfo; madeInCloud?: boolean; choices?: string[] }): void {
     const item = this.store.chat(record.app.id).upsert(draft);
     this.broadcast({ type: "chat.item", item });
+  }
+
+  /** The ask_choice question; the answers also go in the text as a list, so an older phone or desktop still shows them. */
+  private emitChoice(record: AppRecord, question: string, choices: string[]): void {
+    this.emitItem(record, { id: randomUUID(), kind: "assistant", text: `${question}\n\n${choices.map((c) => `- ${c}`).join("\n")}`, choices });
   }
 
   private errorItem(record: AppRecord, text: string): void {
@@ -2128,6 +2137,10 @@ ${overviewNudge()}` : note;
     } finally {
       rt.turnActive = false;
       for (const draft of rt.translator.finishTurn(stopReason)) this.emitItem(record, draft);
+      if (rt.pendingChoice) {
+        if (stopReason !== "cancelled") this.emitChoice(record, rt.pendingChoice.question, rt.pendingChoice.choices);
+        delete rt.pendingChoice;
+      }
     }
     if (stopReason === "cancelled") this.emitItem(record, { id: randomUUID(), kind: "stopped", text: "Stopped" });
     if (rt.translator.lastTurnText.trim() !== "") record.app.lastMessagePreview = shorten(rt.translator.lastTurnText, 140);
