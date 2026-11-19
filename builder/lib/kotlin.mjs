@@ -31,11 +31,11 @@ export function xmlString(s) {
     .replace(/\?/g, '\\?');
 }
 
-/** Writes the app's name, slug and package id into a fresh Kotlin app. */
+/** Writes the app's name, slug and package id into a fresh Kotlin (or game) app. */
 export async function fillKotlinPlaceholders(dir, { name, slug, packageName }) {
   const metaPath = path.join(dir, KOTLIN_META);
   const meta = JSON.parse(await fsp.readFile(metaPath, 'utf8'));
-  meta.preset = 'kotlin';
+  meta.preset = meta.preset === 'game' ? 'game' : 'kotlin';
   meta.slug = slug;
   meta.package = packageName;
   await fsp.writeFile(metaPath, JSON.stringify(meta, null, 2) + '\n');
@@ -82,23 +82,23 @@ export async function syncKotlinIcon(dir, say = () => {}) {
  * dependency cache and the local build cache in %USERPROFILE%\.gradle, both safe for concurrent
  * use by design) hold everything a new Kotlin app's first build needs.
  */
-export async function warmKotlin(spareRoot, log = () => {}) {
-  const hash = templateHash('kotlin');
-  const marker = path.join(CACHE_DIR, `kotlin-warm-${hash}`);
+export async function warmKotlin(spareRoot, log = () => {}, preset = 'kotlin') {
+  const hash = templateHash(preset);
+  const marker = path.join(CACHE_DIR, `${preset}-warm-${hash}`);
   if (fs.existsSync(marker)) return;
   const dir = path.join(spareRoot, `warm-${crypto.randomBytes(4).toString('hex')}`);
   const t0 = Date.now();
   try {
-    await makeAppTree(dir, log, 'kotlin');
+    await makeAppTree(dir, log, preset);
     await fillKotlinPlaceholders(dir, { name: 'Warm up', slug: 'warmup', packageName: 'com.anyapp.warmup' });
-    log('Warming the Gradle caches for Kotlin apps (one build of a throwaway app)…');
+    log(`Warming the Gradle caches for ${preset === 'game' ? 'games' : 'Kotlin apps'} (one build of a throwaway app)…`);
     const { buildApk } = await import('../index.mjs');
     await buildApk({ dir, buildNumber: 1 });
     await fsp.mkdir(CACHE_DIR, { recursive: true });
     await fsp.writeFile(marker, new Date().toISOString());
-    log(`Kotlin caches warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    log(`${preset === 'game' ? 'Game' : 'Kotlin'} caches warm in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   } catch (e) {
-    log(`Kotlin warm-up build failed (a new app's first build will just be slower): ${e.message}`);
+    log(`${preset === 'game' ? 'Game' : 'Kotlin'} warm-up build failed (a new app's first build will just be slower): ${e.message}`);
   } finally {
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }).catch(() => {});
   }

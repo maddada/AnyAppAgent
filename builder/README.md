@@ -206,6 +206,33 @@ Error messages are cut to what an agent needs: TypeScript errors, the Metro erro
 code frame), Kotlin/Java compiler errors and Gradle's "What went wrong", npm `ERESOLVE`s, or
 prebuild/config-plugin errors; never more than ~60 lines.
 
+## The game preset
+
+`createApp({ ..., preset: 'game' })` makes a game: the Kotlin starter (`../template-kotlin`) with
+`../template-game` copied on top (override: `ANYAPP_GAME_TEMPLATE_DIR`). The Kotlin `AGENTS.md`
+becomes `ANDROID.md` and its `ui/HomeScreen.kt` and `README.md` are left out (`GAME_FROM_KOTLIN` in
+`lib/presets.mjs`); everything else of the Android app (feedback, updates, Change this app, AI, the
+diary, abilities) is the Kotlin starter's, so it stays one copy. `anyapp.json` says
+`"preset": "game"`.
+
+The project has two Gradle modules: `game/` (Kotlin Multiplatform with Compose Multiplatform 1.12.2,
+the Android Gradle plugin's `com.android.kotlin.multiplatform.library`, Android as its only target
+today) and `app/` (the APK, `implementation(project(":game"))`). Kotlin is 2.4.21 for both (the
+root `build.gradle.kts`), AGP 9.2.1 and Gradle 9.4.1 as for Kotlin apps. Keeping the APK module
+named `app` means `buildApk` is the Kotlin path unchanged (`isKotlinLike`): the same
+`app:assembleRelease`, output folder, icon sizes, keys and versionCode; `renameApp`, `adoptApp`
+(Duplicate, Make it mine) work as for Kotlin apps; `game/build` is never copied. No quick updates.
+
+Nothing in the build checks that `game/` stays free of Android (the person chose "instructions
+only", Q67 on 19 Nov 2026): the template's `AGENTS.md` carries the rules. `test/game.test.mjs` checks
+the template's own game code.
+
+The first game build on a PC downloads about 100 MB of Kotlin and Compose Multiplatform libraries
+into Gradle's cache. After a game is created, the spare refill builds a throwaway game once per
+template version (`warmKotlin(..., 'game')`) so the next first build is warm. The companion does not
+warm games at start (a PC that never makes a game never downloads them). Measured on Linux: starter
+APK 1.25 MB, first build 80 s cold, about 36 s warm.
+
 ## The Expo Exact preset (alpha)
 
 `createApp({ ..., preset: 'expo-exact' })` makes an [Expo Exact](https://github.com/expo/exact) app:

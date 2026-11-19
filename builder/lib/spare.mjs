@@ -128,7 +128,7 @@ export async function refillSpares(root, log = console.log, preset = 'react-nati
       await renameWithRetry(tmp, path.join(root, `spare-${id}`));
       log(`Spare spare-${id} ready in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     }
-    if (preset === 'kotlin' && process.env.ANYAPP_NO_WARM !== '1') {
+    if ((preset === 'kotlin' || preset === 'game') && process.env.ANYAPP_NO_WARM !== '1') {
       const { warmKotlin } = await import('./kotlin.mjs');
       await warmKotlin(root, log);
     }

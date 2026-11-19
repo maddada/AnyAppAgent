@@ -1,5 +1,6 @@
 // Kiwimake builder: makes apps from a template and builds their signed release APKs.
-// Two presets: 'react-native' (template/, the default) and 'kotlin' (template-kotlin/).
+// Presets: 'react-native' (template/, the default), 'kotlin' (template-kotlin/), 'game' (template-kotlin/
+// with template-game/ on top, built like kotlin), 'expo-exact' and 'web' (lib/presets.mjs).
 // Contract (docs/SPEC.md):
 //   createApp({ dir, name, slug, packageName, preset?, onLog? }) -> Promise<void>
 //   buildApk({ dir, buildNumber, onLog?, fast? }) -> Promise<{ apkPath, sizeBytes, sha256, delivery, ota?, ... }>
@@ -22,7 +23,7 @@ import { ensureAppKey, signingFor } from './lib/keystore.mjs';
 import { renameWithRetry, tryLock } from './lib/lock.mjs';
 import { fillKotlinPlaceholders, KOTLIN_ICON, syncKotlinIcon, xmlString } from './lib/kotlin.mjs';
 import { createExactApp, ensureExact, exactDirFor, exactEnv, extractExactError, runExactAndroidBuild } from './lib/exact.mjs';
-import { checkPreset, KOTLIN_META, presetOf, readAppMeta, readKotlinMeta, skipFor } from './lib/presets.mjs';
+import { checkPreset, isKotlinLike, KOTLIN_META, presetOf, readAppMeta, readKotlinMeta, skipFor } from './lib/presets.mjs';
 import { claimSpare, refillSparesInBackground } from './lib/spare.mjs';
 import { DEPS_STAMP, depsHash, makeAppTree, templateHash } from './lib/template.mjs';
 import { createWebApp, fillWebPlaceholders, webIconPath } from './lib/web.mjs';
@@ -83,7 +84,7 @@ export async function createApp({ dir, name, slug, packageName, preset, onLog = 
     await renameWithRetry(tmp, dir);
   }
   const fields = { name: String(name).trim(), slug, packageName };
-  if (preset === 'kotlin') await fillKotlinPlaceholders(dir, fields);
+  if (isKotlinLike(preset)) await fillKotlinPlaceholders(dir, fields);
   else await fillPlaceholders(dir, fields);
   onLog(`Created ${dir} from the ${preset} template (${how}, ${((Date.now() - t0) / 1000).toFixed(1)}s).`);
   refillSparesInBackground(dir, preset);
@@ -134,7 +135,7 @@ export async function adoptApp({ src, dir, name, slug, packageName, onLog = noop
     },
   });
   const fields = { name: String(name).trim(), slug, packageName };
-  if (preset === 'kotlin') await renameKotlinApp(tmp, fields);
+  if (isKotlinLike(preset)) await renameKotlinApp(tmp, fields);
   else if (preset === 'web') await fillWebPlaceholders(tmp, fields);
   else await fillPlaceholders(tmp, fields);
   if (preset !== 'web' && presetOf(path.join(tmp, 'web')) === 'web') await fillWebPlaceholders(path.join(tmp, 'web'), fields);
@@ -167,7 +168,7 @@ export async function renameApp({ dir, name, slug, packageName, onLog = noop }) 
   if (packageChanged && !signExternalOn() && preset !== 'web') await ensureAppKey(androidEnv().javaHome, packageName, onLog);
   const fields = { name: String(name).trim(), slug, packageName };
   if (preset !== 'web' && presetOf(path.join(dir, 'web')) === 'web') await fillWebPlaceholders(path.join(dir, 'web'), fields);
-  if (preset === 'kotlin') await renameKotlinApp(dir, fields);
+  if (isKotlinLike(preset)) await renameKotlinApp(dir, fields);
   else if (preset === 'web') await fillWebPlaceholders(dir, fields);
   else {
     await fillPlaceholders(dir, fields);
@@ -180,7 +181,7 @@ export async function renameApp({ dir, name, slug, packageName, onLog = noop }) 
 
 function currentPackage(dir, preset) {
   try {
-    if (preset === 'kotlin') return JSON.parse(fs.readFileSync(path.join(dir, KOTLIN_META), 'utf8')).package ?? null;
+    if (isKotlinLike(preset)) return JSON.parse(fs.readFileSync(path.join(dir, KOTLIN_META), 'utf8')).package ?? null;
     return JSON.parse(fs.readFileSync(path.join(dir, 'app.json'), 'utf8')).expo?.android?.package ?? null;
   } catch {
     return null;
@@ -307,7 +308,8 @@ async function runBuild(dir, n, onLog, preset, feeds = {}, fast = false) {
 
   try {
     const { env, javaHome, sdk } = androidEnv();
-    const kotlin = preset === 'kotlin';
+    // Kotlin and game apps: one Gradle project at the root, the APK from app/.
+    const kotlin = isKotlinLike(preset);
     let slug;
     let packageName;
     if (kotlin || preset === 'expo-exact') {
@@ -548,7 +550,7 @@ async function finishApk({ built, parts = [], sdk, javaHome, signing, n, dir, sl
     throw new BuildError(`APK versionCode is ${badging.versionCode}, expected ${n} (the builder's init script did not apply)`);
   }
   if (preset !== 'react-native' && badging && packageName && badging.packageName !== packageName) {
-    const where = preset === 'kotlin' ? 'anyapp.json, used by app/build.gradle.kts' : 'app.json app.id';
+    const where = isKotlinLike(preset) ? 'anyapp.json, used by app/build.gradle.kts' : 'app.json app.id';
     throw new BuildError(
       `The app's package id is ${badging.packageName} but must stay ${packageName} (${where}). Put it back: a different id cannot update the app on the phone.`,
     );

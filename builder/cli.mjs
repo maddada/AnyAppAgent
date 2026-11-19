@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // CLI for humans and tests.
-//   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact|web]
+//   node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact|web|game]
 //   node builder/cli.mjs build <dir> --build-number <n> [--quiet] [--update-feed <url>] [--update-testing-feed <url>]
 //   node builder/cli.mjs build-web <dir> --build-number <n> [--quiet]      (a web app, or an app's web/ folder)
 //   node builder/cli.mjs add-web <dir> --name "<name>" [--slug <slug>]     ("Both": a web version in <dir>/web)
 //   node builder/cli.mjs icon <dir>
-//   node builder/cli.mjs warm [<spareRootDir>] [--preset react-native|kotlin|expo-exact|web]
-//        (react-native: the deps cache and a spare; kotlin: a spare and one warm-up build for Gradle's caches)
+//   node builder/cli.mjs warm [<spareRootDir>] [--preset react-native|kotlin|expo-exact|web|game]
+//        (react-native: the deps cache and a spare; kotlin and game: a spare and one warm-up build for Gradle's caches)
 //   node builder/cli.mjs keys list | backup <file> | restore <file> | move <app dir>
 //        (signing keys, docs/DISTRIBUTION.md; the password comes from ANYAPP_KEYS_PASSWORD or is asked for)
 import path from 'node:path';
@@ -23,12 +23,12 @@ const DEFAULT_PROBE = process.platform === 'win32' ? 'C:\\aa\\apps\\x' : path.jo
 function usage(msg) {
   if (msg) console.error(`error: ${msg}\n`);
   console.error(`usage:
-  node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact|web]
+  node builder/cli.mjs create <dir> --name "<name>" [--slug <slug>] [--package <id>] [--preset react-native|kotlin|expo-exact|web|game]
   node builder/cli.mjs build <dir> --build-number <n> [--quiet]
   node builder/cli.mjs build-web <dir> --build-number <n> [--quiet]
   node builder/cli.mjs add-web <dir> --name "<name>" [--slug <slug>]
   node builder/cli.mjs icon <dir>
-  node builder/cli.mjs warm [<dir-on-the-apps-volume>] [--preset react-native|kotlin|expo-exact|web]
+  node builder/cli.mjs warm [<dir-on-the-apps-volume>] [--preset react-native|kotlin|expo-exact|web|game]
   node builder/cli.mjs keys list | backup <file> | restore <file> | move <app dir>`);
   process.exit(2);
 }

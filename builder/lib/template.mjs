@@ -8,7 +8,7 @@ import path from 'node:path';
 import { BUILDER_VERSION, CACHE_DIR, TEMPLATE_DIR } from './env.mjs';
 import { npmCommand, run } from './exec.mjs';
 import { withFileLock } from './lock.mjs';
-import { checkPreset, skipFor, templateDirFor } from './presets.mjs';
+import { checkPreset, GAME_FROM_KOTLIN, isKotlinLike, KOTLIN_TEMPLATE_DIR, skipFor, templateDirFor } from './presets.mjs';
 
 export const DEPS_STAMP = path.join('node_modules', '.anyapp-deps');
 
@@ -29,6 +29,13 @@ export function templateHash(preset = 'react-native') {
   const h = crypto.createHash('sha256').update(`builder:${BUILDER_VERSION}\n`);
   // The React Native hash is computed exactly as before, so existing spares stay valid.
   if (checkPreset(preset) !== 'react-native') h.update(`preset:${preset}\n`);
+  // A game is the Kotlin template with the game template on top: both count.
+  if (preset === 'game') {
+    for (const f of listTemplateFiles(KOTLIN_TEMPLATE_DIR, skipFor('kotlin'))) {
+      h.update('kotlin:' + f.replace(/\\/g, '/') + '\n');
+      h.update(fs.readFileSync(path.join(KOTLIN_TEMPLATE_DIR, f)));
+    }
+  }
   for (const f of listTemplateFiles(root, skipFor(preset))) {
     h.update(f.replace(/\\/g, '/') + '\n');
     h.update(fs.readFileSync(path.join(root, f)));
@@ -109,6 +116,16 @@ export async function copyTree(src, dest) {
 async function copyTemplateFiles(dest, preset) {
   const root = templateDirFor(preset);
   await fsp.mkdir(dest, { recursive: true });
+  if (preset === 'game') {
+    // The Kotlin template first (the Android app: feedback, updates, AI, the diary), then the game
+    // template on top (game/, the Gradle files, MainActivity and the game's AGENTS.md).
+    for (const f of listTemplateFiles(KOTLIN_TEMPLATE_DIR, skipFor('kotlin'))) {
+      if (GAME_FROM_KOTLIN.drop.has(f)) continue;
+      const to = path.join(dest, GAME_FROM_KOTLIN.rename[f.replace(/\\/g, '/')] ?? f);
+      await fsp.mkdir(path.dirname(to), { recursive: true });
+      await fsp.copyFile(path.join(KOTLIN_TEMPLATE_DIR, f), to);
+    }
+  }
   for (const f of listTemplateFiles(root, skipFor(preset))) {
     const to = path.join(dest, f);
     await fsp.mkdir(path.dirname(to), { recursive: true });
@@ -121,7 +138,7 @@ async function copyTemplateFiles(dest, preset) {
  * node_modules, for kotlin the template sources (Gradle downloads into its own shared, locked cache).
  */
 export async function makeAppTree(dest, log = () => {}, preset = 'react-native') {
-  if (checkPreset(preset) === 'kotlin') {
+  if (isKotlinLike(checkPreset(preset))) {
     await copyTemplateFiles(dest, preset);
     return;
   }
