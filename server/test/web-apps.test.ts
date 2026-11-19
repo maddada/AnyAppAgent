@@ -308,7 +308,7 @@ describe("web apps", () => {
     }
     const text = appPlaybook({ name: "Tea Timer", packageName: "com.anyapp.teatimer", dir: "/x", preset: "web" });
     expect(text).toMatch(/^You are the one and only agent for the web app "Tea Timer"\./);
-    expect(text).toContain("Web, Android or Both");
+    expect(text).toContain("The kind of app");
     expect(text).not.toContain(String.fromCharCode(0x2014));
   });
 

@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ApkVariant, App, AppMove, DeleteAppResult, AppPreset, ChangeSettingsRequest, CloneRequest, DuplicateAppRequest, RenameAppRequest, FileSuggestionResponse, Suggestion, AppStatus, AppVersion, BuildInfo, CareState, ChangeNotes, ChatImage, ChatItem, CrashInfo, CrashReport, DiaryAnswer, DiaryReadInfo, ImageUpload, PageInfo, PlanLimit, PublishRequest, ReleaseStats, ServerEvent, TodoItem, TokenUsage, WorkerInfo } from "../../shared/protocol.ts";
-import { crashFixPrompt, History, isDescribeChangeCall, isReadDiaryCall, isSetAppKindCall, type VersionRecord } from "./history.ts";
+import { crashFixPrompt, History, isDescribeChangeCall, isAskChoiceCall, isReadDiaryCall, isSetAppKindCall, type VersionRecord } from "./history.ts";
 import { MEMORY_FILE } from "./playbook.ts";
 import { checkImages, imageExtension, IMAGE_TYPES, picturesLabel } from "../../shared/chat/images.ts";
 import { answersPreview, parsePageAnswers } from "../../shared/chat/pages.ts";
@@ -278,6 +278,12 @@ export class AppManager {
         const record = this.store.find(appId);
         if (record) this.emitItem(record, { id: randomUUID(), kind: "diary", diary: info });
       },
+      askChoice: (appId, question, choices) => {
+        const record = this.store.find(appId);
+        if (!record) return;
+        // The answers also go in the text as a list, so an older phone or desktop still shows them.
+        this.emitItem(record, { id: randomUUID(), kind: "assistant", text: `${question}\n\n${choices.map((c) => `- ${c}`).join("\n")}`, choices });
+      },
       setKind: async (appId, kind) => {
         const { app, note } = kind === "game" ? await this.makeGame(appId) : await this.setTargets(appId, targetsFromKind(kind));
         // The session's playbook was written for the kind the app had when it started: say how new
@@ -341,7 +347,7 @@ export class AppManager {
           activityChanged: (record) => this.activityChanged(record),
           pageTools: (appId, from) => this.pages.mcpServer(this.config.port, appId, from),
           appTools: (appId, workerId) => this.history.mcpServer(this.config.port, appId, workerId),
-          hiddenTool: (update) => isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update) || isSetAppKindCall(update),
+          hiddenTool: (update) => isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update) || isSetAppKindCall(update) || isAskChoiceCall(update),
           usageItem: (appId) => this.runtimes.get(appId)?.usageItem,
           countUsage: (appId, itemId, usage) => {
             const record = this.store.find(appId);
@@ -526,7 +532,7 @@ export class AppManager {
 
   // ---------- events
 
-  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo; page?: PageInfo; crash?: CrashInfo; diary?: DiaryReadInfo; madeInCloud?: boolean }): void {
+  private emitItem(record: AppRecord, draft: ChatDraft & { build?: BuildInfo; worker?: WorkerInfo; page?: PageInfo; crash?: CrashInfo; diary?: DiaryReadInfo; madeInCloud?: boolean; choices?: string[] }): void {
     const item = this.store.chat(record.app.id).upsert(draft);
     this.broadcast({ type: "chat.item", item });
   }
@@ -577,8 +583,10 @@ export class AppManager {
 
   /** uploads: pictures for the first message; sharedIn: "Like this, but mine" (the agent gets sharedInNote). */
   /** fixed: the cloud names the app's slug and package itself (docs/CLOUD.md, "Package names"). */
-  create(name: string, prompt: string, preset: unknown = "react-native", askMore = false, uploads: ImageUpload[] = [], sharedIn = false, fixed?: { slug: string; packageName: string }): App {
+  /** preset: what the person picked under Advanced; absent means the agent picks the kind from their words. */
+  create(name: string, prompt: string, picked?: unknown, askMore = false, uploads: ImageUpload[] = [], sharedIn = false, fixed?: { slug: string; packageName: string }): App {
     const cleanName = name.trim().replace(/\s+/g, " ");
+    const preset = picked ?? "react-native";
     if (!PRESETS.includes(preset as AppPreset)) throw new HttpError(400, "Choose React Native, Kotlin, Game or Expo Exact.");
     if (cleanName === "" || cleanName.length > 50) throw new HttpError(400, "Give the app a name of up to 50 characters.");
     if (prompt.trim() === "") throw new HttpError(400, "Say what the app should do.");
@@ -610,7 +618,7 @@ export class AppManager {
     const firstItemId = randomUUID();
     const saved = uploads.map((u) => this.saveImage(app.id, u));
     this.emitItem(record, { id: firstItemId, kind: "user", text: prompt.trim(), ...(saved.length ? { images: saved.map(({ chat }) => chat) } : {}) });
-    const agentPrompt = firstPrompt(prompt.trim(), { askMore: askMore === true, planFirst: this.config.planFirst });
+    const agentPrompt = firstPrompt(prompt.trim(), { askMore: askMore === true, planFirst: this.config.planFirst, picked: picked === undefined ? undefined : (preset as AppPreset) });
     const shared = sharedIn ? `\n\n${sharedInNote(/https?:\/\//i.test(prompt))}` : "";
     this.finishCreate(record, prompt.trim(), `${agentPrompt}${shared}`, firstItemId, saved.map(({ prompt: image }) => image)).catch((error: unknown) => {
       if (!record.deleted) this.log(`[${app.slug}] creation stopped:`, (error as Error).message);
@@ -2043,7 +2051,7 @@ ${overviewNudge()}` : note;
           const toolCallId = String(update["toolCallId"] ?? "");
           if (rt.hiddenTools.has(toolCallId)) return;
           // The page tools are never shown (the page's card stands for them); with helpers, neither are the worker tools.
-          if (isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update) || isSetAppKindCall(update) || (coordinated && isWorkerToolCall(update))) {
+          if (isPageToolCall(update) || isDescribeChangeCall(update) || isReadDiaryCall(update) || isSetAppKindCall(update) || isAskChoiceCall(update) || (coordinated && isWorkerToolCall(update))) {
             // Not shown (the worker row stands for it), but it ends the text before it, like any tool call.
             rt.hiddenTools.add(toolCallId);
             for (const draft of rt.translator.closeStreams()) this.emitItem(record, draft);

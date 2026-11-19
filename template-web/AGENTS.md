@@ -61,8 +61,8 @@ do it, and keep them looking alike. Storage, AI and the rules in this file apply
 ## What a web app cannot do (say so plainly when asked)
 
 This is a web app, not an Android app. When the person asks for one of these, say in plain words
-that a web app cannot do it, and that Kiwimake can make the app an Android app too (the plan page
-has a switch for Web, Android or Both):
+that a web app cannot do it, and that Kiwimake can make it an Android app instead (while the app is
+new, saying so in the chat is enough; once it has versions, that is a new app):
 
 - **No alarms, reminders or notifications while the app is closed**, and no exact alarms. Timers
   and sounds work only while the app is open and on screen.

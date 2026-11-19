@@ -32,6 +32,8 @@ export interface HistoryHost {
   diaryRead(appId: string, info: { ok: boolean; entries: number; problem?: string }): void;
   /** Web, Android or Both (docs/WEB-APPS.md): the set_app_kind tool. Resolves with what the agent is told. */
   setKind?(appId: string, kind: string): Promise<string>;
+  /** The ask_choice tool: one short question in the app's main chat, with answers the person taps. */
+  askChoice?(appId: string, question: string, choices: string[]): void;
 }
 
 const MAX_TEXT = 300;
@@ -281,11 +283,24 @@ export class History {
       {
         name: "set_app_kind",
         description:
-          'Web, Android, Both or Game (the plan page\'s switch; a game has no switch). Call it once the person has picked or confirmed the kind on the plan page (or in a message), before you or a helper start building: "web" makes this a web app (Vite and React; it opens from a link, no install), "android" an Android app, "both" the Android app plus a web version kept beside it in web/, "game" a game (Kotlin and Compose Multiplatform: the game in game/, ready for iPhone and the web later, inside an Android app). A new app can become any kind; later an Android app can only add or drop its web version (a web app never becomes an Android app: that is a new app). It answers with what changed in the project: read the AGENTS.md it names before you change code.',
+          'Web, Android, Both or Game. For a new app the person left to you, call it as soon as the kind is clear from their words (in your first reply, after the sentence that says which kind and why) or from their answer to your question; call it again when they ask for another kind while the app is new. Always before you or a helper start building: "web" makes this a web app (Vite and React; it opens from a link, no install), "android" an Android app, "both" the Android app plus a web version kept beside it in web/, "game" a game (Kotlin and Compose Multiplatform: the game in game/, ready for iPhone and the web later, inside an Android app). A new app can become any kind; later an Android app can only add or drop its web version (a web app never becomes an Android app: that is a new app). It answers with what changed in the project: read the AGENTS.md it names before you change code.',
         inputSchema: {
           type: "object",
           properties: { kind: { type: "string", enum: ["web", "android", "both", "game"] } },
           required: ["kind"],
+        },
+      },
+      {
+        name: "ask_choice",
+        description:
+          'Asks the person one short question in the chat with 2 to 4 answers they can tap (quick replies), for example when a new app\'s description does not make clear what kind of app it should be. Plain words only, never technical ones (no "React Native", "Kotlin", "framework"). It shows the question and the answers as one message, so do not write the question again yourself; end your turn after it and wait: the answer they tap (or type) comes as their next message. Only for the main chat.',
+        inputSchema: {
+          type: "object",
+          properties: {
+            question: { type: "string", description: 'One short question, e.g. "Is it something to play, or something to use?"' },
+            choices: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 4, description: 'The answers, a few words each, e.g. ["A game to play", "An app on her phone", "A page she opens from a link"]' },
+          },
+          required: ["question", "choices"],
         },
       },
       {
@@ -305,6 +320,13 @@ export class History {
       return "Saved. It shows on the new version's card when the build is ready. Now end your turn as usual.";
     }
     if (name === "read_diary") return this.readDiary(appId);
+    if (name === "ask_choice") {
+      if (workerId) throw new Error("Only the main chat asks the person. Put the question in your report instead.");
+      if (!this.host.askChoice) throw new Error("This PC cannot show quick replies.");
+      const { question, choices } = choiceFrom(args);
+      this.host.askChoice(appId, question, choices);
+      return "Shown in the chat with the answers to tap. Now end your turn and wait for their answer.";
+    }
     if (name === "set_app_kind") {
       if (!this.host.setKind) throw new Error("This PC cannot change the kind of an app.");
       return this.host.setKind(appId, String(args["kind"] ?? ""));
@@ -367,6 +389,25 @@ type Rpc = { jsonrpc?: string; id?: string | number | null; method?: string; par
 /** An ACP tool call of set_app_kind (hidden: the plan page's answer stands for it). */
 export function isSetAppKindCall(update: Record<string, unknown>): boolean {
   return JSON.stringify([update["title"], update["name"], update["_meta"]]).includes(`mcp__${APP_TOOLS_SERVER}__set_app_kind`);
+}
+
+/** An ACP tool call of ask_choice (hidden: the question with its answers stands for it). */
+export function isAskChoiceCall(update: Record<string, unknown>): boolean {
+  return JSON.stringify([update["title"], update["name"], update["_meta"]]).includes(`mcp__${APP_TOOLS_SERVER}__ask_choice`);
+}
+
+/** The ask_choice tool's arguments, cleaned: one question, 2 to 4 short distinct answers. */
+export function choiceFrom(args: Record<string, unknown>): { question: string; choices: string[] } {
+  const question = clean(args["question"], 200);
+  if (!question) throw new Error('Put the question in "question".');
+  const raw = Array.isArray(args["choices"]) ? args["choices"] : [];
+  const choices: string[] = [];
+  for (const c of raw) {
+    const choice = clean(c, 60);
+    if (choice && !choices.some((x) => x.toLowerCase() === choice.toLowerCase())) choices.push(choice);
+  }
+  if (choices.length < 2) throw new Error('Give 2 to 4 answers in "choices".');
+  return { question, choices: choices.slice(0, 4) };
 }
 
 /** An ACP tool call of describe_change (hidden: the version's card stands for it). */

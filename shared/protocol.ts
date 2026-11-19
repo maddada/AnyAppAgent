@@ -328,6 +328,11 @@ export interface ChatItem {
   usage?: TokenUsage;
   crash?: CrashInfo; // added: on a "crash" item; upserted when it happens again or "Fix it" is tapped
   diary?: DiaryReadInfo; // added: on a "diary" item
+  // Added (picking the kind in the conversation, docs/SPEC.md): on an "assistant" item, a short question's
+  // answers the person can tap (quick replies, from the agent's ask_choice tool). Tapping one sends it as
+  // the person's next message; they show only while no message of theirs followed. The item's text
+  // also lists them, so an older phone or desktop shows them as plain text.
+  choices?: string[];
   // Added for the cloud (docs/CLOUD.md section 2): on a user item, what its change used in credits
   // ("Used 2.2 credits (est. 2)"), in millicredits; never tokens. ownKey: the AI ran on the
   // person's own key (only machine time past fair use counts). Absent on a PC's chats.
@@ -558,7 +563,11 @@ export interface RenameAppRequest {
 export interface CreateAppRequest {
   name: string;
   prompt: string; // what the app should do: becomes the first message to the agent
-  preset?: AppPreset; // default "react-native"; an unknown value is refused with 400
+  // Default "react-native"; an unknown value is refused with 400. Added meaning (picking the kind in the
+  // conversation): absent means "Let the agent decide": the app starts as "react-native" and its agent
+  // reads the description, says which kind it makes and why, and switches it (set_app_kind) while the
+  // app is new. Present (even "react-native") is the person's own pick under Advanced: the agent keeps it.
+  preset?: AppPreset;
   // Added: "Ask me more": before it plans, the agent asks the person questions about the app (on a page).
   askMore?: boolean;
   // Added: pictures for the first message (the same limits as SendMessageRequest.images). An older PC ignores them.

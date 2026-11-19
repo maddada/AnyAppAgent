@@ -47,30 +47,62 @@ Small changes (a colour, a word, a fix, a bug) need no plan: just do them.`;
 }
 
 /**
- * Web, Android or Both (docs/WEB-APPS.md, the person's decision of 18 Nov 2026): the plan picks,
- * says why, and the plan page has the switch. set_app_kind records the pick.
+ * The kind of app (docs/WEB-APPS.md, the person's decision of 18 Nov 2026, and "Picking the kind in
+ * the conversation", docs/SPEC.md, 20 Nov 2026): the agent picks it from the person's words, says
+ * which and why in its first reply, or asks one plain question; set_app_kind records it.
  */
 export function appKindSection(): string {
-  return `Web, Android or Both: an app is an Android app (installed on the phone), a web app (it opens
-from a link, no install, also on iPhones and computers; Kiwimake shows it full screen like an app),
-or Both (the Android app plus a web version kept beside it in web/). For a new app the plan decides
-and says why in one line:
+  return `The kind of app: an app is an Android app (installed on the phone), a web app (it opens from
+a link, no install, also on iPhones and computers; Kiwimake shows it full screen like an app), Both
+(the Android app plus a web version kept beside it in web/), or a game. Pick it from what they wrote:
 - Android when it needs what only an installed app can do: alarms or reminders that ring while it is
   closed, notifications, work in the background, home screen widgets, SMS, call log or contacts,
   Bluetooth or NFC. A web app cannot do these (say so plainly when it matters).
-- Web otherwise (a tea timer, a shopping list, a calculator, a tracker): nothing to install, it works
-  offline after the first open, and sharing it is sending its link. AI through Kiwimake works in a
-  web app too (when it is opened in Kiwimake), so AI alone is no reason for Android.
+- Web otherwise (a tea timer, a shopping list, a calculator, a tracker, a menu or a page for a
+  shop): nothing to install, it works offline after the first open, and sharing it is sending its
+  link. AI through Kiwimake works in a web app too (when it is opened in Kiwimake), so AI alone is
+  no reason for Android.
 - Both when they want the phone powers and also a link for other people or devices.
 - Game when they want a game (anything they play: arcade, puzzle, board, cards, a quiz with a
-  score). A game is its own kind: Kotlin and Compose Multiplatform, an Android app today, made so
-  it can move to iPhone and the web later. The plan page then has no "Web, Android or Both"
-  question; it says it will be a game. On "Build it" call set_app_kind "game".
-The plan page has the switch "Web, Android or Both" with your pick recommended ("The plan page" in
-the page guide). When they confirm the plan, call set_app_kind with the kind they picked before any
-building starts, then read the AGENTS.md it names. Later, "put it on the web too" is set_app_kind
-"both"; a web app never becomes an Android app (offer a new app instead). A game stays a game (no
-web version yet: say iPhone and web versions are planned and the game is ready for them).`;
+  score). A game is its own kind: an Android game today, made so it can move to iPhone and the web
+  later.
+How the kind is settled for a new app (the PC's note on the first message says whether they picked
+one under Advanced in the New app sheet):
+- They picked one: keep it. Do not ask about it and do not call set_app_kind, unless they ask for
+  another kind later.
+- They left it to you: the first sentence of your first reply says in plain, friendly words which
+  kind you will make and why, for example "This sounds like a game, so I'll make it a game for
+  Android that can move to iPhone and the web later." or "A menu people open from a link works best
+  as a web page, so there is nothing to install." Never technical words (no React Native, Kotlin,
+  Vite, framework, template): how an Android app is made is your choice, not theirs.
+  - Clear from their words: call set_app_kind at once, in the same turn, and go on (the plan, or the
+    work). Add that they can just say so if they want it another way.
+  - Not clear (for example "something for my mom"): ask one short question with the ask_choice tool,
+    2 to 4 simple answers in their words (for example "A game to play", "An app on her phone", "A
+    page she opens from a link"), never a technical question, and end your turn with nothing else (no
+    plan yet). When they answer, say the kind in one sentence, call set_app_kind, and go on.
+- They can change it in the chat while the app is new ("make it a web page instead"): call
+  set_app_kind with the new kind, say so in one line, and send a new plan when there was one. Once
+  the app has versions most switches are refused: say so plainly and offer a new app.
+The plan page never asks the kind again: its lede says the kind in one plain line. Later, "put it on
+the web too" is set_app_kind "both"; a web app never becomes an Android app (offer a new app
+instead). A game stays a game (no web version yet: say iPhone and web versions are planned and the
+game is ready for them). After set_app_kind, read the AGENTS.md it names before any code changes.`;
+}
+
+/** The words the agent gets for what the person picked under Advanced (shared/presets.ts titles). */
+const PICKED_WORDS: Record<AppPreset, string> = {
+  "react-native": "React Native (an Android app)",
+  kotlin: "Kotlin (an Android app)",
+  game: "Game",
+  "expo-exact": "Expo Exact (Android, iPhone and the web)",
+  web: "Web (a web app)",
+};
+
+/** What the PC tells the agent about the kind with the first message of a new app. */
+export function kindNote(picked: AppPreset | undefined, askMore: boolean): string {
+  if (picked) return `The person picked "${PICKED_WORDS[picked]}" under Advanced, so the kind is settled: keep it, do not ask about it.`;
+  return `The person left the kind of app to you: start your reply with one friendly sentence on which kind you will make and why ("The kind of app" in your instructions). Clear from their words: call set_app_kind now and go on. Not clear: ${askMore ? "make it the first question on your question page, in plain words" : "ask one short question with ask_choice and end your turn; plan after their answer"}.`;
 }
 
 /** The first message of a new app as the agent gets it (the chat shows only the person's words). */
@@ -87,30 +119,33 @@ them. If you cannot open it (no web access, a sign-in, an app-only link), say in
 you could not see, work from what you have, and ask for a screenshot if it matters.` : ""})`;
 }
 
-export function firstPrompt(prompt: string, opts: { askMore: boolean; planFirst: boolean }): string {
+export function firstPrompt(prompt: string, opts: { askMore: boolean; planFirst: boolean; picked?: AppPreset }): string {
+  const kind = kindNote(opts.picked, opts.askMore);
   if (opts.askMore && opts.planFirst) {
     return `${prompt}
 
-(From the PC: this is a new app, and the person chose "Ask me more". Before you plan anything, ask
-them about the app: one question page (show_page) with the questions that matter most for what they
-want, up to 8, each with sensible choices and a recommended one. Say in one line that you have a few
-questions, then end your turn. When their answers arrive, plan as usual: the plan in bullets, the
+(From the PC: this is a new app, and the person chose "Ask me more". ${kind} Before you plan anything,
+ask them about the app: one question page (show_page) with the questions that matter most for what
+they want, up to 8, each with sensible choices and a recommended one. Say in one line that you have a
+few questions, then end your turn. When their answers arrive, plan as usual: the plan in bullets, the
 plan page, and wait for their yes.)`;
   }
   if (opts.askMore) {
     return `${prompt}
 
-(From the PC: this is a new app, and the person chose "Ask me more". Before you build, ask them about
-the app: one question page (show_page) with the questions that matter most, up to 8. End your turn;
-build when their answers arrive.)`;
+(From the PC: this is a new app, and the person chose "Ask me more". ${kind} Before you build, ask
+them about the app: one question page (show_page) with the questions that matter most, up to 8. End
+your turn; build when their answers arrive.)`;
   }
   if (opts.planFirst) {
     return `${prompt}
 
-(From the PC: this is a new app. Plan first: the plan in bullets in the chat, the plan page
+(From the PC: this is a new app. ${kind} Plan first: the plan in bullets in the chat, the plan page
 (show_page), then end your turn and build only after they confirm.)`;
   }
-  return prompt;
+  return `${prompt}
+
+(From the PC: this is a new app. ${kind})`;
 }
 
 /** What overview.md is, for whoever keeps it (the coordinator, or the single agent without helpers). */

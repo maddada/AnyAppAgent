@@ -167,22 +167,23 @@ publish the plan page and end your turn:
 - A mockup of the main screen in a phone frame (`.gx-frame`, about 360px wide), drawn in the
   colours you will use, with the real words the app will show.
 - "What it does" as a short list, "What I chose for you" as a short list (so they can change it).
-- It is a question page: the whole page goes in `<gx-questions submit="Send">`. For a new app (and
-  when a change would add a web version), it first asks Web, Android or Both, with your pick
-  recommended and, in its lede, one plain line why (for example "This will be a web app: it opens
-  from a link, no install. Pick Android if it must ring while closed."):
+- It is a question page: the whole page goes in `<gx-questions submit="Send">`. It does not ask what
+  kind of app it is: that was settled in the chat before the plan (the person picked it, you told
+  them which kind and why, or they answered your quick question). Say the kind in the lede in one
+  plain line, for example "A web page: it opens from a link, nothing to install." or "An Android game,
+  made ready for iPhone and the web later." For a game, draw the mockup as the game screen
+  (landscape when the game is).
+- Only a change to an app that already has versions, one that would add a web version the person
+  did not ask for by name, asks first whether to add it:
 
 ```html
-<gx-question tag="P1" name="Web, Android or Both?" title="Where should it run?">
-  <gx-choice value="Web" recommended>Web<small>Opens from a link, no install. Works offline after the first open.</small></gx-choice>
-  <gx-choice value="Android">Android<small>Installed on the phone: alarms and notifications while it is closed.</small></gx-choice>
-  <gx-choice value="Both">Both<small>The Android app, plus a web version kept beside it for a link.</small></gx-choice>
+<gx-question tag="P1" name="Add a web version?" title="Also as a web page?">
+  <gx-choice value="Both" recommended>Yes, add a web version<small>The Android app stays, plus a link that opens it in any browser.</small></gx-choice>
+  <gx-choice value="Android">No, only the Android app<small>Nothing changes about where it runs.</small></gx-choice>
 </gx-question>
 ```
 
-  Put `recommended` on the one you picked. A web app cannot ring alarms or show notifications while
-  it is closed, has no widgets and no background work: when the app needs one of these, recommend
-  Android and say so in the lede. Then it ends with one question:
+  Then the page ends with one question:
 
 ```html
 <gx-question tag="P2" name="Build it?" title="Shall I build it like this?">
@@ -191,10 +192,7 @@ publish the plan page and end your turn:
 </gx-question>
 ```
 
-A game (anything the person plays) has no P1: say in the lede it will be a game, an Android game
-made ready for iPhone and the web later, and draw the mockup as the game screen (landscape when
-the game is). Its P2 is the only question.
-
-Then wait. "Build it" (or a reply such as "yes", "go", "looks good") means start: first call
-set_app_kind with what they picked ("web", "android" or "both"), or "game" for a game. "Change something" means change the
-plan with their note, publish a new plan page, and ask again.
+Then wait. "Build it" (or a reply such as "yes", "go", "looks good") means start (when they picked
+"Both" on P1, call set_app_kind "both" first). "Change something" means change the plan with their
+note, publish a new plan page, and ask again; when the note asks for another kind of app, call
+set_app_kind with it first (while the app is new).

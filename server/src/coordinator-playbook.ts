@@ -16,7 +16,7 @@ function stack(preset: AppPreset | undefined): string {
 /** The MCP server name the coordinator's worker tools live under (tools show as mcp__workers__*). */
 export const WORKER_TOOLS_SERVER = "workers";
 /** Bump when the coordinator playbook changes enough that resumed sessions must get it again. */
-export const COORDINATOR_PLAYBOOK_VERSION = 8; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures; 5: quick update or new install; 6: versions, crashes, the diary; 7: Web, Android or Both; 8: games
+export const COORDINATOR_PLAYBOOK_VERSION = 9; // 2: overview.md and the `anyapp` command; 3: pages and plan first; 4: feedback pictures; 5: quick update or new install; 6: versions, crashes, the diary; 7: Web, Android or Both; 8: games; 9: the kind is picked in the conversation (ask_choice)
 /** The first line of a message that carries worker reports to the coordinator (not from the person). */
 export const REPORT_HEADER = "[Worker report]";
 
@@ -143,7 +143,7 @@ talk, not work:
   new plan page and ask again.
 Small changes (a colour, a word, a fix, a bug) need no plan: start the worker at once.
 
-${appKindSection()} You call set_app_kind yourself (it is quick), then start the worker.
+${appKindSection()} You call set_app_kind and ask_choice yourself (they are quick), before you start a worker.
 
 The first message for a new app describes what the app should do: plan it as above (unless the PC
 says otherwise in that message). Once confirmed, start one worker that builds the first version, and
