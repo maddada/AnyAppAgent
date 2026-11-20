@@ -1,6 +1,7 @@
 // The GitHub calls sharing needs, through the `gh` CLI that onboarding signed in (docs/DISTRIBUTION.md,
-// "GitHub"). Only repos named anyapp-<slug>-releases are ever created, made public, made private or
-// written to here. The one deletion: deleteAppRepo, when the person deletes an app for good, and
+// "GitHub"). Only repos named anyapp-<slug>-releases are ever made public, made private or written to
+// here, and only those and the public code repos anyapp-<slug>-source ("Publish the code too",
+// docs/GALLERY.md; git writes to them, not this file) are ever created. The one deletion: deleteAppRepo, when the person deletes an app for good, and
 // only for anyapp-<slug> and anyapp-<slug>-releases. The one rename: renameAppRepo (Rename), only
 // a private code repo anyapp-<slug> to anyapp-<new slug>; a -releases repo is never renamed.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -9,6 +10,7 @@ import { join } from "node:path";
 import { run, type RunResult } from "./git.ts";
 
 export const RELEASES_REPO_PATTERN = /^anyapp-[a-z0-9-]+-releases$/;
+export const SOURCE_REPO_PATTERN = /^anyapp-[a-z0-9-]+-source$/;
 
 function lastLine(result: RunResult): string {
   const text = (result.stderr || result.stdout).trim().split(/\r?\n/).filter(Boolean);
@@ -19,9 +21,9 @@ async function gh(args: string[], timeoutMs = 60_000): Promise<RunResult> {
   return run("gh", args, tmpdir(), timeoutMs);
 }
 
-function checkName(full: string): void {
+function checkName(full: string, alsoSource = false): void {
   const [, name] = full.split("/");
-  if (!name || !RELEASES_REPO_PATTERN.test(name)) throw new Error(`Refusing to touch the repository ${full}`);
+  if (!name || !(RELEASES_REPO_PATTERN.test(name) || (alsoSource && SOURCE_REPO_PATTERN.test(name)))) throw new Error(`Refusing to touch the repository ${full}`);
 }
 
 /** The GitHub account `gh` is signed in with. */
@@ -43,7 +45,7 @@ export async function repoVisibility(full: string): Promise<"PUBLIC" | "PRIVATE"
 }
 
 export async function createPublicRepo(full: string, description: string): Promise<void> {
-  checkName(full);
+  checkName(full, true);
   const result = await gh(["repo", "create", full, "--public", "--description", description]);
   if (result.code !== 0) throw new Error(lastLine(result));
 }

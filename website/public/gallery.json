@@ -1,6 +1,59 @@
 {
   "format": 1,
-  "updatedAt": "2026-11-18T00:00:00Z",
+  "updatedAt": "2026-11-20T05:59:52.904Z",
   "maker": "Kiwimake",
-  "apps": []
+  "apps": [
+    {
+      "package": "com.anyapp.waterglass",
+      "name": "Water Glass",
+      "line": "Tap once per glass and watch the day's goal fill up.",
+      "icon": "https://raw.githubusercontent.com/maddada/anyapp-waterglass-releases/HEAD/icon.png",
+      "repo": "maddada/anyapp-waterglass-releases",
+      "code": "maddada/anyapp-waterglass-source",
+      "certSha256": "4ea4701d7a004597951d1b35a51c6d73b9f2cfc83e42b775744d1173806e691c",
+      "latest": {
+        "version": "1.0",
+        "build": 10
+      }
+    },
+    {
+      "package": "com.anyapp.prayeralarm",
+      "name": "Prayer Alarm",
+      "line": "Prayer times with alarms before each prayer.",
+      "icon": "https://raw.githubusercontent.com/maddada/anyapp-prayeralarm-releases/HEAD/icon.png",
+      "repo": "maddada/anyapp-prayeralarm-releases",
+      "code": "maddada/anyapp-prayeralarm-source",
+      "certSha256": "d7aed077ee31279933af27d237de9ec4351006b849c9554303772dff5d4e721d",
+      "latest": {
+        "version": "1.0",
+        "build": 20
+      }
+    },
+    {
+      "package": "com.anyapp.alarmup",
+      "name": "Alarm Up",
+      "line": "An alarm clock that makes sure you get up: missions to turn it off, and sleep reports.",
+      "icon": "https://raw.githubusercontent.com/maddada/anyapp-alarmup-releases/HEAD/icon.png",
+      "repo": "maddada/anyapp-alarmup-releases",
+      "code": "maddada/anyapp-alarmup-source",
+      "certSha256": "c6dd5066c9b1431e52f7201fd81d5bd7785d19ec9a8fad9d628052aa57a27c8c",
+      "latest": {
+        "version": "1.0",
+        "build": 5
+      }
+    },
+    {
+      "package": "com.anyapp.game",
+      "name": "Kiwi Games",
+      "line": "Nine kiwi sports for two on one phone, against the phone, or together over Bluetooth.",
+      "icon": "https://raw.githubusercontent.com/maddada/anyapp-kiwigames-releases/HEAD/icon.png",
+      "repo": "maddada/anyapp-kiwigames-releases",
+      "code": "maddada/anyapp-kiwigames-source",
+      "certSha256": "bbd17e1c27cef1d2b2e9f42508754295958172a73d125646101ffdf43fc84f87",
+      "latest": {
+        "version": "1.0",
+        "build": 41
+      }
+    }
+  ]
 }

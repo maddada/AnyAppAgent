@@ -91,3 +91,15 @@ describe("folder paths of this PC", () => {
     expect(where).toEqual(["notes.md (line 1)", "other.md (line 2)", "win.md (line 1)"]);
   });
 });
+
+describe("the GitHub guard", () => {
+  it("lets Kiwimake create anyapp-<slug>-source repos, and nothing else besides -releases", async () => {
+    const { SOURCE_REPO_PATTERN, RELEASES_REPO_PATTERN, createPublicRepo, setVisibility } = await import("../src/github.ts");
+    expect(SOURCE_REPO_PATTERN.test(publicCodeRepoName("waterglass"))).toBe(true);
+    expect(RELEASES_REPO_PATTERN.test(publicCodeRepoName("waterglass"))).toBe(false);
+    await expect(createPublicRepo("me/anyapp-tea", "x")).rejects.toThrow(/Refusing/);
+    await expect(createPublicRepo("me/Kiwimake", "x")).rejects.toThrow(/Refusing/);
+    // A code repo is only ever created public: its visibility is never changed from here.
+    await expect(setVisibility("me/anyapp-tea-source", "private")).rejects.toThrow(/Refusing/);
+  });
+});

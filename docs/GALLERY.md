@@ -155,3 +155,28 @@ Not proven: Make it mine end to end from a gallery app (it is `POST /api/clones`
 notice of a gallery-installed app (needs a second published version); `handles/<package>` answering
 0 for a gallery app (the provider answers only the app itself, so it was not read from adb);
 kiwimake.ai serving the file (the website was not deployed).
+
+## Published (2026-11-20, Kiwimake 0.3.5)
+
+Done through the owner's own Kiwimake (its API): Game renamed to Kiwi Games (package kept), then for
+each of the four apps Share with others, Publish the code too and Publish (stable, version 1.0).
+Water Glass and Prayer Alarm were still on the shared key, so sharing moved each to its own key
+(signed with the rotation lineage, V3) and built it again first.
+
+| App | Build | Certificate (SHA-256, first 12) | Code repo |
+| --- | --- | --- | --- |
+| Water Glass | 10 | `4ea4701d7a00` | `maddada/anyapp-waterglass-source` |
+| Prayer Alarm | 20 | `d7aed077ee31` | `maddada/anyapp-prayeralarm-source` |
+| Alarm Up | 5 | `c6dd5066c9b1` | `maddada/anyapp-alarmup-source` |
+| Kiwi Games (`com.anyapp.game`) | 41 | `bbd17e1c27ce` | `maddada/anyapp-kiwigames-source` |
+
+Found then: 0.3.5's GitHub guard (`server/src/github.ts`) let Kiwimake create only
+`anyapp-<slug>-releases` repos, so the first code commit of each app was refused ("Refusing to touch
+the repository"; the releases were out). Fixed: `createPublicRepo` also takes
+`anyapp-<slug>-source` (nothing else changed: visibility and file writes stay `-releases` only). The
+running 0.3.5 could not take the fix without a restart, so each version's code went in with the same
+`pushPublicCode`, from the `<slug>-source.zip` attached to that release. Every code repo was then
+cloned and checked: public, one commit tagged `v1.0-b<build>`, author and committer the noreply
+address, the MIT LICENSE, no `APP_MEMORY.md`, `.env` or keys, no PC folder paths, no em dashes. Each
+published APK's certificate (apksigner) is the one in its `update.json` and in `gallery.json`. Later
+Publishes find the repo and add one commit each, which 0.3.5 already does.
