@@ -1,7 +1,7 @@
 {
   "name": "anyappagent-desktop",
   "productName": "Kiwimake",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "private": true,
   "description": "Kiwimake for Windows, macOS and Linux: runs the companion, onboarding, connect a phone.",
   "homepage": "https://github.com/maddada/Kiwimake",
