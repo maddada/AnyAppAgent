@@ -6,7 +6,7 @@ import { CodexModels } from "./acp/codex-model.ts";
 import { selectedEngine } from "./acp/session.ts";
 import { AppManager } from "./apps.ts";
 import { installAppsCli } from "./apps-cli.ts";
-import { Auth } from "./auth.ts";
+import { Auth, releaseVersion } from "./auth.ts";
 import { CloudLink } from "./cloud-link.ts";
 import { builderKeys, CloudMover } from "./cloud-move.ts";
 import { KeepReady } from "./keep-ready.ts";
@@ -83,6 +83,7 @@ export async function main(): Promise<void> {
     easyConnect,
     signing,
     ...(process.env.ANYAPP_HOST_APK ? { hostApkPath: process.env.ANYAPP_HOST_APK } : {}),
+    ...(releaseVersion(process.env.ANYAPP_PHONE_RELEASE) ? { phoneRelease: process.env.ANYAPP_PHONE_RELEASE } : {}),
   });
   phonesConnected = () => http.phonesConnected();
   broadcast = (event) => {

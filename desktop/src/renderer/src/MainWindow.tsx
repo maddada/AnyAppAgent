@@ -19,7 +19,7 @@ import { EngineChoice, type StepId } from "./Onboarding.tsx";
 import { PairingDialog } from "./Pairing.tsx";
 import { ShareButton, ShareDialog } from "./Share.tsx";
 import { FromOthersButton, FromOthersDialog } from "./FromOthers.tsx";
-import { GetPhoneAppDialog } from "./PhoneApp.tsx";
+import { GetPhoneAppDialog, PhoneUpdateNotice } from "./PhoneApp.tsx";
 import { AppIcon, Dialog, Icon, Spinner, StateLine, Switch, appState, timeAgo, Wordmark, type UiState } from "./ui.tsx";
 import { BackupGroup, ReminderCard, UsageGroup } from "./Trust.tsx";
 import { UpdateNotice, UpdatesGroup } from "./Update.tsx";
@@ -360,6 +360,7 @@ function AppsPage({
           </div>
         )}
         <UpdateNotice u={s.update} />
+        <PhoneUpdateNotice devices={s.admin?.devices ?? []} release={s.admin?.phoneRelease} onGetApp={onGetApp} />
         <ReminderCard care={s.care} />
         {listError && <p className="label problem-text apps-list-error">{listError}</p>}
         {pinned.length + rest.length === 0 ? (

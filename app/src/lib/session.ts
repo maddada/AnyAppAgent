@@ -28,6 +28,7 @@ import {
 import { loadPairing, loadPrefs, savePairing, savePrefs, type Pairing, type Prefs } from "./storage";
 import { autoInstallIfNew, installerHooks, onApkReady, onAppReport, refreshPackages, resumePendingInstall, resumeUnfinishedInstalls } from "./installer";
 import { updateKeepAlive } from "./keepalive";
+import { pcKnowsRelease, runningRelease } from "./appUpdate";
 import { loadTrash, onAppDeleted } from "./manage";
 
 // ---------- startup, pairing
@@ -373,7 +374,7 @@ async function connect() {
   }
   connecting = false;
   if (socket) return;
-  const ws = new WebSocket(client.socketUrl());
+  const ws = new WebSocket(client.socketUrl(runningRelease()));
   socket = ws;
   console.log(`link: opening the socket (${usesEasyConnect(pairing) ? "Easy Connect" : "same Wi-Fi"})`);
   // A socket that neither opens nor fails would leave the app waiting for ever.
@@ -622,6 +623,8 @@ function handleEvent(event: ServerEvent) {
   switch (event.type) {
     case "hello":
       setState({ serverName: event.serverName });
+      // The PC knows a newer Kiwimake for phones: look for it now, not at the next scheduled check.
+      if (event.phoneRelease) pcKnowsRelease(event.phoneRelease);
       break;
     case "app.updated":
       upsertApp(event.app);

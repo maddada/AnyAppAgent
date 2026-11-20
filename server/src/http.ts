@@ -43,7 +43,7 @@ import { HttpError, type AppManager } from "./apps.ts";
 import type { SigningKeys } from "./signing-keys.ts";
 import type { CloudLink } from "./cloud-link.ts";
 import type { CloudMover } from "./cloud-move.ts";
-import { ADMIN_DEVICE_ID, cleanDeviceName, type Auth } from "./auth.ts";
+import { ADMIN_DEVICE_ID, cleanDeviceName, releaseVersion, type Auth } from "./auth.ts";
 import { PairingRefused, type EasyConnect } from "./easy-connect/controller.ts";
 import { log } from "./fs-util.ts";
 import { lanAddresses, pairingUri } from "./net.ts";
@@ -158,6 +158,8 @@ export function startHttpServer(deps: {
   easyConnect: EasyConnect;
   signing?: SigningKeys;
   hostApkPath?: string;
+  /** The newest Kiwimake phone release this PC knows (the desktop's pin, ANYAPP_PHONE_RELEASE). */
+  phoneRelease?: string;
   account?: CloudLink;
   mover?: CloudMover;
   /** The Codex model in use (acp/codex-model.ts), when the engine is Codex. */
@@ -220,10 +222,12 @@ export function startHttpServer(deps: {
       ...(device.lastSeenAt ? { lastSeenAt: device.lastSeenAt } : {}),
       connected: connected.has(device.id),
       via: device.via === "easy-connect" ? "easy-connect" : "same-network",
+      ...(device.appVersion ? { appVersion: device.appVersion } : {}),
     }));
     return {
       serverName: serverName(),
       version: deps.version,
+      ...(deps.phoneRelease ? { phoneRelease: deps.phoneRelease } : {}),
       port: deps.port,
       pairing: {
         code: auth.code,
@@ -717,7 +721,7 @@ export function startHttpServer(deps: {
       return;
     }
     wss.handleUpgrade(req, socket, head, (ws) => {
-      const hello = JSON.stringify({ type: "hello", serverName: serverName(), protocol: 1 } satisfies ServerEvent);
+      const hello = JSON.stringify({ type: "hello", serverName: serverName(), protocol: 1, ...(deps.phoneRelease ? { phoneRelease: deps.phoneRelease } : {}) } satisfies ServerEvent);
       if (isAdminEvents) {
         adminSockets.add(ws);
         const drop = () => adminSockets.delete(ws);
@@ -728,6 +732,8 @@ export function startHttpServer(deps: {
         return;
       }
       phoneSockets.set(ws, deviceId);
+      const appVersion = releaseVersion(url.searchParams.get("app"));
+      if (appVersion) auth.noteAppVersion(deviceId, appVersion);
       const drop = () => {
         if (phoneSockets.delete(ws)) adminChanged();
       };

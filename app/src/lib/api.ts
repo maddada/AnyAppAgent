@@ -218,6 +218,8 @@ export class Client {
   /** The latest build's quick update (docs/FAST-LANE.md). */
   otaUrl = (id: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/ota`;
   apkUrl = (id: string, abi?: string) => `${this.baseUrl}/api/apps/${encodeURIComponent(id)}/apk${abi ? `?abi=${encodeURIComponent(abi)}` : ""}`;
-  socketUrl = () => `${this.baseUrl.replace(/^http/i, "ws")}/ws?token=${encodeURIComponent(this.token)}`;
+  /** With `appVersion`, the Kiwimake release this phone runs, so the PC can say when it is older (shared/protocol.ts). */
+  socketUrl = (appVersion?: string) =>
+    `${this.baseUrl.replace(/^http/i, "ws")}/ws?token=${encodeURIComponent(this.token)}${appVersion ? `&app=${encodeURIComponent(appVersion)}` : ""}`;
   authHeaders = () => ({ Authorization: `Bearer ${this.token}` });
 }

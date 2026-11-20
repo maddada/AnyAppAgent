@@ -669,11 +669,17 @@ export interface UpdateTodoRequest {
 // Every change also arrives over the socket as "todos.updated" (the whole list) and "app.updated" (openTodos).
 
 // ---------- WebSocket: GET /ws?token=<token>. Server to app only; JSON text frames.
+// Added: phones send `&app=<MAJOR.MINOR.PATCH>` too, the Kiwimake release they run (the APK's own
+// version, or the newer over-the-air update it runs). The companion keeps it (PairedDevice.appVersion);
+// older phones send none, older companions ignore it.
 // The app may send the text frame "ping" every few seconds: writing is how a phone notices a dead
 // connection whose close never reached it. The companion ignores frames from the app.
 
 export type ServerEvent =
-  | { type: "hello"; serverName: string; protocol: 1 }
+  // phoneRelease added: the newest Kiwimake phone release this PC knows (the desktop's pinned phone
+  // APK, MAJOR.MINOR.PATCH). A phone that runs an older one looks for its update at once instead of
+  // waiting for its next scheduled check. Absent from older companions and a companion without a desktop.
+  | { type: "hello"; serverName: string; protocol: 1; phoneRelease?: string }
   | { type: "app.updated"; app: App } // also sent for a new app
   | { type: "app.deleted"; appId: string; uninstall?: boolean } // uninstall added: phones uninstall it too (Android asks)
   | { type: "trash.updated"; count: number } // added: Recently deleted changed (count: apps in it now)
@@ -700,6 +706,7 @@ export interface PairedDevice {
   lastSeenAt?: string;
   connected: boolean; // has a live socket right now
   via: "same-network" | "easy-connect"; // how it paired (and reaches the PC)
+  appVersion?: string; // added: the Kiwimake release it last said it runs (/ws &app=); absent for phones too old to say
 }
 
 export interface EasyConnectState {
@@ -731,6 +738,9 @@ export interface AdminState {
   // not include Kiwimake's usual model, so the PC uses one the plan allows. Absent with Claude and
   // from older PCs.
   codexModel?: { model: string; fallback?: true };
+  // Added: the newest Kiwimake phone release this PC knows (as in the phones' hello), so the desktop
+  // can say when a phone runs an older one. Absent from older PCs.
+  phoneRelease?: string;
 }
 
 // ---------- The PC link (docs/CLOUD.md section 3, "The PC link"; added for the cloud's milestone

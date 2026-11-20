@@ -9,7 +9,7 @@ import QRCode from "qrcode";
 import electronUpdater from "electron-updater";
 import type { ChatItem, WorkerInfo } from "../../../shared/protocol.ts";
 import type { AccountAction, BackupAction, Checks, HexCheck, ImageUpload, KeysAction, PairingView, PhoneDownload, PhoneRelease, Settings, Snapshot } from "../shared/types.ts";
-import { ensurePhone, phoneCachePath, pinnedPhoneUrl, universalPhoneUrl } from "./install/phone.ts";
+import { ensurePhone, PHONE_PIN, phoneCachePath, pinnedPhoneUrl, universalPhoneUrl } from "./install/phone.ts";
 // Window background before first paint, from the shared theme (shared/theme/tokens.ts).
 import { color as themeColor } from "../../../shared/theme/tokens.ts";
 import { AdminClient, lanAddresses } from "./admin-client.ts";
@@ -152,6 +152,9 @@ const companion = new Companion({
       ...(t?.gitBash ? { CLAUDE_CODE_GIT_BASH_PATH: t.gitBash } : {}),
       // The companion serves the phone app at /download/anyappagent.apk for the install QR.
       ANYAPP_HOST_APK: phoneApk() ?? phoneCachePath(paths.stateDir),
+      // The newest phone release (the pin): the companion tells phones on an older one, so they look
+      // for their update at once, and lists which phones run an older one.
+      ANYAPP_PHONE_RELEASE: PHONE_PIN.version,
       // The builder also reads these first (builder/lib/env.mjs).
       ...(t?.JAVA_HOME ? { ANYAPP_JAVA_HOME: t.JAVA_HOME } : {}),
       ...(t?.ANDROID_HOME ? { ANYAPP_ANDROID_HOME: t.ANDROID_HOME } : {}),

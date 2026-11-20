@@ -260,7 +260,8 @@ which sets `KIWIMAKE_RELEASE=1` for `app/app.config.js`) updates itself in two w
 builds do neither, so a debug-signed copy never offers the release APK.
 
 **A newer APK** (`app/src/lib/appUpdate.ts`, `app/src/lib/releaseFeed.ts`). At start, when it comes
-back to the front (at most every 6 hours) and on Settings, Updates, Check now, the phone reads
+back to the front (at most every hour; a failed check is retried after 10 minutes, not remembered),
+when the PC says a newer phone release exists (below) and on Settings, Updates, Check now, the phone reads
 `https://api.github.com/repos/maddada/Kiwimake/releases/latest`. That GitHub release is the
 update metadata; there is no other feed. The phone takes the release's version from its tag
 (`v<version>`) and, when it is newer than its own `versionName`, the asset for its processor:
@@ -277,6 +278,18 @@ It does not offer the APK when the update server already gives this APK that rel
 - The two APK names. They are the same files `desktop/phone-release.json` pins, so the desktop's
   download and the phone's own update are always the same bytes.
 - The release key. An APK signed with any other key is refused before Android sees it.
+
+**The PC tells the phone.** The desktop passes its pinned phone version (`desktop/phone-release.json`)
+to the companion as `ANYAPP_PHONE_RELEASE`. The companion names it in the `hello` every phone gets
+when its socket opens (`phoneRelease`), and a phone that runs an older Kiwimake looks for the update
+at once (GitHub and the update server) instead of waiting for its next check, at most every 10
+minutes per release. So once the PC runs a new desktop release, the connected phone shows the notice
+within seconds. The phone also says which release it runs (`/ws?...&app=<version>`: the APK's
+version, or the newer over-the-air update it runs), the companion keeps it with the pairing
+(`PairedDevice.appVersion`), and the desktop shows a notice over the apps list when a connected phone
+is older than the pin: "Kiwimake <version> is ready for <phone>" (the phone updates itself), or, for
+a phone too old to say its version (0.3.5 and earlier), "Is Kiwimake on <phone> up to date?" with
+Get the phone app (the download QR), because 0.3.3 and earlier have no updater at all.
 
 **Over-the-air JavaScript** (`expo-updates`, `app/src/lib/overTheAir.ts`). A change to JavaScript
 only reaches phones without a new APK, from Kiwimake's update server: a Cloudflare Worker with one

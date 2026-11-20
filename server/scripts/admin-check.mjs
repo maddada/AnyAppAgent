@@ -30,6 +30,7 @@ function start(withApk) {
       ANYAPP_BUILDER: "fake",
       ANYAPP_GITHUB: "off",
       ANYAPP_ADMIN_TOKEN: ADMIN,
+      ANYAPP_PHONE_RELEASE: "0.3.9",
       ...(withApk ? { ANYAPP_HOST_APK: hostApk } : { ANYAPP_HOST_APK: "" }),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -103,6 +104,29 @@ check(device && device.connected === true && typeof device.lastSeenAt === "strin
 const pushed = events.filter((e) => e.type === "admin.state").at(-1);
 check(events[0]?.type === "hello" && pushed?.state.devices.some((d) => d.name === "Test phone" && d.connected),
   `admin events: hello, then admin.state pushed when the phone connected (${events.length} events)`);
+check(state.phoneRelease === "0.3.9", `the admin state names the newest phone release (${state.phoneRelease})`);
+check(device && device.appVersion === undefined, "a phone that does not say its version has no appVersion");
+
+// ---------- the phone's version: it says which Kiwimake it runs (&app=), the PC says the newest one (hello)
+const versionToken = await (async () => {
+  const code = (await (await call("GET", "/api/admin/state", ADMIN)).json()).pairing.code;
+  return (await (await call("POST", "/api/pair", undefined, { code, deviceName: "Version phone" })).json()).token;
+})();
+const versionWs = new WebSocket(`ws://127.0.0.1:${PORT}/ws?token=${encodeURIComponent(versionToken)}&app=0.3.6`);
+const versionHello = await new Promise((r) => versionWs.addEventListener("message", (e) => r(JSON.parse(String(e.data))), { once: true }));
+check(versionHello.type === "hello" && versionHello.phoneRelease === "0.3.9", `the phone's hello names the newest phone release: ${JSON.stringify(versionHello)}`);
+await new Promise((r) => setTimeout(r, 300));
+let versionDevice = (await (await call("GET", "/api/admin/state", ADMIN)).json()).devices.find((d) => d.name === "Version phone");
+check(versionDevice?.appVersion === "0.3.6", `the PC keeps the version the phone said (${versionDevice?.appVersion})`);
+versionWs.close();
+const junkWs = new WebSocket(`ws://127.0.0.1:${PORT}/ws?token=${encodeURIComponent(versionToken)}&app=${encodeURIComponent("9.9.9<script>")}`);
+await new Promise((r) => junkWs.addEventListener("open", r, { once: true }));
+await new Promise((r) => setTimeout(r, 300));
+versionDevice = (await (await call("GET", "/api/admin/state", ADMIN)).json()).devices.find((d) => d.name === "Version phone");
+check(versionDevice?.appVersion === "0.3.6", `a version that is not MAJOR.MINOR.PATCH is ignored (${versionDevice?.appVersion})`);
+junkWs.close();
+const tokensFile = JSON.parse(readFileSync(join(ROOT, "state", "tokens.json"), "utf8"));
+check(tokensFile.some((d) => d.deviceName === "Version phone" && d.appVersion === "0.3.6"), "the version is kept with the pairing (tokens.json)");
 
 const before = state.pairing.code;
 state = await (await call("POST", "/api/admin/pairing/new", ADMIN)).json();

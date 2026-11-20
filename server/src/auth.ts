@@ -14,6 +14,12 @@ export interface DeviceRecord {
   lastSeenAt?: string;
   via?: "lan" | "easy-connect";
   clientKey?: string; // Easy Connect: the phone's tailcat client key ("nodekey:…"), on the helper's allow-list
+  appVersion?: string; // the Kiwimake release the phone last said it runs (/ws &app=)
+}
+
+/** `0.3.5`, or null for anything that is not MAJOR.MINOR.PATCH (a phone's /ws &app=, the desktop's pin). */
+export function releaseVersion(text: unknown): string | null {
+  return typeof text === "string" && /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(text) ? text : null;
 }
 
 const MAX_FAILURES_PER_MINUTE = 10;
@@ -133,6 +139,14 @@ export class Auth {
     if (ok === "locked") return "locked";
     if (!ok) return null;
     return this.issue(deviceName, "lan").token;
+  }
+
+  /** A phone said which Kiwimake it runs (on its socket): kept with its record, written when it changed. */
+  noteAppVersion(id: string, version: string): void {
+    const device = this.devices.find((record) => record.id === id);
+    if (!device || device.appVersion === version) return;
+    device.appVersion = version;
+    writeJsonAtomic(this.tokensPath, this.devices);
   }
 
   isAdmin(token: string | undefined | null): boolean {

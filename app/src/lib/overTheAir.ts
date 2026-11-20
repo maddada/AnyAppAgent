@@ -151,6 +151,13 @@ export async function overTheAirReleaseVersion(): Promise<string | null> {
   return typeof body.version === "string" ? body.version : null;
 }
 
+/** The Kiwimake release of the downloaded update running now (`extra.kiwimake.version`), or null for the APK's own code. */
+export function runningUpdateVersion(): string | null {
+  if (!OTA_ENABLED) return null;
+  const version = (Updates.manifest as { extra?: { kiwimake?: { version?: unknown } } } | undefined)?.extra?.kiwimake?.version;
+  return typeof version === "string" ? version : null;
+}
+
 /** What an update says about itself (`extra.kiwimake`, written by scripts/ota-publish.mjs). */
 export type UpdateDetails = { id: string | null; createdAt: Date | null; version: string | null; commit: string | null; whatsNew: string[] };
 

@@ -12,8 +12,13 @@
 // the apps list, the settings) stays, and the installer offers Open when it is done.
 //
 // initAppUpdates checks at start and whenever Kiwimake comes back to the front, at most once every
-// CHECK_INTERVAL_MS (the time is kept in a file, so a restart does not reset it). Only release builds
-// check (app.config.js `extra.selfUpdate`): a debug-signed copy could never take the release APK.
+// CHECK_INTERVAL_MS (the time is kept in a file, so a restart does not reset it). A check that failed
+// (no internet, GitHub busy) is not remembered: the next time Kiwimake comes to the front tries again,
+// at most every RETRY_MS. And the PC says which phone release is newest when the phone connects (its
+// hello, shared/protocol.ts): when that is newer than this Kiwimake, the phone looks at once
+// (pcKnowsRelease), so a new release shows on the home screen as soon as the PC has it.
+// Only release builds check (app.config.js `extra.selfUpdate`): a debug-signed copy could never take
+// the release APK.
 import * as Application from "expo-application";
 import Constants from "expo-constants";
 import { File, Paths } from "expo-file-system";
@@ -21,11 +26,13 @@ import { AppState, type AppStateStatus } from "react-native";
 import { create } from "zustand";
 import { AnyAppNative } from "anyapp-native";
 import { describeFeedFailure, isNewerVersion, readRelease, type ReleaseApk } from "./releaseFeed";
-import { checkForOverTheAirUpdate, overTheAirReleaseVersion, type OverTheAirCheckOutcome } from "./overTheAir";
+import { checkForOverTheAirUpdate, overTheAirReleaseVersion, runningUpdateVersion, type OverTheAirCheckOutcome } from "./overTheAir";
 import { phoneAbis } from "./installer";
 
-/** Automatic checks run at most this often; Check for updates in Settings ignores it. */
-export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+/** Automatic checks run at most this often; Check for updates in Settings and the PC's word ignore it. */
+export const CHECK_INTERVAL_MS = 60 * 60 * 1000;
+/** After a failed check, or a look the PC asked for, the next try waits at least this long. */
+export const RETRY_MS = 10 * 60 * 1000;
 
 const extra = (Constants.expoConfig?.extra ?? {}) as { selfUpdate?: unknown; releaseFeed?: unknown };
 export const SELF_UPDATE_ENABLED = extra.selfUpdate === true && typeof extra.releaseFeed === "string";
@@ -79,6 +86,20 @@ export function availableApp(check: CheckState): NewApp | null {
 /** The versionName of the installed APK (`0.3.3`). */
 export function installedVersion(): string {
   return Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? "0.0.0";
+}
+
+/**
+ * The Kiwimake release this phone runs: the APK's own version, or the newer over-the-air update it
+ * runs. What the phone tells the PC (/ws &app=), so the desktop can say when it is behind.
+ */
+export function runningRelease(): string {
+  const native = installedVersion();
+  const update = runningUpdateVersion();
+  try {
+    return update !== null && isNewerVersion(update, native) ? update : native;
+  } catch {
+    return native;
+  }
 }
 
 /** The installed package: com.anyappagent, or a test build's own one. */
@@ -188,8 +209,8 @@ export const useAppUpdate = create<State>()((set, get) => ({
         }
         rememberCheck({ at, newApp });
       } catch (error) {
+        // Not remembered: a failed check must not hide a new release until the next scheduled one.
         set({ check: { phase: "error", message: errorMessage(error), at } });
-        rememberCheck({ at, newApp: null });
       } finally {
         checkInFlight = null;
       }
@@ -255,12 +276,44 @@ export const useAppUpdate = create<State>()((set, get) => ({
   dismiss: (version) => set({ dismissed: version }),
 }));
 
+/** When the last automatic look started (this run of Kiwimake), so failures are retried, but not in a loop. */
+let lastTryAt = 0;
+
 async function checkIfDue(): Promise<void> {
   const last = await lastCheck();
-  if (last === null || Date.now() - last.at >= CHECK_INTERVAL_MS) return useAppUpdate.getState().checkForNewApp();
+  if ((last === null || Date.now() - last.at >= CHECK_INTERVAL_MS) && Date.now() - lastTryAt >= RETRY_MS) {
+    lastTryAt = Date.now();
+    return useAppUpdate.getState().checkForNewApp();
+  }
+  if (last === null) return; // the last try failed a moment ago
   // Checked a moment ago: show what that check found, while it is still newer than this APK.
   const newApp = last.newApp && isNewerVersion(last.newApp.version, installedVersion()) ? last.newApp : null;
   if (useAppUpdate.getState().check.phase === "idle") useAppUpdate.setState({ check: { phase: "checked", newApp, at: last.at } });
+}
+
+/** Releases the PC named, and when the phone last looked because of it. */
+const pcAskedAt = new Map<string, number>();
+
+/**
+ * The PC says `release` is the newest Kiwimake for phones (its hello, at every connection). When that
+ * is newer than this Kiwimake and not already offered, look now: on GitHub for the APK, and on the
+ * update server, in case it comes over the air. At most every RETRY_MS per release, so a phone that
+ * reconnects often does not ask GitHub every time.
+ */
+export function pcKnowsRelease(release: string): void {
+  if (!SELF_UPDATE_ENABLED) return;
+  try {
+    if (!isNewerVersion(release, runningRelease())) return;
+    const offered = availableApp(useAppUpdate.getState().check);
+    if (offered !== null && !isNewerVersion(release, offered.version)) return;
+  } catch {
+    return; // not MAJOR.MINOR.PATCH
+  }
+  const at = pcAskedAt.get(release);
+  if (at !== undefined && Date.now() - at < RETRY_MS) return;
+  pcAskedAt.set(release, Date.now());
+  void useAppUpdate.getState().checkForNewApp();
+  void checkForOverTheAirUpdate();
 }
 
 let started = false;
