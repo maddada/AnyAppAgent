@@ -160,6 +160,8 @@ export function startHttpServer(deps: {
   hostApkPath?: string;
   account?: CloudLink;
   mover?: CloudMover;
+  /** The Codex model in use (acp/codex-model.ts), when the engine is Codex. */
+  codexModel?: () => { model: string; fallback?: true };
 }): {
   server: Server;
   broadcast(event: ServerEvent): void;
@@ -233,6 +235,7 @@ export function startHttpServer(deps: {
       ...(deps.signing?.state() ? { signing: deps.signing.state() } : {}),
       backup: apps.backups.state(),
       ...(deps.account ? { account: deps.account.info() } : {}),
+      ...(deps.codexModel ? { codexModel: deps.codexModel() } : {}),
     };
   }
 

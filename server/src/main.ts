@@ -2,6 +2,8 @@
 // The desktop app (desktop/) starts it as a child process with ANYAPP_ADMIN_TOKEN set.
 import qrcode from "qrcode-terminal";
 import type { ServerEvent } from "../../shared/protocol.ts";
+import { CodexModels } from "./acp/codex-model.ts";
+import { selectedEngine } from "./acp/session.ts";
 import { AppManager } from "./apps.ts";
 import { installAppsCli } from "./apps-cli.ts";
 import { Auth } from "./auth.ts";
@@ -66,8 +68,12 @@ export async function main(): Promise<void> {
   const keepReady = new KeepReady({ apps, link: account, keys: builderKeys(builder), log });
   apps.beforeChange = (app) => keepReady.guard(app);
 
+  // The Codex model in use: a free ChatGPT plan falls back to one it allows (acp/codex-model.ts).
+  const codexModels = selectedEngine(config) === "codex" ? new CodexModels(config.stateDir) : undefined;
+  let shownModel = JSON.stringify(codexModels?.state());
   const http = startHttpServer({
     account,
+    ...(codexModels ? { codexModel: () => codexModels.state() } : {}),
     mover,
     host: config.host,
     port: config.port,
@@ -81,7 +87,12 @@ export async function main(): Promise<void> {
   phonesConnected = () => http.phonesConnected();
   broadcast = (event) => {
     // A new app gets its own signing key: show it (and that it is not backed up yet) on the PC.
-    if (event.type === "app.updated") signing.refreshSoon();
+    if (event.type === "app.updated") {
+      signing.refreshSoon();
+      // A turn that fell back (or got the usual model back) changes the line in the engine settings.
+      const model = JSON.stringify(codexModels?.state());
+      if (model !== shownModel) { shownModel = model; http.adminChanged(); }
+    }
     // A new version: its code (and the key, once) goes to the cloud for changes while the PC is off.
     if (event.type === "apk.ready") void keepReady.keep(event.app.id);
     http.broadcast(event);

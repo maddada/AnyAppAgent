@@ -398,8 +398,16 @@ show model selector, just the user can pick either in setup."
   `CLAUDE_CODE_EXECUTABLE`. The installer no longer carries a Claude binary. On Windows only an
   `.exe` counts (the SDK spawns it directly, which a `.cmd` shim cannot do).
 - **Codex** is the `codex` CLI, run as `codex app-server` over stdio, one private process per app
-  session (no shared daemon). It always uses model `gpt-6.1-sol` at `high` reasoning effort, with
-  the app's MCP tools passed per thread (`server/src/acp/codex-session.ts`).
+  session (no shared daemon). It uses model `gpt-6.1-sol` at `high` reasoning effort, with
+  the app's MCP tools passed per thread (`server/src/acp/codex-session.ts`). A ChatGPT plan that
+  does not include `gpt-6.1-sol` (a free plan) refuses every turn ("The 'gpt-6.1-sol' model is not
+  supported when using Codex with a ChatGPT account."). Then the companion drops the refused turn
+  from the thread, runs it again once on `gpt-6-luna` and remembers that in its state
+  (`codex-model.json`, with a hash of the signed-in account and plan, never the account itself),
+  so later chats start on `gpt-6-luna`. It tries `gpt-6.1-sol` again after a sign-in change or a
+  day later, so a paid plan gets it back by itself (`server/src/acp/codex-model.ts`, added
+  2026-11-20). The person sees nothing of this, only one quiet line under "The AI that makes your
+  apps" in Settings naming the model in use (`AdminState.codexModel`, additive).
 - **Install and update the way Ghostex does** (its `packages/shared/agent-cli-catalog.json` and
   `server/src/agent_cli`): find the CLI on PATH and in the official install folders, skipping a
   host's session wrappers; when missing, run the official installer (`claude.ai/install.ps1` or

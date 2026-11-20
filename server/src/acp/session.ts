@@ -2,6 +2,7 @@ import { findEngine, type Engine } from "../../../shared/engines.mts";
 import type { Config } from "../config.ts";
 import { ClaudeSession, claudeLaunchSpec, type ClaudeSessionOptions } from "./claude-session.ts";
 import { CodexSession } from "./codex-session.ts";
+import { CodexModels } from "./codex-model.ts";
 
 export type AgentSession = ClaudeSession | CodexSession;
 export const selectedEngine = (config: Pick<Config, "cloud" | "engine">): Engine => config.cloud ? "claude" : config.engine ?? "claude";
@@ -19,7 +20,7 @@ export function createSession(config: Config, options: Omit<ClaudeSessionOptions
   if (selectedEngine(config) === "codex") {
     const cli = findEngine("codex");
     if (!cli) throw new Error("Codex is missing. Install it in Kiwimake Setup.");
-    return new CodexSession({ ...options, launch: { command: cli, args: ["app-server", "--listen", "stdio://"] } });
+    return new CodexSession({ ...options, models: new CodexModels(config.stateDir), launch: { command: cli, args: ["app-server", "--listen", "stdio://"] } });
   }
   // Cloud keeps its pinned engine. Desktop always passes the detected system Claude to ACP.
   const cli = config.cloud ? undefined : findEngine("claude");

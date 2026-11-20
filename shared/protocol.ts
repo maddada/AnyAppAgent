@@ -727,6 +727,10 @@ export interface AdminState {
   signing?: SigningKeysState; // absent with the fake builder (added for docs/DISTRIBUTION.md)
   backup?: BackupState; // added with "Never lose your apps" (see "Backup"); absent from older PCs
   account?: AccountLinkInfo; // added (cloud milestone 7): the PC link; absent from older PCs
+  // Added: the Codex model this PC uses, when the engine is Codex. fallback: the ChatGPT plan does
+  // not include Kiwimake's usual model, so the PC uses one the plan allows. Absent with Claude and
+  // from older PCs.
+  codexModel?: { model: string; fallback?: true };
 }
 
 // ---------- The PC link (docs/CLOUD.md section 3, "The PC link"; added for the cloud's milestone

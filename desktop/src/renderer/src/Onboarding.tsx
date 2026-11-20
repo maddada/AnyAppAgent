@@ -227,12 +227,18 @@ function Welcome() {
 }
 
 /** Claude or Codex: no model choice (Codex always runs gpt-6.1-sol at high effort). In setup and in Settings. */
+/** The one quiet line about Codex's model: the usual one, or the one a ChatGPT plan allows. */
+export function codexModelLine(m: { model: string; fallback?: true }): string {
+  return m.fallback ? `Codex uses ${m.model}, the model your ChatGPT plan includes.` : `Codex uses ${m.model}.`;
+}
+
 export function EngineChoice({ s, inSetup }: { s: Snapshot; inSetup?: boolean }) {
   const busy = s.checks.claude.signingIn || s.checks.claude.state === "working" || s.apps.some((a) => a.status === "working" || a.status === "building");
   const [error, setError] = useState("");
   return <div className="card" style={{ padding: "var(--aa-space-lg)", marginBottom: "var(--aa-space-xl)" }}>
     <strong>{inSetup ? "Claude or Codex?" : "The AI that makes your apps"}</strong>
     <p className="label secondary">Claude uses a paid Claude plan. Codex uses your ChatGPT plan. {inSetup ? "You can change this later in Settings, when your apps are idle." : "Change it when your apps are idle."}</p>
+    {s.settings.engine === "codex" && s.admin?.codexModel && <p className="label secondary">{codexModelLine(s.admin.codexModel)}</p>}
     {error && <p className="problem-text">{error}</p>}
     <div className="notice-actions" role="group" aria-label="AI engine">
       {(["claude", "codex"] as const).map((engine) => <button key={engine} className={`btn ${s.settings.engine === engine ? "btn-primary" : "btn-quiet"}`} aria-pressed={s.settings.engine === engine} disabled={busy} onClick={() => { setError(""); void api.setSetting("engine", engine).catch(() => setError("Could not change the engine. Wait for your app to finish and try again.")); }}>{engine === "claude" ? "Claude" : "Codex"}</button>)}

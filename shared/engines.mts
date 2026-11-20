@@ -6,6 +6,8 @@ import { delimiter, dirname, join } from "node:path";
 export type Engine = "claude" | "codex";
 export const engineName = (engine: Engine): string => engine === "codex" ? "Codex" : "Claude";
 export const CODEX_MODEL = "gpt-6.1-sol";
+/** When the signed-in ChatGPT plan refuses CODEX_MODEL (a free plan), the companion uses this one (server/src/acp/codex-model.ts). */
+export const CODEX_FALLBACK_MODEL = "gpt-6-luna";
 export const CODEX_EFFORT = "high";
 export const isEngine = (value: unknown): value is Engine => value === "claude" || value === "codex";
 

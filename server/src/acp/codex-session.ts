@@ -5,6 +5,7 @@ import spawn from "cross-spawn";
 import { spawnSync, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { CODEX_EFFORT, CODEX_MODEL } from "../../../shared/engines.mts";
+import { accountKey, isPlanModelRefusal, type CodexModels } from "./codex-model.ts";
 import type { PlanLimit } from "../../../shared/protocol.ts";
 import { agentEnv, type ClaudeSessionOptions, type PromptImage } from "./claude-session.ts";
 
@@ -34,8 +35,15 @@ export function codexPlanLimits(params: unknown, now = new Date().toISOString())
   });
 }
 
+export type CodexSessionOptions = ClaudeSessionOptions & {
+  /** This PC's remembered model (codex-model.ts). Without it, always CODEX_MODEL and no fallback. */
+  models?: CodexModels;
+};
+
 export class CodexSession {
   sessionId = "";
+  /** The model this session asks for: CODEX_MODEL, or the fallback when the plan refuses it. */
+  model = CODEX_MODEL;
   resumed = false;
   modeId = "danger-full-access";
   supportsImageInput = true;
@@ -50,11 +58,18 @@ export class CodexSession {
   /** The agent message that wrote last, while nothing else came after it: the next one starts a new paragraph. */
   private lastMessage: string | undefined;
   private lastUsage: Obj | undefined;
-  private readonly options: ClaudeSessionOptions;
+  /** The last turn that finished (to drop a refused turn from the thread before it runs again). */
+  private lastTurnId: string | undefined;
+  /** The turn showed something (words, thoughts, a tool): then it is never run again. */
+  private produced = false;
+  /** A hash of the signed-in account and plan (codex-model.ts). */
+  private account = "";
+  private readonly options: CodexSessionOptions;
 
-  constructor(options: ClaudeSessionOptions) { this.options = options; }
+  constructor(options: CodexSessionOptions) { this.options = options; }
   get alive(): boolean { return !!this.child && !this.stopping && this.child.exitCode === null && this.child.signalCode === null; }
 
+  private update(value: Obj): void { this.produced = true; this.options.onUpdate(value); }
   private send(value: unknown): void { this.child?.stdin?.write(`${JSON.stringify(value)}\n`); }
   private request(method: string, params: unknown, timeoutMs = 120_000): Promise<Obj> {
     if (!this.alive) return Promise.reject(new Error("Codex is not running"));
@@ -89,8 +104,13 @@ export class CodexSession {
     try {
       await this.request("initialize", { clientInfo: { name: "kiwimake", title: "Kiwimake", version: "0.3.1" }, capabilities: { experimentalApi: true } });
       this.send({ method: "initialized", params: {} });
+      if (this.options.models) {
+        // Local and free: which account and plan are signed in, so a sign-in change tries CODEX_MODEL again.
+        this.account = accountKey(await this.request("account/read", { refreshToken: false }, 15_000).catch(() => ({})));
+        this.model = this.options.models.modelFor(this.account);
+      }
       const params = {
-        cwd: this.options.cwd, model: CODEX_MODEL, modelProvider: "openai", serviceTier: null,
+        cwd: this.options.cwd, model: this.model, modelProvider: "openai", serviceTier: null,
         approvalPolicy: this.options.askPermissions ? "on-request" : "never", sandbox: "danger-full-access",
         developerInstructions: this.options.instructions,
         config: { model_reasoning_effort: CODEX_EFFORT, mcp_servers: codexMcpConfig(this.options.mcpServers) },
@@ -110,20 +130,38 @@ export class CodexSession {
       result ??= await this.request("thread/start", params);
       this.sessionId = obj(result.thread).id;
       if (!this.sessionId) throw new Error("Codex did not return a thread id");
-      if (result.model && result.model !== CODEX_MODEL) throw new Error(`Codex did not accept ${CODEX_MODEL}. Check account access in Setup.`);
-      this.options.log(`Codex ${this.resumed ? "resumed" : "started"}: ${CODEX_MODEL}, ${CODEX_EFFORT}`);
+      if (result.model && result.model !== this.model) throw new Error(`Codex did not accept ${this.model}. Check account access in Setup.`);
+      this.options.log(`Codex ${this.resumed ? "resumed" : "started"}: ${this.model}, ${CODEX_EFFORT}`);
     } catch (error) { await this.stop(); throw error; }
   }
 
   async prompt(text: string, images: PromptImage[] = []): Promise<string> {
+    const model = this.model;
+    try {
+      const stop = await this.runTurn(text, images);
+      if (stop === "end_turn") this.options.models?.worked(model);
+      return stop;
+    } catch (error) {
+      const models = this.options.models;
+      // Only Codex's refusal of CODEX_MODEL for this plan, before anything showed: once, on the fallback.
+      if (!models || model !== CODEX_MODEL || this.produced || this.cancelPending || !this.alive || !isPlanModelRefusal((error as Error).message, model)) throw error;
+      this.model = models.refused(this.account);
+      this.options.log(`Codex: this ChatGPT plan does not include ${model}, so this PC uses ${this.model} (it tries ${model} again tomorrow or after a new sign-in)`);
+      // The refused turn holds only this message: drop it, so the retry does not say it twice.
+      if (this.lastTurnId) await this.request("thread/revert", { threadId: this.sessionId, beforeTurnId: this.lastTurnId }, 15_000).catch(() => {});
+      return this.runTurn(text, images);
+    }
+  }
+
+  private async runTurn(text: string, images: PromptImage[]): Promise<string> {
     if (this.turn) throw new Error("Codex already has an active turn");
-    this.streamed.clear(); this.lastMessage = undefined; this.lastUsage = undefined; this.cancelPending = false;
+    this.streamed.clear(); this.lastMessage = undefined; this.lastUsage = undefined; this.cancelPending = false; this.produced = false; this.lastTurnId = undefined;
     const done = new Promise<string>((resolve, reject) => { this.turn = { resolve, reject }; });
     // Attach before turn/start so a fast completion or exit cannot become an unhandled rejection.
     void done.catch(() => {});
     try {
       const response = await this.request("turn/start", {
-        threadId: this.sessionId, model: CODEX_MODEL, effort: CODEX_EFFORT,
+        threadId: this.sessionId, model: this.model, effort: CODEX_EFFORT,
         approvalPolicy: this.options.askPermissions ? "on-request" : "never",
         sandboxPolicy: { type: "dangerFullAccess" },
         input: [{ type: "text", text, text_elements: [] }, ...images.map((i) => ({ type: "localImage", path: i.path }))],
@@ -176,15 +214,15 @@ export class CodexSession {
       case "item/reasoning/textDelta": {
         this.streamed.add(p.itemId);
         if (message.method === "item/agentMessage/delta") this.agentText(p.itemId, p.delta ?? "");
-        else { this.lastMessage = undefined; this.options.onUpdate({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text: p.delta ?? "" } }); }
+        else { this.lastMessage = undefined; this.update({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text: p.delta ?? "" } }); }
         break;
       }
       case "item/started": case "item/completed": this.item(obj(p.item), message.method === "item/completed"); break;
       case "thread/tokenUsage/updated": this.lastUsage = obj(obj(p.tokenUsage).last); break;
-      case "turn/plan/updated": this.options.onUpdate({ sessionUpdate: "plan", entries: (p.plan ?? []).map((v: Obj) => ({ content: v.step, status: v.status === "inProgress" ? "in_progress" : v.status, priority: "medium" })) }); break;
+      case "turn/plan/updated": this.update({ sessionUpdate: "plan", entries: (p.plan ?? []).map((v: Obj) => ({ content: v.step, status: v.status === "inProgress" ? "in_progress" : v.status, priority: "medium" })) }); break;
       case "turn/completed": {
         const turn = obj(p.turn);
-        const pending = this.turn; this.turn = undefined; this.turnId = undefined;
+        const pending = this.turn; this.lastTurnId = turn.id ?? this.turnId; this.turn = undefined; this.turnId = undefined;
         if (this.lastUsage) {
           const u = this.lastUsage;
           this.options.onUsage?.({ inputTokens: Math.max(0, (u.inputTokens ?? 0) - (u.cachedInputTokens ?? 0)), outputTokens: u.outputTokens ?? 0, cacheReadTokens: u.cachedInputTokens ?? 0, cacheWriteTokens: 0 });
@@ -201,14 +239,14 @@ export class CodexSession {
       if (done && !this.streamed.has(item.id)) {
         const text = item.text ?? (item.summary ?? []).join("\n");
         if (text && item.type === "agentMessage") this.agentText(item.id, text);
-        else if (text) { this.lastMessage = undefined; this.options.onUpdate({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text } }); }
+        else if (text) { this.lastMessage = undefined; this.update({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text } }); }
       }
       return;
     }
     this.lastMessage = undefined;
     if (!["commandExecution", "fileChange", "mcpToolCall", "webSearch", "dynamicToolCall"].includes(item.type)) return;
     const name = item.type === "mcpToolCall" ? `mcp__${item.server}__${item.tool}` : item.type;
-    this.options.onUpdate({ sessionUpdate: done ? "tool_call_update" : "tool_call", toolCallId: item.id, name,
+    this.update({ sessionUpdate: done ? "tool_call_update" : "tool_call", toolCallId: item.id, name,
       title: item.type === "commandExecution" ? "Running a command" : name,
       kind: item.type === "commandExecution" ? "execute" : item.type === "fileChange" ? "edit" : "other",
       status: done ? item.status === "failed" || item.status === "declined" ? "failed" : "completed" : "in_progress",
@@ -225,7 +263,7 @@ export class CodexSession {
     if (!text) return;
     const gap = this.lastMessage !== undefined && this.lastMessage !== itemId ? "\n\n" : "";
     this.lastMessage = itemId;
-    this.options.onUpdate({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: gap + text } });
+    this.update({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: gap + text } });
   }
 
   private permission(message: Obj): void {
